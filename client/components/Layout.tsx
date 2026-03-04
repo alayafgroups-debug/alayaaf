@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { ReactNode, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   FileText,
@@ -24,6 +24,7 @@ export default function Layout({ children, subMenu }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -36,6 +37,16 @@ export default function Layout({ children, subMenu }: LayoutProps) {
     { icon: DollarSign, label: "إدارة الضرائب", href: "/tax", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
+
+  // Auto-expand menu when navigating to a page with submenu
+  useEffect(() => {
+    const currentPath = location.pathname;
+    navItems.forEach((item) => {
+      if (item.href === currentPath && item.hasSubmenu) {
+        setExpandedMenu(currentPath);
+      }
+    });
+  }, [location.pathname]);
 
   return (
     <div className="flex h-screen bg-background">
@@ -89,11 +100,10 @@ export default function Layout({ children, subMenu }: LayoutProps) {
               <div key={item.href}>
                 {item.hasSubmenu ? (
                   <button
-                    onClick={() =>
-                      setExpandedMenu(
-                        expandedMenu === item.href ? null : item.href
-                      )
-                    }
+                    onClick={() => {
+                      navigate(item.href);
+                      setExpandedMenu(item.href);
+                    }}
                     className={cn(
                       "w-full flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200",
                       isItemActive

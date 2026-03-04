@@ -3,9 +3,9 @@ import { Users } from "lucide-react";
 
 export default function HR() {
   const features = [
-    "بيانات الموظفين (Employee Management)",
-    "إدارة الرواتب (Payroll Management)",
-    "تسجيل الحضور والانصراف (Attendance Tracking)",
+    "بيانات الموظفين",
+    "إدارة الرواتب",
+    "تسجيل الحضور والانصراف",
     "تقارير الموارد البشرية",
     "إجازات وغيابات",
     "تطور الموظفين والمؤهلات",

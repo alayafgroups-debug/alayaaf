@@ -3,11 +3,11 @@ import { FileText } from "lucide-react";
 
 export default function Sales() {
   const features = [
-    "عروض الأسعار (Quotations)",
-    "أوامر البيع (Sales Orders)",
-    "فواتير المبيعات (Sales Invoices) - متوافقة مع ZATCA",
-    "سندات التسليم (Delivery Notes)",
-    "مردودات المبيعات (Sales Returns)",
+    "عروض الأسعار",
+    "أوامر البيع",
+    "فواتير المبيعات",
+    "سندات التسليم",
+    "مردودات المبيعات",
     "تقارير المبيعات المتقدمة",
     "تتبع الحالة والتنبيهات",
   ];

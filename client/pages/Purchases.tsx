@@ -3,11 +3,11 @@ import { ShoppingCart } from "lucide-react";
 
 export default function Purchases() {
   const features = [
-    "طلبات الشراء (Purchase Requests)",
-    "أوامر الشراء (Purchase Orders)",
-    "سندات الاستلام (Goods Receipt Notes)",
-    "فواتير المشتريات (Purchase Invoices)",
-    "مردودات المشتريات (Purchase Returns)",
+    "طلبات الشراء",
+    "أوامر الشراء",
+    "سندات الاستلام",
+    "فواتير المشتريات",
+    "مردودات المشتريات",
     "تقارير المشتريات الشاملة",
     "إدارة الموردين والعروض",
   ];

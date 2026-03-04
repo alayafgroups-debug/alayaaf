@@ -9,7 +9,6 @@ import {
   CreditCard,
   Menu,
   X,
-  Home,
   Settings,
 } from "lucide-react";
 import { useState } from "react";
@@ -26,8 +25,7 @@ export default function Layout({ children }: LayoutProps) {
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
-    { icon: Home, label: "الرئيسية", href: "/" },
-    { icon: BarChart3, label: "لوحة التحكم", href: "/dashboard" },
+    { icon: BarChart3, label: "لوحة التحكم", href: "/" },
     { icon: FileText, label: "المبيعات", href: "/sales" },
     { icon: ShoppingCart, label: "المشتريات", href: "/purchases" },
     { icon: Users, label: "الموارد البشرية", href: "/hr" },

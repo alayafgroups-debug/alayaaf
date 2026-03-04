@@ -101,8 +101,14 @@ export default function Layout({ children, subMenu }: LayoutProps) {
                 {item.hasSubmenu ? (
                   <button
                     onClick={() => {
-                      navigate(item.href);
-                      setExpandedMenu(item.href);
+                      // إذا كان على نفس الصفحة، قم بتبديل القائمة
+                      if (isItemActive) {
+                        setExpandedMenu(expandedMenu === item.href ? null : item.href);
+                      } else {
+                        // إذا كان على صفحة مختلفة، انتقل وافتح القائمة
+                        navigate(item.href);
+                        setExpandedMenu(item.href);
+                      }
                     }}
                     className={cn(
                       "w-full flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200",

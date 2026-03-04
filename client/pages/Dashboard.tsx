@@ -1,5 +1,6 @@
 import Layout from "@/components/Layout";
 import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import {
   TrendingUp,
   TrendingDown,
@@ -105,7 +106,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <Layout>
+    <Layout subMenu={null}>
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">
@@ -320,8 +321,4 @@ export default function Dashboard() {
       </div>
     </Layout>
   );
-}
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ");
 }

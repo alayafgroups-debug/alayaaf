@@ -3,7 +3,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 
 export default function Settings() {
   return (
-    <Layout>
+    <Layout subMenu={null}>
       <div className="max-w-4xl">
         {/* Header */}
         <div className="mb-8">

@@ -15,6 +15,7 @@ import {
   Ban,
   ShoppingCart,
   ChevronDown,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

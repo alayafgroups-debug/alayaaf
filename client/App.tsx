@@ -12,6 +12,7 @@ import Quotations from "./pages/Quotations";
 import SalesOrders from "./pages/SalesOrders";
 import SalesInvoices from "./pages/SalesInvoices";
 import Purchases from "./pages/Purchases";
+import PurchaseRequests from "./pages/PurchaseRequests";
 import HR from "./pages/HR";
 import CRM from "./pages/CRM";
 import Tax from "./pages/Tax";
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/sales/orders" element={<SalesOrders />} />
           <Route path="/sales/invoices" element={<SalesInvoices />} />
           <Route path="/purchases" element={<Purchases />} />
+          <Route path="/purchases/requests" element={<PurchaseRequests />} />
           <Route path="/hr" element={<HR />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/tax" element={<Tax />} />

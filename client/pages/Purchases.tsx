@@ -1,5 +1,4 @@
 import PlaceholderModule from "@/components/PlaceholderModule";
-import PlaceholderModule from "@/components/PlaceholderModule";
 import { ShoppingCart } from "lucide-react";
 
 export const purchasesFeatures = [

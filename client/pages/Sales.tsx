@@ -1,4 +1,5 @@
 import PlaceholderModule from "@/components/PlaceholderModule";
+import PlaceholderModule from "@/components/PlaceholderModule";
 import { FileText } from "lucide-react";
 
 export const salesFeatures = [

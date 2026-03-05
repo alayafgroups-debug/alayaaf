@@ -426,7 +426,7 @@ function OrderForm({ onBack }: { onBack: () => void }) {
               </div>
               <input
                 type="text"
-                value="بدون مركز تكلفة"
+                defaultValue="بدون مركز تكلفة"
                 disabled
                 className="w-full px-3 py-2 border border-slate-300 bg-slate-50 rounded text-sm text-right outline-none text-slate-500"
               />

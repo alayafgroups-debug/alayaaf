@@ -5,7 +5,6 @@ export const salesFeatures = [
   { label: "عروض الأسعار", href: "/sales/quotations" },
   { label: "أوامر البيع", href: "/sales/orders" },
   { label: "فواتير المبيعات" },
-  { label: "سندات التسليم" },
   { label: "مردودات المبيعات" },
   { label: "تقارير المبيعات المتقدمة" },
   { label: "تتبع الحالة والتنبيهات" },

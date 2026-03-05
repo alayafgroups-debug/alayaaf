@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 
 export const salesFeatures = [
   { label: "عروض الأسعار", href: "/sales/quotations" },
-  { label: "أوامر البيع" },
+  { label: "أوامر البيع", href: "/sales/orders" },
   { label: "فواتير المبيعات" },
   { label: "سندات التسليم" },
   { label: "مردودات المبيعات" },

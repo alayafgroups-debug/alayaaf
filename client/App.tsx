@@ -9,6 +9,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Sales from "./pages/Sales";
 import Quotations from "./pages/Quotations";
+import SalesOrders from "./pages/SalesOrders";
 import Purchases from "./pages/Purchases";
 import HR from "./pages/HR";
 import CRM from "./pages/CRM";
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/" element={<Dashboard />} />
           <Route path="/sales" element={<Sales />} />
           <Route path="/sales/quotations" element={<Quotations />} />
+          <Route path="/sales/orders" element={<SalesOrders />} />
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/hr" element={<HR />} />
           <Route path="/crm" element={<CRM />} />

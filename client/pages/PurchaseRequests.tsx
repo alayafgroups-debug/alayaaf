@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Settings,
   ArrowLeftRight,
+  MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

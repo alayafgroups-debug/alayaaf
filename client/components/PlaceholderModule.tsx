@@ -5,7 +5,7 @@ interface PlaceholderModuleProps {
   title: string;
   description: string;
   icon: LucideIcon;
-  features: string[];
+  features: { label: string; href?: string }[] | string[];
 }
 
 export default function PlaceholderModule({
@@ -14,8 +14,12 @@ export default function PlaceholderModule({
   icon: Icon,
   features,
 }: PlaceholderModuleProps) {
+  const formattedFeatures = features.map((f) =>
+    typeof f === "string" ? { label: f } : f
+  );
+
   return (
-    <Layout subMenu={{ title, items: features }}>
+    <Layout subMenu={{ title, items: formattedFeatures }}>
       <div className="max-w-4xl">
         {/* Header */}
         <div className="mb-8">

@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 interface LayoutProps {
   children: ReactNode;
-  subMenu?: { title: string; items: string[] } | null;
+  subMenu?: { title: string; items: { label: string; href?: string }[] } | null;
 }
 
 export default function Layout({ children, subMenu }: LayoutProps) {
@@ -26,7 +26,7 @@ export default function Layout({ children, subMenu }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
 
   const navItems = [
     { icon: BarChart3, label: "لوحة التحكم", href: "/" },
@@ -42,8 +42,8 @@ export default function Layout({ children, subMenu }: LayoutProps) {
   useEffect(() => {
     const currentPath = location.pathname;
     navItems.forEach((item) => {
-      if (item.href === currentPath && item.hasSubmenu) {
-        setExpandedMenu(currentPath);
+      if (currentPath.startsWith(item.href) && item.href !== "/" && item.hasSubmenu) {
+        setExpandedMenu(item.href);
       }
     });
   }, [location.pathname]);
@@ -150,14 +150,23 @@ export default function Layout({ children, subMenu }: LayoutProps) {
                 {/* Submenu */}
                 {isExpanded && sidebarOpen && subMenu && isItemActive && (
                   <div className="mt-2 ml-4 border-r-2 border-sidebar-primary space-y-1">
-                    {subMenu.items.map((subItem) => (
+                    {subMenu.items.map((subItem, index) => (
                       <button
-                        key={subItem}
-                        onClick={() => {}}
-                        className="w-full text-right flex items-start gap-2 px-4 py-2 text-xs font-medium text-sidebar-foreground hover:text-sidebar-primary hover:bg-sidebar-accent rounded transition-colors duration-200"
+                        key={index}
+                        onClick={() => {
+                          if (subItem.href) {
+                            navigate(subItem.href);
+                          }
+                        }}
+                        className={cn(
+                          "w-full text-right flex items-start gap-2 px-4 py-2 text-xs font-medium rounded transition-colors duration-200",
+                          subItem.href && location.pathname === subItem.href
+                            ? "text-sidebar-primary bg-sidebar-accent"
+                            : "text-sidebar-foreground hover:text-sidebar-primary hover:bg-sidebar-accent"
+                        )}
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-sidebar-primary flex-shrink-0 mt-1" />
-                        <span>{subItem}</span>
+                        <span>{subItem.label}</span>
                       </button>
                     ))}
                   </div>

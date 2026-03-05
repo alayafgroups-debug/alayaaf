@@ -359,7 +359,7 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="text"
-                value="SAR"
+                defaultValue="SAR"
                 disabled
                 className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-center text-slate-600 outline-none"
               />

@@ -509,7 +509,7 @@ function OrderForm({ onBack }: { onBack: () => void }) {
                   <td className="pt-4 px-1 align-top">
                     <input
                       type="text"
-                      value="15%"
+                      defaultValue="15%"
                       className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                     />
                   </td>

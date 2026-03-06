@@ -35,8 +35,9 @@ const statusColors: Record<string, string> = {
 const mockQuotations: QuotationRow[] = [];
 
 export default function Quotations() {
-  const [view, setView] = useState<"list" | "create">("list");
+  const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
   const [quotations, setQuotations] = useState<QuotationRow[]>(mockQuotations);
+  const [selectedQuotation, setSelectedQuotation] = useState<QuotationRow | null>(null);
 
   useEffect(() => {
     const loadQuotations = async () => {
@@ -71,16 +72,112 @@ export default function Quotations() {
     setQuotations((prev) => [quotation, ...prev]);
   };
 
+  const handleUpdated = (quotation: QuotationRow) => {
+    setQuotations((prev) =>
+      prev.map((row) => (row.id === quotation.id ? quotation : row))
+    );
+  };
+
+  const handleDelete = async (quotationId: string) => {
+    const { error } = await supabase
+      .from("sales_quotations")
+      .delete()
+      .eq("id", quotationId);
+
+    if (!error) {
+      setQuotations((prev) => prev.filter((row) => row.id !== quotationId));
+      toast({ title: "تم حذف عرض السعر", description: `العرض: ${quotationId}` });
+    } else {
+      toast({ title: "تعذر حذف عرض السعر", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
+  const handleDownloadPdf = (quotation: QuotationRow) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      return;
+    }
+
+    printWindow.document.write(`
+      <html dir="rtl">
+        <head>
+          <title>عرض سعر ${quotation.id}</title>
+          <style>
+            body { font-family: 'Cairo', Arial, sans-serif; padding: 24px; }
+            h1 { color: #1f2937; }
+            .section { margin-top: 16px; }
+            .label { color: #6b7280; font-size: 14px; }
+            .value { font-size: 16px; font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          <h1>تفاصيل عرض السعر</h1>
+          <div class="section">
+            <div class="label">رقم العرض</div>
+            <div class="value">${quotation.id}</div>
+          </div>
+          <div class="section">
+            <div class="label">العميل</div>
+            <div class="value">${quotation.customer}</div>
+          </div>
+          <div class="section">
+            <div class="label">تاريخ العرض</div>
+            <div class="value">${quotation.date}</div>
+          </div>
+          <div class="section">
+            <div class="label">تاريخ الصلاحية</div>
+            <div class="value">${quotation.validity}</div>
+          </div>
+          <div class="section">
+            <div class="label">الإجمالي</div>
+            <div class="value">${quotation.total}</div>
+          </div>
+          <div class="section">
+            <div class="label">الحالة</div>
+            <div class="value">${quotation.status}</div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
-        {view === "list" ? (
+        {view === "list" && (
           <QuotationsList
             onCreateClick={() => setView("create")}
+            onView={(quotation) => {
+              setSelectedQuotation(quotation);
+              setView("details");
+            }}
+            onEdit={(quotation) => {
+              setSelectedQuotation(quotation);
+              setView("edit");
+            }}
+            onDelete={handleDelete}
+            onDownloadPdf={handleDownloadPdf}
             quotations={quotations}
           />
-        ) : (
+        )}
+        {view === "create" && (
           <QuotationForm onBack={() => setView("list")} onSaved={handleSaved} />
+        )}
+        {view === "details" && selectedQuotation && (
+          <QuotationDetails
+            quotation={selectedQuotation}
+            onBack={() => setView("list")}
+          />
+        )}
+        {view === "edit" && selectedQuotation && (
+          <QuotationEdit
+            quotation={selectedQuotation}
+            onBack={() => setView("list")}
+            onUpdated={handleUpdated}
+          />
         )}
       </div>
     </Layout>
@@ -89,14 +186,19 @@ export default function Quotations() {
 
 function QuotationsList({
   onCreateClick,
+  onView,
+  onEdit,
+  onDelete,
+  onDownloadPdf,
   quotations,
 }: {
   onCreateClick: () => void;
+  onView: (quotation: QuotationRow) => void;
+  onEdit: (quotation: QuotationRow) => void;
+  onDelete: (quotationId: string) => void;
+  onDownloadPdf: (quotation: QuotationRow) => void;
   quotations: QuotationRow[];
 }) {
-  const notifyAction = (title: string, description?: string) => {
-    toast({ title, description });
-  };
 
   return (
     <div className="space-y-6">
@@ -182,16 +284,14 @@ function QuotationsList({
                   <div className="flex items-center gap-1 flex-wrap">
                     <button
                       title="عرض عرض السعر"
-                      onClick={() => notifyAction("عرض السعر", `عرض: ${quo.id}`)}
+                      onClick={() => onView(quo)}
                       className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
                     <button
                       title="تعديل عرض السعر"
-                      onClick={() =>
-                        notifyAction("تعديل عرض السعر", `عرض: ${quo.id}`)
-                      }
+                      onClick={() => onEdit(quo)}
                       className="p-1.5 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors"
                     >
                       <Edit className="h-4 w-4" />
@@ -201,8 +301,15 @@ function QuotationsList({
                       تحويل إلى فاتورة مبيعات
                     </button>
                     <button
+                      title="تحميل PDF"
+                      onClick={() => onDownloadPdf(quo)}
+                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
+                    >
+                      تحميل PDF
+                    </button>
+                    <button
                       title="حذف عرض السعر"
-                      onClick={() => notifyAction("حذف عرض السعر", `عرض: ${quo.id}`)}
+                      onClick={() => onDelete(quo.id)}
                       className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -254,6 +361,525 @@ function QuotationsList({
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function QuotationDetails({
+  quotation,
+  onBack,
+}: {
+  quotation: QuotationRow;
+  onBack: () => void;
+}) {
+  const [lineItems, setLineItems] = useState<
+    Array<{
+      id: number;
+      description: string;
+      unit: string;
+      quantity: number;
+      price: number;
+      discount: number;
+      taxPercent: number;
+      lineTotal: number;
+    }>
+  >([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(
+      `sales-quotation-items-${quotation.id}`
+    );
+    if (stored) {
+      const parsed = JSON.parse(stored) as Array<{
+        id: number;
+        description: string;
+        unit: string;
+        quantity: number;
+        price: number;
+        discount: number;
+        taxPercent: number;
+      }>;
+
+      const mapped = parsed.map((item) => {
+        const lineSubtotal = item.quantity * item.price - item.discount;
+        const tax = (lineSubtotal * item.taxPercent) / 100;
+        return {
+          ...item,
+          lineTotal: lineSubtotal + tax,
+        };
+      });
+      setLineItems(mapped);
+    }
+  }, [quotation.id]);
+
+  const totals = lineItems.reduce(
+    (acc, item) => {
+      const lineSubtotal = item.quantity * item.price - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + tax,
+        total: acc.total + lineSubtotal + tax,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
+
+  return (
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+        >
+          العودة للقائمة
+          <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">تفاصيل عرض السعر</h1>
+          <FileSpreadsheet className="h-5 w-5 text-blue-600" />
+        </div>
+      </div>
+
+      <div className="p-4 space-y-6">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">بيانات العرض</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">رقم العرض</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {quotation.id}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {quotation.customer}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">تاريخ العرض</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {quotation.date}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">تاريخ الصلاحية</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {quotation.validity}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">الإجمالي</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {quotation.total}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">بنود العرض</h2>
+          </div>
+          <div className="p-4 overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-slate-100 text-slate-700">
+                <tr>
+                  <th className="px-3 py-2 border border-slate-200">#</th>
+                  <th className="px-3 py-2 border border-slate-200">الوصف</th>
+                  <th className="px-3 py-2 border border-slate-200">الوحدة</th>
+                  <th className="px-3 py-2 border border-slate-200">الكمية</th>
+                  <th className="px-3 py-2 border border-slate-200">السعر</th>
+                  <th className="px-3 py-2 border border-slate-200">الخصم</th>
+                  <th className="px-3 py-2 border border-slate-200">الضريبة</th>
+                  <th className="px-3 py-2 border border-slate-200">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineItems.map((item) => (
+                  <tr key={item.id}>
+                    <td className="px-3 py-2 border border-slate-200">{item.id}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.description}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.unit}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.quantity}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.price.toFixed(2)}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.discount.toFixed(2)}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.taxPercent}%</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.lineTotal.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="border-t border-slate-200 pt-4 flex justify-end mt-6">
+              <div className="w-64 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.subtotal.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">المجموع الفرعي</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.discount.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">الخصم</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.tax.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">الضريبة</span>
+                </div>
+                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
+                  <span className="font-bold text-blue-600">
+                    {totals.total.toFixed(2)} ريال
+                  </span>
+                  <span className="font-bold text-slate-800">الإجمالي</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuotationEdit({
+  quotation,
+  onBack,
+  onUpdated,
+}: {
+  quotation: QuotationRow;
+  onBack: () => void;
+  onUpdated: (quotation: QuotationRow) => void;
+}) {
+  const [reference, setReference] = useState("");
+  const [validity, setValidity] = useState(quotation.validity);
+  const [date, setDate] = useState(quotation.date);
+  const [customer, setCustomer] = useState(quotation.customer);
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState(
+    () =>
+      JSON.parse(
+        localStorage.getItem(`sales-quotation-items-${quotation.id}`) || "null"
+      ) || [
+        {
+          id: 1,
+          description: "",
+          unit: "",
+          quantity: 1,
+          price: 0,
+          discount: 0,
+          taxPercent: 15,
+        },
+      ]
+  );
+
+  const handleAddItem = () => {
+    setItems((prev: typeof items) => [
+      ...prev,
+      {
+        id: prev.length + 1,
+        description: "",
+        unit: "",
+        quantity: 1,
+        price: 0,
+        discount: 0,
+        taxPercent: 15,
+      },
+    ]);
+  };
+
+  const updateItem = (id: number, changes: Partial<(typeof items)[number]>) => {
+    setItems((prev: typeof items) =>
+      prev.map((item: (typeof items)[number]) =>
+        item.id === id ? { ...item, ...changes } : item
+      )
+    );
+  };
+
+  const removeItem = (id: number) => {
+    setItems((prev: typeof items) => prev.filter((item) => item.id !== id));
+  };
+
+  const totals = items.reduce(
+    (acc: { subtotal: number; discount: number; tax: number; total: number }, item: (typeof items)[number]) => {
+      const lineSubtotal = item.quantity * item.price - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      const lineTotal = lineSubtotal + tax;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + tax,
+        total: acc.total + lineTotal,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
+
+  const handleSave = async () => {
+    const payload = {
+      date,
+      validity,
+      customer,
+      total: `ريال ${totals.total.toFixed(2)}`,
+      status: quotation.status,
+    };
+
+    const { data, error } = await supabase
+      .from("sales_quotations")
+      .update(payload)
+      .eq("id", quotation.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      localStorage.setItem(
+        `sales-quotation-items-${quotation.id}`,
+        JSON.stringify(items)
+      );
+      onUpdated({
+        id: data.id ?? quotation.id,
+        date: data.date ?? date,
+        validity: data.validity ?? validity,
+        customer: data.customer ?? customer,
+        total: data.total ?? payload.total,
+        status: data.status ?? quotation.status,
+        statusColor: statusColors[data.status ?? quotation.status] ?? "bg-cyan-500 text-white",
+      });
+      toast({ title: "تم تحديث عرض السعر", description: `العرض: ${quotation.id}` });
+      onBack();
+    } else {
+      toast({ title: "تعذر تحديث عرض السعر", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
+  return (
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+        >
+          العودة للقائمة
+          <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">تعديل عرض السعر</h1>
+          <Edit className="h-5 w-5 text-emerald-600" />
+        </div>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 transition-colors"
+        >
+          حفظ التعديلات
+        </button>
+      </div>
+
+      <div className="p-4 space-y-6">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">معلومات العرض</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">تاريخ العرض</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">تاريخ الصلاحية</label>
+              <input
+                type="date"
+                value={validity}
+                onChange={(event) => setValidity(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <input
+                type="text"
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <button
+              onClick={handleAddItem}
+              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              إضافة بند
+            </button>
+            <h2 className="font-semibold text-slate-800">بنود العرض</h2>
+          </div>
+          <div className="p-4 overflow-x-auto">
+            <table className="w-full text-sm text-right mb-4">
+              <thead>
+                <tr className="text-slate-600 border-b border-slate-200">
+                  <th className="pb-2 font-medium w-16 text-center"></th>
+                  <th className="pb-2 font-medium w-32">الإجمالي</th>
+                  <th className="pb-2 font-medium w-32">الضريبة</th>
+                  <th className="pb-2 font-medium w-24">خصم</th>
+                  <th className="pb-2 font-medium w-32">السعر *</th>
+                  <th className="pb-2 font-medium w-24">الكمية *</th>
+                  <th className="pb-2 font-medium w-32">الوحدة</th>
+                  <th className="pb-2 font-medium">وصف البند *</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item: (typeof items)[number]) => {
+                  const lineSubtotal = item.quantity * item.price - item.discount;
+                  const lineTax = (lineSubtotal * item.taxPercent) / 100;
+                  const lineTotal = lineSubtotal + lineTax;
+
+                  return (
+                    <tr key={item.id}>
+                      <td className="pt-4 align-top">
+                        <div className="flex items-center justify-center gap-1 h-10">
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="text"
+                          value={lineTotal.toFixed(2)}
+                          disabled
+                          className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.taxPercent}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              taxPercent: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.discount}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              discount: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.price}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              price: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              quantity: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="text"
+                          placeholder="اكتب الوحدة..."
+                          value={item.unit}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              unit: event.target.value,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 pl-1 align-top">
+                        <input
+                          type="text"
+                          placeholder="اكتب وصف البند..."
+                          value={item.description}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              description: event.target.value,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="border-t border-slate-200 pt-4 flex justify-end">
+              <div className="w-64 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.subtotal.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">المجموع الفرعي</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.discount.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">الخصم</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.tax.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">الضريبة</span>
+                </div>
+                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
+                  <span className="font-bold text-emerald-600">
+                    {totals.total.toFixed(2)} ريال
+                  </span>
+                  <span className="font-bold text-slate-800">الإجمالي</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -341,6 +967,10 @@ function QuotationForm({
       .single();
 
     if (!error && data) {
+      localStorage.setItem(
+        `sales-quotation-items-${data.id ?? quotationId}`,
+        JSON.stringify(items)
+      );
       onSaved({
         id: data.id ?? quotationId,
         date: data.date ?? date,

@@ -1,4 +1,3 @@
-import { ShieldCheck } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useLocation } from "react-router-dom";
 import {

@@ -80,10 +80,10 @@ export default function PurchaseOrders() {
 
 function OrdersList({
   onCreateClick,
-  orders,
+  orders = [],
 }: {
   onCreateClick: () => void;
-  orders: PurchaseOrderRow[];
+  orders?: PurchaseOrderRow[];
 }) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 

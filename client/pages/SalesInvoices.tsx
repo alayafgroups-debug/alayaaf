@@ -302,6 +302,10 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
             </svg>
             حفظ الفاتورة
           </button>
+          <button className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-indigo-700 transition-colors">
+            <Printer className="h-4 w-4" />
+            حفظ وطباعة
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold text-slate-800">
@@ -459,8 +463,7 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                   <th className="pb-2 font-medium w-24">المجموع</th>
                   <th className="pb-2 font-medium w-24">الضريبة</th>
                   <th className="pb-2 font-medium w-20">خصم</th>
-                  <th className="pb-2 font-medium w-24">السعر *</th>
-                  <th className="pb-2 font-medium w-24">الوحدة</th>
+                  <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
                   <th className="pb-2 font-medium w-20">الكمية *</th>
                   <th className="pb-2 font-medium">وصف البند *</th>
                 </tr>
@@ -504,11 +507,6 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                         type="number"
                         className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                       />
-                    </td>
-                    <td className="pt-4 px-1 align-top">
-                      <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                        <option>اختر الوحدة...</option>
-                      </select>
                     </td>
                     <td className="pt-4 px-1 align-top">
                       <input

@@ -94,6 +94,10 @@ function QuotationsList({
   onCreateClick: () => void;
   quotations: QuotationRow[];
 }) {
+  const notifyAction = (title: string, description?: string) => {
+    toast({ title, description });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -176,17 +180,31 @@ function QuotationsList({
               >
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-1 flex-wrap">
-                    <button className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors">
+                    <button
+                      title="عرض عرض السعر"
+                      onClick={() => notifyAction("عرض السعر", `عرض: ${quo.id}`)}
+                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+                    >
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button className="p-1.5 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors">
+                    <button
+                      title="تعديل عرض السعر"
+                      onClick={() =>
+                        notifyAction("تعديل عرض السعر", `عرض: ${quo.id}`)
+                      }
+                      className="p-1.5 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors"
+                    >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-amber-700 border border-amber-200 rounded hover:bg-amber-50 transition-colors text-xs font-semibold">
                       <ArrowLeftRight className="h-3.5 w-3.5" />
                       تحويل إلى فاتورة مبيعات
                     </button>
-                    <button className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
+                    <button
+                      title="حذف عرض السعر"
+                      onClick={() => notifyAction("حذف عرض السعر", `عرض: ${quo.id}`)}
+                      className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>

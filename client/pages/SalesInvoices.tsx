@@ -650,14 +650,76 @@ function InvoiceEdit({
   const [dueDate, setDueDate] = useState(invoice.dueDate);
   const [customer, setCustomer] = useState(invoice.customer);
   const [status, setStatus] = useState(invoice.status);
+  const [items, setItems] = useState(
+    () =>
+      JSON.parse(
+        localStorage.getItem(`sales-invoice-items-${invoice.id}`) || "null"
+      ) || [
+        {
+          id: 1,
+          description: "",
+          quantity: 1,
+          unitPrice: 0,
+          discount: 0,
+          taxPercent: 15,
+        },
+      ]
+  );
+
+  const handleAddItem = () => {
+    setItems((prev: typeof items) => [
+      ...prev,
+      {
+        id: prev.length + 1,
+        description: "",
+        quantity: 1,
+        unitPrice: 0,
+        discount: 0,
+        taxPercent: 15,
+      },
+    ]);
+  };
+
+  const updateItem = (id: number, changes: Partial<(typeof items)[number]>) => {
+    setItems((prev: typeof items) =>
+      prev.map((item: (typeof items)[number]) =>
+        item.id === id ? { ...item, ...changes } : item
+      )
+    );
+  };
+
+  const removeItem = (id: number) => {
+    setItems((prev: typeof items) => prev.filter((item) => item.id !== id));
+  };
+
+  const totals = items.reduce(
+    (acc: { subtotal: number; discount: number; tax: number; total: number }, item: (typeof items)[number]) => {
+      const lineSubtotal = item.quantity * item.unitPrice - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      const lineTotal = lineSubtotal + tax;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + tax,
+        total: acc.total + lineTotal,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
 
   const handleSave = async () => {
+    const paidValue = parseCurrency(invoice.paid);
+    const totalValue = totals.total;
+    const remainingValue = Math.max(totalValue - paidValue, 0);
+
     const { data, error } = await supabase
       .from("sales_invoices")
       .update({
         date: invoiceDate,
         due_date: dueDate,
         customer,
+        total: `ريال ${totalValue.toFixed(2)}`,
+        remaining: `ريال ${remainingValue.toFixed(2)}`,
         status,
       })
       .eq("id", invoice.id)
@@ -665,11 +727,17 @@ function InvoiceEdit({
       .single();
 
     if (!error && data) {
+      localStorage.setItem(
+        `sales-invoice-items-${invoice.id}`,
+        JSON.stringify(items)
+      );
       onUpdated({
         ...invoice,
         date: invoiceDate,
         dueDate,
         customer,
+        total: `ريال ${totalValue.toFixed(2)}`,
+        remaining: `ريال ${remainingValue.toFixed(2)}`,
         status,
         statusColor: statusColors[status] ?? "bg-slate-500 text-white",
       });
@@ -702,7 +770,7 @@ function InvoiceEdit({
         </button>
       </div>
 
-      <div className="p-4">
+      <div className="p-4 space-y-6">
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
             <h2 className="font-semibold text-slate-800">معلومات الفاتورة</h2>
@@ -750,6 +818,162 @@ function InvoiceEdit({
                 <option value="مدفوعة جزئياً">مدفوعة جزئياً</option>
                 <option value="مدفوعة بالكامل">مدفوعة بالكامل</option>
               </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <button
+              onClick={handleAddItem}
+              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              إضافة بند
+            </button>
+            <h2 className="font-semibold text-slate-800">بنود الفاتورة</h2>
+          </div>
+          <div className="p-4 overflow-x-auto">
+            <table className="w-full text-sm text-right mb-4">
+              <thead>
+                <tr className="text-slate-600 border-b border-slate-200">
+                  <th className="pb-2 font-medium w-16 text-center"></th>
+                  <th className="pb-2 font-medium w-24">المجموع</th>
+                  <th className="pb-2 font-medium w-24">الضريبة</th>
+                  <th className="pb-2 font-medium w-20">خصم</th>
+                  <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
+                  <th className="pb-2 font-medium w-20">الكمية *</th>
+                  <th className="pb-2 font-medium">وصف البند</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item: (typeof items)[number]) => {
+                  const lineSubtotal = item.quantity * item.unitPrice - item.discount;
+                  const lineTax = (lineSubtotal * item.taxPercent) / 100;
+                  const lineTotal = lineSubtotal + lineTax;
+
+                  return (
+                    <tr key={item.id}>
+                      <td className="pt-4 align-top">
+                        <div className="flex items-center justify-center gap-1 h-10">
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="text"
+                          value={lineTotal.toFixed(2)}
+                          disabled
+                          className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.taxPercent}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              taxPercent: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.discount}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              discount: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              unitPrice: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              quantity: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 pl-1 align-top">
+                        <input
+                          type="text"
+                          placeholder="اكتب وصف البند..."
+                          value={item.description}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              description: event.target.value,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">
+              <div className="w-96 flex justify-between">
+                <div className="space-y-2 text-left">
+                  <div className="text-sm">
+                    <span className="font-semibold text-slate-800">
+                      {totals.tax.toFixed(2)} ريال
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-bold text-emerald-600">
+                      {totals.total.toFixed(2)} ريال
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2 text-right">
+                  <div className="text-sm text-slate-600">الضريبة</div>
+                  <div className="text-sm font-bold text-slate-800">المجموع الكلي</div>
+                </div>
+                <div className="space-y-2 text-left">
+                  <div className="text-sm">
+                    <span className="font-semibold text-slate-800">
+                      {totals.subtotal.toFixed(2)} ريال
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-semibold text-slate-800">
+                      {totals.discount.toFixed(2)} ريال
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2 text-right">
+                  <div className="text-sm text-slate-600">المجموع الفرعي</div>
+                  <div className="text-sm text-slate-600">الخصم</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

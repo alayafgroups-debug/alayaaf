@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
 type QuotationRow = {
@@ -70,6 +71,10 @@ export default function Quotations() {
     loadQuotations();
   }, []);
 
+  const handleSaved = (quotation: QuotationRow) => {
+    setQuotations((prev) => [quotation, ...prev]);
+  };
+
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
@@ -79,7 +84,7 @@ export default function Quotations() {
             quotations={quotations}
           />
         ) : (
-          <QuotationForm onBack={() => setView("list")} />
+          <QuotationForm onBack={() => setView("list")} onSaved={handleSaved} />
         )}
       </div>
     </Layout>
@@ -271,7 +276,18 @@ function QuotationsList({
   );
 }
 
-function QuotationForm({ onBack }: { onBack: () => void }) {
+function QuotationForm({
+  onBack,
+  onSaved,
+}: {
+  onBack: () => void;
+  onSaved: (quotation: QuotationRow) => void;
+}) {
+  const [reference, setReference] = useState("");
+  const [validity, setValidity] = useState("2026-04-04");
+  const [date, setDate] = useState("2026-03-05");
+  const [customer, setCustomer] = useState("");
+  const [notes, setNotes] = useState("");
   const [items, setItems] = useState([
     {
       id: 1,
@@ -309,6 +325,57 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const totals = items.reduce(
+    (acc, item) => {
+      const lineSubtotal = item.quantity * item.price - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      const lineTotal = lineSubtotal + tax;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + tax,
+        total: acc.total + lineTotal,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
+
+  const handleSave = async () => {
+    const quotationId = `QT-${Date.now()}`;
+    const payload = {
+      id: quotationId,
+      date,
+      validity,
+      customer,
+      total: `ريال ${totals.total.toFixed(2)}`,
+      status: "مفتوح",
+      reference,
+      notes,
+    };
+
+    const { data, error } = await supabase
+      .from("sales_quotations")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (!error && data) {
+      onSaved({
+        id: data.id ?? quotationId,
+        date: data.date ?? date,
+        validity: data.validity ?? validity,
+        customer: data.customer ?? customer,
+        total: data.total ?? payload.total,
+        status: data.status ?? "مفتوح",
+        statusColor: statusColors[data.status ?? "مفتوح"] ?? "bg-cyan-500 text-white",
+      });
+      toast({ title: "تم حفظ عرض السعر", description: `العرض: ${data.id ?? quotationId}` });
+      onBack();
+    } else {
+      toast({ title: "تعذر حفظ عرض السعر", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
       {/* Header */}
@@ -320,7 +387,10 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
           >
             إلغاء
           </button>
-          <button className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors">
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors"
+          >
             <svg
               className="h-4 w-4"
               fill="none"
@@ -392,6 +462,8 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="text"
+                value={reference}
+                onChange={(event) => setReference(event.target.value)}
                 placeholder="أدخل مرجع العرض (اختياري)"
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -426,7 +498,8 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="date"
-                defaultValue="2026-04-04"
+                value={validity}
+                onChange={(event) => setValidity(event.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -436,7 +509,8 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="date"
-                defaultValue="2026-03-05"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -444,9 +518,13 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               <label className="text-sm font-medium text-slate-700 text-right block">
                 العميل <span className="text-red-500">*</span>
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
-                <option value="">ابحث عن عميل...</option>
-              </select>
+              <input
+                type="text"
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                placeholder="اكتب اسم العميل..."
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
             </div>
 
             <div className="space-y-1 md:col-span-3">
@@ -455,6 +533,8 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               </label>
               <textarea
                 rows={2}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
                 placeholder="أدخل ملاحظات إضافية"
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
               />
@@ -601,19 +681,27 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
             <div className="border-t border-slate-200 pt-4 flex justify-end">
               <div className="w-64 space-y-2">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">0.00 ريال</span>
+                  <span className="font-semibold text-slate-800">
+                    {totals.subtotal.toFixed(2)} ريال
+                  </span>
                   <span className="text-slate-600">المجموع الفرعي</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">0.00 ريال</span>
+                  <span className="font-semibold text-slate-800">
+                    {totals.discount.toFixed(2)} ريال
+                  </span>
                   <span className="text-slate-600">الخصم</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">0.00 ريال</span>
+                  <span className="font-semibold text-slate-800">
+                    {totals.tax.toFixed(2)} ريال
+                  </span>
                   <span className="text-slate-600">الضريبة</span>
                 </div>
                 <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
-                  <span className="font-bold text-blue-600">0.00 ريال</span>
+                  <span className="font-bold text-blue-600">
+                    {totals.total.toFixed(2)} ريال
+                  </span>
                   <span className="font-bold text-slate-800">الإجمالي</span>
                 </div>
               </div>

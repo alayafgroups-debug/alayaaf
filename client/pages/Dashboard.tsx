@@ -124,8 +124,9 @@ export default function Dashboard() {
           return (
             <div
               key={kpi.label}
-              className="erp-card flex flex-col justify-between"
+              className="erp-card relative flex flex-col justify-between overflow-hidden border border-primary/10 bg-gradient-to-br from-white via-white to-primary/5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
+              <span className="pointer-events-none absolute -left-6 -top-6 h-16 w-16 rounded-full bg-primary/10" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
                   {kpi.label}

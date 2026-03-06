@@ -49,19 +49,19 @@ export default function Layout({ children, subMenu }: LayoutProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-muted/20">
       {/* Sidebar */}
       <aside
         className={cn(
-          "border-r border-border bg-sidebar transition-all duration-300 ease-in-out",
+          "border-r border-sidebar-border bg-sidebar/95 shadow-lg transition-all duration-300 ease-in-out",
           sidebarOpen ? "w-64" : "w-20"
         )}
       >
         {/* Header */}
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border/70 px-4">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-lg p-2 hover:bg-sidebar-accent"
+            className="rounded-lg p-2 transition hover:bg-sidebar-accent/70"
           >
             {sidebarOpen ? (
               <X className="h-5 w-5" />
@@ -79,7 +79,7 @@ export default function Layout({ children, subMenu }: LayoutProps) {
             !sidebarOpen && "flex-col"
           )}
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold shadow-sm">
             نظ
           </div>
           {sidebarOpen && (
@@ -111,10 +111,10 @@ export default function Layout({ children, subMenu }: LayoutProps) {
                       }
                     }}
                     className={cn(
-                      "w-full flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200",
+                      "w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
                       isItemActive
-                        ? "bg-sidebar-accent text-sidebar-primary"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent"
+                        ? "bg-sidebar-accent/80 text-sidebar-primary shadow-sm"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-primary"
                     )}
                     title={item.label}
                   >
@@ -135,10 +135,10 @@ export default function Layout({ children, subMenu }: LayoutProps) {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200",
+                      "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
                       isItemActive
-                        ? "bg-sidebar-accent text-sidebar-primary"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent"
+                        ? "bg-sidebar-accent/80 text-sidebar-primary shadow-sm"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-primary"
                     )}
                     title={item.label}
                   >
@@ -180,7 +180,7 @@ export default function Layout({ children, subMenu }: LayoutProps) {
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
         {/* Header */}
-        <header className="sticky top-0 z-40 border-b border-border bg-card">
+        <header className="sticky top-0 z-40 border-b border-border/60 bg-card/90 backdrop-blur">
           <div className="flex h-16 items-center justify-between px-8">
             <h1 className="text-xl font-semibold text-foreground">
               نظام الفواتير الإلكترونية المتكامل

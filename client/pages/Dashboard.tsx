@@ -175,7 +175,7 @@ export default function Dashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border">
+                  <tr className="border-b border-border bg-muted/40">
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">
                       رقم الفاتورة
                     </th>

@@ -163,7 +163,7 @@
 
 @layer components {
   .erp-card {
-    @apply rounded-lg border border-border bg-card p-6 shadow-sm transition-all hover:shadow-md;
+    @apply rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md;
   }
 
   .erp-button {

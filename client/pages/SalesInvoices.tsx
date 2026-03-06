@@ -481,7 +481,7 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                   <th className="pb-2 font-medium w-20">خصم</th>
                   <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
                   <th className="pb-2 font-medium w-20">الكمية *</th>
-                  <th className="pb-2 font-medium">وصف البند *</th>
+                  <th className="pb-2 font-medium">وصف البند</th>
                 </tr>
               </thead>
               <tbody>
@@ -532,9 +532,11 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                       />
                     </td>
                     <td className="pt-4 pl-1 align-top">
-                      <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                        <option>ابحث عن منتج بالاسم أو الكود...</option>
-                      </select>
+                      <input
+                        type="text"
+                        placeholder="اكتب وصف البند..."
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
                     </td>
                   </tr>
                 ))}

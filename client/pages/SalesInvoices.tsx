@@ -186,14 +186,33 @@ function InvoicesList({ onCreateClick }: { onCreateClick: () => void }) {
               >
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-1 flex-wrap">
-                    <button className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors">
+                    <button
+                      title="عرض الفاتورة"
+                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+                    >
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button className="p-1.5 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors">
+                    <button
+                      title="تعديل الفاتورة"
+                      className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
+                    >
                       <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      title="تسديد الفاتورة"
+                      className="p-1.5 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-50 transition-colors"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                    </button>
+                    <button
+                      title="حذف الفاتورة"
+                      className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                     <div className="relative">
                       <button
+                        title="خيارات إضافية"
                         onClick={() =>
                           setOpenDropdownId(
                             openDropdownId === invoice.id ? null : invoice.id
@@ -205,7 +224,7 @@ function InvoicesList({ onCreateClick }: { onCreateClick: () => void }) {
                         <ChevronDown className="h-3 w-3" />
                       </button>
                       {openDropdownId === invoice.id && (
-                        <div className="absolute top-full mt-1 left-0 w-36 bg-white border border-slate-200 rounded shadow-lg z-10 py-1">
+                        <div className="absolute top-full mt-1 left-0 w-40 bg-white border border-slate-200 rounded shadow-lg z-10 py-1">
                           <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
                             <Printer className="h-4 w-4 text-slate-600" />
                             طباعة
@@ -222,9 +241,6 @@ function InvoicesList({ onCreateClick }: { onCreateClick: () => void }) {
                         </div>
                       )}
                     </div>
-                    <button className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
                 </td>
                 <td className="px-4 py-3 align-middle text-right">

@@ -18,6 +18,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
 const statusColors: Record<string, string> = {
@@ -99,6 +100,10 @@ function InvoicesList({
   invoices: Invoice[];
 }) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  const notifyAction = (title: string, description?: string) => {
+    toast({ title, description });
+  };
 
   return (
     <div className="space-y-6">
@@ -192,24 +197,36 @@ function InvoicesList({
                   <div className="flex items-center gap-1 flex-wrap">
                     <button
                       title="عرض الفاتورة"
+                      onClick={() =>
+                        notifyAction("عرض الفاتورة", `الفاتورة: ${invoice.id}`)
+                      }
                       className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
                     <button
                       title="تعديل الفاتورة"
+                      onClick={() =>
+                        notifyAction("تعديل الفاتورة", `الفاتورة: ${invoice.id}`)
+                      }
                       className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
                       title="تسديد الفاتورة"
+                      onClick={() =>
+                        notifyAction("تسديد الفاتورة", `الفاتورة: ${invoice.id}`)
+                      }
                       className="p-1.5 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-50 transition-colors"
                     >
                       <CreditCard className="h-4 w-4" />
                     </button>
                     <button
                       title="حذف الفاتورة"
+                      onClick={() =>
+                        notifyAction("حذف الفاتورة", `الفاتورة: ${invoice.id}`)
+                      }
                       className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -229,16 +246,31 @@ function InvoicesList({
                       </button>
                       {openDropdownId === invoice.id && (
                         <div className="absolute top-full mt-1 left-0 w-40 bg-white border border-slate-200 rounded shadow-lg z-10 py-1">
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
+                          <button
+                            onClick={() =>
+                              notifyAction("طباعة الفاتورة", `الفاتورة: ${invoice.id}`)
+                            }
+                            className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between"
+                          >
                             <Printer className="h-4 w-4 text-slate-600" />
                             طباعة
                           </button>
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
+                          <button
+                            onClick={() =>
+                              notifyAction("تصدير PDF", `الفاتورة: ${invoice.id}`)
+                            }
+                            className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between"
+                          >
                             <FileText className="h-4 w-4 text-slate-600" />
                             PDF
                           </button>
                           <div className="h-px bg-slate-200 my-1" />
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-red-50 text-red-600 flex items-center justify-between">
+                          <button
+                            onClick={() =>
+                              notifyAction("إلغاء الفاتورة", `الفاتورة: ${invoice.id}`)
+                            }
+                            className="w-full px-4 py-2 text-right text-sm hover:bg-red-50 text-red-600 flex items-center justify-between"
+                          >
                             <Ban className="h-4 w-4" />
                             إلغاء الفاتورة
                           </button>

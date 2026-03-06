@@ -412,15 +412,6 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               </select>
             </div>
 
-            <div className="space-y-1 md:col-start-4">
-              <label className="text-sm font-medium text-slate-700 text-right block">
-                المخزن
-              </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
-                <option value="">اختر المخزن...</option>
-              </select>
-            </div>
-
             <div className="space-y-1 md:col-span-3">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 ملاحظات
@@ -432,22 +423,6 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
               />
             </div>
 
-            <div className="space-y-1">
-              <div className="flex justify-between items-center mb-1">
-                <div className="w-8 h-4 bg-green-500 rounded-full flex items-center p-0.5">
-                  <div className="w-3 h-3 bg-white rounded-full shadow-sm ml-auto"></div>
-                </div>
-                <label className="text-sm font-medium text-slate-700 text-right block">
-                  مركز التكلفة
-                </label>
-              </div>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
-                <option value="">اختر مركز التكلفة...</option>
-              </select>
-              <p className="text-xs text-amber-500 text-right mt-1">
-                يرجى اختيار مركز التكلفة من القائمة أعلاه ⚠️
-              </p>
-            </div>
           </div>
         </div>
 
@@ -538,14 +513,18 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
                     />
                   </td>
                   <td className="pt-4 px-1 align-top">
-                    <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                      <option>اختر الوحدة...</option>
-                    </select>
+                    <input
+                      type="text"
+                      placeholder="اكتب الوحدة..."
+                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                    />
                   </td>
                   <td className="pt-4 pl-1 align-top">
-                    <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                      <option>ابحث عن منتج بالاسم أو الكود...</option>
-                    </select>
+                    <input
+                      type="text"
+                      placeholder="اكتب وصف البند..."
+                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                    />
                   </td>
                 </tr>
               </tbody>

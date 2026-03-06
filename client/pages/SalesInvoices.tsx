@@ -6,15 +6,12 @@ import {
   Search,
   X,
   Trash2,
-  MoreVertical,
   ArrowLeftRight,
   Edit,
   Eye,
   Printer,
   FileText,
-  Ban,
   CreditCard,
-  ChevronDown,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +23,9 @@ const statusColors: Record<string, string> = {
   "مدفوعة جزئياً": "bg-yellow-500 text-white",
   "مفتوحة": "bg-cyan-500 text-white",
 };
+
+const parseCurrency = (value: string) =>
+  Number(value.replace(/[^0-9.]/g, "")) || 0;
 
 const mockInvoices: Invoice[] = [];
 
@@ -42,8 +42,9 @@ type Invoice = {
 };
 
 export default function SalesInvoices() {
-  const [view, setView] = useState<"list" | "create">("list");
+  const [view, setView] = useState<"list" | "create" | "details" | "edit" | "payment">("list");
   const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
     const loadInvoices = async () => {
@@ -76,16 +77,128 @@ export default function SalesInvoices() {
     setInvoices((prev) => [invoice, ...prev]);
   };
 
+  const handleUpdate = (updated: Invoice) => {
+    setInvoices((prev) =>
+      prev.map((invoice) => (invoice.id === updated.id ? updated : invoice))
+    );
+  };
+
+  const handleDelete = async (invoiceId: string) => {
+    const { error } = await supabase
+      .from("sales_invoices")
+      .delete()
+      .eq("id", invoiceId);
+
+    if (!error) {
+      setInvoices((prev) => prev.filter((invoice) => invoice.id !== invoiceId));
+      toast({ title: "تم حذف الفاتورة", description: `الفاتورة: ${invoiceId}` });
+    } else {
+      toast({ title: "تعذر حذف الفاتورة", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
+  const handleDownloadPdf = (invoice: Invoice) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      return;
+    }
+
+    printWindow.document.write(`
+      <html dir="rtl">
+        <head>
+          <title>فاتورة ${invoice.id}</title>
+          <style>
+            body { font-family: 'Cairo', Arial, sans-serif; padding: 24px; }
+            h1 { color: #1f2937; }
+            .section { margin-top: 16px; }
+            .label { color: #6b7280; font-size: 14px; }
+            .value { font-size: 16px; font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          <h1>تفاصيل الفاتورة</h1>
+          <div class="section">
+            <div class="label">رقم الفاتورة</div>
+            <div class="value">${invoice.id}</div>
+          </div>
+          <div class="section">
+            <div class="label">العميل</div>
+            <div class="value">${invoice.customer}</div>
+          </div>
+          <div class="section">
+            <div class="label">تاريخ الفاتورة</div>
+            <div class="value">${invoice.date}</div>
+          </div>
+          <div class="section">
+            <div class="label">تاريخ الاستحقاق</div>
+            <div class="value">${invoice.dueDate}</div>
+          </div>
+          <div class="section">
+            <div class="label">الإجمالي</div>
+            <div class="value">${invoice.total}</div>
+          </div>
+          <div class="section">
+            <div class="label">المدفوع</div>
+            <div class="value">${invoice.paid}</div>
+          </div>
+          <div class="section">
+            <div class="label">المتبقي</div>
+            <div class="value">${invoice.remaining}</div>
+          </div>
+          <div class="section">
+            <div class="label">الحالة</div>
+            <div class="value">${invoice.status}</div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
-        {view === "list" ? (
+        {view === "list" && (
           <InvoicesList
             onCreateClick={() => setView("create")}
+            onView={(invoice) => {
+              setSelectedInvoice(invoice);
+              setView("details");
+            }}
+            onEdit={(invoice) => {
+              setSelectedInvoice(invoice);
+              setView("edit");
+            }}
+            onPayment={(invoice) => {
+              setSelectedInvoice(invoice);
+              setView("payment");
+            }}
+            onDelete={handleDelete}
+            onDownloadPdf={handleDownloadPdf}
             invoices={invoices}
           />
-        ) : (
+        )}
+        {view === "create" && (
           <InvoiceForm onBack={() => setView("list")} onSaved={handleSaved} />
+        )}
+        {view === "details" && selectedInvoice && (
+          <InvoiceDetails invoice={selectedInvoice} onBack={() => setView("list")} />
+        )}
+        {view === "edit" && selectedInvoice && (
+          <InvoiceEdit
+            invoice={selectedInvoice}
+            onBack={() => setView("list")}
+            onUpdated={handleUpdate}
+          />
+        )}
+        {view === "payment" && selectedInvoice && (
+          <InvoicePayment
+            invoice={selectedInvoice}
+            onBack={() => setView("list")}
+            onUpdated={handleUpdate}
+          />
         )}
       </div>
     </Layout>
@@ -94,13 +207,21 @@ export default function SalesInvoices() {
 
 function InvoicesList({
   onCreateClick,
+  onView,
+  onEdit,
+  onPayment,
+  onDelete,
+  onDownloadPdf,
   invoices,
 }: {
   onCreateClick: () => void;
+  onView: (invoice: Invoice) => void;
+  onEdit: (invoice: Invoice) => void;
+  onPayment: (invoice: Invoice) => void;
+  onDelete: (invoiceId: string) => void;
+  onDownloadPdf: (invoice: Invoice) => void;
   invoices: Invoice[];
 }) {
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-
   const notifyAction = (title: string, description?: string) => {
     toast({ title, description });
   };
@@ -197,86 +318,42 @@ function InvoicesList({
                   <div className="flex items-center gap-1 flex-wrap">
                     <button
                       title="عرض الفاتورة"
-                      onClick={() =>
-                        notifyAction("عرض الفاتورة", `الفاتورة: ${invoice.id}`)
-                      }
+                      onClick={() => onView(invoice)}
                       className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
                     <button
                       title="تعديل الفاتورة"
-                      onClick={() =>
-                        notifyAction("تعديل الفاتورة", `الفاتورة: ${invoice.id}`)
-                      }
+                      onClick={() => onEdit(invoice)}
                       className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
                       title="تسديد الفاتورة"
-                      onClick={() =>
-                        notifyAction("تسديد الفاتورة", `الفاتورة: ${invoice.id}`)
-                      }
+                      onClick={() => onPayment(invoice)}
                       className="p-1.5 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-50 transition-colors"
                     >
                       <CreditCard className="h-4 w-4" />
                     </button>
                     <button
                       title="حذف الفاتورة"
-                      onClick={() =>
-                        notifyAction("حذف الفاتورة", `الفاتورة: ${invoice.id}`)
-                      }
+                      onClick={() => onDelete(invoice.id)}
                       className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
-                    <div className="relative">
-                      <button
-                        title="خيارات إضافية"
-                        onClick={() =>
-                          setOpenDropdownId(
-                            openDropdownId === invoice.id ? null : invoice.id
-                          )
-                        }
-                        className="p-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors flex items-center"
-                      >
-                        <MoreVertical className="h-4 w-3" />
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
-                      {openDropdownId === invoice.id && (
-                        <div className="absolute top-full mt-1 left-0 w-40 bg-white border border-slate-200 rounded shadow-lg z-10 py-1">
-                          <button
-                            onClick={() =>
-                              notifyAction("طباعة الفاتورة", `الفاتورة: ${invoice.id}`)
-                            }
-                            className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between"
-                          >
-                            <Printer className="h-4 w-4 text-slate-600" />
-                            طباعة
-                          </button>
-                          <button
-                            onClick={() =>
-                              notifyAction("تصدير PDF", `الفاتورة: ${invoice.id}`)
-                            }
-                            className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between"
-                          >
-                            <FileText className="h-4 w-4 text-slate-600" />
-                            PDF
-                          </button>
-                          <div className="h-px bg-slate-200 my-1" />
-                          <button
-                            onClick={() =>
-                              notifyAction("إلغاء الفاتورة", `الفاتورة: ${invoice.id}`)
-                            }
-                            className="w-full px-4 py-2 text-right text-sm hover:bg-red-50 text-red-600 flex items-center justify-between"
-                          >
-                            <Ban className="h-4 w-4" />
-                            إلغاء الفاتورة
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      title="تحميل PDF"
+                      onClick={() => {
+                        onDownloadPdf(invoice);
+                        notifyAction("تحميل PDF", `الفاتورة: ${invoice.id}`);
+                      }}
+                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
+                    >
+                      تحميل PDF
+                    </button>
                   </div>
                 </td>
                 <td className="px-4 py-3 align-middle text-right">
@@ -314,6 +391,337 @@ function InvoicesList({
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function InvoiceDetails({
+  invoice,
+  onBack,
+}: {
+  invoice: Invoice;
+  onBack: () => void;
+}) {
+  return (
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+        >
+          العودة للقائمة
+          <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">تفاصيل الفاتورة</h1>
+          <FileText className="h-5 w-5 text-blue-600" />
+        </div>
+      </div>
+
+      <div className="p-4">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">بيانات الفاتورة</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">رقم الفاتورة</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.id}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.customer}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">
+                تاريخ الفاتورة
+              </label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.date}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">
+                تاريخ الاستحقاق
+              </label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.dueDate}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">الإجمالي</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.total}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">المدفوع</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.paid}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">المتبقي</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.remaining}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">الحالة</label>
+              <div
+                className={cn(
+                  "inline-flex items-center justify-center px-3 py-1 rounded text-xs font-semibold text-white",
+                  invoice.statusColor
+                )}
+              >
+                {invoice.status}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvoiceEdit({
+  invoice,
+  onBack,
+  onUpdated,
+}: {
+  invoice: Invoice;
+  onBack: () => void;
+  onUpdated: (invoice: Invoice) => void;
+}) {
+  const [invoiceDate, setInvoiceDate] = useState(invoice.date);
+  const [dueDate, setDueDate] = useState(invoice.dueDate);
+  const [customer, setCustomer] = useState(invoice.customer);
+  const [status, setStatus] = useState(invoice.status);
+
+  const handleSave = async () => {
+    const { data, error } = await supabase
+      .from("sales_invoices")
+      .update({
+        date: invoiceDate,
+        due_date: dueDate,
+        customer,
+        status,
+      })
+      .eq("id", invoice.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      onUpdated({
+        ...invoice,
+        date: invoiceDate,
+        dueDate,
+        customer,
+        status,
+        statusColor: statusColors[status] ?? "bg-slate-500 text-white",
+      });
+      toast({ title: "تم تحديث الفاتورة", description: `الفاتورة: ${invoice.id}` });
+      onBack();
+    } else {
+      toast({ title: "تعذر تحديث الفاتورة", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
+  return (
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+        >
+          العودة للقائمة
+          <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">تعديل الفاتورة</h1>
+          <Edit className="h-5 w-5 text-emerald-600" />
+        </div>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 transition-colors"
+        >
+          حفظ التعديلات
+        </button>
+      </div>
+
+      <div className="p-4">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">معلومات الفاتورة</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">
+                تاريخ الفاتورة
+              </label>
+              <input
+                type="date"
+                value={invoiceDate}
+                onChange={(event) => setInvoiceDate(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">
+                تاريخ الاستحقاق
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <input
+                type="text"
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">الحالة</label>
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none bg-white"
+              >
+                <option value="مفتوحة">مفتوحة</option>
+                <option value="مدفوعة جزئياً">مدفوعة جزئياً</option>
+                <option value="مدفوعة بالكامل">مدفوعة بالكامل</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvoicePayment({
+  invoice,
+  onBack,
+  onUpdated,
+}: {
+  invoice: Invoice;
+  onBack: () => void;
+  onUpdated: (invoice: Invoice) => void;
+}) {
+  const totalValue = parseCurrency(invoice.total);
+  const paidValue = parseCurrency(invoice.paid);
+  const remainingValue = parseCurrency(invoice.remaining);
+  const defaultStatus =
+    remainingValue === 0 ? "مدفوعة بالكامل" : paidValue > 0 ? "مدفوعة جزئياً" : "مفتوحة";
+  const [amount, setAmount] = useState(remainingValue.toFixed(2));
+  const [status, setStatus] = useState(invoice.status || defaultStatus);
+
+  const handleSave = async () => {
+    const paymentAmount = Math.max(Number(amount) || 0, 0);
+    const nextPaid = Math.min(paidValue + paymentAmount, totalValue);
+    const nextRemaining = Math.max(totalValue - nextPaid, 0);
+    const nextStatus = status || defaultStatus;
+
+    const { data, error } = await supabase
+      .from("sales_invoices")
+      .update({
+        paid: `ريال ${nextPaid.toFixed(2)}`,
+        remaining: `ريال ${nextRemaining.toFixed(2)}`,
+        status: nextStatus,
+      })
+      .eq("id", invoice.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      onUpdated({
+        ...invoice,
+        paid: `ريال ${nextPaid.toFixed(2)}`,
+        remaining: `ريال ${nextRemaining.toFixed(2)}`,
+        status: nextStatus,
+        statusColor: statusColors[nextStatus] ?? "bg-slate-500 text-white",
+      });
+      toast({ title: "تم تسديد الفاتورة", description: `الفاتورة: ${invoice.id}` });
+      onBack();
+    } else {
+      toast({ title: "تعذر تسديد الفاتورة", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
+  return (
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+        >
+          العودة للقائمة
+          <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">تسديد الفاتورة</h1>
+          <CreditCard className="h-5 w-5 text-indigo-600" />
+        </div>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
+        >
+          حفظ السداد
+        </button>
+      </div>
+
+      <div className="p-4">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">معلومات السداد</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">رقم الفاتورة</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.id}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">المتبقي</label>
+              <div className="text-base font-semibold text-slate-800 text-right">
+                {invoice.remaining}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">المبلغ المدفوع الآن</label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">الحالة</label>
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+              >
+                <option value="مفتوحة">مفتوحة</option>
+                <option value="مدفوعة جزئياً">مدفوعة جزئياً</option>
+                <option value="مدفوعة بالكامل">مدفوعة بالكامل</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

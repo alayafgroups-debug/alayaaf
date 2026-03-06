@@ -349,8 +349,6 @@ function QuotationForm({
       customer,
       total: `ريال ${totals.total.toFixed(2)}`,
       status: "مفتوح",
-      reference,
-      notes,
     };
 
     const { data, error } = await supabase

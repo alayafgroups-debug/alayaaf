@@ -20,57 +20,56 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 
-const mockOrders = [
-  {
-    id: "PO-000006",
-    date: "07/02/2026",
-    vendor: "B2B",
-    total: "SAR 862.50",
-    status: "مغلق",
-    statusColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PO-000005",
-    date: "02/02/2026",
-    vendor: "Grass",
-    total: "SAR 1,902.50",
-    status: "مغلق",
-    statusColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PO-000004",
-    date: "02/02/2026",
-    vendor: "Odo",
-    total: "SAR 1,092.50",
-    status: "مغلق",
-    statusColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PO-000003",
-    date: "02/02/2026",
-    vendor: "Ceo",
-    total: "SAR 15,525.00",
-    status: "مغلق",
-    statusColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PO-000002",
-    date: "02/02/2026",
-    vendor: "Ceo",
-    total: "SAR 15,066.60",
-    status: "مغلق",
-    statusColor: "bg-green-600 text-white",
-  },
-];
+type PurchaseOrderRow = {
+  id: string;
+  date: string;
+  vendor: string;
+  total: string;
+  status: string;
+  statusColor: string;
+};
+
+const statusColors: Record<string, string> = {
+  "مغلق": "bg-green-600 text-white",
+  "مفتوح": "bg-cyan-500 text-white",
+};
+
+const mockOrders: PurchaseOrderRow[] = [];
 
 export default function PurchaseOrders() {
   const [view, setView] = useState<"list" | "create">("list");
+  const [orders, setOrders] = useState<PurchaseOrderRow[]>(mockOrders);
+
+  useEffect(() => {
+    const loadOrders = async () => {
+      const { data, error } = await supabase
+        .from("purchase_orders")
+        .select("*")
+        .order("date", { ascending: false });
+
+      if (!error && data) {
+        setOrders(
+          data.map((row) => ({
+            id: row.id ?? "",
+            date: row.date ?? "",
+            vendor: row.vendor ?? "",
+            total: row.total ?? "",
+            status: row.status ?? "",
+            statusColor:
+              statusColors[row.status ?? ""] ?? "bg-slate-500 text-white",
+          }))
+        );
+      }
+    };
+
+    loadOrders();
+  }, []);
 
   return (
     <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" ? (
-          <OrdersList onCreateClick={() => setView("create")} />
+          <OrdersList onCreateClick={() => setView("create")} orders={orders} />
         ) : (
           <OrderForm onBack={() => setView("list")} />
         )}
@@ -79,7 +78,13 @@ export default function PurchaseOrders() {
   );
 }
 
-function OrdersList({ onCreateClick }: { onCreateClick: () => void }) {
+function OrdersList({
+  onCreateClick,
+  orders,
+}: {
+  onCreateClick: () => void;
+  orders: PurchaseOrderRow[];
+}) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   return (

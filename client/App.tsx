@@ -61,4 +61,11 @@ const App = () => (
   </QueryClientProvider>
 );
 
-createRoot(document.getElementById("root")!).render(<App />);
+const container = document.getElementById("root");
+if (container) {
+  const root =
+    (container as { __root?: ReturnType<typeof createRoot> }).__root ??
+    createRoot(container);
+  (container as { __root?: ReturnType<typeof createRoot> }).__root = root;
+  root.render(<App />);
+}

@@ -6,13 +6,9 @@ import {
   Search,
   X,
   Trash2,
-  MoreVertical,
   ArrowLeftRight,
   Edit,
   Eye,
-  Printer,
-  FileText,
-  Ban,
   FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -98,8 +94,6 @@ function QuotationsList({
   onCreateClick: () => void;
   quotations: QuotationRow[];
 }) {
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -188,39 +182,10 @@ function QuotationsList({
                     <button className="p-1.5 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors">
                       <Edit className="h-4 w-4" />
                     </button>
-                    <button className="p-1.5 text-cyan-500 border border-cyan-200 rounded hover:bg-cyan-50 transition-colors">
-                      <ArrowLeftRight className="h-4 w-4" />
+                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-amber-700 border border-amber-200 rounded hover:bg-amber-50 transition-colors text-xs font-semibold">
+                      <ArrowLeftRight className="h-3.5 w-3.5" />
+                      تحويل إلى فاتورة مبيعات
                     </button>
-                    <div className="relative">
-                      <button
-                        onClick={() =>
-                          setOpenDropdownId(
-                            openDropdownId === quo.id ? null : quo.id
-                          )
-                        }
-                        className="p-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors flex items-center"
-                      >
-                        <MoreVertical className="h-4 w-3" />
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
-                      {openDropdownId === quo.id && (
-                        <div className="absolute top-full mt-1 left-0 w-36 bg-white border border-slate-200 rounded shadow-lg z-10 py-1">
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
-                            <Printer className="h-4 w-4 text-slate-600" />
-                            طباعة
-                          </button>
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
-                            <FileText className="h-4 w-4 text-slate-600" />
-                            PDF
-                          </button>
-                          <div className="h-px bg-slate-200 my-1" />
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-red-50 text-red-600 flex items-center justify-between">
-                            <Ban className="h-4 w-4" />
-                            إلغاء العرض
-                          </button>
-                        </div>
-                      )}
-                    </div>
                     <button className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
                       <Trash2 className="h-4 w-4" />
                     </button>

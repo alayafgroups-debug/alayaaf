@@ -1,7 +1,10 @@
 import Layout from "@/components/Layout";
+import { useState } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
 
 export default function Settings() {
+  const [language, setLanguage] = useState("ar");
+
   return (
     <Layout subMenu={null}>
       <div className="space-y-6">
@@ -172,6 +175,35 @@ export default function Settings() {
                   <option>GMT+3</option>
                   <option>GMT+4</option>
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium text-foreground">
+                  لغة النظام
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLanguage("ar")}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                      language === "ar"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground"
+                    }`}
+                  >
+                    العربية
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage("en")}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                      language === "en"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground"
+                    }`}
+                  >
+                    English
+                  </button>
+                </div>
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium text-foreground">

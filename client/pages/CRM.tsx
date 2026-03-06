@@ -59,14 +59,16 @@ export default function CRM() {
   return (
     <Layout
       subMenu={{
-        title: "إدارة العملاء",
-        items: [{ label: "العملاء" }, { label: "تقارير العملاء" }],
+        title: "العملاء والموردين",
+        items: [{ label: "العملاء" }, { label: "الموردين" }, { label: "التقارير" }],
       }}
     >
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">العملاء</h1>
+            <h1 className="text-2xl font-semibold text-foreground">
+              العملاء والموردين
+            </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               إدارة قاعدة بيانات العملاء ومتابعة الحالة المالية.
             </p>

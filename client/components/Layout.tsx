@@ -33,7 +33,7 @@ export default function Layout({ children, subMenu }: LayoutProps) {
     { icon: FileText, label: "المبيعات", href: "/sales", hasSubmenu: true },
     { icon: ShoppingCart, label: "المشتريات", href: "/purchases", hasSubmenu: true },
     { icon: Users, label: "الموارد البشرية", href: "/hr", hasSubmenu: true },
-    { icon: CreditCard, label: "إدارة العملاء", href: "/crm", hasSubmenu: true },
+    { icon: CreditCard, label: "العملاء والموردين", href: "/crm", hasSubmenu: true },
     { icon: DollarSign, label: "إدارة الضرائب", href: "/tax", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];

@@ -403,6 +403,21 @@ function InvoiceDetails({
   invoice: Invoice;
   onBack: () => void;
 }) {
+  const totalValue = parseCurrency(invoice.total);
+  const taxableValue = totalValue ? totalValue / 1.15 : 0;
+  const vatValue = totalValue ? totalValue - taxableValue : 0;
+  const lineItems = [
+    {
+      id: 1,
+      description: "خدمات/بنود الفاتورة",
+      qty: 1,
+      price: taxableValue,
+      taxable: taxableValue,
+      vat: vatValue,
+      total: totalValue,
+    },
+  ];
+
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
       <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
@@ -414,72 +429,154 @@ function InvoiceDetails({
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تفاصيل الفاتورة</h1>
+          <h1 className="text-xl font-bold text-slate-800">تفاصيل الفاتورة الضريبية</h1>
           <FileText className="h-5 w-5 text-blue-600" />
         </div>
       </div>
 
       <div className="p-4">
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">بيانات الفاتورة</h2>
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">رقم الفاتورة</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
-                {invoice.id}
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+              <div className="space-y-2 text-right">
+                <h2 className="text-lg font-semibold text-slate-800">شركة الكجري العياف</h2>
+                <p className="text-sm text-slate-600">
+                  8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة
+                </p>
+                <p className="text-sm text-slate-600">24351 المملكة العربية السعودية</p>
+                <p className="text-sm text-slate-600">رقم التسجيل الضريبي 314559705300003</p>
+                <p className="text-sm text-slate-600">رقم السجل التجاري 7053358979</p>
+              </div>
+              <div className="flex items-center justify-center">
+                <div className="h-24 w-32 border border-slate-200 rounded bg-slate-50 flex items-center justify-center text-xs text-slate-500">
+                  شعار الشركة
+                </div>
+              </div>
+              <div className="space-y-2 text-left md:text-right">
+                <h2 className="text-lg font-semibold text-slate-800">Luxury Al Ayaf company</h2>
+                <p className="text-sm text-slate-600">
+                  8529, Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca
+                </p>
+                <p className="text-sm text-slate-600">24351, Kingdom of Saudi Arabia</p>
+                <p className="text-sm text-slate-600">VAT number 314559705300003</p>
+                <p className="text-sm text-slate-600">CR Number 7053358979</p>
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">العميل</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
-                {invoice.customer}
+
+            <div className="text-center border-t border-b border-slate-200 py-4">
+              <h3 className="text-2xl font-bold text-slate-800">فاتورة ضريبية</h3>
+              <p className="text-sm text-slate-500">Tax Invoice</p>
+            </div>
+
+            <div className="border border-slate-200 rounded">
+              <div className="grid grid-cols-1 md:grid-cols-2 text-sm">
+                <div className="p-3 border-b md:border-b-0 md:border-l border-slate-200 space-y-2 text-right">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-600">العميل</span>
+                    <span className="font-semibold text-slate-800">{invoice.customer}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-600">العنوان</span>
+                    <span className="font-semibold text-slate-800">العزيزية، مكة المكرمة</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-600">رقم التسجيل الضريبي</span>
+                    <span className="font-semibold text-slate-800">300726885600003</span>
+                  </div>
+                </div>
+                <div className="p-3 space-y-2 text-right">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-600">رقم الفاتورة</span>
+                    <span className="font-semibold text-slate-800">{invoice.id}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-600">التاريخ</span>
+                    <span className="font-semibold text-slate-800">{invoice.date}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-600">تاريخ الاستحقاق</span>
+                    <span className="font-semibold text-slate-800">{invoice.dueDate}</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">
-                تاريخ الفاتورة
-              </label>
-              <div className="text-base font-semibold text-slate-800 text-right">
-                {invoice.date}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-right border border-slate-200">
+                <thead className="bg-slate-100 text-slate-700">
+                  <tr>
+                    <th className="px-3 py-2 border border-slate-200">#</th>
+                    <th className="px-3 py-2 border border-slate-200">الوصف</th>
+                    <th className="px-3 py-2 border border-slate-200">الكمية</th>
+                    <th className="px-3 py-2 border border-slate-200">السعر</th>
+                    <th className="px-3 py-2 border border-slate-200">المبلغ الخاضع للضريبة</th>
+                    <th className="px-3 py-2 border border-slate-200">القيمة المضافة</th>
+                    <th className="px-3 py-2 border border-slate-200">المجموع</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineItems.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-3 py-2 border border-slate-200">{item.id}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.description}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.qty}</td>
+                      <td className="px-3 py-2 border border-slate-200">
+                        {item.price.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 border border-slate-200">
+                        {item.taxable.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 border border-slate-200">
+                        {item.vat.toFixed(2)}
+                        <div className="text-xs text-slate-500">15%</div>
+                      </td>
+                      <td className="px-3 py-2 border border-slate-200">
+                        {item.total.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-28 w-28 border border-slate-200 rounded flex items-center justify-center text-xs text-slate-500">
+                    QR
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm text-slate-700">
+                  <h4 className="font-semibold">ملاحظات</h4>
+                  <p>يتم عرض تفاصيل الفاتورة وفق نموذج الفاتورة الضريبية المعتمد.</p>
+                </div>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">المجموع الفرعي</span>
+                  <span className="font-semibold text-slate-800">{taxableValue.toFixed(2)} ﷼</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">إجمالي ضريبة القيمة المضافة</span>
+                  <span className="font-semibold text-slate-800">{vatValue.toFixed(2)} ﷼</span>
+                </div>
+                <div className="flex justify-between text-blue-600 font-bold">
+                  <span>المجموع شامل القيمة المضافة</span>
+                  <span>{totalValue.toFixed(2)} ﷼</span>
+                </div>
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">
-                تاريخ الاستحقاق
-              </label>
-              <div className="text-base font-semibold text-slate-800 text-right">
-                {invoice.dueDate}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">الإجمالي</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
-                {invoice.total}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">المدفوع</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
-                {invoice.paid}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">المتبقي</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
-                {invoice.remaining}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">الحالة</label>
-              <div
-                className={cn(
-                  "inline-flex items-center justify-center px-3 py-1 rounded text-xs font-semibold text-white",
-                  invoice.statusColor
-                )}
-              >
-                {invoice.status}
+
+            <div className="border-t border-slate-200 pt-4 text-sm text-slate-700">
+              <h4 className="font-semibold mb-2">بيانات الحساب البنكي</h4>
+              <div className="space-y-1">
+                <div>اسم المستفيد: شركة الكجري العياف</div>
+                <div>رقم الحساب: 1575917249940</div>
+                <div>رقم الآيبان: SA3520000001575917249940</div>
+                <div>بنك الرياض</div>
               </div>
             </div>
           </div>

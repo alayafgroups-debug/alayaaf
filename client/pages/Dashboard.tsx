@@ -109,7 +109,7 @@ export default function Dashboard() {
     <Layout subMenu={null}>
       {/* Welcome Section */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">
+        <h1 className="text-3xl font-bold text-primary">
           أهلاً وسهلاً بك
         </h1>
         <p className="mt-2 text-muted-foreground">

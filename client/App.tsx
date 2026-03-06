@@ -19,6 +19,7 @@ import HR from "./pages/HR";
 import CRM from "./pages/CRM";
 import Tax from "./pages/Tax";
 import UsersPermissions from "./pages/UsersPermissions";
+import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,8 @@ const App = () => (
           <Route path="/users" element={<UsersPermissions />} />
           <Route path="/users/roles" element={<UsersPermissions />} />
           <Route path="/users/audit" element={<UsersPermissions />} />
+          <Route path="/ai" element={<AIAssistant />} />
+          <Route path="/ai/assistant" element={<AIAssistant />} />
           <Route path="/settings" element={<Settings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

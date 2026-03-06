@@ -403,20 +403,71 @@ function InvoiceDetails({
   invoice: Invoice;
   onBack: () => void;
 }) {
-  const totalValue = parseCurrency(invoice.total);
-  const taxableValue = totalValue ? totalValue / 1.15 : 0;
-  const vatValue = totalValue ? totalValue - taxableValue : 0;
-  const lineItems = [
-    {
-      id: 1,
-      description: "خدمات/بنود الفاتورة",
-      qty: 1,
-      price: taxableValue,
-      taxable: taxableValue,
-      vat: vatValue,
-      total: totalValue,
+  const [lineItems, setLineItems] = useState<
+    Array<{
+      id: number;
+      description: string;
+      qty: number;
+      price: number;
+      taxable: number;
+      vat: number;
+      total: number;
+    }>
+  >([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(`sales-invoice-items-${invoice.id}`);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Array<{
+        id: number;
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        discount: number;
+        taxPercent: number;
+      }>;
+
+      const mapped = parsed.map((item) => {
+        const lineSubtotal = item.quantity * item.unitPrice - item.discount;
+        const vat = (lineSubtotal * item.taxPercent) / 100;
+        return {
+          id: item.id,
+          description: item.description || "-",
+          qty: item.quantity,
+          price: item.unitPrice,
+          taxable: lineSubtotal,
+          vat,
+          total: lineSubtotal + vat,
+        };
+      });
+      setLineItems(mapped);
+    } else {
+      const totalValue = parseCurrency(invoice.total);
+      const taxableValue = totalValue ? totalValue / 1.15 : 0;
+      const vatValue = totalValue ? totalValue - taxableValue : 0;
+      setLineItems([
+        {
+          id: 1,
+          description: "-",
+          qty: 1,
+          price: taxableValue,
+          taxable: taxableValue,
+          vat: vatValue,
+          total: totalValue,
+        },
+      ]);
+    }
+  }, [invoice.id, invoice.total]);
+
+  const totals = lineItems.reduce(
+    (acc, item) => {
+      acc.taxable += item.taxable;
+      acc.vat += item.vat;
+      acc.total += item.total;
+      return acc;
     },
-  ];
+    { taxable: 0, vat: 0, total: 0 }
+  );
 
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
@@ -557,15 +608,15 @@ function InvoiceDetails({
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-600">المجموع الفرعي</span>
-                  <span className="font-semibold text-slate-800">{taxableValue.toFixed(2)} ﷼</span>
+                  <span className="font-semibold text-slate-800">{totals.taxable.toFixed(2)} ﷼</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">إجمالي ضريبة القيمة المضافة</span>
-                  <span className="font-semibold text-slate-800">{vatValue.toFixed(2)} ﷼</span>
+                  <span className="font-semibold text-slate-800">{totals.vat.toFixed(2)} ﷼</span>
                 </div>
                 <div className="flex justify-between text-blue-600 font-bold">
                   <span>المجموع شامل القيمة المضافة</span>
-                  <span>{totalValue.toFixed(2)} ﷼</span>
+                  <span>{totals.total.toFixed(2)} ﷼</span>
                 </div>
               </div>
             </div>
@@ -902,6 +953,10 @@ function InvoiceForm({
       .single();
 
     if (!error && data) {
+      localStorage.setItem(
+        `sales-invoice-items-${data.id ?? invoiceId}`,
+        JSON.stringify(items)
+      );
       onSaved({
         id: data.id ?? invoiceId,
         date: data.date ?? invoiceDate,

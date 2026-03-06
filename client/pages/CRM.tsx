@@ -159,28 +159,101 @@ export default function CRM() {
         </div>
 
         {isReports ? (
-          <div className="erp-card">
-            <h3 className="text-lg font-semibold text-foreground">تقارير مخصصة</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              يمكنك إنشاء تقارير تفصيلية حول أرصدة العملاء والموردين،
-              وأداء الحسابات، والمستحقات المفتوحة.
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
-                <p className="text-sm font-semibold text-foreground">
-                  تقرير أرصدة العملاء
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  يعرض الأرصدة الحالية والفواتير غير المسددة.
-                </p>
+          <div className="space-y-6">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between bg-rose-600 px-4 py-3 text-sm font-semibold text-white">
+                  <span>التدقيق والمتابعة</span>
+                  <span className="text-xs">تحكم</span>
+                </div>
+                <div className="space-y-3 p-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-rose-500" />
+                    إعدادات نُظم الضريبة
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-rose-500" />
+                    فواتير المبيعات المستحقة
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-rose-500" />
+                    تقارير أعمار المديونية
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-rose-500" />
+                    مؤشرات الأداء (KPIs)
+                  </div>
+                </div>
               </div>
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
-                <p className="text-sm font-semibold text-foreground">
-                  تقرير أرصدة الموردين
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  ملخص للمستحقات وفترات الاستحقاق للموردين.
-                </p>
+
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">
+                  <span>تقارير الموردين (AP)</span>
+                  <span className="text-xs">قيد التطوير</span>
+                </div>
+                <div className="space-y-3 p-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    تقرير أعمار الموردين
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    تقرير أرصدة الموردين (AP Aging)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    تقييمات المستحقات المتأخرة
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between bg-sky-600 px-4 py-3 text-sm font-semibold text-white">
+                  <span>تقارير العملاء (AR)</span>
+                  <span className="text-xs">نشطة</span>
+                </div>
+                <div className="space-y-3 p-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-sky-500" />
+                    تقرير أعمار العملاء
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-sky-500" />
+                    تقرير أرصدة العملاء (AR Aging)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-sky-500" />
+                    حالات التحصيل
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-sky-500" />
+                    تنبيهات التأخر في الدفع
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="bg-slate-700 px-4 py-3 text-sm font-semibold text-white">
+                ملخصات عامة للتقارير
+              </div>
+              <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">إجمالي المديونية</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">﷼ 120,000</p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">المدفوعات الأخيرة</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">﷼ 48,000</p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">المستحقات المتأخرة</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">﷼ 18,500</p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">تنبيهات المتابعة</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">5 تنبيهات</p>
+                </div>
               </div>
             </div>
           </div>

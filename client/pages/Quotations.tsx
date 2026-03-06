@@ -272,6 +272,43 @@ function QuotationsList({
 }
 
 function QuotationForm({ onBack }: { onBack: () => void }) {
+  const [items, setItems] = useState([
+    {
+      id: 1,
+      description: "",
+      unit: "",
+      quantity: 1,
+      price: 0,
+      discount: 0,
+      taxPercent: 15,
+    },
+  ]);
+
+  const handleAddItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: prev.length + 1,
+        description: "",
+        unit: "",
+        quantity: 1,
+        price: 0,
+        discount: 0,
+        taxPercent: 15,
+      },
+    ]);
+  };
+
+  const updateItem = (id: number, changes: Partial<(typeof items)[number]>) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...changes } : item))
+    );
+  };
+
+  const removeItem = (id: number) => {
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
       {/* Header */}
@@ -429,7 +466,10 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
         {/* Items */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-            <button className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1">
+            <button
+              onClick={handleAddItem}
+              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+            >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
@@ -464,69 +504,96 @@ function QuotationForm({ onBack }: { onBack: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td className="pt-4 align-top">
-                    <div className="flex items-center justify-end gap-2 h-10">
-                      <button className="w-8 h-8 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
+                {items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="pt-4 align-top">
+                      <div className="flex items-center justify-end gap-2 h-10">
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M20 12H4"
-                          />
-                        </svg>
-                      </button>
-                      <button className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10">
-                      <option>ضريبة 15% (15.0000%)</option>
-                    </select>
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      defaultValue={0}
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      defaultValue={1}
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="text"
-                      placeholder="اكتب الوحدة..."
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 pl-1 align-top">
-                    <input
-                      type="text"
-                      placeholder="اكتب وصف البند..."
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                </tr>
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <select
+                        value={item.taxPercent}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            taxPercent: Number(event.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      >
+                        <option value={15}>ضريبة 15% (15.0000%)</option>
+                        <option value={0}>معفاة (0%)</option>
+                      </select>
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="number"
+                        value={item.discount}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            discount: Number(event.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="number"
+                        value={item.price}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            price: Number(event.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            quantity: Number(event.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="text"
+                        placeholder="اكتب الوحدة..."
+                        value={item.unit}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            unit: event.target.value,
+                          })
+                        }
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 pl-1 align-top">
+                      <input
+                        type="text"
+                        placeholder="اكتب وصف البند..."
+                        value={item.description}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            description: event.target.value,
+                          })
+                        }
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             

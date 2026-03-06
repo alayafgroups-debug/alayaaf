@@ -268,6 +268,12 @@ function InvoicesList({ onCreateClick }: { onCreateClick: () => void }) {
 }
 
 function InvoiceForm({ onBack }: { onBack: () => void }) {
+  const [items, setItems] = useState([{ id: 1 }]);
+
+  const handleAddItem = () => {
+    setItems((prev) => [...prev, { id: prev.length + 1 }]);
+  };
+
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
       {/* Header */}
@@ -404,32 +410,13 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
               />
             </div>
 
-            <div className="space-y-1 md:col-span-2">
-              <div className="flex justify-between items-center mb-1">
-                <div className="w-8 h-4 bg-green-500 rounded-full flex items-center p-0.5">
-                  <div className="w-3 h-3 bg-white rounded-full shadow-sm ml-auto"></div>
-                </div>
-                <label className="text-sm font-medium text-slate-700 text-right block">
-                  مركز التكلفة
-                </label>
-              </div>
-              <input
-                type="text"
-                defaultValue="بدون مركز تكلفة"
-                disabled
-                className="w-full px-3 py-2 border border-slate-300 bg-slate-50 rounded text-sm text-right outline-none text-slate-500"
-              />
-              <p className="text-xs text-amber-500 text-right mt-1">
-                يرجى اختيار مركز تكلفة من القائمة أعلاه ⚠️
-              </p>
-            </div>
             <div className="space-y-1 md:col-start-4">
               <label className="text-sm font-medium text-slate-700 text-right block">
-                مرجع الفاتورة
+                رقم الفاتورة
               </label>
               <input
                 type="text"
-                placeholder="تلقائي"
+                defaultValue="تلقائي"
                 disabled
                 className="w-full px-3 py-2 border border-slate-300 bg-slate-50 rounded text-sm text-right outline-none text-slate-500"
               />
@@ -440,7 +427,10 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
         {/* Items */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-            <button className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1">
+            <button
+              onClick={handleAddItem}
+              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+            >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
@@ -476,62 +466,64 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td className="pt-4 align-top">
-                    <div className="flex items-center justify-center gap-1 h-10">
-                      <button className="w-7 h-7 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="text"
-                      disabled
-                      className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="text"
-                      defaultValue="15%"
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      defaultValue={0}
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                      <option>اختر الوحدة...</option>
-                    </select>
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      defaultValue={1}
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 pl-1 align-top">
-                    <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                      <option>ابحث عن منتج بالاسم أو الكود...</option>
-                    </select>
-                  </td>
-                </tr>
+                {items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="pt-4 align-top">
+                      <div className="flex items-center justify-center gap-1 h-10">
+                        <button className="w-7 h-7 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
+                          <Settings className="w-3.5 h-3.5" />
+                        </button>
+                        <button className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="text"
+                        disabled
+                        className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="text"
+                        defaultValue="15%"
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="number"
+                        defaultValue={0}
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="number"
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
+                        <option>اختر الوحدة...</option>
+                      </select>
+                    </td>
+                    <td className="pt-4 px-1 align-top">
+                      <input
+                        type="number"
+                        defaultValue={1}
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                      />
+                    </td>
+                    <td className="pt-4 pl-1 align-top">
+                      <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
+                        <option>ابحث عن منتج بالاسم أو الكود...</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
 

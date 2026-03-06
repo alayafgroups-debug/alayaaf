@@ -41,6 +41,9 @@ const App = () => (
           <Route path="/purchases/receipts" element={<GoodsReceipts />} />
           <Route path="/hr" element={<HR />} />
           <Route path="/crm" element={<CRM />} />
+          <Route path="/crm/customers" element={<CRM />} />
+          <Route path="/crm/vendors" element={<CRM />} />
+          <Route path="/crm/reports" element={<CRM />} />
           <Route path="/tax" element={<Tax />} />
           <Route path="/settings" element={<Settings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -2,115 +2,77 @@ import PlaceholderModule from "@/components/PlaceholderModule";
 import Layout from "@/components/Layout";
 import { Plus, Search, Filter, Eye, Pencil, Trash2 } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
-const customers = [
-  {
-    id: "CUST-0005",
-    name: "ahmed",
-    type: "شركة",
-    email: "ahmed@demo.com",
-    phone: "0556656562",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "CUST-0004",
-    name: "great",
-    type: "شركة",
-    email: "great@demo.com",
-    phone: "0555544",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "CUST-0003",
-    name: "mood",
-    type: "فرد",
-    email: "mood@demo.com",
-    phone: "0588888",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "CUST-0002",
-    name: "sori",
-    type: "شركة",
-    email: "sori@demo.com",
-    phone: "052645555",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "CUST-0001",
-    name: "tyan",
-    type: "شركة",
-    email: "tyan@demo.com",
-    phone: "0556656562",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-];
+type PartyRow = {
+  id: string;
+  name: string;
+  type: string;
+  email: string;
+  phone: string;
+  openingBalance: string;
+  creditLimit: string;
+  status: string;
+};
 
-const vendors = [
-  {
-    id: "VEND-0005",
-    name: "B28",
-    type: "شركة",
-    email: "vendor@demo.com",
-    phone: "0556656562",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "VEND-0004",
-    name: "Gra",
-    type: "شركة",
-    email: "gra@demo.com",
-    phone: "0555544",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "VEND-0003",
-    name: "odo",
-    type: "فرد",
-    email: "odo@demo.com",
-    phone: "0588888",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "VEND-0002",
-    name: "smi",
-    type: "شركة",
-    email: "smi@demo.com",
-    phone: "052645555",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-  {
-    id: "VEND-0001",
-    name: "tyan",
-    type: "شركة",
-    email: "tyan@demo.com",
-    phone: "0556656562",
-    openingBalance: "0.00",
-    creditLimit: "100,000.00",
-    status: "نشط",
-  },
-];
+const customers: PartyRow[] = [];
+
+const vendors: PartyRow[] = [];
 
 export default function CRM() {
   const location = useLocation();
+  const [customerRows, setCustomerRows] = useState<PartyRow[]>(customers);
+  const [vendorRows, setVendorRows] = useState<PartyRow[]>(vendors);
+
+  useEffect(() => {
+    const loadCustomers = async () => {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (!error && data) {
+        setCustomerRows(
+          data.map((row) => ({
+            id: row.id ?? "",
+            name: row.name ?? "",
+            type: row.type ?? "",
+            email: row.email ?? "",
+            phone: row.phone ?? "",
+            openingBalance: row.opening_balance ?? row.openingBalance ?? "0.00",
+            creditLimit: row.credit_limit ?? row.creditLimit ?? "0.00",
+            status: row.status ?? "",
+          }))
+        );
+      }
+    };
+
+    const loadVendors = async () => {
+      const { data, error } = await supabase
+        .from("vendors")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (!error && data) {
+        setVendorRows(
+          data.map((row) => ({
+            id: row.id ?? "",
+            name: row.name ?? "",
+            type: row.type ?? "",
+            email: row.email ?? "",
+            phone: row.phone ?? "",
+            openingBalance: row.opening_balance ?? row.openingBalance ?? "0.00",
+            creditLimit: row.credit_limit ?? row.creditLimit ?? "0.00",
+            status: row.status ?? "",
+          }))
+        );
+      }
+    };
+
+    loadCustomers();
+    loadVendors();
+  }, []);
   const isVendors = location.pathname.includes("/crm/vendors");
   const isReports = location.pathname.includes("/crm/reports");
   const title = isReports
@@ -128,7 +90,7 @@ export default function CRM() {
     : isVendors
       ? "إضافة مورد جديد"
       : "إضافة عميل جديد";
-  const tableData = isVendors ? vendors : customers;
+  const tableData = isVendors ? vendorRows : customerRows;
   const idLabel = isVendors ? "رقم المورد" : "رقم العميل";
   const typeLabel = isVendors ? "نوع المورد" : "نوع العميل";
   const searchPlaceholder = isVendors

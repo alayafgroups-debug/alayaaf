@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { purchasesFeatures } from "./Purchases";
 import {
@@ -18,6 +18,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 
 const mockOrders = [
   {
@@ -143,7 +144,7 @@ function OrdersList({ onCreateClick }: { onCreateClick: () => void }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {mockOrders.map((order, i) => (
+            {orders.map((order, i) => (
               <tr key={order.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-1 flex-wrap">

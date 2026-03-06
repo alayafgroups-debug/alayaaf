@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { purchasesFeatures } from "./Purchases";
 import {
@@ -20,26 +20,61 @@ import {
   Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 
-const mockReceipts = [
-  {
-    id: "GR-000001",
-    date: "05/03/2026",
-    vendor: "-",
-    orderId: "PO-000012",
-    status: "مفتوح",
-    statusColor: "bg-cyan-500 text-white",
-  },
-];
+type GoodsReceiptRow = {
+  id: string;
+  date: string;
+  vendor: string;
+  orderId: string;
+  status: string;
+  statusColor: string;
+};
+
+const statusColors: Record<string, string> = {
+  "مفتوح": "bg-cyan-500 text-white",
+  "مغلق": "bg-green-600 text-white",
+};
+
+const mockReceipts: GoodsReceiptRow[] = [];
 
 export default function GoodsReceipts() {
   const [view, setView] = useState<"list" | "create">("list");
+  const [receipts, setReceipts] = useState<GoodsReceiptRow[]>(mockReceipts);
+
+  useEffect(() => {
+    const loadReceipts = async () => {
+      const { data, error } = await supabase
+        .from("goods_receipts")
+        .select("*")
+        .order("date", { ascending: false });
+
+      if (!error && data) {
+        setReceipts(
+          data.map((row) => ({
+            id: row.id ?? "",
+            date: row.date ?? "",
+            vendor: row.vendor ?? "",
+            orderId: row.order_id ?? row.orderId ?? "",
+            status: row.status ?? "",
+            statusColor:
+              statusColors[row.status ?? ""] ?? "bg-slate-500 text-white",
+          }))
+        );
+      }
+    };
+
+    loadReceipts();
+  }, []);
 
   return (
     <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" ? (
-          <ReceiptsList onCreateClick={() => setView("create")} />
+          <ReceiptsList
+            onCreateClick={() => setView("create")}
+            receipts={receipts}
+          />
         ) : (
           <ReceiptForm onBack={() => setView("list")} />
         )}
@@ -48,7 +83,13 @@ export default function GoodsReceipts() {
   );
 }
 
-function ReceiptsList({ onCreateClick }: { onCreateClick: () => void }) {
+function ReceiptsList({
+  onCreateClick,
+  receipts,
+}: {
+  onCreateClick: () => void;
+  receipts: GoodsReceiptRow[];
+}) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   return (
@@ -113,7 +154,7 @@ function ReceiptsList({ onCreateClick }: { onCreateClick: () => void }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {mockReceipts.map((receipt, i) => (
+            {receipts.map((receipt, i) => (
               <tr key={receipt.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-1 flex-wrap">
@@ -178,7 +219,7 @@ function ReceiptsList({ onCreateClick }: { onCreateClick: () => void }) {
                 </td>
               </tr>
             ))}
-            {mockReceipts.length === 0 && (
+            {receipts.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-10 text-center text-slate-500">
                   لا يوجد سندات استلام مشتريات

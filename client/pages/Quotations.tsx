@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
 import {
@@ -16,68 +16,68 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 
-// Mock data
-const mockQuotations = [
-  {
-    id: "QUO-000014",
-    date: "11/02/2026",
-    validity: "12/03/2026",
-    customer: "moga",
-    total: "SAR 220.80",
-    status: "مفتوح",
-    statusColor: "bg-cyan-500 text-white",
-  },
-  {
-    id: "QUO-000011",
-    date: "10/02/2026",
-    validity: "12/03/2026",
-    customer: "ahmed",
-    total: "SAR 5.75",
-    status: "مغلق",
-    subStatus: "محول لأمر بيع",
-    statusColor: "bg-green-600 text-white",
-    subStatusColor: "bg-blue-600 text-white",
-  },
-  {
-    id: "QUO-000012",
-    date: "10/02/2026",
-    validity: "12/03/2026",
-    customer: "ahmed",
-    total: "SAR 57.50",
-    status: "مفتوح",
-    statusColor: "bg-cyan-500 text-white",
-  },
-  {
-    id: "QUO-000013",
-    date: "10/02/2026",
-    validity: "12/03/2026",
-    customer: "ahmed",
-    total: "SAR 57.50",
-    status: "مفتوح",
-    statusColor: "bg-cyan-500 text-white",
-  },
-  {
-    id: "QUO-000010",
-    date: "28/01/2026",
-    validity: "27/02/2026",
-    customer: "-",
-    total: "SAR 575.00",
-    status: "مغلق",
-    subStatus: "محول لفاتورة",
-    statusColor: "bg-green-600 text-white",
-    subStatusColor: "bg-yellow-500 text-white",
-  },
-];
+type QuotationRow = {
+  id: string;
+  date: string;
+  validity: string;
+  customer: string;
+  total: string;
+  status: string;
+  statusColor: string;
+  subStatus?: string;
+  subStatusColor?: string;
+};
+
+const statusColors: Record<string, string> = {
+  مفتوح: "bg-cyan-500 text-white",
+  مغلق: "bg-green-600 text-white",
+};
+
+const mockQuotations: QuotationRow[] = [];
 
 export default function Quotations() {
   const [view, setView] = useState<"list" | "create">("list");
+  const [quotations, setQuotations] = useState<QuotationRow[]>(mockQuotations);
+
+  useEffect(() => {
+    const loadQuotations = async () => {
+      const { data, error } = await supabase
+        .from("sales_quotations")
+        .select("*")
+        .order("date", { ascending: false });
+
+      if (!error && data) {
+        setQuotations(
+          data.map((row) => ({
+            id: row.id ?? "",
+            date: row.date ?? "",
+            validity: row.validity ?? row.valid_until ?? "",
+            customer: row.customer ?? "",
+            total: row.total ?? "",
+            status: row.status ?? "مفتوح",
+            statusColor:
+              statusColors[row.status ?? "مفتوح"] ??
+              "bg-cyan-500 text-white",
+            subStatus: row.sub_status ?? row.subStatus,
+            subStatusColor: row.sub_status_color ?? row.subStatusColor,
+          }))
+        );
+      }
+    };
+
+    loadQuotations();
+  }, []);
 
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" ? (
-          <QuotationsList onCreateClick={() => setView("create")} />
+          <QuotationsList
+            onCreateClick={() => setView("create")}
+            quotations={quotations}
+          />
         ) : (
           <QuotationForm onBack={() => setView("list")} />
         )}
@@ -86,7 +86,13 @@ export default function Quotations() {
   );
 }
 
-function QuotationsList({ onCreateClick }: { onCreateClick: () => void }) {
+function QuotationsList({
+  onCreateClick,
+  quotations,
+}: {
+  onCreateClick: () => void;
+  quotations: QuotationRow[];
+}) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   return (
@@ -164,7 +170,7 @@ function QuotationsList({ onCreateClick }: { onCreateClick: () => void }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {mockQuotations.map((quo, i) => (
+            {quotations.map((quo, i) => (
               <tr
                 key={quo.id}
                 className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}

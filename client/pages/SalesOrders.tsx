@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
 import {
@@ -18,101 +18,67 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 
-// Mock data based on the screenshot
-const mockOrders = [
-  {
-    id: "SO-000010",
-    date: "10/02/2026",
-    deliveryDate: "12/03/2026",
-    customer: "ahmed",
-    total: "SAR 5.75",
-    quotationId: "QUO-000011",
-    status: "confirmed",
-    statusColor: "bg-slate-600 text-white",
-  },
-  {
-    id: "SO-000009",
-    date: "23/01/2026",
-    deliveryDate: "22/02/2026",
-    customer: "-",
-    total: "SAR 63,244.25",
-    quotationId: "QUO-000007",
-    status: "delivered",
-    subStatus: "محول لفاتورة",
-    statusColor: "bg-slate-600 text-white",
-    subStatusColor: "bg-yellow-500 text-white",
-  },
-  {
-    id: "SO-000008",
-    date: "23/01/2026",
-    deliveryDate: "22/02/2026",
-    customer: "-",
-    total: "SAR 5,744.25",
-    quotationId: "QUO-000006",
-    status: "delivered",
-    statusColor: "bg-slate-600 text-white",
-  },
-  {
-    id: "SO-000007",
-    date: "23/01/2026",
-    deliveryDate: "20/02/2026",
-    customer: "-",
-    total: "SAR 110.40",
-    quotationId: "QUO-000002",
-    status: "delivered",
-    statusColor: "bg-slate-600 text-white",
-  },
-  {
-    id: "SO-000006",
-    date: "23/01/2026",
-    deliveryDate: "20/02/2026",
-    customer: "-",
-    total: "SAR 110.40",
-    quotationId: "QUO-000001",
-    status: "delivered",
-    statusColor: "bg-slate-600 text-white",
-  },
-  {
-    id: "SO-000005",
-    date: "22/01/2026",
-    deliveryDate: "21/02/2026",
-    customer: "-",
-    total: "SAR 287.50",
-    quotationId: "QUO-000005",
-    status: "delivered",
-    statusColor: "bg-slate-600 text-white",
-  },
-  {
-    id: "SO-000004",
-    date: "22/01/2026",
-    deliveryDate: "20/02/2026",
-    customer: "-",
-    total: "SAR 110.40",
-    quotationId: "QUO-000003",
-    status: "delivered",
-    statusColor: "bg-slate-600 text-white",
-  },
-  {
-    id: "SO-000003",
-    date: "22/01/2026",
-    deliveryDate: "21/02/2026",
-    customer: "-",
-    total: "SAR 5.75",
-    quotationId: "QUO-000004",
-    status: "delivered",
-    statusColor: "bg-slate-600 text-white",
-  },
-];
+type SalesOrder = {
+  id: string;
+  date: string;
+  deliveryDate: string;
+  customer: string;
+  total: string;
+  quotationId: string;
+  status: string;
+  statusColor: string;
+  subStatus?: string;
+  subStatusColor?: string;
+};
+
+const statusColors: Record<string, string> = {
+  confirmed: "bg-slate-600 text-white",
+  delivered: "bg-slate-600 text-white",
+};
+
+const mockOrders: SalesOrder[] = [];
 
 export default function SalesOrders() {
   const [view, setView] = useState<"list" | "create">("list");
+  const [orders, setOrders] = useState<SalesOrder[]>(mockOrders);
+
+  useEffect(() => {
+    const loadOrders = async () => {
+      const { data, error } = await supabase
+        .from("sales_orders")
+        .select("*")
+        .order("date", { ascending: false });
+
+      if (!error && data) {
+        setOrders(
+          data.map((row) => ({
+            id: row.id ?? "",
+            date: row.date ?? "",
+            deliveryDate: row.delivery_date ?? row.deliveryDate ?? "",
+            customer: row.customer ?? "",
+            total: row.total ?? "",
+            quotationId: row.quotation_id ?? row.quotationId ?? "",
+            status: row.status ?? "confirmed",
+            statusColor:
+              statusColors[row.status ?? "confirmed"] ??
+              "bg-slate-600 text-white",
+            subStatus: row.sub_status ?? row.subStatus,
+            subStatusColor: row.sub_status_color ?? row.subStatusColor,
+          }))
+        );
+      }
+    };
+
+    loadOrders();
+  }, []);
 
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" ? (
-          <OrdersList onCreateClick={() => setView("create")} />
+          <OrdersList onCreateClick={() => setView("create")} orders={orders} />
         ) : (
           <OrderForm onBack={() => setView("list")} />
         )}
@@ -121,7 +87,13 @@ export default function SalesOrders() {
   );
 }
 
-function OrdersList({ onCreateClick }: { onCreateClick: () => void }) {
+function OrdersList({
+  onCreateClick,
+  orders,
+}: {
+  onCreateClick: () => void;
+  orders: SalesOrder[];
+}) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   return (
@@ -200,7 +172,7 @@ function OrdersList({ onCreateClick }: { onCreateClick: () => void }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {mockOrders.map((order, i) => (
+            {orders.map((order, i) => (
               <tr
                 key={order.id}
                 className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}

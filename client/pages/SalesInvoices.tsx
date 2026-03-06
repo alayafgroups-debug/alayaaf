@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
 import {
@@ -18,73 +18,67 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 
-const mockInvoices = [
-  {
-    id: "INV-2026-000012",
-    date: "01/02/2026",
-    dueDate: "13/03/2026",
-    customer: "grass",
-    total: "ريال 5.75",
-    paid: "ريال 5.75",
-    remaining: "ريال 0.00",
-    status: "مدفوعة بالكامل",
-    statusColor: "bg-green-600 text-white",
-  },
-  {
-    id: "INV-2026-000011",
-    date: "02/02/2026",
-    dueDate: "13/03/2026",
-    customer: "moga",
-    total: "ريال 15,100.00",
-    paid: "ريال 0.00",
-    remaining: "ريال 15,100.00",
-    status: "مفتوحة",
-    statusColor: "bg-cyan-500 text-white",
-  },
-  {
-    id: "INV-2026-000010",
-    date: "03/02/2026",
-    dueDate: "13/03/2026",
-    customer: "ahmed",
-    total: "ريال 57.50",
-    paid: "ريال 0.00",
-    remaining: "ريال 57.50",
-    status: "مفتوحة",
-    statusColor: "bg-cyan-500 text-white",
-  },
-  {
-    id: "INV-2026-000009",
-    date: "02/02/2026",
-    dueDate: "13/03/2026",
-    customer: "ahmed",
-    total: "ريال 0.00",
-    paid: "ريال 0.00",
-    remaining: "ريال 0.00",
-    status: "مدفوعة بالكامل",
-    statusColor: "bg-green-600 text-white",
-  },
-  {
-    id: "INV-2026-000008",
-    date: "02/02/2026",
-    dueDate: "13/03/2026",
-    customer: "grass",
-    total: "ريال 80,500.00",
-    paid: "ريال 0.00",
-    remaining: "ريال 80,500.00",
-    status: "مدفوعة جزئياً",
-    statusColor: "bg-yellow-500 text-white",
-  },
-];
+const statusColors: Record<string, string> = {
+  "مدفوعة بالكامل": "bg-green-600 text-white",
+  "مدفوعة جزئياً": "bg-yellow-500 text-white",
+  "مفتوحة": "bg-cyan-500 text-white",
+};
+
+const mockInvoices: Invoice[] = [];
+
+type Invoice = {
+  id: string;
+  date: string;
+  dueDate: string;
+  customer: string;
+  total: string;
+  paid: string;
+  remaining: string;
+  status: string;
+  statusColor: string;
+};
 
 export default function SalesInvoices() {
   const [view, setView] = useState<"list" | "create">("list");
+  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
+
+  useEffect(() => {
+    const loadInvoices = async () => {
+      const { data, error } = await supabase
+        .from("sales_invoices")
+        .select("*")
+        .order("date", { ascending: false });
+
+      if (!error && data) {
+        const mapped = data.map((row) => ({
+          id: row.id ?? "",
+          date: row.date ?? "",
+          dueDate: row.due_date ?? row.dueDate ?? "",
+          customer: row.customer ?? "",
+          total: row.total ?? "",
+          paid: row.paid ?? "",
+          remaining: row.remaining ?? "",
+          status: row.status ?? "مفتوحة",
+          statusColor: statusColors[row.status ?? "مفتوحة"] ??
+            "bg-slate-500 text-white",
+        }));
+        setInvoices(mapped);
+      }
+    };
+
+    loadInvoices();
+  }, []);
 
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" ? (
-          <InvoicesList onCreateClick={() => setView("create")} />
+          <InvoicesList
+            onCreateClick={() => setView("create")}
+            invoices={invoices}
+          />
         ) : (
           <InvoiceForm onBack={() => setView("list")} />
         )}
@@ -93,7 +87,13 @@ export default function SalesInvoices() {
   );
 }
 
-function InvoicesList({ onCreateClick }: { onCreateClick: () => void }) {
+function InvoicesList({
+  onCreateClick,
+  invoices,
+}: {
+  onCreateClick: () => void;
+  invoices: Invoice[];
+}) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   return (
@@ -179,7 +179,7 @@ function InvoicesList({ onCreateClick }: { onCreateClick: () => void }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {mockInvoices.map((invoice, i) => (
+            {invoices.map((invoice, i) => (
               <tr
                 key={invoice.id}
                 className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { purchasesFeatures } from "./Purchases";
 import {
@@ -18,83 +18,77 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 
-const mockRequests = [
-  {
-    id: "PR-2026-000006",
-    date: "07/02/2026",
-    type: "مواد",
-    department: "التسويق",
-    requester: "د.يوسف فؤاد",
-    section: "التسويق",
-    total: "ريال 862.50",
-    status: "مغلقة",
-    approval: "موافق",
-    statusColor: "bg-green-600 text-white",
-    approvalColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PR-2026-000005",
-    date: "02/02/2026",
-    type: "أصول",
-    department: "الإدارة المالية",
-    requester: "د.يوسف فؤاد",
-    section: "المشتريات",
-    total: "ريال 11,902.50",
-    status: "مغلقة",
-    approval: "موافق",
-    statusColor: "bg-green-600 text-white",
-    approvalColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PR-2026-000004",
-    date: "02/02/2026",
-    type: "خدمات",
-    department: "الإدارة المالية",
-    requester: "د.يوسف فؤاد",
-    section: "التسويق",
-    total: "ريال 1,052.50",
-    status: "مغلقة",
-    approval: "موافق",
-    statusColor: "bg-green-600 text-white",
-    approvalColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PR-2026-000003",
-    date: "02/02/2026",
-    type: "أصول",
-    department: "الإدارة المالية",
-    requester: "د.يوسف فؤاد",
-    section: "التسويق",
-    total: "ريال 155,233.00",
-    status: "مغلقة",
-    approval: "موافق",
-    statusColor: "bg-green-600 text-white",
-    approvalColor: "bg-green-600 text-white",
-  },
-  {
-    id: "PR-2026-000002",
-    date: "02/02/2026",
-    type: "مواد",
-    department: "الإدارة المالية",
-    requester: "د.يوسف فؤاد",
-    section: "التسويق",
-    total: "ريال 15,066.60",
-    status: "مغلقة",
-    approval: "موافق",
-    statusColor: "bg-green-600 text-white",
-    approvalColor: "bg-green-600 text-white",
-  },
-];
+type PurchaseRequestRow = {
+  id: string;
+  date: string;
+  type: string;
+  department: string;
+  requester: string;
+  section: string;
+  total: string;
+  status: string;
+  approval: string;
+  statusColor: string;
+  approvalColor: string;
+};
+
+const statusColors: Record<string, string> = {
+  "مغلقة": "bg-green-600 text-white",
+  "قيد المراجعة": "bg-cyan-500 text-white",
+};
+
+const approvalColors: Record<string, string> = {
+  "موافق": "bg-green-600 text-white",
+  "بانتظار": "bg-amber-500 text-white",
+};
+
+const mockRequests: PurchaseRequestRow[] = [];
 
 export default function PurchaseRequests() {
   const [view, setView] = useState<"list" | "create">("list");
+  const [requests, setRequests] = useState<PurchaseRequestRow[]>(mockRequests);
+
+  useEffect(() => {
+    const loadRequests = async () => {
+      const { data, error } = await supabase
+        .from("purchase_requests")
+        .select("*")
+        .order("date", { ascending: false });
+
+      if (!error && data) {
+        setRequests(
+          data.map((row) => ({
+            id: row.id ?? "",
+            date: row.date ?? "",
+            type: row.type ?? "",
+            department: row.department ?? "",
+            requester: row.requester ?? "",
+            section: row.section ?? "",
+            total: row.total ?? "",
+            status: row.status ?? "",
+            approval: row.approval ?? "",
+            statusColor:
+              statusColors[row.status ?? ""] ?? "bg-slate-500 text-white",
+            approvalColor:
+              approvalColors[row.approval ?? ""] ?? "bg-slate-500 text-white",
+          }))
+        );
+      }
+    };
+
+    loadRequests();
+  }, []);
 
   return (
     <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" ? (
-          <RequestsList onCreateClick={() => setView("create")} />
+          <RequestsList
+            onCreateClick={() => setView("create")}
+            requests={requests}
+          />
         ) : (
           <RequestForm onBack={() => setView("list")} />
         )}
@@ -103,7 +97,13 @@ export default function PurchaseRequests() {
   );
 }
 
-function RequestsList({ onCreateClick }: { onCreateClick: () => void }) {
+function RequestsList({
+  onCreateClick,
+  requests,
+}: {
+  onCreateClick: () => void;
+  requests: PurchaseRequestRow[];
+}) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   return (
@@ -197,7 +197,7 @@ function RequestsList({ onCreateClick }: { onCreateClick: () => void }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {mockRequests.map((request, i) => (
+            {requests.map((request, i) => (
               <tr
                 key={request.id}
                 className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}

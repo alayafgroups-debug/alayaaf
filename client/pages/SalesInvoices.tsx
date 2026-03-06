@@ -71,6 +71,10 @@ export default function SalesInvoices() {
     loadInvoices();
   }, []);
 
+  const handleSaved = (invoice: Invoice) => {
+    setInvoices((prev) => [invoice, ...prev]);
+  };
+
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
@@ -80,7 +84,7 @@ export default function SalesInvoices() {
             invoices={invoices}
           />
         ) : (
-          <InvoiceForm onBack={() => setView("list")} />
+          <InvoiceForm onBack={() => setView("list")} onSaved={handleSaved} />
         )}
       </div>
     </Layout>
@@ -283,11 +287,98 @@ function InvoicesList({
   );
 }
 
-function InvoiceForm({ onBack }: { onBack: () => void }) {
-  const [items, setItems] = useState([{ id: 1 }]);
+function InvoiceForm({
+  onBack,
+  onSaved,
+}: {
+  onBack: () => void;
+  onSaved: (invoice: Invoice) => void;
+}) {
+  const [items, setItems] = useState([
+    {
+      id: 1,
+      description: "",
+      quantity: 1,
+      unitPrice: 0,
+      discount: 0,
+      taxPercent: 15,
+    },
+  ]);
+  const [invoiceDate, setInvoiceDate] = useState("2026-02-01");
+  const [dueDate, setDueDate] = useState("2026-03-13");
+  const [customer, setCustomer] = useState("");
+  const [notes, setNotes] = useState("");
 
   const handleAddItem = () => {
-    setItems((prev) => [...prev, { id: prev.length + 1 }]);
+    setItems((prev) => [
+      ...prev,
+      {
+        id: prev.length + 1,
+        description: "",
+        quantity: 1,
+        unitPrice: 0,
+        discount: 0,
+        taxPercent: 15,
+      },
+    ]);
+  };
+
+  const updateItem = (id: number, changes: Partial<(typeof items)[number]>) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...changes } : item))
+    );
+  };
+
+  const totals = items.reduce(
+    (acc, item) => {
+      const lineSubtotal = item.quantity * item.unitPrice - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      const lineTotal = lineSubtotal + tax;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + tax,
+        total: acc.total + lineTotal,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
+
+  const handleSave = async () => {
+    const invoiceId = `INV-${Date.now()}`;
+    const totalValue = totals.total;
+    const payload = {
+      id: invoiceId,
+      date: invoiceDate,
+      due_date: dueDate,
+      customer,
+      total: `ريال ${totalValue.toFixed(2)}`,
+      paid: "ريال 0.00",
+      remaining: `ريال ${totalValue.toFixed(2)}`,
+      status: "مفتوحة",
+    };
+
+    const { data, error } = await supabase
+      .from("sales_invoices")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (!error && data) {
+      onSaved({
+        id: data.id ?? invoiceId,
+        date: data.date ?? invoiceDate,
+        dueDate: data.due_date ?? dueDate,
+        customer: data.customer ?? customer,
+        total: data.total ?? payload.total,
+        paid: data.paid ?? payload.paid,
+        remaining: data.remaining ?? payload.remaining,
+        status: data.status ?? "مفتوحة",
+        statusColor: statusColors[data.status ?? "مفتوحة"] ??
+          "bg-cyan-500 text-white",
+      });
+      onBack();
+    }
   };
 
   return (
@@ -302,7 +393,10 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
             <X className="h-4 w-4" />
             إلغاء
           </button>
-          <button className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors">
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors"
+          >
             <svg
               className="h-4 w-4"
               fill="none"
@@ -318,7 +412,10 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
             </svg>
             حفظ الفاتورة
           </button>
-          <button className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-indigo-700 transition-colors">
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+          >
             <Printer className="h-4 w-4" />
             حفظ وطباعة
           </button>
@@ -397,7 +494,8 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="date"
-                defaultValue="2026-03-13"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -407,7 +505,8 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="date"
-                defaultValue="2026-02-01"
+                value={invoiceDate}
+                onChange={(event) => setInvoiceDate(event.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -415,8 +514,13 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
               <label className="text-sm font-medium text-slate-700 text-right block">
                 العميل <span className="text-red-500">*</span>
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
+              <select
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white"
+              >
                 <option value="">ابحث عن عميل...</option>
+                <option value="عميل جديد">عميل جديد</option>
               </select>
             </div>
             <div className="space-y-1 md:col-span-4">
@@ -426,6 +530,8 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
               <input
                 type="text"
                 placeholder="ملاحظات إضافية"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -485,7 +591,12 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {items.map((item) => {
+                  const lineSubtotal = item.quantity * item.unitPrice - item.discount;
+                  const lineTax = (lineSubtotal * item.taxPercent) / 100;
+                  const lineTotal = lineSubtotal + lineTax;
+
+                  return (
                   <tr key={item.id}>
                     <td className="pt-4 align-top">
                       <div className="flex items-center justify-center gap-1 h-10">
@@ -500,34 +611,56 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                     <td className="pt-4 px-1 align-top">
                       <input
                         type="text"
+                        value={lineTotal.toFixed(2)}
                         disabled
                         className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
                       <input
-                        type="text"
-                        defaultValue="15%"
+                        type="number"
+                        value={item.taxPercent}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            taxPercent: Number(event.target.value) || 0,
+                          })
+                        }
                         className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
                       <input
                         type="number"
-                        defaultValue={0}
+                        value={item.discount}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            discount: Number(event.target.value) || 0,
+                          })
+                        }
                         className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
                       <input
                         type="number"
+                        value={item.unitPrice}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            unitPrice: Number(event.target.value) || 0,
+                          })
+                        }
                         className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
                       <input
                         type="number"
-                        defaultValue={1}
+                        value={item.quantity}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            quantity: Number(event.target.value) || 0,
+                          })
+                        }
                         className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                       />
                     </td>
@@ -535,11 +668,18 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                       <input
                         type="text"
                         placeholder="اكتب وصف البند..."
+                        value={item.description}
+                        onChange={(event) =>
+                          updateItem(item.id, {
+                            description: event.target.value,
+                          })
+                        }
                         className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                       />
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
 
@@ -548,10 +688,14 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
               <div className="w-96 flex justify-between">
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">0.00 ريال</span>
+                    <span className="font-semibold text-slate-800">
+                      {totals.tax.toFixed(2)} ريال
+                    </span>
                   </div>
                   <div className="text-sm">
-                    <span className="font-bold text-blue-600">0.00 ريال</span>
+                    <span className="font-bold text-blue-600">
+                      {totals.total.toFixed(2)} ريال
+                    </span>
                   </div>
                 </div>
                 <div className="space-y-2 text-right">
@@ -560,10 +704,14 @@ function InvoiceForm({ onBack }: { onBack: () => void }) {
                 </div>
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">0.00 ريال</span>
+                    <span className="font-semibold text-slate-800">
+                      {totals.subtotal.toFixed(2)} ريال
+                    </span>
                   </div>
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">0.00 ريال</span>
+                    <span className="font-semibold text-slate-800">
+                      {totals.discount.toFixed(2)} ريال
+                    </span>
                   </div>
                 </div>
                 <div className="space-y-2 text-right">

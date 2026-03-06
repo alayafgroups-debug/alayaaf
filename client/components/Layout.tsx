@@ -7,6 +7,7 @@ import {
   Users,
   DollarSign,
   CreditCard,
+  ShieldCheck,
   Menu,
   X,
   Settings,
@@ -35,6 +36,12 @@ export default function Layout({ children, subMenu }: LayoutProps) {
     { icon: Users, label: "الموارد البشرية", href: "/hr", hasSubmenu: true },
     { icon: CreditCard, label: "العملاء والموردين", href: "/crm", hasSubmenu: true },
     { icon: DollarSign, label: "إدارة الضرائب", href: "/tax", hasSubmenu: true },
+    {
+      icon: ShieldCheck,
+      label: "المستخدمين والصلاحيات",
+      href: "/users",
+      hasSubmenu: true,
+    },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
 

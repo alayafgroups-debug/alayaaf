@@ -18,6 +18,7 @@ import GoodsReceipts from "./pages/GoodsReceipts";
 import HR from "./pages/HR";
 import CRM from "./pages/CRM";
 import Tax from "./pages/Tax";
+import UsersPermissions from "./pages/UsersPermissions";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -45,6 +46,9 @@ const App = () => (
           <Route path="/crm/vendors" element={<CRM />} />
           <Route path="/crm/reports" element={<CRM />} />
           <Route path="/tax" element={<Tax />} />
+          <Route path="/users" element={<UsersPermissions />} />
+          <Route path="/users/roles" element={<UsersPermissions />} />
+          <Route path="/users/audit" element={<UsersPermissions />} />
           <Route path="/settings" element={<Settings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

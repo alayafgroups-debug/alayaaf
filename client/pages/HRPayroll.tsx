@@ -43,6 +43,15 @@ type PayrollRun = {
   status: "مدفوعة" | "قيد المعالجة" | "ملغاة";
 };
 
+type EmployeeLite = {
+  id: string;
+  emp_id: string | null;
+  name: string;
+  department: string | null;
+  total_salary: number | null;
+  status: string | null;
+};
+
 const emptyEntry = (): PayrollEntry => ({
   id: crypto.randomUUID(),
   empId: "",
@@ -88,6 +97,8 @@ export default function HRPayroll() {
   const [fSearch, setFSearch] = useState("");
   const [fStatus, setFStatus] = useState<"" | PayrollRun["status"]>("");
   const [detailsMonth, setDetailsMonth] = useState("");
+  const [generationMonth, setGenerationMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -211,6 +222,76 @@ export default function HRPayroll() {
     toast({ title: "تم الحذف" });
   };
 
+  const handleGenerateMonthlyRun = async () => {
+    if (!generationMonth) {
+      toast({ title: "تنبيه", description: "اختر الفترة أولاً", variant: "destructive" });
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const { data: employees, error: employeesError } = await supabase
+        .from("employees")
+        .select("id, emp_id, name, department, total_salary, status")
+        .eq("status", "نشط");
+
+      if (employeesError) throw employeesError;
+
+      const activeEmployees = (employees ?? []) as EmployeeLite[];
+      if (activeEmployees.length === 0) {
+        toast({ title: "لا يوجد موظفون", description: "لا يوجد موظفون نشطون لإنشاء المسير" });
+        return;
+      }
+
+      const { data: existingRows, error: existingError } = await supabase
+        .from("payroll")
+        .select("emp_id")
+        .eq("month", generationMonth);
+
+      if (existingError) throw existingError;
+
+      const existingEmpIds = new Set((existingRows ?? []).map((r) => String(r.emp_id ?? "")).filter(Boolean));
+
+      const newPayload = activeEmployees
+        .map((emp) => {
+          const empId = String(emp.emp_id ?? "").trim() || String(emp.id);
+          const basicSalary = Number(emp.total_salary ?? 0);
+          return {
+            id: crypto.randomUUID(),
+            emp_id: empId,
+            emp_name: emp.name,
+            department: emp.department ?? "",
+            month: generationMonth,
+            basic_salary: basicSalary,
+            allowances: 0,
+            deductions: 0,
+            net_salary: basicSalary,
+            status: "معلق",
+            paid_date: null,
+            notes: "تم الإنشاء تلقائياً من مسير الرواتب الشهري",
+          };
+        })
+        .filter((row) => !existingEmpIds.has(String(row.emp_id)));
+
+      if (newPayload.length === 0) {
+        toast({ title: "لا يوجد جديد", description: "تم إنشاء هذا المسير مسبقاً لكل الموظفين النشطين" });
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("payroll").insert(newPayload);
+      if (insertError) throw insertError;
+
+      toast({ title: "تم الإنشاء", description: `تم إنشاء ${newPayload.length} سجل رواتب للفترة ${formatMonthLabel(generationMonth)}` });
+      setFMonth(generationMonth);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "فشل الإنشاء", description: "تعذر إنشاء المسير التلقائي", variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handlePrint = () => {
     const w = window.open("", "_blank");
     if (!w) return;
@@ -269,7 +350,7 @@ export default function HRPayroll() {
           </div>
 
           <div className="p-3 border-b bg-gray-50">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-8 gap-3">
               <div className="relative md:col-span-2">
                 <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
                 <input
@@ -298,7 +379,23 @@ export default function HRPayroll() {
                 <option value="ملغاة">ملغاة</option>
               </select>
 
-              <div className="flex gap-2">
+              <div className="md:col-span-2 flex gap-2">
+                <input
+                  type="month"
+                  value={generationMonth}
+                  onChange={(e) => setGenerationMonth(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  onClick={handleGenerateMonthlyRun}
+                  disabled={generating}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {generating ? "جاري الإنشاء..." : "إنشاء تلقائي"}
+                </button>
+              </div>
+
+              <div className="md:col-span-2 flex gap-2">
                 <button
                   onClick={handlePrint}
                   className="flex-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50"

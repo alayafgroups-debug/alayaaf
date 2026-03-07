@@ -302,54 +302,68 @@ function InvoicesList({
         <FilterActions onReset={() => {}} onSearch={() => {}} />
       </FilterBar>
 
-      <DataTable
-        headers={["الإجراءات", "الحالة", "المتبقي", "المدفوع", "الإجمالي", "المورد", "تاريخ الاستحقاق", "تاريخ الفاتورة", "رقم الفاتورة"]}
-        gradient="from-purple-800 to-indigo-900"
-      >
-        {invoices.map((inv) => (
-          <tr key={inv.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-            <td className="px-5 py-3.5 align-middle">
-              <div className="flex items-center gap-1">
-                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(inv)} />
-                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(inv)} />
-                <ActionBtn icon={CreditCard} label="تسديد" color="indigo" onClick={() => onPayment(inv)} />
-                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(inv.id)} />
-                <button
-                  title="طباعة PDF"
-                  onClick={() => onPrintPdf(inv)}
-                  className="px-2.5 py-1.5 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs font-semibold"
+      <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-x-auto">
+        <table className="w-full text-sm text-right">
+          <thead className={cn("text-white bg-gradient-to-r", "from-purple-800 to-indigo-900")}>
+            <tr>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">الإجراءات</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">الحالة</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">المتبقي</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">المدفوع</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">الإجمالي</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">المورد</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">تاريخ الاستحقاق</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">تاريخ الفاتورة</th>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">رقم الفاتورة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.map((inv) => (
+              <tr key={inv.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+                <td className="px-4 py-3 align-middle">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(inv)} />
+                    <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(inv)} />
+                    <ActionBtn icon={CreditCard} label="تسديد" color="indigo" onClick={() => onPayment(inv)} />
+                    <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(inv.id)} />
+                    <button
+                      title="طباعة PDF"
+                      onClick={() => onPrintPdf(inv)}
+                      className="px-2.5 py-1.5 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs font-semibold"
+                    >
+                      PDF
+                    </button>
+                  </div>
+                </td>
+                <td className="px-4 py-3 align-middle">
+                  <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", inv.statusColor)}>
+                    {inv.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 align-middle text-red-600 font-medium whitespace-nowrap">{inv.remaining}</td>
+                <td className="px-4 py-3 align-middle text-green-700 font-medium whitespace-nowrap">{inv.paid}</td>
+                <td className="px-4 py-3 align-middle font-semibold whitespace-nowrap">{inv.total}</td>
+                <td className="px-4 py-3 align-middle whitespace-nowrap">{inv.vendor}</td>
+                <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">{inv.dueDate}</td>
+                <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">{inv.date}</td>
+                <td
+                  className="px-4 py-3 align-middle font-semibold text-purple-600 hover:underline cursor-pointer whitespace-nowrap"
+                  onClick={() => onView(inv)}
                 >
-                  PDF
-                </button>
-              </div>
-            </td>
-            <td className="px-5 py-3.5 align-middle">
-              <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", inv.statusColor)}>
-                {inv.status}
-              </span>
-            </td>
-            <td className="px-5 py-3.5 align-middle text-red-600 font-medium whitespace-nowrap">{inv.remaining} ريال</td>
-            <td className="px-5 py-3.5 align-middle text-green-700 font-medium whitespace-nowrap">{inv.paid} ريال</td>
-            <td className="px-5 py-3.5 align-middle font-semibold whitespace-nowrap">{inv.total} ريال</td>
-            <td className="px-5 py-3.5 align-middle">{inv.vendor}</td>
-            <td className="px-5 py-3.5 align-middle text-muted-foreground">{inv.dueDate}</td>
-            <td className="px-5 py-3.5 align-middle text-muted-foreground">{inv.date}</td>
-            <td
-              className="px-5 py-3.5 align-middle font-semibold text-purple-600 hover:underline cursor-pointer"
-              onClick={() => onView(inv)}
-            >
-              {inv.id.slice(0, 8)}...
-            </td>
-          </tr>
-        ))}
-        {invoices.length === 0 && (
-          <tr>
-            <td colSpan={9} className="px-5 py-12 text-center text-muted-foreground">
-              لا يوجد فواتير مشتريات
-            </td>
-          </tr>
-        )}
-      </DataTable>
+                  {inv.id.slice(0, 8)}...
+                </td>
+              </tr>
+            ))}
+            {invoices.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                  لا يوجد فواتير مشتريات
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

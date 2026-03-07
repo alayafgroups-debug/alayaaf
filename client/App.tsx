@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Sales from "./pages/Sales";
 import Quotations from "./pages/Quotations";
@@ -36,11 +36,11 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/sales" element={<Sales />} />
+          <Route path="/sales" element={<Navigate to="/sales/quotations" replace />} />
           <Route path="/sales/quotations" element={<Quotations />} />
           <Route path="/sales/orders" element={<SalesOrders />} />
           <Route path="/sales/invoices" element={<SalesInvoices />} />
-          <Route path="/purchases" element={<Purchases />} />
+          <Route path="/purchases" element={<Navigate to="/purchases/requests" replace />} />
           <Route path="/purchases/requests" element={<PurchaseRequests />} />
           <Route path="/purchases/orders" element={<PurchaseOrders />} />
           <Route path="/purchases/receipts" element={<GoodsReceipts />} />

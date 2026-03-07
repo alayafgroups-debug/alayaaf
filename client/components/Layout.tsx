@@ -22,13 +22,56 @@ interface LayoutProps {
   subMenu?: { title: string; items: { label: string; href?: string }[] } | null;
 }
 
-export default function Layout({ children, subMenu }: LayoutProps) {
+// Static submenu definitions for each main section
+const navSubMenus: Record<string, { label: string; href: string }[]> = {
+  "/sales": [
+    { label: "عروض الأسعار", href: "/sales/quotations" },
+    { label: "أوامر البيع", href: "/sales/orders" },
+    { label: "فواتير المبيعات", href: "/sales/invoices" },
+  ],
+  "/purchases": [
+    { label: "طلبات الشراء", href: "/purchases/requests" },
+    { label: "أوامر الشراء", href: "/purchases/orders" },
+    { label: "سندات الاستلام", href: "/purchases/receipts" },
+    { label: "فواتير المشتريات", href: "/purchases/invoices" },
+    { label: "مردودات المشتريات", href: "/purchases/returns" },
+    { label: "تقارير المشتريات الشاملة", href: "/purchases/reports" },
+  ],
+  "/hr": [
+    { label: "بيانات الموظفين", href: "/hr" },
+    { label: "إدارة الرواتب", href: "/hr" },
+    { label: "الحضور والانصراف", href: "/hr" },
+    { label: "الإجازات والغيابات", href: "/hr" },
+  ],
+  "/crm": [
+    { label: "العملاء", href: "/crm/customers" },
+    { label: "الموردين", href: "/crm/vendors" },
+    { label: "التقارير", href: "/crm/reports" },
+  ],
+  "/tax": [
+    { label: "حساب الضرائب", href: "/tax" },
+    { label: "تقارير ضريبية", href: "/tax" },
+    { label: "الامتثال لـ ZATCA", href: "/tax" },
+  ],
+  "/users": [
+    { label: "المستخدمون", href: "/users" },
+    { label: "الأدوار والصلاحيات", href: "/users/roles" },
+    { label: "سجل النشاط", href: "/users/audit" },
+  ],
+  "/ai": [
+    { label: "المساعد الذكي", href: "/ai/assistant" },
+  ],
+};
+
+export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isActive = (path: string) => location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
+  const isActive = (path: string) =>
+    location.pathname === path ||
+    (path !== "/" && location.pathname.startsWith(path));
 
   const navItems = [
     { icon: BarChart3, label: "لوحة التحكم", href: "/" },
@@ -37,18 +80,8 @@ export default function Layout({ children, subMenu }: LayoutProps) {
     { icon: Users, label: "الموارد البشرية", href: "/hr", hasSubmenu: true },
     { icon: CreditCard, label: "العملاء والموردين", href: "/crm", hasSubmenu: true },
     { icon: DollarSign, label: "إدارة الضرائب", href: "/tax", hasSubmenu: true },
-    {
-      icon: ShieldCheck,
-      label: "المستخدمين والصلاحيات",
-      href: "/users",
-      hasSubmenu: true,
-    },
-    {
-      icon: Bot,
-      label: "الذكاء الاصطناعي",
-      href: "/ai",
-      hasSubmenu: true,
-    },
+    { icon: ShieldCheck, label: "المستخدمين والصلاحيات", href: "/users", hasSubmenu: true },
+    { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
 
@@ -56,7 +89,11 @@ export default function Layout({ children, subMenu }: LayoutProps) {
   useEffect(() => {
     const currentPath = location.pathname;
     navItems.forEach((item) => {
-      if (currentPath.startsWith(item.href) && item.href !== "/" && item.hasSubmenu) {
+      if (
+        currentPath.startsWith(item.href) &&
+        item.href !== "/" &&
+        item.hasSubmenu
+      ) {
         setExpandedMenu(item.href);
       }
     });
@@ -109,20 +146,17 @@ export default function Layout({ children, subMenu }: LayoutProps) {
             const Icon = item.icon;
             const isItemActive = isActive(item.href);
             const isExpanded = expandedMenu === item.href && item.hasSubmenu;
+            const subItems = navSubMenus[item.href];
 
             return (
               <div key={item.href}>
                 {item.hasSubmenu ? (
                   <button
                     onClick={() => {
-                      // إذا كان على نفس الصفحة، قم بتبديل القائمة
-                      if (isItemActive) {
-                        setExpandedMenu(expandedMenu === item.href ? null : item.href);
-                      } else {
-                        // إذا كان على صفحة مختلفة، انتقل وافتح القائمة
-                        navigate(item.href);
-                        setExpandedMenu(item.href);
-                      }
+                      // Only toggle submenu - never navigate to main section page
+                      setExpandedMenu(
+                        expandedMenu === item.href ? null : item.href
+                      );
                     }}
                     className={cn(
                       "w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
@@ -161,20 +195,16 @@ export default function Layout({ children, subMenu }: LayoutProps) {
                   </Link>
                 )}
 
-                {/* Submenu */}
-                {isExpanded && sidebarOpen && subMenu && isItemActive && (
+                {/* Submenu - shows when expanded, no need to be on main route */}
+                {isExpanded && sidebarOpen && subItems && (
                   <div className="mt-2 ml-4 border-r-2 border-sidebar-primary space-y-1">
-                    {subMenu.items.map((subItem, index) => (
+                    {subItems.map((subItem, index) => (
                       <button
                         key={index}
-                        onClick={() => {
-                          if (subItem.href) {
-                            navigate(subItem.href);
-                          }
-                        }}
+                        onClick={() => navigate(subItem.href)}
                         className={cn(
                           "w-full text-right flex items-start gap-2 px-4 py-2 text-xs font-medium rounded transition-colors duration-200",
-                          subItem.href && location.pathname === subItem.href
+                          location.pathname === subItem.href
                             ? "text-sidebar-primary bg-sidebar-accent"
                             : "text-sidebar-foreground hover:text-sidebar-primary hover:bg-sidebar-accent"
                         )}

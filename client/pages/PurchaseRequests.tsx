@@ -20,6 +20,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 type PurchaseRequestRow = {
   id: string;
@@ -115,189 +124,64 @@ function RequestsList({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <ClipboardList className="h-6 w-6 text-primary" />
-          <h1>طلبات الشراء</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-[#1b8c56] text-white px-4 py-2 rounded-md hover:bg-[#157347] transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          إنشاء طلب شراء جديد
-        </button>
-      </div>
+      <PageHeader
+        icon={ClipboardList}
+        title="طلبات الشراء"
+        subtitle="إدارة وتتبع جميع طلبات الشراء"
+        actionLabel="إنشاء طلب شراء جديد"
+        onAction={onCreateClick}
+        gradient="from-amber-600 to-orange-700"
+      />
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            من تاريخ
-          </label>
-          <input
-            type="date"
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            إلى تاريخ
-          </label>
-          <input
-            type="date"
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            النوع
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            الجهة
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            الحالة
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="md:col-span-5 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm">
-            <X className="h-4 w-4" />
-            إعادة تعيين
-          </button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-primary px-6 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm font-medium">
-            <Search className="h-4 w-4" />
-            بحث
-          </button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput placeholder="البحث برقم الطلب أو المقدم..." />
+        <FilterSelect label="النوع">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterSelect label="الجهة">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterSelect label="الحالة">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterActions onReset={() => {}} onSearch={() => {}} />
+      </FilterBar>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold text-right">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold text-right">مستوى الاعتماد</th>
-              <th className="px-4 py-3 font-semibold text-right">الحالة</th>
-              <th className="px-4 py-3 font-semibold text-right">المجموع</th>
-              <th className="px-4 py-3 font-semibold text-right">القسم</th>
-              <th className="px-4 py-3 font-semibold text-right">مقدم الطلب</th>
-              <th className="px-4 py-3 font-semibold text-right">الجهة</th>
-              <th className="px-4 py-3 font-semibold text-right">النوع</th>
-              <th className="px-4 py-3 font-semibold text-right">التاريخ</th>
-              <th className="px-4 py-3 font-semibold text-right">رقم الطلب</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {requests.map((request, i) => (
-              <tr
-                key={request.id}
-                className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-              >
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <button className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors">
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button className="p-1.5 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors">
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <div className="relative">
-                      <button
-                        onClick={() =>
-                          setOpenDropdownId(
-                            openDropdownId === request.id ? null : request.id
-                          )
-                        }
-                        className="p-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors flex items-center"
-                      >
-                        <MoreVertical className="h-4 w-3" />
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
-                      {openDropdownId === request.id && (
-                        <div className="absolute top-full mt-1 left-0 w-36 bg-white border border-slate-200 rounded shadow-lg z-10 py-1">
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
-                            <Printer className="h-4 w-4 text-slate-600" />
-                            طباعة
-                          </button>
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
-                            <FileText className="h-4 w-4 text-slate-600" />
-                            PDF
-                          </button>
-                          <div className="h-px bg-slate-200 my-1" />
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-red-50 text-red-600 flex items-center justify-between">
-                            <Ban className="h-4 w-4" />
-                            إلغاء الطلب
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <button className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  <div
-                    className={cn(
-                      "inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap",
-                      request.approvalColor
-                    )}
-                  >
-                    {request.approval}
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  <div
-                    className={cn(
-                      "inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap",
-                      request.statusColor
-                    )}
-                  >
-                    {request.status}
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle text-right whitespace-nowrap">
-                  {request.total}
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  {request.section}
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  {request.requester}
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  {request.department}
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  {request.type}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-slate-600">
-                  {request.date}
-                </td>
-                <td className="px-4 py-3 align-middle text-right font-medium text-blue-600 hover:underline cursor-pointer">
-                  {request.id}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        headers={["الإجراءات", "الاعتماد", "الحالة", "المجموع", "القسم", "مقدم الطلب", "الجهة", "النوع", "التاريخ", "رقم الطلب"]}
+        gradient="from-amber-800 to-orange-900"
+      >
+        {requests.map((request) => (
+          <tr key={request.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-1 flex-wrap">
+                <ActionBtn icon={Eye} label="عرض" color="blue" />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" />
+                <ActionBtn icon={Trash2} label="حذف" color="red" />
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle">
+              <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", request.approvalColor)}>
+                {request.approval}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle">
+              <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", request.statusColor)}>
+                {request.status}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle font-medium whitespace-nowrap">{request.total}</td>
+            <td className="px-5 py-3.5 align-middle">{request.section}</td>
+            <td className="px-5 py-3.5 align-middle">{request.requester}</td>
+            <td className="px-5 py-3.5 align-middle">{request.department}</td>
+            <td className="px-5 py-3.5 align-middle">{request.type}</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{request.date}</td>
+            <td className="px-5 py-3.5 align-middle font-semibold text-amber-600 hover:underline cursor-pointer">
+              {request.id}
+            </td>
+          </tr>
+        ))}
+      </DataTable>
     </div>
   );
 }

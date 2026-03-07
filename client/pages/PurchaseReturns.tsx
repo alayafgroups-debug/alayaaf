@@ -17,6 +17,15 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 /* ── Types ── */
 type ReturnItem = {
@@ -239,81 +248,72 @@ function ReturnsList({
 }) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <RotateCcw className="h-6 w-6 text-red-600" />
-          <h1>مردودات المشتريات</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          إنشاء مردود مشتريات جديد
-        </button>
-      </div>
+      <PageHeader
+        icon={RotateCcw}
+        title="مردودات المشتريات"
+        subtitle="إدارة وتتبع جميع المردودات"
+        actionLabel="إنشاء مردود جديد"
+        onAction={onCreateClick}
+        gradient="from-rose-600 to-red-700"
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1 md:col-span-2">
-          <label className="text-sm text-slate-600 text-right block">البحث</label>
-          <input type="text" placeholder="رقم المردود، المورد، سبب الإرجاع..." className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right focus:outline-none focus:ring-1 focus:ring-red-400" />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">المورد</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none"><option>الكل</option></select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">الحالة</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none"><option>الكل</option></select>
-        </div>
-        <div className="md:col-span-4 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 text-sm"><X className="h-4 w-4" /> إعادة تعيين</button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-red-600 px-6 py-1.5 rounded-md hover:bg-slate-50 text-sm font-medium"><Search className="h-4 w-4" /> بحث</button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput placeholder="رقم المردود، المورد، سبب الإرجاع..." />
+        <FilterSelect label="المورد">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterSelect label="الحالة">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterActions onReset={() => {}} onSearch={() => {}} />
+      </FilterBar>
 
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold">الحالة</th>
-              <th className="px-4 py-3 font-semibold">الإجمالي</th>
-              <th className="px-4 py-3 font-semibold">سبب الإرجاع</th>
-              <th className="px-4 py-3 font-semibold">رقم أمر الشراء</th>
-              <th className="px-4 py-3 font-semibold">المورد</th>
-              <th className="px-4 py-3 font-semibold">التاريخ</th>
-              <th className="px-4 py-3 font-semibold">رقم المردود</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {returns.map((ret, i) => (
-              <tr key={ret.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1">
-                    <button title="عرض" onClick={() => onView(ret)} className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50"><Eye className="h-4 w-4" /></button>
-                    <button title="تعديل" onClick={() => onEdit(ret)} className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50"><Edit className="h-4 w-4" /></button>
-                    <button title="PDF" onClick={() => onPrintPdf(ret)} className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 text-xs font-semibold">PDF</button>
-                    <button title="حذف" onClick={() => onDelete(ret.id)} className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle">
-                  <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold", ret.statusColor)}>{ret.status}</span>
-                </td>
-                <td className="px-4 py-3 align-middle font-semibold text-red-600 whitespace-nowrap">{ret.total} ريال</td>
-                <td className="px-4 py-3 align-middle text-slate-600">{ret.returnReason || "-"}</td>
-                <td className="px-4 py-3 align-middle text-blue-600">{ret.poNumber || "-"}</td>
-                <td className="px-4 py-3 align-middle">{ret.vendor}</td>
-                <td className="px-4 py-3 align-middle text-slate-600">{ret.date}</td>
-                <td className="px-4 py-3 align-middle font-medium text-blue-600 hover:underline cursor-pointer" onClick={() => onView(ret)}>{ret.id.slice(0, 8)}...</td>
-              </tr>
-            ))}
-            {returns.length === 0 && (
-              <tr><td colSpan={8} className="py-10 text-center text-slate-500">لا يوجد مردودات مشتريات</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        headers={["الإجراءات", "الحالة", "الإجمالي", "السبب", "أمر الشراء", "المورد", "التاريخ", "رقم المردود"]}
+        gradient="from-rose-800 to-red-900"
+      >
+        {returns.map((ret) => (
+          <tr key={ret.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-1">
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(ret)} />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(ret)} />
+                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(ret.id)} />
+                <button
+                  title="PDF"
+                  onClick={() => onPrintPdf(ret)}
+                  className="px-2.5 py-1.5 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs font-semibold"
+                >
+                  PDF
+                </button>
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle">
+              <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", ret.statusColor)}>
+                {ret.status}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle font-semibold text-red-600 whitespace-nowrap">{ret.total} ريال</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{ret.returnReason || "-"}</td>
+            <td className="px-5 py-3.5 align-middle text-rose-600">{ret.poNumber || "-"}</td>
+            <td className="px-5 py-3.5 align-middle">{ret.vendor}</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{ret.date}</td>
+            <td
+              className="px-5 py-3.5 align-middle font-semibold text-rose-600 hover:underline cursor-pointer"
+              onClick={() => onView(ret)}
+            >
+              {ret.id.slice(0, 8)}...
+            </td>
+          </tr>
+        ))}
+        {returns.length === 0 && (
+          <tr>
+            <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
+              لا يوجد مردودات مشتريات
+            </td>
+          </tr>
+        )}
+      </DataTable>
     </div>
   );
 }

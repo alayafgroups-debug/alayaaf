@@ -17,6 +17,15 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 /* ── Types ── */
 type ReceiptItem = {
@@ -258,126 +267,71 @@ function ReceiptsList({
 }) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <ClipboardList className="h-6 w-6 text-primary" />
-          <h1>سندات استلام المشتريات</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-[#1b8c56] text-white px-4 py-2 rounded-md hover:bg-[#157347] transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          سند استلام جديد
-        </button>
-      </div>
+      <PageHeader
+        icon={Package}
+        title="سندات استلام المشتريات"
+        subtitle="إدارة وتتبع جميع سندات الاستلام"
+        actionLabel="سند استلام جديد"
+        onAction={onCreateClick}
+        gradient="from-sky-600 to-cyan-700"
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1 md:col-span-2">
-          <label className="text-sm text-slate-600 text-right block">البحث</label>
-          <input
-            type="text"
-            placeholder="رقم السند، المرجع، اسم المورد..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">المورد</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">الحالة</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="md:col-span-4 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 text-sm">
-            <X className="h-4 w-4" /> إعادة تعيين
-          </button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-primary px-6 py-1.5 rounded-md hover:bg-slate-50 text-sm font-medium">
-            <Search className="h-4 w-4" /> بحث
-          </button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput placeholder="رقم السند، المرجع، اسم المورد..." />
+        <FilterSelect label="المورد">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterSelect label="الحالة">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterActions onReset={() => {}} onSearch={() => {}} />
+      </FilterBar>
 
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold">الحالة</th>
-              <th className="px-4 py-3 font-semibold">الإجمالي</th>
-              <th className="px-4 py-3 font-semibold">رقم أمر الشراء</th>
-              <th className="px-4 py-3 font-semibold">المورد</th>
-              <th className="px-4 py-3 font-semibold">تاريخ الاستلام</th>
-              <th className="px-4 py-3 font-semibold">رقم السند</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {receipts.map((receipt, i) => (
-              <tr key={receipt.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1">
-                    <button
-                      title="عرض"
-                      onClick={() => onView(receipt)}
-                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="تعديل"
-                      onClick={() => onEdit(receipt)}
-                      className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="طباعة PDF"
-                      onClick={() => onPrintPdf(receipt)}
-                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
-                    >
-                      PDF
-                    </button>
-                    <button
-                      title="حذف"
-                      onClick={() => onDelete(receipt.id)}
-                      className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle">
-                  <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold", receipt.statusColor)}>
-                    {receipt.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 align-middle whitespace-nowrap">{receipt.total} ريال</td>
-                <td className="px-4 py-3 align-middle text-blue-600">{receipt.orderId || "-"}</td>
-                <td className="px-4 py-3 align-middle">{receipt.vendor}</td>
-                <td className="px-4 py-3 align-middle text-slate-600">{receipt.date}</td>
-                <td
-                  className="px-4 py-3 align-middle font-medium text-blue-600 hover:underline cursor-pointer"
-                  onClick={() => onView(receipt)}
+      <DataTable
+        headers={["الإجراءات", "الحالة", "الإجمالي", "أمر الشراء", "المورد", "تاريخ الاستلام", "رقم السند"]}
+        gradient="from-sky-800 to-cyan-900"
+      >
+        {receipts.map((receipt) => (
+          <tr key={receipt.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-1">
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(receipt)} />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(receipt)} />
+                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(receipt.id)} />
+                <button
+                  title="طباعة PDF"
+                  onClick={() => onPrintPdf(receipt)}
+                  className="px-2.5 py-1.5 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs font-semibold"
                 >
-                  {receipt.id.slice(0, 8)}...
-                </td>
-              </tr>
-            ))}
-            {receipts.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-10 text-center text-slate-500">
-                  لا يوجد سندات استلام مشتريات
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  PDF
+                </button>
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle">
+              <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", receipt.statusColor)}>
+                {receipt.status}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle font-medium whitespace-nowrap">{receipt.total} ريال</td>
+            <td className="px-5 py-3.5 align-middle text-sky-600">{receipt.orderId || "-"}</td>
+            <td className="px-5 py-3.5 align-middle">{receipt.vendor}</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{receipt.date}</td>
+            <td
+              className="px-5 py-3.5 align-middle font-semibold text-sky-600 hover:underline cursor-pointer"
+              onClick={() => onView(receipt)}
+            >
+              {receipt.id.slice(0, 8)}...
+            </td>
+          </tr>
+        ))}
+        {receipts.length === 0 && (
+          <tr>
+            <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">
+              لا يوجد سندات استلام مشتريات
+            </td>
+          </tr>
+        )}
+      </DataTable>
     </div>
   );
 }

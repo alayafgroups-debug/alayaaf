@@ -31,6 +31,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { PageHeader, FilterInput } from "@/components/SalesPageUI";
 
 /* ── Types ── */
 type ReportItem = {
@@ -317,24 +318,25 @@ export default function PurchaseReports() {
   return (
     <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
       <div className="mx-auto max-w-7xl space-y-6 pb-12">
-        {/* Page header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-          <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-            <BarChart2 className="h-6 w-6 text-primary" />
-            <h1>تقارير المشتريات الشاملة</h1>
-          </div>
-        </div>
+        <PageHeader
+          icon={BarChart2}
+          title="تقارير المشتريات الشاملة"
+          subtitle="إحصائيات وتقارير تفصيلية لجميع عمليات المشتريات"
+          actionLabel="تحديث البيانات"
+          onAction={() => toast({ title: "تم تحديث البيانات" })}
+          gradient="from-indigo-600 to-purple-700"
+        />
 
         {/* Search */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm p-6 animate-fade-in-up">
           <div className="relative max-w-xl mr-auto">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="ابحث في التقارير..."
-              className="w-full pr-10 pl-4 py-2.5 border border-slate-300 rounded-lg text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              className="w-full px-4 py-3 pr-12 border border-border/60 rounded-xl bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm text-right transition-all"
             />
           </div>
         </div>

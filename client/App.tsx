@@ -16,6 +16,7 @@ import PurchaseRequests from "./pages/PurchaseRequests";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import GoodsReceipts from "./pages/GoodsReceipts";
 import PurchaseInvoices from "./pages/PurchaseInvoices";
+import PurchaseReturns from "./pages/PurchaseReturns";
 import HR from "./pages/HR";
 import CRM from "./pages/CRM";
 import Tax from "./pages/Tax";
@@ -43,6 +44,7 @@ const App = () => (
           <Route path="/purchases/orders" element={<PurchaseOrders />} />
           <Route path="/purchases/receipts" element={<GoodsReceipts />} />
           <Route path="/purchases/invoices" element={<PurchaseInvoices />} />
+          <Route path="/purchases/returns" element={<PurchaseReturns />} />
           <Route path="/hr" element={<HR />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />

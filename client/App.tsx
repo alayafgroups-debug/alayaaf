@@ -25,6 +25,7 @@ import HRPayroll from "./pages/HRPayroll";
 import HRAttendance from "./pages/HRAttendance";
 import HRAdvances from "./pages/HRAdvances";
 import HRCertificates from "./pages/HRCertificates";
+import HRReports from "./pages/HRReports";
 import CRM from "./pages/CRM";
 import Tax from "./pages/Tax";
 import UsersPermissions from "./pages/UsersPermissions";
@@ -62,7 +63,7 @@ const App = () => (
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />
-          <Route path="/hr/reports" element={<HRDashboard />} />
+          <Route path="/hr/reports" element={<HRReports />} />
           <Route path="/hr/settings" element={<HRDashboard />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />

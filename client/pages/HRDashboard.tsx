@@ -189,11 +189,11 @@ export default function HRDashboard() {
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600">تقارير الموارد البشرية الشاملة</p>
               <div className="flex gap-2 flex-wrap">
-                <button className="flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-800 text-white text-xs font-medium hover:bg-gray-900 transition">
+                <button onClick={() => navigate("/hr/reports")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-800 text-white text-xs font-medium hover:bg-gray-900 transition">
                   <BarChart2 className="h-3.5 w-3.5" />
                   تقارير شاملة
                 </button>
-                <button className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
+                <button onClick={() => navigate("/hr/reports")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
                   <ClipboardList className="h-3.5 w-3.5" />
                   تقارير سريعة
                 </button>

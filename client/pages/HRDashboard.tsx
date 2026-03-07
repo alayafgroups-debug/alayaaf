@@ -13,8 +13,10 @@ import {
   BarChart2,
   Plus,
   Eye,
+  type LucideIcon,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { PageHeader } from "@/components/SalesPageUI";
 
 export default function HRDashboard() {
   const navigate = useNavigate();
@@ -44,164 +46,202 @@ export default function HRDashboard() {
   const saudiEmployees = empData.filter((e) => e.nationality === "المملكة العربية السعودية").length;
 
   const stats = [
-    { label: "منتفع قائمة", value: activeBeneficiaries, icon: UserCheck, bg: "bg-yellow-400" },
-    { label: "إجمالي الرواتب", value: totalSalaries.toLocaleString("ar-SA"), icon: DollarSign, bg: "bg-blue-500" },
-    { label: "موظفين سعوديين", value: saudiEmployees, icon: Flag, bg: "bg-green-600" },
-    { label: "إجمالي الموظفين", value: totalEmployees, icon: Users, bg: "bg-blue-700" },
+    {
+      label: "الموظفون النشطون",
+      value: activeBeneficiaries,
+      icon: UserCheck,
+      gradient: "from-emerald-500 to-green-600",
+      onClick: () => navigate("/hr/employees"),
+    },
+    {
+      label: "إجمالي الرواتب",
+      value: `${totalSalaries.toLocaleString("ar-SA")} ر.س`,
+      icon: DollarSign,
+      gradient: "from-blue-500 to-indigo-600",
+      onClick: () => navigate("/hr/payroll"),
+    },
+    {
+      label: "الموظفون السعوديون",
+      value: saudiEmployees,
+      icon: Flag,
+      gradient: "from-amber-500 to-orange-600",
+    },
+    {
+      label: "إجمالي الموظفين",
+      value: totalEmployees,
+      icon: Users,
+      gradient: "from-violet-500 to-purple-600",
+      onClick: () => navigate("/hr/employees"),
+    },
+  ];
+
+  const modules = [
+    {
+      title: "الموظفون",
+      description: "إدارة بيانات الموظفين والعقود والتعيينات.",
+      icon: Users,
+      gradient: "from-blue-600 to-indigo-700",
+      actions: [
+        { label: "عرض الموظفين", icon: Eye, onClick: () => navigate("/hr/employees"), variant: "primary" as const },
+        { label: "إضافة موظف", icon: Plus, onClick: () => navigate("/hr/employees"), variant: "success" as const },
+      ],
+    },
+    {
+      title: "مسير الرواتب",
+      description: "إدارة الرواتب الشهرية وتحديث حالات الصرف.",
+      icon: DollarSign,
+      gradient: "from-emerald-600 to-green-700",
+      badge: "قيد المتابعة",
+      actions: [
+        { label: "فتح مسير الرواتب", icon: ClipboardList, onClick: () => navigate("/hr/payroll"), variant: "danger" as const },
+      ],
+    },
+    {
+      title: "الحضور والانصراف",
+      description: "متابعة تسجيل الحضور والغياب والتأخير.",
+      icon: Clock,
+      gradient: "from-cyan-600 to-sky-700",
+      badge: "مفعل",
+      actions: [
+        { label: "فتح الحضور", icon: Clock, onClick: () => navigate("/hr/attendance"), variant: "info" as const },
+      ],
+    },
+    {
+      title: "الهيكل التنظيمي",
+      description: "تنظيم الأقسام والوظائف والهيكل الإداري.",
+      icon: Building2,
+      gradient: "from-slate-600 to-slate-800",
+      actions: [
+        { label: "الأقسام", icon: Building2, onClick: () => navigate("/hr/settings"), variant: "primary" as const },
+        { label: "الإعدادات", icon: Eye, onClick: () => navigate("/hr/settings"), variant: "neutral" as const },
+      ],
+    },
+    {
+      title: "السلف",
+      description: "إدارة سلف الموظفين وحركة الأقساط.",
+      icon: Wallet,
+      gradient: "from-amber-500 to-yellow-600",
+      actions: [
+        { label: "عرض السلف", icon: Eye, onClick: () => navigate("/hr/advances"), variant: "warning" as const },
+        { label: "سلفة جديدة", icon: Plus, onClick: () => navigate("/hr/advances"), variant: "success" as const },
+      ],
+    },
+    {
+      title: "التقارير",
+      description: "تقارير شاملة لأداء الموارد البشرية.",
+      icon: BarChart2,
+      gradient: "from-indigo-600 to-purple-700",
+      actions: [
+        { label: "فتح التقارير", icon: BarChart2, onClick: () => navigate("/hr/reports"), variant: "primary" as const },
+      ],
+    },
   ];
 
   return (
     <Layout>
-      <div dir="rtl" className="space-y-6">
-        {/* Page Title */}
-        <div className="flex items-center gap-3">
-          <Users className="h-7 w-7 text-blue-600" />
-          <h1 className="text-2xl font-bold text-foreground">إدارة الموارد البشرية</h1>
-        </div>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <PageHeader
+          icon={Users}
+          title="لوحة تحكم الموارد البشرية"
+          subtitle="نظرة عامة وإدارة سريعة لجميع أقسام الموارد البشرية"
+          actionLabel="إضافة موظف جديد"
+          onAction={() => navigate("/hr/employees")}
+          gradient="from-emerald-600 to-teal-700"
+        />
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {stats.map((s, i) => {
-            const Icon = s.icon;
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {stats.map((item) => {
+            const Icon = item.icon;
             return (
-              <div key={i} className={`${s.bg} rounded-xl p-5 flex flex-col items-center gap-2 shadow cursor-pointer hover:opacity-90 transition`}
-                onClick={() => i === 0 || i === 3 ? navigate("/hr/employees") : undefined}>
-                <Icon className="h-8 w-8 text-white/90" />
-                <span className="text-3xl font-bold text-white">{s.value}</span>
-                <span className="text-sm text-white/90 font-medium">{s.label}</span>
-              </div>
+              <button
+                key={item.label}
+                onClick={item.onClick}
+                className={`w-full text-right rounded-2xl bg-gradient-to-br ${item.gradient} p-5 text-white shadow-lg hover:scale-[1.01] transition-transform`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm text-white/85">{item.label}</p>
+                    <p className="text-2xl font-bold leading-tight">{item.value}</p>
+                  </div>
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white/20">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                </div>
+              </button>
             );
           })}
         </div>
 
-        {/* Module Cards Grid - Row 1 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* الموظفون */}
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="bg-blue-600 text-white px-4 py-3 flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              <span className="font-semibold">الموظفون</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">إدارة بيانات الموظفين والعقود</p>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => navigate("/hr/employees")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
-                  <Eye className="h-3.5 w-3.5" />
-                  عرض الموظفين
-                </button>
-                <button onClick={() => navigate("/hr/employees")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">
-                  <Plus className="h-3.5 w-3.5" />
-                  إضافة موظف
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* مسير الرواتب */}
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="bg-green-600 text-white px-4 py-3 flex items-center gap-2 justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                <span className="font-semibold">مسير الرواتب</span>
-              </div>
-              <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-full">معلق</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">حساب وصرف الرواتب الشهرية</p>
-              <div className="flex gap-2">
-                <button onClick={() => navigate("/hr/payroll")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition">
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  مسير الرواتب
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* الحضور والانصراف */}
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="bg-green-700 text-white px-4 py-3 flex items-center gap-2 justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                <span className="font-semibold">الحضور والانصراف</span>
-              </div>
-              <span className="bg-green-400 text-green-900 text-xs font-bold px-2 py-0.5 rounded-full">ممتمة</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">تسجيل الحضور والغياب الشهري</p>
-              <div className="flex gap-2">
-                <button onClick={() => navigate("/hr/attendance")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-700 text-white text-xs font-medium hover:bg-green-800 transition">
-                  <Clock className="h-3.5 w-3.5" />
-                  الحضور والانصراف
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Module Cards Grid - Row 2 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* الهيكل التنظيمي */}
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="bg-gray-600 text-white px-4 py-3 flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              <span className="font-semibold">الهيكل التنظيمي</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">الأقسام والوظائف والجنسيات</p>
-              <div className="flex gap-2 flex-wrap">
-                <button className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">الأقسام</button>
-                <button className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">الوظائف</button>
-                <button className="px-3 py-2 rounded-lg bg-gray-600 text-white text-xs font-medium hover:bg-gray-700 transition">الجنسيات</button>
-              </div>
-            </div>
-          </div>
-
-          {/* السلف */}
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="bg-yellow-500 text-white px-4 py-3 flex items-center gap-2">
-              <Wallet className="h-5 w-5" />
-              <span className="font-semibold">السلف</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">إدارة سلف الموظفين</p>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => navigate("/hr/advances")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-yellow-600 text-white text-xs font-medium hover:bg-yellow-700 transition">
-                  <Eye className="h-3.5 w-3.5" />
-                  عرض السلف
-                </button>
-                <button onClick={() => navigate("/hr/advances")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">
-                  <Plus className="h-3.5 w-3.5" />
-                  سلفة جديدة
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Module Cards Grid - Row 3 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* التقارير */}
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="bg-gray-800 text-white px-4 py-3 flex items-center gap-2">
-              <BarChart2 className="h-5 w-5" />
-              <span className="font-semibold">التقارير</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">تقارير الموارد البشرية الشاملة</p>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => navigate("/hr/reports")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-800 text-white text-xs font-medium hover:bg-gray-900 transition">
-                  <BarChart2 className="h-3.5 w-3.5" />
-                  تقارير شاملة
-                </button>
-                <button onClick={() => navigate("/hr/reports")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  تقارير سريعة
-                </button>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {modules.map((module) => (
+            <ModuleCard key={module.title} {...module} />
+          ))}
         </div>
       </div>
     </Layout>
+  );
+}
+
+type ModuleAction = {
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  variant: "primary" | "success" | "danger" | "warning" | "info" | "neutral";
+};
+
+function ModuleCard({
+  title,
+  description,
+  icon: Icon,
+  gradient,
+  actions,
+  badge,
+}: {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  gradient: string;
+  actions: ModuleAction[];
+  badge?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-white shadow-sm overflow-hidden">
+      <div className={`bg-gradient-to-r ${gradient} px-4 py-3 text-white flex items-center justify-between`}>
+        <div className="flex items-center gap-2">
+          <Icon className="h-5 w-5" />
+          <h3 className="font-semibold">{title}</h3>
+        </div>
+        {badge && <span className="rounded-full bg-white/25 px-2.5 py-1 text-xs font-semibold">{badge}</span>}
+      </div>
+      <div className="p-4 space-y-4">
+        <p className="text-sm text-muted-foreground">{description}</p>
+        <div className="flex flex-wrap gap-2">
+          {actions.map((action) => (
+            <QuickActionButton key={action.label} {...action} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionButton({ label, icon: Icon, onClick, variant }: ModuleAction) {
+  const variants = {
+    primary: "bg-blue-600 hover:bg-blue-700 text-white",
+    success: "bg-emerald-600 hover:bg-emerald-700 text-white",
+    danger: "bg-rose-600 hover:bg-rose-700 text-white",
+    warning: "bg-amber-600 hover:bg-amber-700 text-white",
+    info: "bg-cyan-600 hover:bg-cyan-700 text-white",
+    neutral: "bg-slate-600 hover:bg-slate-700 text-white",
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${variants[variant]}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
   );
 }

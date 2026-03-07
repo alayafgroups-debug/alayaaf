@@ -1,6 +1,7 @@
 import Layout from "@/components/Layout";
 import { useState } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function Settings() {
   const [language, setLanguage] = useState("ar");
@@ -15,85 +16,86 @@ export default function Settings() {
               <span>/</span>
               <span>إعدادات الشركة</span>
             </div>
-            <h1 className="mt-2 text-2xl font-semibold text-foreground">
+            <h1 className="mt-2 text-3xl font-bold text-foreground">
               إعدادات الشركة
             </h1>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary-700">
+          <button className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200">
             <SettingsIcon className="h-4 w-4" />
             حفظ الإعدادات
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <button className="rounded-lg bg-primary px-4 py-2 font-semibold text-primary-foreground">
+          <button className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-500/20 hover:shadow-xl transition-all duration-200">
             معلومات الشركة
           </button>
-          <button className="rounded-lg border border-border bg-card px-4 py-2 font-semibold text-foreground">
+          <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
             الإعدادات الضريبية
           </button>
-          <button className="rounded-lg border border-border bg-card px-4 py-2 font-semibold text-foreground">
+          <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
             إعدادات إضافية
           </button>
         </div>
 
         <div className="space-y-6">
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="bg-blue-600 px-4 py-3 text-sm font-semibold text-white">
+          <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-sm animate-fade-in-up">
+            <div className="bg-gradient-to-l from-blue-800 to-blue-900 px-6 py-4 text-sm font-bold text-white flex items-center gap-2">
+              <SettingsIcon className="h-4 w-4" />
               معلومات الشركة
             </div>
-            <div className="grid gap-4 p-4 sm:grid-cols-2">
+            <div className="grid gap-6 p-6 sm:grid-cols-2">
               <div>
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-bold text-foreground text-right block mb-2">
                   اسم الشركة
                 </label>
                 <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                   defaultValue="شركة لاكجري العياف"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-bold text-foreground text-right block mb-2">
                   الرقم الضريبي
                 </label>
                 <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                   defaultValue="311111111111113"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-bold text-foreground text-right block mb-2">
                   رقم السجل التجاري
                 </label>
                 <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                   defaultValue="1010101010"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-bold text-foreground text-right block mb-2">
                   البريد الإلكتروني
                 </label>
                 <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                   defaultValue="info@demo.com"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-bold text-foreground text-right block mb-2">
                   رقم الهاتف
                 </label>
                 <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                   defaultValue="0500000000"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-bold text-foreground text-right block mb-2">
                   المدينة
                 </label>
                 <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                   defaultValue="الرياض"
                 />
               </div>

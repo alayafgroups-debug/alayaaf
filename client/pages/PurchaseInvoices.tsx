@@ -18,6 +18,15 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 /* ── Types ── */
 type InvoiceItem = {
@@ -273,112 +282,74 @@ function InvoicesList({
 }) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <FileText className="h-6 w-6 text-primary" />
-          <h1>فواتير المشتريات</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-[#1b8c56] text-white px-4 py-2 rounded-md hover:bg-[#157347] transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          إضافة فاتورة مشتريات جديدة
-        </button>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="فواتير المشتريات"
+        subtitle="إدارة وتتبع جميع فواتير المشتريات"
+        actionLabel="إضافة فاتورة مشتريات جديدة"
+        onAction={onCreateClick}
+        gradient="from-purple-600 to-indigo-700"
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1 md:col-span-2">
-          <label className="text-sm text-slate-600 text-right block">البحث</label>
-          <input
-            type="text"
-            placeholder="رقم الفاتورة، المرجع، اسم المورد..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">المورد</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">الحالة</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="md:col-span-4 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 text-sm">
-            <X className="h-4 w-4" /> إعادة تعيين
-          </button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-primary px-6 py-1.5 rounded-md hover:bg-slate-50 text-sm font-medium">
-            <Search className="h-4 w-4" /> بحث
-          </button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput placeholder="رقم الفاتورة، المرجع، اسم المورد..." />
+        <FilterSelect label="المورد">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterSelect label="الحالة">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterActions onReset={() => {}} onSearch={() => {}} />
+      </FilterBar>
 
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold">الحالة</th>
-              <th className="px-4 py-3 font-semibold">المتبقي</th>
-              <th className="px-4 py-3 font-semibold">المدفوع</th>
-              <th className="px-4 py-3 font-semibold">الإجمالي</th>
-              <th className="px-4 py-3 font-semibold">المورد</th>
-              <th className="px-4 py-3 font-semibold">تاريخ الاستحقاق</th>
-              <th className="px-4 py-3 font-semibold">تاريخ الفاتورة</th>
-              <th className="px-4 py-3 font-semibold">رقم الفاتورة</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {invoices.map((inv, i) => (
-              <tr key={inv.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1">
-                    <button title="عرض" onClick={() => onView(inv)} className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50">
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button title="تعديل" onClick={() => onEdit(inv)} className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50">
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button title="تسديد" onClick={() => onPayment(inv)} className="p-1.5 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-50">
-                      <CreditCard className="h-4 w-4" />
-                    </button>
-                    <button title="PDF" onClick={() => onPrintPdf(inv)} className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 text-xs font-semibold">
-                      PDF
-                    </button>
-                    <button title="حذف" onClick={() => onDelete(inv.id)} className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle">
-                  <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold", inv.statusColor)}>
-                    {inv.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 align-middle text-red-600 font-medium whitespace-nowrap">{inv.remaining} ريال</td>
-                <td className="px-4 py-3 align-middle text-green-700 whitespace-nowrap">{inv.paid} ريال</td>
-                <td className="px-4 py-3 align-middle font-semibold whitespace-nowrap">{inv.total} ريال</td>
-                <td className="px-4 py-3 align-middle">{inv.vendor}</td>
-                <td className="px-4 py-3 align-middle text-slate-600">{inv.dueDate}</td>
-                <td className="px-4 py-3 align-middle text-slate-600">{inv.date}</td>
-                <td className="px-4 py-3 align-middle font-medium text-blue-600 hover:underline cursor-pointer" onClick={() => onView(inv)}>
-                  {inv.id.slice(0, 8)}...
-                </td>
-              </tr>
-            ))}
-            {invoices.length === 0 && (
-              <tr>
-                <td colSpan={9} className="py-10 text-center text-slate-500">لا يوجد فواتير مشتريات</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        headers={["الإجراءات", "الحالة", "المتبقي", "المدفوع", "الإجمالي", "المورد", "تاريخ الاستحقاق", "تاريخ الفاتورة", "رقم الفاتورة"]}
+        gradient="from-purple-800 to-indigo-900"
+      >
+        {invoices.map((inv) => (
+          <tr key={inv.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-2">
+                <ActionBtn icon={Eye} color="blue" title="عرض" onClick={() => onView(inv)} />
+                <ActionBtn icon={Edit} color="emerald" title="تعديل" onClick={() => onEdit(inv)} />
+                <ActionBtn icon={CreditCard} color="indigo" title="تسديد" onClick={() => onPayment(inv)} />
+                <ActionBtn icon={Trash2} color="red" title="حذف" onClick={() => onDelete(inv.id)} />
+                <button
+                  title="طباعة PDF"
+                  onClick={() => onPrintPdf(inv)}
+                  className="px-2.5 py-1.5 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs font-semibold"
+                >
+                  PDF
+                </button>
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle">
+              <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", inv.statusColor)}>
+                {inv.status}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle text-red-600 font-medium whitespace-nowrap">{inv.remaining} ريال</td>
+            <td className="px-5 py-3.5 align-middle text-green-700 font-medium whitespace-nowrap">{inv.paid} ريال</td>
+            <td className="px-5 py-3.5 align-middle font-semibold whitespace-nowrap">{inv.total} ريال</td>
+            <td className="px-5 py-3.5 align-middle">{inv.vendor}</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{inv.dueDate}</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{inv.date}</td>
+            <td
+              className="px-5 py-3.5 align-middle font-semibold text-purple-600 hover:underline cursor-pointer"
+              onClick={() => onView(inv)}
+            >
+              {inv.id.slice(0, 8)}...
+            </td>
+          </tr>
+        ))}
+        {invoices.length === 0 && (
+          <tr>
+            <td colSpan={9} className="px-5 py-12 text-center text-muted-foreground">
+              لا يوجد فواتير مشتريات
+            </td>
+          </tr>
+        )}
+      </DataTable>
     </div>
   );
 }

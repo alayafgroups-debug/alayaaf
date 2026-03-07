@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 type UserRow = {
   id: string;
@@ -425,49 +426,81 @@ export default function UsersPermissions() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-900 text-white">
-                    <th className="px-4 py-3 text-right font-semibold">#</th>
-                    <th className="px-4 py-3 text-right font-semibold">المستخدم</th>
-                    <th className="px-4 py-3 text-right font-semibold">البريد الإلكتروني</th>
-                    <th className="px-4 py-3 text-right font-semibold">الدور</th>
-                    <th className="px-4 py-3 text-right font-semibold">الشركة</th>
-                    <th className="px-4 py-3 text-right font-semibold">الحالة</th>
-                    <th className="px-4 py-3 text-right font-semibold">الإجراءات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">جاري التحميل...</td></tr>
-                  ) : filteredUsers.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">لا يوجد مستخدمون</td></tr>
-                  ) : (
-                    filteredUsers.map((user, index) => (
-                      <tr key={user.id} className="border-b border-border hover:bg-muted/40">
-                        <td className="px-4 py-3 text-muted-foreground">{index + 1}</td>
-                        <td className="px-4 py-3 text-foreground">{user.name}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
-                        <td className="px-4 py-3"><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{user.role}</span></td>
-                        <td className="px-4 py-3 text-muted-foreground">{user.company}</td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => void toggleUserStatus(user)} className={`rounded-full px-3 py-1 text-xs font-semibold ${user.status === "نشط" ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-700"}`}>
-                            {user.status}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => openView(user)} className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary"><Eye className="h-4 w-4" /></button>
-                            <button onClick={() => openEdit(user)} className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary"><Pencil className="h-4 w-4" /></button>
-                            <button onClick={() => void deleteUser(user)} className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-right">
+                  <thead>
+                    <tr className="bg-gradient-to-l from-cyan-800 to-cyan-900 text-white">
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">#</th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">المستخدم</th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">البريد الإلكتروني</th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الدور</th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الشركة</th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الحالة</th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {loading ? (
+                      <tr><td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">جاري التحميل...</td></tr>
+                    ) : filteredUsers.length === 0 ? (
+                      <tr><td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">لا يوجد مستخدمون</td></tr>
+                    ) : (
+                      filteredUsers.map((user, index) => (
+                        <tr key={user.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+                          <td className="px-5 py-3.5 text-muted-foreground">{index + 1}</td>
+                          <td className="px-5 py-3.5 font-medium text-foreground">{user.name}</td>
+                          <td className="px-5 py-3.5 text-muted-foreground">{user.email}</td>
+                          <td className="px-5 py-3.5">
+                            <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", "bg-cyan-100 text-cyan-700")}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-muted-foreground">{user.company}</td>
+                          <td className="px-5 py-3.5">
+                            <button
+                              onClick={() => void toggleUserStatus(user)}
+                              className={cn(
+                                "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold transition-colors",
+                                user.status === "نشط"
+                                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                  : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                              )}
+                            >
+                              {user.status}
+                            </button>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openView(user)}
+                                className="p-1.5 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                                title="عرض"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => openEdit(user)}
+                                className="p-1.5 text-cyan-600 border border-cyan-200 rounded-lg hover:bg-cyan-50 transition-colors"
+                                title="تعديل"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => void deleteUser(user)}
+                                className="p-1.5 text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                                title="حذف"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

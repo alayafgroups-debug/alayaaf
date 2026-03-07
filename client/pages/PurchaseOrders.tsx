@@ -17,6 +17,15 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 type PurchaseOrderRow = {
   id: string;
@@ -227,110 +236,70 @@ function OrdersList({
 }) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <ClipboardCheck className="h-6 w-6 text-primary" />
-          <h1>أوامر الشراء</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-[#1b8c56] text-white px-4 py-2 rounded-md hover:bg-[#157347] transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          إنشاء أمر شراء جديد
-        </button>
-      </div>
+      <PageHeader
+        icon={ClipboardCheck}
+        title="أوامر الشراء"
+        subtitle="إدارة وتتبع جميع أوامر الشراء من الموردين"
+        actionLabel="إنشاء أمر شراء جديد"
+        onAction={onCreateClick}
+        gradient="from-violet-600 to-purple-700"
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1 md:col-span-2">
-          <label className="text-sm text-slate-600 text-right block">البحث</label>
-          <input type="text" placeholder="رقم أمر الشراء، المرجع، اسم المورد..." className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">المورد</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none"><option>الكل</option></select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">الحالة</label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-right bg-white appearance-none"><option>الكل</option></select>
-        </div>
-        <div className="md:col-span-4 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 text-sm"><X className="h-4 w-4" />إعادة تعيين</button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-primary px-6 py-1.5 rounded-md hover:bg-slate-50 text-sm font-medium"><Search className="h-4 w-4" />بحث</button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput placeholder="رقم أمر الشراء، المرجع، اسم المورد..." />
+        <FilterSelect label="المورد">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterSelect label="الحالة">
+          <option>الكل</option>
+        </FilterSelect>
+        <FilterActions onReset={() => {}} onSearch={() => {}} />
+      </FilterBar>
 
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold">الحالة</th>
-              <th className="px-4 py-3 font-semibold">المجموع</th>
-              <th className="px-4 py-3 font-semibold">المورد</th>
-              <th className="px-4 py-3 font-semibold">تاريخ الأمر</th>
-              <th className="px-4 py-3 font-semibold">رقم الأمر</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {orders.map((order, i) => (
-              <tr key={order.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1">
-                    <button
-                      title="عرض"
-                      onClick={() => onView(order)}
-                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="تعديل"
-                      onClick={() => onEdit(order)}
-                      className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="طباعة PDF"
-                      onClick={() => onPrintPdf(order)}
-                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
-                    >
-                      PDF
-                    </button>
-                    <button
-                      title="حذف"
-                      onClick={() => onDelete(order.id)}
-                      className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle">
-                  <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold", order.statusColor)}>
-                    {order.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 align-middle whitespace-nowrap">{order.total}</td>
-                <td className="px-4 py-3 align-middle">{order.vendor}</td>
-                <td className="px-4 py-3 align-middle text-slate-600">{order.date}</td>
-                <td
-                  className="px-4 py-3 align-middle font-medium text-blue-600 hover:underline cursor-pointer"
-                  onClick={() => onView(order)}
+      <DataTable
+        headers={["الإجراءات", "الحالة", "المجموع", "المورد", "تاريخ الأمر", "رقم الأمر"]}
+        gradient="from-violet-800 to-purple-900"
+      >
+        {orders.map((order) => (
+          <tr key={order.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-2">
+                <ActionBtn icon={Eye} color="blue" title="عرض" onClick={() => onView(order)} />
+                <ActionBtn icon={Edit} color="emerald" title="تعديل" onClick={() => onEdit(order)} />
+                <ActionBtn icon={Trash2} color="red" title="حذف" onClick={() => onDelete(order.id)} />
+                <button
+                  title="طباعة PDF"
+                  onClick={() => onPrintPdf(order)}
+                  className="px-2.5 py-1.5 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs font-semibold"
                 >
-                  {order.id}
-                </td>
-              </tr>
-            ))}
-            {orders.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">لا توجد أوامر شراء</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  PDF
+                </button>
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle">
+              <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", order.statusColor)}>
+                {order.status}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle font-medium whitespace-nowrap">{order.total}</td>
+            <td className="px-5 py-3.5 align-middle">{order.vendor}</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{order.date}</td>
+            <td
+              className="px-5 py-3.5 align-middle font-semibold text-violet-600 hover:underline cursor-pointer"
+              onClick={() => onView(order)}
+            >
+              {order.id}
+            </td>
+          </tr>
+        ))}
+        {orders.length === 0 && (
+          <tr>
+            <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
+              لا توجد أوامر شراء
+            </td>
+          </tr>
+        )}
+      </DataTable>
     </div>
   );
 }

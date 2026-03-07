@@ -5,7 +5,7 @@ export const purchasesFeatures = [
   { label: "طلبات الشراء", href: "/purchases/requests" },
   { label: "أوامر الشراء", href: "/purchases/orders" },
   { label: "سندات الاستلام", href: "/purchases/receipts" },
-  { label: "فواتير المشتريات" },
+  { label: "فواتير المشتريات", href: "/purchases/invoices" },
   { label: "مردودات المشتريات" },
   { label: "تقارير المشتريات الشاملة" },
   { label: "إدارة الموردين والعروض" },

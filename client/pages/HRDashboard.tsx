@@ -188,11 +188,11 @@ export default function HRDashboard() {
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600">إدارة سلف الموظفين</p>
               <div className="flex gap-2 flex-wrap">
-                <button className="flex items-center gap-1 px-3 py-2 rounded-lg bg-yellow-600 text-white text-xs font-medium hover:bg-yellow-700 transition">
+                <button onClick={() => navigate("/hr/advances")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-yellow-600 text-white text-xs font-medium hover:bg-yellow-700 transition">
                   <Eye className="h-3.5 w-3.5" />
                   عرض السلف
                 </button>
-                <button className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">
+                <button onClick={() => navigate("/hr/advances")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">
                   <Plus className="h-3.5 w-3.5" />
                   سلفة جديدة
                 </button>

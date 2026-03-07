@@ -217,8 +217,8 @@ export default function HREmployees() {
                   <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => handleDelete(emp)} />
                 </div>
               </td>
-              <td className="px-4 py-3 align-middle">
-                <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", getStatusColor(emp.status))}>
+              <td className="px-4 py-3 align-middle whitespace-nowrap">
+                <span className={cn("inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold", getStatusColor(emp.status))}>
                   {emp.status}
                 </span>
               </td>

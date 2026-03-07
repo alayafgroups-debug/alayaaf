@@ -161,51 +161,62 @@ export default function HRSettings() {
   const [settings, setSettings] = useState<HRSettingsState>(defaultSettings);
 
   useEffect(() => {
-    loadSettings();
+    void loadSettings();
   }, []);
 
   async function loadSettings() {
     setLoading(true);
     const local = readLocalSettings();
 
-    try {
-      const { data, error } = await supabase
-        .from("hr_settings")
-        .select("setting_key, setting_value")
-        .in("setting_key", ["general", "recruitment", "payroll", "leaves", "attendance"]);
+    const fallback = local ?? defaultSettings;
 
-      if (!error && data) {
-        const dbState: HRSettingsState = {
-          general: defaultSettings.general,
-          recruitment: defaultSettings.recruitment,
-          payroll: defaultSettings.payroll,
-          leaves: defaultSettings.leaves,
-          attendance: defaultSettings.attendance,
-        };
-
-        data.forEach((row) => {
-          const key = String((row as Record<string, unknown>).setting_key ?? "") as TabKey;
-          const value = (row as Record<string, unknown>).setting_value;
-          if (key === "general") dbState.general = mergeTab(defaultSettings.general, value);
-          if (key === "recruitment") dbState.recruitment = mergeTab(defaultSettings.recruitment, value);
-          if (key === "payroll") dbState.payroll = mergeTab(defaultSettings.payroll, value);
-          if (key === "leaves") dbState.leaves = mergeTab(defaultSettings.leaves, value);
-          if (key === "attendance") dbState.attendance = mergeTab(defaultSettings.attendance, value);
-        });
-
-        const hasDbValues = data.length > 0;
-        const resolved = hasDbValues ? dbState : (local ?? dbState);
-
-        setSettings(resolved);
-        writeLocalSettings(resolved);
-      } else {
-        setSettings(local ?? defaultSettings);
-      }
-    } catch {
-      setSettings(local ?? defaultSettings);
-    } finally {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setSettings(fallback);
       setLoading(false);
+      return;
     }
+
+    const result = await supabase
+      .from("hr_settings")
+      .select("setting_key, setting_value")
+      .in("setting_key", ["general", "recruitment", "payroll", "leaves", "attendance"])
+      .then((res) => ({ ...res, failed: false as const }))
+      .catch(() => ({ data: null, error: new Error("fetch_failed"), failed: true as const }));
+
+    if (!result.error && result.data) {
+      const dbState: HRSettingsState = {
+        general: defaultSettings.general,
+        recruitment: defaultSettings.recruitment,
+        payroll: defaultSettings.payroll,
+        leaves: defaultSettings.leaves,
+        attendance: defaultSettings.attendance,
+      };
+
+      result.data.forEach((row) => {
+        const key = String((row as Record<string, unknown>).setting_key ?? "") as TabKey;
+        const value = (row as Record<string, unknown>).setting_value;
+        if (key === "general") dbState.general = mergeTab(defaultSettings.general, value);
+        if (key === "recruitment") dbState.recruitment = mergeTab(defaultSettings.recruitment, value);
+        if (key === "payroll") dbState.payroll = mergeTab(defaultSettings.payroll, value);
+        if (key === "leaves") dbState.leaves = mergeTab(defaultSettings.leaves, value);
+        if (key === "attendance") dbState.attendance = mergeTab(defaultSettings.attendance, value);
+      });
+
+      const hasDbValues = result.data.length > 0;
+      const resolved = hasDbValues ? dbState : fallback;
+      setSettings(resolved);
+      writeLocalSettings(resolved);
+    } else {
+      setSettings(fallback);
+      if (result.failed) {
+        toast({
+          title: "وضع دون اتصال",
+          description: "تعذر الوصول لقاعدة البيانات، تم تحميل آخر إعدادات محفوظة محلياً",
+        });
+      }
+    }
+
+    setLoading(false);
   }
 
   const saveLabel = useMemo(() => {
@@ -224,24 +235,27 @@ export default function HRSettings() {
     };
 
     setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("hr_settings")
-        .upsert([payload], { onConflict: "setting_key" });
 
-      if (error) throw error;
+    const result = await supabase
+      .from("hr_settings")
+      .upsert([payload], { onConflict: "setting_key" })
+      .then((res) => ({ ...res, failed: false as const }))
+      .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
 
-      writeLocalSettings(settings);
+    writeLocalSettings(settings);
+
+    if (!result.error) {
       toast({ title: "تم الحفظ", description: "تم حفظ الإعدادات في قاعدة البيانات" });
-    } catch {
-      writeLocalSettings(settings);
+    } else {
       toast({
         title: "تم الحفظ محليًا",
-        description: "تعذر حفظ الإعدادات في قاعدة البيانات حالياً",
+        description: result.failed
+          ? "تعذر الاتصال بقاعدة البيانات، تم الحفظ محليًا"
+          : "تعذر حفظ الإعدادات في قاعدة البيانات حالياً",
       });
-    } finally {
-      setSaving(false);
     }
+
+    setSaving(false);
   }
 
   return (

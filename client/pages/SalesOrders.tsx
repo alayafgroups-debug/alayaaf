@@ -6,16 +6,11 @@ import {
   Search,
   X,
   Trash2,
-  MoreVertical,
   ArrowLeftRight,
   Edit,
   Eye,
-  Printer,
   FileText,
-  Ban,
   ShoppingCart,
-  ChevronDown,
-  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -41,9 +36,12 @@ const statusColors: Record<string, string> = {
 
 const mockOrders: SalesOrder[] = [];
 
+const parseCurrency = (value: string) => Number(value.replace(/[^0-9.]/g, "")) || 0;
+
 export default function SalesOrders() {
-  const [view, setView] = useState<"list" | "create">("list");
+  const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
   const [orders, setOrders] = useState<SalesOrder[]>(mockOrders);
+  const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -79,13 +77,136 @@ export default function SalesOrders() {
     setOrders((prev) => [order, ...prev]);
   };
 
+  const handleUpdated = (order: SalesOrder) => {
+    setOrders((prev) => prev.map((row) => (row.id === order.id ? order : row)));
+  };
+
+  const handleDownloadPdf = (order: SalesOrder) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      return;
+    }
+
+    const storedItems = localStorage.getItem(`sales-order-items-${order.id}`);
+    const parsedItems = storedItems
+      ? (JSON.parse(storedItems) as Array<{
+          id: number;
+          description: string;
+          quantity: number;
+          price: number;
+          discount: number;
+          taxPercent: number;
+        }>)
+      : [];
+
+    const fallbackTotal = parseCurrency(order.total);
+    const items =
+      parsedItems.length > 0
+        ? parsedItems
+        : [
+            {
+              id: 1,
+              description: "-",
+              quantity: 1,
+              price: fallbackTotal,
+              discount: 0,
+              taxPercent: 0,
+            },
+          ];
+
+    const rowsHtml = items
+      .map((item) => {
+        const lineSubtotal = item.quantity * item.price - item.discount;
+        const tax = (lineSubtotal * item.taxPercent) / 100;
+        const lineTotal = lineSubtotal + tax;
+        return `<tr>
+          <td>${item.id}</td>
+          <td>${item.description || "-"}</td>
+          <td>${item.quantity}</td>
+          <td>${item.price.toFixed(2)}</td>
+          <td>${item.discount.toFixed(2)}</td>
+          <td>${item.taxPercent}%</td>
+          <td>${lineTotal.toFixed(2)}</td>
+        </tr>`;
+      })
+      .join("");
+
+    printWindow.document.write(`
+      <html dir="rtl" lang="ar">
+        <head>
+          <title>أمر بيع ${order.id}</title>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: 'Cairo', Arial, sans-serif; margin:0; padding:24px; color:#0f172a; }
+            .page { border:1px solid #e2e8f0; padding:20px; }
+            .header { display:flex; justify-content:space-between; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:12px; }
+            .title { font-size:26px; font-weight:700; }
+            .meta { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+            .card { border:1px solid #e2e8f0; padding:10px; border-radius:8px; }
+            .label { color:#64748b; font-size:12px; }
+            .value { font-weight:700; font-size:15px; }
+            table { width:100%; border-collapse:collapse; }
+            th, td { border:1px solid #e2e8f0; padding:8px; text-align:right; font-size:13px; }
+            th { background:#f1f5f9; }
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div class="title">تفاصيل أمر البيع</div>
+              <div>رقم الأمر: ${order.id}</div>
+            </div>
+            <div class="meta">
+              <div class="card"><div class="label">العميل</div><div class="value">${order.customer || "-"}</div></div>
+              <div class="card"><div class="label">رقم عرض السعر</div><div class="value">${order.quotationId || "-"}</div></div>
+              <div class="card"><div class="label">تاريخ الأمر</div><div class="value">${order.date}</div></div>
+              <div class="card"><div class="label">تاريخ التسليم</div><div class="value">${order.deliveryDate}</div></div>
+            </div>
+            <table>
+              <thead>
+                <tr><th>#</th><th>وصف البند</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الضريبة</th><th>الإجمالي</th></tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
-        {view === "list" ? (
-          <OrdersList onCreateClick={() => setView("create")} orders={orders} />
-        ) : (
+        {view === "list" && (
+          <OrdersList
+            onCreateClick={() => setView("create")}
+            onView={(order) => {
+              setSelectedOrder(order);
+              setView("details");
+            }}
+            onEdit={(order) => {
+              setSelectedOrder(order);
+              setView("edit");
+            }}
+            onDownloadPdf={handleDownloadPdf}
+            orders={orders}
+          />
+        )}
+        {view === "create" && (
           <OrderForm onBack={() => setView("list")} onSaved={handleSaved} />
+        )}
+        {view === "details" && selectedOrder && (
+          <OrderDetails order={selectedOrder} onBack={() => setView("list")} />
+        )}
+        {view === "edit" && selectedOrder && (
+          <OrderEdit
+            order={selectedOrder}
+            onBack={() => setView("list")}
+            onUpdated={handleUpdated}
+          />
         )}
       </div>
     </Layout>
@@ -94,13 +215,17 @@ export default function SalesOrders() {
 
 function OrdersList({
   onCreateClick,
+  onView,
+  onEdit,
+  onDownloadPdf,
   orders,
 }: {
   onCreateClick: () => void;
+  onView: (order: SalesOrder) => void;
+  onEdit: (order: SalesOrder) => void;
+  onDownloadPdf: (order: SalesOrder) => void;
   orders: SalesOrder[];
 }) {
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -184,34 +309,27 @@ function OrdersList({
               >
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-1 flex-wrap">
-                    <button className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors">
+                    <button
+                      title="عرض أمر البيع"
+                      onClick={() => onView(order)}
+                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+                    >
                       <Eye className="h-4 w-4" />
                     </button>
-                    <div className="relative">
-                      <button
-                        onClick={() =>
-                          setOpenDropdownId(
-                            openDropdownId === order.id ? null : order.id
-                          )
-                        }
-                        className="p-1.5 text-cyan-500 border border-cyan-200 rounded hover:bg-cyan-50 transition-colors flex items-center bg-cyan-50"
-                      >
-                        <Settings className="h-4 w-4" />
-                        <ChevronDown className="h-3 w-3 ml-1" />
-                      </button>
-                      {openDropdownId === order.id && (
-                        <div className="absolute top-full mt-1 left-0 w-36 bg-white border border-slate-200 rounded shadow-lg z-10 py-1">
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
-                            <Printer className="h-4 w-4 text-slate-600" />
-                            طباعة
-                          </button>
-                          <button className="w-full px-4 py-2 text-right text-sm hover:bg-slate-50 flex items-center justify-between">
-                            <FileText className="h-4 w-4 text-slate-600" />
-                            PDF
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      title="تعديل أمر البيع"
+                      onClick={() => onEdit(order)}
+                      className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      title="طباعة PDF"
+                      onClick={() => onDownloadPdf(order)}
+                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
+                    >
+                      طباعة PDF
+                    </button>
                   </div>
                 </td>
                 <td className="px-4 py-3 align-middle text-right space-y-1">
@@ -257,6 +375,222 @@ function OrdersList({
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetails({
+  order,
+  onBack,
+}: {
+  order: SalesOrder;
+  onBack: () => void;
+}) {
+  const [items, setItems] = useState<
+    Array<{
+      id: number;
+      description: string;
+      quantity: number;
+      price: number;
+      discount: number;
+      taxPercent: number;
+      lineTotal: number;
+    }>
+  >([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(`sales-order-items-${order.id}`);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Array<{
+        id: number;
+        description: string;
+        quantity: number;
+        price: number;
+        discount: number;
+        taxPercent: number;
+      }>;
+
+      setItems(
+        parsed.map((item) => {
+          const lineSubtotal = item.quantity * item.price - item.discount;
+          const tax = (lineSubtotal * item.taxPercent) / 100;
+          return {
+            ...item,
+            lineTotal: lineSubtotal + tax,
+          };
+        })
+      );
+    }
+  }, [order.id]);
+
+  return (
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+        >
+          العودة للقائمة
+          <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">تفاصيل أمر البيع</h1>
+          <ShoppingCart className="h-5 w-5 text-blue-600" />
+        </div>
+      </div>
+
+      <div className="p-4 space-y-6">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800 text-right">بيانات الأمر</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">رقم الأمر</label><div className="text-right font-semibold">{order.id}</div></div>
+            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">العميل</label><div className="text-right font-semibold">{order.customer}</div></div>
+            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">تاريخ الأمر</label><div className="text-right font-semibold">{order.date}</div></div>
+            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">تاريخ التسليم</label><div className="text-right font-semibold">{order.deliveryDate}</div></div>
+            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">رقم عرض السعر</label><div className="text-right font-semibold">{order.quotationId || "-"}</div></div>
+            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">الإجمالي</label><div className="text-right font-semibold">{order.total}</div></div>
+          </div>
+        </div>
+
+        {items.length > 0 && (
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+              <h2 className="font-semibold text-slate-800 text-right">بنود الأمر</h2>
+            </div>
+            <div className="p-4 overflow-x-auto">
+              <table className="w-full text-sm text-right">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="px-3 py-2 border border-slate-200">#</th>
+                    <th className="px-3 py-2 border border-slate-200">وصف البند</th>
+                    <th className="px-3 py-2 border border-slate-200">الكمية</th>
+                    <th className="px-3 py-2 border border-slate-200">السعر</th>
+                    <th className="px-3 py-2 border border-slate-200">الخصم</th>
+                    <th className="px-3 py-2 border border-slate-200">الضريبة</th>
+                    <th className="px-3 py-2 border border-slate-200">الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-3 py-2 border border-slate-200">{item.id}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.description || "-"}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.quantity}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.price.toFixed(2)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.discount.toFixed(2)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.taxPercent}%</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.lineTotal.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrderEdit({
+  order,
+  onBack,
+  onUpdated,
+}: {
+  order: SalesOrder;
+  onBack: () => void;
+  onUpdated: (order: SalesOrder) => void;
+}) {
+  const [deliveryDate, setDeliveryDate] = useState(order.deliveryDate);
+  const [orderDate, setOrderDate] = useState(order.date);
+  const [customer, setCustomer] = useState(order.customer);
+
+  const handleSave = async () => {
+    const { data, error } = await supabase
+      .from("sales_orders")
+      .update({
+        date: orderDate,
+        delivery_date: deliveryDate,
+        customer,
+      })
+      .eq("id", order.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      onUpdated({
+        ...order,
+        date: data.date ?? orderDate,
+        deliveryDate: data.delivery_date ?? deliveryDate,
+        customer: data.customer ?? customer,
+      });
+      toast({ title: "تم تحديث أمر البيع", description: `الأمر: ${order.id}` });
+      onBack();
+    } else {
+      toast({ title: "تعذر تحديث أمر البيع", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
+  return (
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+        >
+          العودة للقائمة
+          <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">تعديل أمر البيع</h1>
+          <Edit className="h-5 w-5 text-emerald-600" />
+        </div>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 transition-colors"
+        >
+          حفظ التعديلات
+        </button>
+      </div>
+
+      <div className="p-4">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800 text-right">معلومات الأمر</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">تاريخ الأمر</label>
+              <input
+                type="date"
+                value={orderDate}
+                onChange={(event) => setOrderDate(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-600 block text-right">تاريخ التسليم</label>
+              <input
+                type="date"
+                value={deliveryDate}
+                onChange={(event) => setDeliveryDate(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <input
+                type="text"
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -346,6 +680,10 @@ function OrderForm({
       .single();
 
     if (!error && data) {
+      localStorage.setItem(
+        `sales-order-items-${data.id ?? orderId}`,
+        JSON.stringify(items)
+      );
       onSaved({
         id: data.id ?? orderId,
         date: data.date ?? orderDate,

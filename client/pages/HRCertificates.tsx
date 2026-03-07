@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import { ArrowRight, Award, Eye, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -85,7 +86,9 @@ function readLocalCertificates(): Certificate[] {
 }
 
 function writeLocalCertificates(certificates: Certificate[]) {
-  localStorage.setItem(CERTIFICATES_STORAGE_KEY, JSON.stringify(certificates));
+  try {
+    localStorage.setItem(CERTIFICATES_STORAGE_KEY, JSON.stringify(certificates));
+  } catch {}
 }
 
 function mergeCertificates(dbCertificates: Certificate[], localCertificates: Certificate[]) {
@@ -127,36 +130,31 @@ export default function HRCertificates() {
     setLoading(true);
     const localCertificates = readLocalCertificates();
 
-    try {
-      const [certRes, empRes] = await Promise.all([
-        supabase.from("hr_certificates").select("*").order("created_at", { ascending: false }),
-        supabase
-          .from("employees")
-          .select("id, emp_id, name, job_title, hire_date")
-          .eq("status", "نشط")
-          .order("name", { ascending: true }),
-      ]);
+    const [certResult, empResult] = await Promise.allSettled([
+      supabase.from("hr_certificates").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("employees")
+        .select("id, emp_id, name, job_title, hire_date")
+        .eq("status", "نشط")
+        .order("name", { ascending: true }),
+    ]);
 
-      if (!certRes.error && certRes.data) {
-        const dbCertificates = certRes.data.map((r) => mapCertificateRow(r as Record<string, unknown>));
-        const merged = mergeCertificates(dbCertificates, localCertificates);
-        setCertificates(merged);
-        writeLocalCertificates(merged);
-      } else {
-        setCertificates(localCertificates);
-      }
-
-      if (!empRes.error && empRes.data) {
-        setEmployees(empRes.data.map((r) => mapEmployee(r as Record<string, unknown>)));
-      } else {
-        setEmployees([]);
-      }
-    } catch {
+    if (certResult.status === "fulfilled" && !certResult.value.error && certResult.value.data) {
+      const dbCertificates = certResult.value.data.map((r) => mapCertificateRow(r as Record<string, unknown>));
+      const merged = mergeCertificates(dbCertificates, localCertificates);
+      setCertificates(merged);
+      writeLocalCertificates(merged);
+    } else {
       setCertificates(localCertificates);
-      setEmployees([]);
-    } finally {
-      setLoading(false);
     }
+
+    if (empResult.status === "fulfilled" && !empResult.value.error && empResult.value.data) {
+      setEmployees(empResult.value.data.map((r) => mapEmployee(r as Record<string, unknown>)));
+    } else {
+      setEmployees([]);
+    }
+
+    setLoading(false);
   }
 
   async function handleCreateCertificate() {

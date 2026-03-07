@@ -98,43 +98,262 @@ export default function Quotations() {
       return;
     }
 
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const parseCurrency = (value: string) => Number(value.replace(/[^0-9.]/g, "")) || 0;
+
+    const storedItems = localStorage.getItem(`sales-quotation-items-${quotation.id}`);
+    const parsedItems = storedItems
+      ? (JSON.parse(storedItems) as Array<{
+          id: number;
+          description: string;
+          unit: string;
+          quantity: number;
+          price: number;
+          discount: number;
+          taxPercent: number;
+        }>)
+      : [];
+
+    const fallbackTotal = parseCurrency(quotation.total);
+    const items =
+      parsedItems.length > 0
+        ? parsedItems
+        : [
+            {
+              id: 1,
+              description: "-",
+              unit: "-",
+              quantity: 1,
+              price: fallbackTotal,
+              discount: 0,
+              taxPercent: 0,
+            },
+          ];
+
+    const calculated = items.map((item) => {
+      const lineSubtotal = item.quantity * item.price - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      const lineTotal = lineSubtotal + tax;
+      return {
+        ...item,
+        lineSubtotal,
+        tax,
+        lineTotal,
+      };
+    });
+
+    const totals = calculated.reduce(
+      (acc, item) => ({
+        subtotal: acc.subtotal + item.lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + item.tax,
+        total: acc.total + item.lineTotal,
+      }),
+      { subtotal: 0, discount: 0, tax: 0, total: 0 }
+    );
+
+    const rowsHtml = calculated
+      .map(
+        (item) => `
+          <tr>
+            <td>${item.id}</td>
+            <td>${escapeHtml(item.description || "-")}</td>
+            <td>${escapeHtml(item.unit || "-")}</td>
+            <td>${item.quantity}</td>
+            <td>${item.price.toFixed(2)}</td>
+            <td>${item.discount.toFixed(2)}</td>
+            <td>${item.taxPercent}%</td>
+            <td>${item.lineTotal.toFixed(2)}</td>
+          </tr>
+        `
+      )
+      .join("");
+
     printWindow.document.write(`
-      <html dir="rtl">
+      <html dir="rtl" lang="ar">
         <head>
           <title>عرض سعر ${quotation.id}</title>
+          <meta charset="utf-8" />
           <style>
-            body { font-family: 'Cairo', Arial, sans-serif; padding: 24px; }
-            h1 { color: #1f2937; }
-            .section { margin-top: 16px; }
-            .label { color: #6b7280; font-size: 14px; }
-            .value { font-size: 16px; font-weight: 600; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 24px;
+              font-family: 'Cairo', Arial, sans-serif;
+              color: #0f172a;
+              background: #f8fafc;
+            }
+            .page {
+              width: 210mm;
+              min-height: 297mm;
+              margin: 0 auto;
+              background: white;
+              border: 1px solid #e2e8f0;
+              padding: 22px;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 1px solid #e2e8f0;
+              padding-bottom: 12px;
+              margin-bottom: 18px;
+            }
+            .title {
+              font-size: 30px;
+              font-weight: 700;
+              margin: 0;
+            }
+            .sub-title {
+              margin: 4px 0 0;
+              color: #64748b;
+              font-size: 14px;
+            }
+            .badge {
+              display: inline-block;
+              padding: 4px 10px;
+              border-radius: 999px;
+              background: #e0f2fe;
+              color: #0369a1;
+              font-size: 12px;
+              font-weight: 700;
+            }
+            .meta {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 12px;
+              margin-bottom: 18px;
+            }
+            .meta-card {
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 10px 12px;
+            }
+            .label {
+              color: #64748b;
+              font-size: 12px;
+              margin-bottom: 4px;
+            }
+            .value {
+              font-size: 16px;
+              font-weight: 700;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+            }
+            th, td {
+              border: 1px solid #e2e8f0;
+              padding: 8px;
+              text-align: right;
+              font-size: 13px;
+              vertical-align: top;
+            }
+            th {
+              background: #f1f5f9;
+              font-weight: 700;
+            }
+            .totals {
+              width: 320px;
+              margin-inline-start: auto;
+              margin-top: 18px;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 12px;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 7px;
+              font-size: 13px;
+            }
+            .total-final {
+              border-top: 1px solid #e2e8f0;
+              margin-top: 8px;
+              padding-top: 10px;
+              font-size: 16px;
+              font-weight: 700;
+              color: #1d4ed8;
+            }
+            @media print {
+              body { background: white; padding: 0; }
+              .page { border: 0; width: 100%; min-height: auto; padding: 0; }
+            }
           </style>
         </head>
         <body>
-          <h1>تفاصيل عرض السعر</h1>
-          <div class="section">
-            <div class="label">رقم العرض</div>
-            <div class="value">${quotation.id}</div>
-          </div>
-          <div class="section">
-            <div class="label">العميل</div>
-            <div class="value">${quotation.customer}</div>
-          </div>
-          <div class="section">
-            <div class="label">تاريخ العرض</div>
-            <div class="value">${quotation.date}</div>
-          </div>
-          <div class="section">
-            <div class="label">تاريخ الصلاحية</div>
-            <div class="value">${quotation.validity}</div>
-          </div>
-          <div class="section">
-            <div class="label">الإجمالي</div>
-            <div class="value">${quotation.total}</div>
-          </div>
-          <div class="section">
-            <div class="label">الحالة</div>
-            <div class="value">${quotation.status}</div>
+          <div class="page">
+            <div class="header">
+              <div>
+                <h1 class="title">تفاصيل عرض السعر</h1>
+                <p class="sub-title">Quotation Details</p>
+              </div>
+              <div class="badge">${escapeHtml(quotation.status)}</div>
+            </div>
+
+            <div class="meta">
+              <div class="meta-card">
+                <div class="label">رقم العرض</div>
+                <div class="value">${escapeHtml(quotation.id)}</div>
+              </div>
+              <div class="meta-card">
+                <div class="label">العميل</div>
+                <div class="value">${escapeHtml(quotation.customer || "-")}</div>
+              </div>
+              <div class="meta-card">
+                <div class="label">تاريخ العرض</div>
+                <div class="value">${escapeHtml(quotation.date)}</div>
+              </div>
+              <div class="meta-card">
+                <div class="label">تاريخ الصلاحية</div>
+                <div class="value">${escapeHtml(quotation.validity)}</div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>وصف البند</th>
+                  <th>الوحدة</th>
+                  <th>الكمية</th>
+                  <th>السعر</th>
+                  <th>الخصم</th>
+                  <th>الضريبة</th>
+                  <th>الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div class="total-row">
+                <span>المجموع الفرعي</span>
+                <span>${totals.subtotal.toFixed(2)} ريال</span>
+              </div>
+              <div class="total-row">
+                <span>الخصم</span>
+                <span>${totals.discount.toFixed(2)} ريال</span>
+              </div>
+              <div class="total-row">
+                <span>الضريبة</span>
+                <span>${totals.tax.toFixed(2)} ريال</span>
+              </div>
+              <div class="total-row total-final">
+                <span>الإجمالي</span>
+                <span>${totals.total.toFixed(2)} ريال</span>
+              </div>
+            </div>
           </div>
         </body>
       </html>

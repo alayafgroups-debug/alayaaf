@@ -664,11 +664,11 @@ function OrderEdit({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {items.map((item, idx) => {
                   const sub = item.quantity * item.price - item.discount;
                   const tax = (sub * item.taxPercent) / 100;
                   return (
-                    <tr key={item.id}>
+                    <tr key={`edit-item-${idx}`}>
                       <td className="pt-4 align-top">
                         <div className="flex items-center justify-center h-10">
                           <button onClick={() => removeItem(item.id)} className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600">

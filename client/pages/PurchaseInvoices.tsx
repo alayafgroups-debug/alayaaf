@@ -309,11 +309,11 @@ function InvoicesList({
         {invoices.map((inv) => (
           <tr key={inv.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
             <td className="px-5 py-3.5 align-middle">
-              <div className="flex items-center gap-2">
-                <ActionBtn icon={Eye} color="blue" title="عرض" onClick={() => onView(inv)} />
-                <ActionBtn icon={Edit} color="emerald" title="تعديل" onClick={() => onEdit(inv)} />
-                <ActionBtn icon={CreditCard} color="indigo" title="تسديد" onClick={() => onPayment(inv)} />
-                <ActionBtn icon={Trash2} color="red" title="حذف" onClick={() => onDelete(inv.id)} />
+              <div className="flex items-center gap-1">
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(inv)} />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(inv)} />
+                <ActionBtn icon={CreditCard} label="تسديد" color="indigo" onClick={() => onPayment(inv)} />
+                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(inv.id)} />
                 <button
                   title="طباعة PDF"
                   onClick={() => onPrintPdf(inv)}

@@ -86,14 +86,12 @@ export function FilterInput({ label, placeholder, colSpan }: { label: string; pl
   );
 }
 
-export function FilterSelect({ label, options }: { label: string; options: string[] }) {
+export function FilterSelect({ label, children }: { label: string; children?: ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label className="text-[12px] font-semibold text-muted-foreground block text-right">{label}</label>
       <select className="w-full px-4 py-2.5 border border-border/60 rounded-xl bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm text-right appearance-none text-foreground transition-all">
-        {options.map((opt) => (
-          <option key={opt}>{opt}</option>
-        ))}
+        {children}
       </select>
     </div>
   );
@@ -149,31 +147,35 @@ export function ActionBtn({
   icon: Icon,
   label,
   color = "blue",
+  title,
   onClick,
 }: {
   icon: LucideIcon;
   label?: string;
-  color?: "blue" | "green" | "amber" | "red" | "slate";
+  color?: "blue" | "emerald" | "green" | "amber" | "red" | "slate" | "indigo";
+  title?: string;
   onClick?: () => void;
 }) {
-  const colors = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200/60 hover:bg-blue-100",
-    green: "text-emerald-600 bg-emerald-50 border-emerald-200/60 hover:bg-emerald-100",
-    amber: "text-amber-700 bg-amber-50 border-amber-200/60 hover:bg-amber-100",
-    red: "text-red-500 bg-red-50 border-red-200/60 hover:bg-red-100",
-    slate: "text-slate-600 bg-slate-50 border-slate-200/60 hover:bg-slate-100",
+  const colorMap = {
+    blue: "text-blue-600 border-blue-200 hover:bg-blue-50",
+    green: "text-emerald-600 border-emerald-200 hover:bg-emerald-50",
+    emerald: "text-emerald-600 border-emerald-200 hover:bg-emerald-50",
+    amber: "text-amber-700 border-amber-200 hover:bg-amber-50",
+    red: "text-red-500 border-red-200 hover:bg-red-50",
+    slate: "text-slate-600 border-slate-300 hover:bg-slate-100",
+    indigo: "text-indigo-600 border-indigo-200 hover:bg-indigo-50",
   };
 
   return (
     <button
       onClick={onClick}
-      title={label}
+      title={title || label}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200",
-        colors[color]
+        "inline-flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg transition-colors text-xs font-semibold",
+        colorMap[color] || colorMap.blue
       )}
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon className="h-4 w-4" />
       {label && <span>{label}</span>}
     </button>
   );

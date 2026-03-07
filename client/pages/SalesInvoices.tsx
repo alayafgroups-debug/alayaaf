@@ -263,9 +263,9 @@ function InvoicesList({
             <td className="px-5 py-3.5 align-middle">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(invoice)} />
-                <ActionBtn icon={Edit} label="تعديل" color="green" onClick={() => onEdit(invoice)} />
-                <ActionBtn icon={CreditCard} label="تسديد" color="blue" onClick={() => onPayment(invoice)} />
-                <ActionBtn icon={Trash2} color="red" onClick={() => onDelete(invoice.id)} />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(invoice)} />
+                <ActionBtn icon={CreditCard} label="تسديد" color="indigo" onClick={() => onPayment(invoice)} />
+                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(invoice.id)} />
                 <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => {
                   onDownloadPdf(invoice);
                   notifyAction("تحميل PDF", `الفاتورة: ${invoice.id}`);

@@ -471,10 +471,10 @@ function QuotationsList({
             <td className="px-5 py-3.5 align-middle">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(quo)} />
-                <ActionBtn icon={Edit} label="تعديل" color="green" onClick={() => onEdit(quo)} />
-                <ActionBtn icon={ArrowLeftRight} label="تحويل لفاتورة" color="amber" />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(quo)} />
+                <ActionBtn icon={ArrowLeftRight} label="تحويل" color="amber" />
                 <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(quo)} />
-                <ActionBtn icon={Trash2} color="red" onClick={() => onDelete(quo.id)} />
+                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(quo.id)} />
               </div>
             </td>
             <td className="px-5 py-3.5 align-middle text-right space-y-1">

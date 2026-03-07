@@ -271,7 +271,7 @@ function OrdersList({
             <td className="px-5 py-3.5 align-middle">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(order)} />
-                <ActionBtn icon={Edit} label="تعديل" color="green" onClick={() => onEdit(order)} />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(order)} />
                 <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(order)} />
               </div>
             </td>

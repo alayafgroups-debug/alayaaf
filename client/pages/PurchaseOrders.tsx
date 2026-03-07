@@ -263,10 +263,10 @@ function OrdersList({
         {orders.map((order) => (
           <tr key={order.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
             <td className="px-5 py-3.5 align-middle">
-              <div className="flex items-center gap-2">
-                <ActionBtn icon={Eye} color="blue" title="عرض" onClick={() => onView(order)} />
-                <ActionBtn icon={Edit} color="emerald" title="تعديل" onClick={() => onEdit(order)} />
-                <ActionBtn icon={Trash2} color="red" title="حذف" onClick={() => onDelete(order.id)} />
+              <div className="flex items-center gap-1">
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(order)} />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(order)} />
+                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(order.id)} />
                 <button
                   title="طباعة PDF"
                   onClick={() => onPrintPdf(order)}

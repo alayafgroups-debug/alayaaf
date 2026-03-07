@@ -1,0 +1,420 @@
+import { useState } from "react";
+import Layout from "@/components/Layout";
+import { purchasesFeatures } from "./Purchases";
+import {
+  Search,
+  FileText,
+  BarChart2,
+  BarChart,
+  TrendingDown,
+  Package,
+  ClipboardList,
+  ShoppingCart,
+  Truck,
+  RotateCcw,
+  Users,
+  Download,
+  Printer,
+  Filter,
+  FileSpreadsheet,
+  PieChart,
+  Calendar,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  ArrowUpDown,
+  Star,
+  CreditCard,
+  Receipt,
+  BookOpen,
+  ShieldAlert,
+} from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+
+/* ── Types ── */
+type ReportItem = {
+  label: string;
+  desc: string;
+  icon: React.ReactNode;
+  badge?: string;
+  badgeColor?: string;
+};
+
+type ReportSection = {
+  title: string;
+  headerBg: string;
+  headerText: string;
+  icon: React.ReactNode;
+  reports: ReportItem[];
+};
+
+/* ── Report sections data ── */
+const sections: ReportSection[] = [
+  {
+    title: "تقارير طلبات الشراء",
+    headerBg: "bg-green-600",
+    headerText: "text-white",
+    icon: <ClipboardList className="h-5 w-5" />,
+    reports: [
+      { label: "تقرير طلبات الشراء", desc: "جميع الطلبات", icon: <FileText className="h-5 w-5 text-green-600" />, badge: "شامل", badgeColor: "bg-green-100 text-green-700" },
+      { label: "طلبات الشراء حسب الحالة", desc: "مفتوح / معتمد / مرفوض", icon: <BarChart2 className="h-5 w-5 text-green-500" /> },
+      { label: "طلبات الشراء حسب القسم", desc: "تصنيف حسب الأقسام", icon: <PieChart className="h-5 w-5 text-green-500" /> },
+      { label: "طلبات الشراء المعلقة", desc: "بانتظار الاعتماد", icon: <Clock className="h-5 w-5 text-yellow-500" />, badge: "تنبيه", badgeColor: "bg-yellow-100 text-yellow-700" },
+      { label: "طلبات الشراء المرفوضة", desc: "الطلبات المرفوضة وأسبابها", icon: <XCircle className="h-5 w-5 text-red-500" /> },
+    ],
+  },
+  {
+    title: "تقارير أوامر الشراء",
+    headerBg: "bg-blue-600",
+    headerText: "text-white",
+    icon: <ShoppingCart className="h-5 w-5" />,
+    reports: [
+      { label: "تقرير أوامر الشراء", desc: "جميع الأوامر", icon: <FileText className="h-5 w-5 text-blue-600" />, badge: "شامل", badgeColor: "bg-blue-100 text-blue-700" },
+      { label: "أوامر الشراء المتأخرة", desc: "تجاوزت تاريخ الاستلام", icon: <AlertCircle className="h-5 w-5 text-red-500" />, badge: "تنبيه", badgeColor: "bg-red-100 text-red-700" },
+      { label: "أوامر الشراء المفتوحة", desc: "قيد التنفيذ", icon: <Clock className="h-5 w-5 text-blue-500" /> },
+      { label: "فاتورة التسليم", desc: "تفاصيل التسليم لكل أمر", icon: <Truck className="h-5 w-5 text-blue-500" /> },
+      { label: "قائمة التسليم", desc: "جدول استلام البضائع", icon: <CheckCircle className="h-5 w-5 text-green-500" /> },
+    ],
+  },
+  {
+    title: "تقارير استلام المشتريات",
+    headerBg: "bg-teal-600",
+    headerText: "text-white",
+    icon: <Package className="h-5 w-5" />,
+    reports: [
+      { label: "تقرير سندات الاستلام", desc: "جميع سندات الاستلام", icon: <FileText className="h-5 w-5 text-teal-600" />, badge: "شامل", badgeColor: "bg-teal-100 text-teal-700" },
+      { label: "الاستلام الجزئي", desc: "بنود لم تُستلم بالكامل", icon: <BarChart className="h-5 w-5 text-orange-500" />, badge: "تنبيه", badgeColor: "bg-orange-100 text-orange-700" },
+      { label: "الاستلام حسب المورد", desc: "مقارنة المورّدين", icon: <ArrowUpDown className="h-5 w-5 text-teal-500" /> },
+      { label: "المشتريات بالانحراف الاستلام", desc: "الفروق بين المطلوب والمستلم", icon: <TrendingDown className="h-5 w-5 text-red-500" /> },
+    ],
+  },
+  {
+    title: "تقارير فواتير المشتريات",
+    headerBg: "bg-indigo-600",
+    headerText: "text-white",
+    icon: <Receipt className="h-5 w-5" />,
+    reports: [
+      { label: "تقرير فواتير المشتريات", desc: "جميع الفواتير", icon: <FileText className="h-5 w-5 text-indigo-600" />, badge: "شامل", badgeColor: "bg-indigo-100 text-indigo-700" },
+      { label: "الفواتير حسب الموردين", desc: "مقارنة فواتير الموردين", icon: <Users className="h-5 w-5 text-indigo-500" /> },
+      { label: "الفواتير حسب الدفع", desc: "مدفوعة / جزئي / متأخرة", icon: <CreditCard className="h-5 w-5 text-indigo-500" /> },
+      { label: "الفواتير حالة المتأخرة", desc: "فواتير تجاوزت الاستحقاق", icon: <AlertCircle className="h-5 w-5 text-red-500" />, badge: "تنبيه", badgeColor: "bg-red-100 text-red-700" },
+      { label: "الفواتير غير المدفوعة", desc: "مستحقة الدفع", icon: <Clock className="h-5 w-5 text-yellow-500" /> },
+      { label: "الفواتير إلى المرتجعة", desc: "فواتير بها مردودات", icon: <RotateCcw className="h-5 w-5 text-orange-500" /> },
+    ],
+  },
+  {
+    title: "تقارير مردودات المشتريات",
+    headerBg: "bg-red-600",
+    headerText: "text-white",
+    icon: <RotateCcw className="h-5 w-5" />,
+    reports: [
+      { label: "تقرير مردودات المشتريات", desc: "جميع المردودات", icon: <FileText className="h-5 w-5 text-red-600" />, badge: "شامل", badgeColor: "bg-red-100 text-red-700" },
+      { label: "المردودات حسب المورد", desc: "أكثر المورّدين مردوداً", icon: <Users className="h-5 w-5 text-red-500" /> },
+      { label: "المردودات حسب السبب", desc: "أسباب الإرجاع", icon: <ShieldAlert className="h-5 w-5 text-red-500" /> },
+      { label: "المردودات حسب المنتج", desc: "المنتجات الأكثر إرجاعاً", icon: <Package className="h-5 w-5 text-red-500" /> },
+    ],
+  },
+  {
+    title: "تقارير أرصدة الموردين",
+    headerBg: "bg-amber-500",
+    headerText: "text-white",
+    icon: <BookOpen className="h-5 w-5" />,
+    reports: [
+      { label: "تقييم أداء الموردين", desc: "جودة وسرعة التسليم", icon: <Star className="h-5 w-5 text-amber-500" />, badge: "مميز", badgeColor: "bg-amber-100 text-amber-700" },
+      { label: "أفضل الموردين شراءً", desc: "ترتيب حسب الكميات", icon: <BarChart2 className="h-5 w-5 text-amber-500" /> },
+      { label: "كشف حساب الموردين", desc: "رصيد وحركات كل مورد", icon: <BookOpen className="h-5 w-5 text-amber-500" /> },
+    ],
+  },
+];
+
+/* ── General features ── */
+const generalFeatures = [
+  { label: "التصفية حسب الفترة", icon: <Calendar className="h-5 w-5 text-blue-500" />, bg: "bg-blue-50" },
+  { label: "التصفية حسب المورد", icon: <Truck className="h-5 w-5 text-green-500" />, bg: "bg-green-50" },
+  { label: "التصفية حسب البنود", icon: <Filter className="h-5 w-5 text-purple-500" />, bg: "bg-purple-50" },
+  { label: "التصفية حسب الحالة", icon: <CheckCircle className="h-5 w-5 text-teal-500" />, bg: "bg-teal-50" },
+  { label: "تصدير إلى Excel", icon: <FileSpreadsheet className="h-5 w-5 text-emerald-600" />, bg: "bg-emerald-50" },
+  { label: "تصدير PDF", icon: <Download className="h-5 w-5 text-red-500" />, bg: "bg-red-50" },
+  { label: "رسوم بيانية", icon: <BarChart2 className="h-5 w-5 text-indigo-500" />, bg: "bg-indigo-50" },
+  { label: "طباعة", icon: <Printer className="h-5 w-5 text-slate-600" />, bg: "bg-slate-100" },
+];
+
+/* ── Report Preview Modal ── */
+function ReportModal({
+  report,
+  onClose,
+}: {
+  report: ReportItem | null;
+  onClose: () => void;
+}) {
+  const [dateFrom, setDateFrom] = useState(
+    new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0]
+  );
+  const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]);
+  const [vendor, setVendor] = useState("الكل");
+  const [status, setStatus] = useState("الكل");
+
+  if (!report) return null;
+
+  const handleExport = (type: string) => {
+    toast({ title: `${type}`, description: `جارٍ تصدير: ${report.label}` });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+        {/* Modal header */}
+        <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+            <XCircle className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-lg">{report.label}</span>
+            <FileText className="h-5 w-5 text-slate-300" />
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="p-6 space-y-4">
+          <h3 className="text-sm font-semibold text-slate-700 text-right border-b border-slate-200 pb-2">
+            خيارات التقرير
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500 text-right block">من تاريخ</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500 text-right block">إلى تاريخ</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500 text-right block">المورد</label>
+              <select
+                value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right bg-white appearance-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              >
+                <option>الكل</option>
+                <option>مورد 1</option>
+                <option>مورد 2</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500 text-right block">الحالة</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right bg-white appearance-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              >
+                <option>الكل</option>
+                <option>مفتوح</option>
+                <option>مغلق</option>
+                <option>ملغي</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Mock preview */}
+          <div className="mt-4 border border-slate-200 rounded-lg overflow-hidden">
+            <div className="bg-slate-50 px-4 py-2 flex items-center justify-between border-b border-slate-200">
+              <span className="text-xs text-slate-500">معاينة البيانات</span>
+              <span className="text-xs font-semibold text-slate-700">{report.label}</span>
+            </div>
+            <div className="p-4">
+              <table className="w-full text-sm text-right">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600">
+                    <th className="px-3 py-2 border border-slate-200">الحالة</th>
+                    <th className="px-3 py-2 border border-slate-200">المبلغ</th>
+                    <th className="px-3 py-2 border border-slate-200">المورد</th>
+                    <th className="px-3 py-2 border border-slate-200">التاريخ</th>
+                    <th className="px-3 py-2 border border-slate-200">#</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { id: 1, date: dateFrom, vendor: "مورد النور للتجارة", amount: "12,500", status: "مفتوح" },
+                    { id: 2, date: dateTo, vendor: "شركة الخليج التجارية", amount: "8,200", status: "مغلق" },
+                    { id: 3, date: dateFrom, vendor: "مؤسسة الأمين", amount: "4,750", status: "مفتوح" },
+                  ].map((row) => (
+                    <tr key={row.id} className={row.id % 2 === 0 ? "bg-slate-50" : "bg-white"}>
+                      <td className="px-3 py-2 border border-slate-200">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${row.status === "مغلق" ? "bg-green-100 text-green-700" : "bg-cyan-100 text-cyan-700"}`}>
+                          {row.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 border border-slate-200 font-medium">{row.amount} ريال</td>
+                      <td className="px-3 py-2 border border-slate-200">{row.vendor}</td>
+                      <td className="px-3 py-2 border border-slate-200 text-slate-500">{row.date}</td>
+                      <td className="px-3 py-2 border border-slate-200 text-slate-500">{row.id}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+          <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded hover:bg-slate-100">
+            إغلاق
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleExport("تصدير Excel")}
+              className="px-4 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 flex items-center gap-2"
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Excel
+            </button>
+            <button
+              onClick={() => handleExport("تصدير PDF")}
+              className="px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" /> PDF
+            </button>
+            <button
+              onClick={() => handleExport("طباعة")}
+              className="px-4 py-2 bg-slate-600 text-white text-sm rounded hover:bg-slate-700 flex items-center gap-2"
+            >
+              <Printer className="h-4 w-4" /> طباعة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main Page ── */
+export default function PurchaseReports() {
+  const [search, setSearch] = useState("");
+  const [activeReport, setActiveReport] = useState<ReportItem | null>(null);
+
+  const filteredSections = sections.map((section) => ({
+    ...section,
+    reports: section.reports.filter(
+      (r) =>
+        search === "" ||
+        r.label.includes(search) ||
+        r.desc.includes(search)
+    ),
+  })).filter((s) => s.reports.length > 0 || search === "");
+
+  return (
+    <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
+      <div className="mx-auto max-w-7xl space-y-6 pb-12">
+        {/* Page header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
+            <BarChart2 className="h-6 w-6 text-primary" />
+            <h1>تقارير المشتريات الشاملة</h1>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+          <div className="relative max-w-xl mr-auto">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ابحث في التقارير..."
+              className="w-full pr-10 pl-4 py-2.5 border border-slate-300 rounded-lg text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Report sections - 3 columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredSections.map((section) => (
+            <div
+              key={section.title}
+              className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col"
+            >
+              {/* Section header */}
+              <div className={`${section.headerBg} ${section.headerText} px-4 py-3 flex items-center justify-between`}>
+                <span className="opacity-80">{section.icon}</span>
+                <h2 className="font-bold text-sm">{section.title}</h2>
+              </div>
+
+              {/* Report items */}
+              <div className="divide-y divide-slate-100 flex-1">
+                {section.reports.map((report) => (
+                  <button
+                    key={report.label}
+                    onClick={() => setActiveReport(report)}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors group text-right"
+                  >
+                    <div className="flex items-center gap-2">
+                      {report.badge && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${report.badgeColor}`}>
+                          {report.badge}
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-400 group-hover:text-slate-500 transition-colors">
+                        {report.desc}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
+                        {report.label}
+                      </span>
+                      <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 group-hover:bg-white border border-slate-100 group-hover:border-slate-200 transition-all shrink-0">
+                        {report.icon}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* General features bar */}
+        <div className="bg-[#1e293b] rounded-xl p-5">
+          <div className="flex items-center justify-end gap-2 mb-4">
+            <h3 className="text-white font-bold text-sm">خصائص عامة للتقارير</h3>
+            <BarChart2 className="h-5 w-5 text-slate-400" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            {generalFeatures.map((feat) => (
+              <button
+                key={feat.label}
+                onClick={() => toast({ title: feat.label, description: "هذه الخاصية متاحة عند فتح أي تقرير" })}
+                className={`${feat.bg} rounded-lg p-3 flex flex-col items-center justify-center gap-2 hover:opacity-90 transition-all hover:scale-105 cursor-pointer border border-white/10`}
+              >
+                {feat.icon}
+                <span className="text-xs font-medium text-slate-700 text-center leading-tight">
+                  {feat.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Report modal */}
+      {activeReport && (
+        <ReportModal
+          report={activeReport}
+          onClose={() => setActiveReport(null)}
+        />
+      )}
+    </Layout>
+  );
+}

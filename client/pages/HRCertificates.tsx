@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import { ArrowRight, Award, Eye, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";

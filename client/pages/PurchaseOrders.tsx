@@ -494,7 +494,7 @@ function OrderEdit({
 
   const [items, setItems] = useState<OrderItem[]>(
     order.items.length > 0
-      ? order.items
+      ? order.items.map((item, idx) => ({ ...item, id: idx + 1 }))
       : [{ id: 1, description: "", unit: "", quantity: 1, price: 0, discount: 0, taxPercent: 15 }]
   );
 

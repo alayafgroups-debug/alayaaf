@@ -77,6 +77,31 @@ const NATIONALITIES = ["مصر", "سوريا", "المملكة العربية ا
 const DEPARTMENTS = ["قسم الصيانة والتشغيل", "قسم شركة البرمجيات", "قسم المبيعات", "قسم الموارد البشرية", "قسم المحاسبة", "الإدارة العليا"];
 const BRANCHES = ["فرع التشغيل والصيانة", "الفرع الرئيسي", "فرع المبيعات"];
 const STATUSES = ["نشط", "غير نشط", "إجازة", "منتهي"];
+const EMPLOYEES_STORAGE_KEY = "hr_employees_local";
+
+const readLocalEmployees = (): Employee[] => {
+  try {
+    const raw = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalEmployees = (employees: Employee[]) => {
+  try {
+    localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(employees));
+  } catch {}
+};
+
+const mergeEmployees = (dbEmployees: Employee[], localEmployees: Employee[]) => {
+  const merged = new Map<string, Employee>();
+  dbEmployees.forEach((emp) => merged.set(emp.id, emp));
+  localEmployees.forEach((emp) => merged.set(emp.id, emp));
+  return Array.from(merged.values());
+};
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HREmployees() {
@@ -95,18 +120,20 @@ export default function HREmployees() {
 
   useEffect(() => {
     const load = async () => {
+      const localEmployees = readLocalEmployees();
       try {
         const { data, error } = await supabase
           .from("employees")
           .select("*")
           .order("emp_id", { ascending: true });
+
         if (!error && data) {
-          setEmployees(data.map(mapRow));
+          setEmployees(mergeEmployees(data.map(mapRow), localEmployees));
         } else {
-          setEmployees([]);
+          setEmployees(localEmployees);
         }
       } catch {
-        setEmployees([]);
+        setEmployees(localEmployees);
       }
     };
     load();
@@ -259,7 +286,13 @@ export default function HREmployees() {
     try {
       await supabase.from("employees").delete().eq("id", emp.id);
     } catch {}
-    setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
+
+    setEmployees((prev) => {
+      const next = prev.filter((e) => e.id !== emp.id);
+      writeLocalEmployees(next);
+      return next;
+    });
+
     toast({ title: "تم الحذف", description: `تم حذف الموظف ${emp.name}` });
   }
 }
@@ -306,7 +339,20 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
   const handleSave = async () => {
     if (!form.name.trim()) { setError("الاسم مطلوب"); return; }
     if (!form.department.trim()) { setError("القسم مطلوب"); return; }
-    setSaving(true); setError("");
+
+    setSaving(true);
+    setError("");
+
+    const localEmployees = readLocalEmployees();
+    const localUpdated =
+      mode === "create"
+        ? [...localEmployees, form]
+        : localEmployees.some((e) => e.id === form.id)
+          ? localEmployees.map((e) => (e.id === form.id ? form : e))
+          : [...localEmployees, form];
+
+    writeLocalEmployees(localUpdated);
+
     try {
       const payload = {
         id: form.id,
@@ -325,12 +371,14 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
         national_id: form.nationalId,
         notes: form.notes,
       };
+
       if (mode === "create") {
         await supabase.from("employees").insert([payload]);
       } else {
         await supabase.from("employees").update(payload).eq("id", form.id);
       }
     } catch {}
+
     toast({ title: mode === "create" ? "تم الإضافة" : "تم التعديل", description: `تم حفظ بيانات الموظف ${form.name}` });
     setSaving(false);
     onSaved();

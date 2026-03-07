@@ -241,7 +241,7 @@ export default function Layout({ children }: LayoutProps) {
 
                 {/* Submenu */}
                 {isExpanded && sidebarOpen && subItems && (
-                  <div className="mt-1 mr-7 space-y-0.5 border-r border-white/[0.06] animate-fade-in">
+                  <div className="mt-1.5 mr-4 ml-2 rounded-xl bg-white/[0.03] border border-white/[0.05] p-1.5 space-y-0.5 animate-fade-in">
                     {subItems.map((subItem, index) => {
                       const isSubActive = location.pathname === subItem.href;
                       return (
@@ -249,21 +249,24 @@ export default function Layout({ children }: LayoutProps) {
                           key={index}
                           onClick={() => navigate(subItem.href)}
                           className={cn(
-                            "w-full text-right flex items-center gap-2.5 px-3 py-[7px] text-[12px] font-medium rounded-lg transition-all duration-150",
+                            "w-full text-right flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium rounded-lg transition-all duration-200",
                             isSubActive
-                              ? "text-white bg-white/[0.08]"
-                              : "text-white/35 hover:text-white/70 hover:bg-white/[0.03]"
+                              ? cn("text-white", colors.active)
+                              : "text-white/40 hover:text-white/75 hover:bg-white/[0.05]"
                           )}
                         >
                           <span
                             className={cn(
-                              "h-[5px] w-[5px] rounded-full flex-shrink-0 transition-colors",
+                              "h-1.5 w-1.5 rounded-full flex-shrink-0 transition-all duration-200",
                               isSubActive
-                                ? "bg-blue-400 shadow-sm shadow-blue-400/50"
-                                : "bg-white/20"
+                                ? cn("h-2 w-2 bg-gradient-to-br shadow-sm", colors.icon, colors.glow)
+                                : "bg-white/15"
                             )}
                           />
                           <span>{subItem.label}</span>
+                          {isSubActive && (
+                            <span className={cn("mr-auto h-1 w-5 rounded-full bg-gradient-to-l opacity-60", colors.icon)} />
+                          )}
                         </button>
                       );
                     })}

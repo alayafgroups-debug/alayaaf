@@ -481,79 +481,239 @@ function OrderEdit({
   onBack: () => void;
   onUpdated: (o: PurchaseOrderRow) => void;
 }) {
-  const [vendor, setVendor] = useState(order.vendor);
-  const [date, setDate] = useState(order.date);
-  const [expectedDate, setExpectedDate] = useState(order.expectedDate);
-  const [referenceNo, setReferenceNo] = useState(order.referenceNo);
-  const [notes, setNotes] = useState(order.notes);
-  const [status, setStatus] = useState(order.status);
+  const [form, setForm] = useState({
+    vendor: order.vendor,
+    date: order.date,
+    expectedDate: order.expectedDate,
+    referenceNo: order.referenceNo,
+    notes: order.notes,
+    costCenter: order.costCenter || "بدون مركز تكلفة",
+    costCenterName: order.costCenterName,
+    status: order.status,
+  });
+
+  const [items, setItems] = useState<OrderItem[]>(
+    order.items.length > 0
+      ? order.items
+      : [{ id: 1, description: "", unit: "", quantity: 1, price: 0, discount: 0, taxPercent: 15 }]
+  );
+
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setField = (field: keyof typeof form, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  const addItem = () =>
+    setItems((prev) => [
+      ...prev,
+      { id: Date.now(), description: "", unit: "", quantity: 1, price: 0, discount: 0, taxPercent: 15 },
+    ]);
+
+  const updateItem = (id: number, changes: Partial<OrderItem>) =>
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+
+  const removeItem = (id: number) =>
+    setItems((prev) => prev.filter((item) => item.id !== id));
+
+  const totals = items.reduce(
+    (acc, item) => {
+      const sub = item.quantity * item.price - item.discount;
+      const tax = (sub * item.taxPercent) / 100;
+      return { subtotal: acc.subtotal + sub, discount: acc.discount + item.discount, tax: acc.tax + tax, total: acc.total + sub + tax };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
 
   const handleSave = async () => {
     setSaving(true);
-    const { data, error } = await supabase
+    setError(null);
+    const { error: updateError } = await supabase
       .from("purchase_orders")
-      .update({ vendor, date, expected_date: expectedDate || null, reference_no: referenceNo || null, notes: notes || null, status })
-      .eq("id", order.id)
-      .select()
-      .single();
+      .update({
+        vendor: form.vendor,
+        date: form.date,
+        expected_date: form.expectedDate || null,
+        reference_no: form.referenceNo || null,
+        notes: form.notes || null,
+        cost_center: form.costCenter,
+        cost_center_name: form.costCenterName || null,
+        status: form.status,
+        total: totals.total.toFixed(2),
+        items: items.map((item) => ({
+          id: item.id,
+          description: item.description,
+          unit: item.unit,
+          quantity: item.quantity,
+          price: item.price,
+          discount: item.discount,
+          taxPercent: item.taxPercent,
+        })),
+      })
+      .eq("id", order.id);
 
     setSaving(false);
-    if (!error && data) {
-      onUpdated({ ...order, vendor, date, expectedDate, referenceNo, notes, status, statusColor: statusColors[status] ?? "bg-slate-500 text-white" });
+    if (!updateError) {
+      onUpdated({
+        ...order,
+        ...form,
+        total: totals.total.toFixed(2),
+        statusColor: statusColors[form.status] ?? "bg-slate-500 text-white",
+        items,
+      });
     } else {
-      toast({ title: "تعذّر التحديث", description: error?.message });
+      setError("تعذّر التحديث: " + updateError.message);
     }
   };
 
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+      {/* Header */}
       <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
-        <button onClick={onBack} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded hover:bg-slate-50 flex items-center gap-2">
-          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
-        </button>
+        <div className="flex gap-2">
+          <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
+            <X className="h-4 w-4" /> إلغاء
+          </button>
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-60">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold text-slate-800">تعديل أمر الشراء</h1>
           <Edit className="h-5 w-5 text-emerald-600" />
         </div>
-        <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-60">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          حفظ التعديلات
+        <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50">
+          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="p-4">
+      {error && (
+        <div className="mx-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm text-right">{error}</div>
+      )}
+
+      <div className="p-4 space-y-6">
+        {/* Order Info */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800 text-right">معلومات الأمر</h2>
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">معلومات أمر الشراء</h2>
           </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">المورد</label>
-              <input value={vendor} onChange={(e) => setVendor(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
+              <label className="text-sm font-medium text-slate-700 text-right block">المورد</label>
+              <input value={form.vendor} onChange={(e) => setField("vendor", e.target.value)} placeholder="اسم المورد" className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ الأمر</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
+              <label className="text-sm font-medium text-slate-700 text-right block">تاريخ أمر الشراء <span className="text-red-500">*</span></label>
+              <input type="date" value={form.date} onChange={(e) => setField("date", e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ الاستلام المتوقع</label>
-              <input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
+              <label className="text-sm font-medium text-slate-700 text-right block">تاريخ الاستلام المتوقع</label>
+              <input type="date" value={form.expectedDate} onChange={(e) => setField("expectedDate", e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">مرجع الأمر</label>
-              <input value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
+              <label className="text-sm font-medium text-slate-700 text-right block">مرجع الأمر</label>
+              <input value={form.referenceNo} onChange={(e) => setField("referenceNo", e.target.value)} placeholder="REF-PO-..." className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">الحالة</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none appearance-none bg-white">
+              <label className="text-sm font-medium text-slate-700 text-right block">الحالة</label>
+              <select value={form.status} onChange={(e) => setField("status", e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none appearance-none bg-white">
                 <option>مفتوح</option>
                 <option>مغلق</option>
               </select>
             </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700 text-right block">مركز التكلفة</label>
+              <select value={form.costCenter} onChange={(e) => setField("costCenter", e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none appearance-none bg-white">
+                <option>بدون مركز تكلفة</option>
+                <option>مركز التكلفة الرئيسي</option>
+                <option>مركز التكلفة الفرعي</option>
+              </select>
+            </div>
             <div className="space-y-1 md:col-span-2">
-              <label className="text-sm text-slate-600 block text-right">ملاحظات</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-y" />
+              <label className="text-sm font-medium text-slate-700 text-right block">اسم مركز التكلفة</label>
+              <input value={form.costCenterName} onChange={(e) => setField("costCenterName", e.target.value)} placeholder="اسم مركز التكلفة" className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
+            </div>
+            <div className="space-y-1 md:col-span-4">
+              <label className="text-sm font-medium text-slate-700 text-right block">ملاحظات</label>
+              <textarea value={form.notes} onChange={(e) => setField("notes", e.target.value)} rows={2} placeholder="أدخل ملاحظات إضافية" className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-y" />
+            </div>
+          </div>
+        </div>
+
+        {/* Items */}
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <button onClick={addItem} className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1">
+              <Plus className="h-4 w-4" /> إضافة بند
+            </button>
+            <h2 className="font-semibold text-slate-800">بنود أمر الشراء</h2>
+          </div>
+          <div className="p-4 overflow-x-auto">
+            <table className="w-full text-sm text-right mb-4">
+              <thead>
+                <tr className="text-slate-600 border-b border-slate-200">
+                  <th className="pb-2 font-medium w-12 text-center"></th>
+                  <th className="pb-2 font-medium w-24">المجموع</th>
+                  <th className="pb-2 font-medium w-20">الضريبة %</th>
+                  <th className="pb-2 font-medium w-20">خصم</th>
+                  <th className="pb-2 font-medium w-24">السعر *</th>
+                  <th className="pb-2 font-medium w-24">الوحدة</th>
+                  <th className="pb-2 font-medium w-20">الكمية *</th>
+                  <th className="pb-2 font-medium">وصف البند *</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const sub = item.quantity * item.price - item.discount;
+                  const tax = (sub * item.taxPercent) / 100;
+                  return (
+                    <tr key={item.id}>
+                      <td className="pt-4 align-top">
+                        <div className="flex items-center justify-center h-10">
+                          <button onClick={() => removeItem(item.id)} className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input type="text" value={(sub + tax).toFixed(2)} disabled className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10" />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input type="number" value={item.taxPercent} onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) || 0 })} className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10" />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input type="number" value={item.discount} onChange={(e) => updateItem(item.id, { discount: Number(e.target.value) || 0 })} className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10" />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input type="number" value={item.price} onChange={(e) => updateItem(item.id, { price: Number(e.target.value) || 0 })} className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10" />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input type="text" value={item.unit} onChange={(e) => updateItem(item.id, { unit: e.target.value })} placeholder="اختياري" className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10" />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input type="number" value={item.quantity} onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) || 0 })} className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10" />
+                      </td>
+                      <td className="pt-4 pl-1 align-top min-w-[200px]">
+                        <input type="text" value={item.description} onChange={(e) => updateItem(item.id, { description: e.target.value })} placeholder="وصف البند..." className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* Totals */}
+            <div className="border-t border-slate-200 pt-4 mt-4 flex justify-end">
+              <div className="w-80 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="font-semibold">{totals.subtotal.toFixed(2)} ريال</span><span className="text-slate-600">المجموع الفرعي</span></div>
+                <div className="flex justify-between"><span className="font-semibold">{totals.discount.toFixed(2)} ريال</span><span className="text-slate-600">الخصم</span></div>
+                <div className="flex justify-between"><span className="font-semibold">{totals.tax.toFixed(2)} ريال</span><span className="text-slate-600">الضريبة</span></div>
+                <div className="flex justify-between border-t border-slate-200 pt-2">
+                  <span className="font-bold text-emerald-600 text-base">{totals.total.toFixed(2)} ريال</span>
+                  <span className="font-bold text-slate-800">المجموع الكلي</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -119,12 +119,12 @@ export default function HRDashboard() {
             </div>
           </div>
 
-          {/* كافة الدوام */}
+          {/* الحضور والانصراف */}
           <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
             <div className="bg-green-700 text-white px-4 py-3 flex items-center gap-2 justify-between">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                <span className="font-semibold">كافة الدوام</span>
+                <span className="font-semibold">الحضور والانصراف</span>
               </div>
               <span className="bg-green-400 text-green-900 text-xs font-bold px-2 py-0.5 rounded-full">ممتمة</span>
             </div>
@@ -133,7 +133,7 @@ export default function HRDashboard() {
               <div className="flex gap-2">
                 <button onClick={() => navigate("/hr/attendance")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-700 text-white text-xs font-medium hover:bg-green-800 transition">
                   <Clock className="h-3.5 w-3.5" />
-                  كافة الدوام
+                  الحضور والانصراف
                 </button>
               </div>
             </div>

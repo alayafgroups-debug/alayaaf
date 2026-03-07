@@ -65,16 +65,6 @@ const mapRow = (r: Record<string, unknown>): PayrollEntry => ({
   notes: String(r.notes ?? ""),
 });
 
-const SAMPLE: PayrollEntry[] = [
-  { id: "1", empId: "EMP-0001", empName: "سائق سائق", department: "قسم الصيانة والتشغيل", month: "2026-01", basicSalary: 14000, allowances: 2150, deductions: 0, netSalary: 16150, status: "مدفوع", paidDate: "2026-01-31", notes: "" },
-  { id: "2", empId: "EMP-0002", empName: "مشرف حركة", department: "قسم الصيانة والتشغيل", month: "2026-01", basicSalary: 12000, allowances: 2500, deductions: 0, netSalary: 14500, status: "مدفوع", paidDate: "2026-01-31", notes: "" },
-  { id: "3", empId: "EMP-0003", empName: "مدير الشؤون الإدارية", department: "قسم الصيانة والتشغيل", month: "2026-01", basicSalary: 11000, allowances: 2500, deductions: 0, netSalary: 13500, status: "معلق", paidDate: "", notes: "" },
-  { id: "4", empId: "EMP-0007", empName: "مدير النظام", department: "قسم الصيانة والتشغيل", month: "2026-01", basicSalary: 45000, allowances: 5000, deductions: 0, netSalary: 50000, status: "معلق", paidDate: "", notes: "" },
-  { id: "5", empId: "EMP-0008", empName: "ندوى مبيعات", department: "قسم شركة البرمجيات", month: "2026-01", basicSalary: 3500, allowances: 550, deductions: 0, netSalary: 4050, status: "معلق", paidDate: "", notes: "" },
-  { id: "6", empId: "EMP-0009", empName: "علي عديل", department: "قسم الصيانة والتشغيل", month: "2026-01", basicSalary: 9000, allowances: 1800, deductions: 0, netSalary: 10800, status: "معلق", paidDate: "", notes: "" },
-  { id: "7", empId: "EMP-0010", empName: "أحمد المحمدي", department: "قسم المحاسبة", month: "2026-01", basicSalary: 8000, allowances: 1500, deductions: 0, netSalary: 9500, status: "مدفوع", paidDate: "2026-01-31", notes: "" },
-];
-
 const STATUS_COLORS: Record<string, string> = {
   "مدفوع": "bg-green-100 text-green-700 border-green-200",
   "معلق": "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -95,9 +85,9 @@ export default function HRPayroll() {
     const load = async () => {
       try {
         const { data, error } = await supabase.from("payroll").select("*").order("month", { ascending: false });
-        if (!error && data && data.length > 0) setEntries(data.map(mapRow));
-        else setEntries(SAMPLE);
-      } catch { setEntries(SAMPLE); }
+        if (!error && data) setEntries(data.map(mapRow));
+        else setEntries([]);
+      } catch { setEntries([]); }
     };
     load();
   }, [refreshKey]);

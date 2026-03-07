@@ -45,16 +45,6 @@ const mapRow = (r: Record<string, unknown>): AttendanceRecord => ({
   notes: String(r.notes ?? ""),
 });
 
-const SAMPLE: AttendanceRecord[] = [
-  { id: "1", empId: "EMP-0001", empName: "سائق سائق", department: "قسم الصيانة والتشغيل", date: "2026-02-10", checkIn: "07:55", checkOut: "16:05", status: "حاضر", lateMinutes: 0, notes: "" },
-  { id: "2", empId: "EMP-0002", empName: "مشرف حركة", department: "قسم الصيانة والتشغيل", date: "2026-02-10", checkIn: "08:20", checkOut: "16:00", status: "متأخر", lateMinutes: 20, notes: "" },
-  { id: "3", empId: "EMP-0003", empName: "مدير الشؤون الإدارية", department: "قسم الصيانة والتشغيل", date: "2026-02-10", checkIn: "", checkOut: "", status: "غائب", lateMinutes: 0, notes: "إجازة مرضية" },
-  { id: "4", empId: "EMP-0007", empName: "مدير النظام", department: "قسم الصيانة والتشغيل", date: "2026-02-10", checkIn: "08:00", checkOut: "16:00", status: "حاضر", lateMinutes: 0, notes: "" },
-  { id: "5", empId: "EMP-0008", empName: "ندوى مبيعات", department: "قسم شركة البرمجيات", date: "2026-02-10", checkIn: "08:05", checkOut: "16:00", status: "حاضر", lateMinutes: 5, notes: "" },
-  { id: "6", empId: "EMP-0009", empName: "علي عديل", department: "قسم الصيانة والتشغيل", date: "2026-02-10", checkIn: "08:00", checkOut: "16:00", status: "حاضر", lateMinutes: 0, notes: "" },
-  { id: "7", empId: "EMP-0010", empName: "أحمد المحمدي", department: "قسم المحاسبة", date: "2026-02-10", checkIn: "", checkOut: "", status: "إجازة", lateMinutes: 0, notes: "إجازة سنوية" },
-];
-
 const STATUS_COLORS: Record<string, string> = {
   "حاضر": "bg-green-100 text-green-700 border-green-200",
   "غائب": "bg-red-100 text-red-700 border-red-200",
@@ -79,9 +69,9 @@ export default function HRAttendance() {
     const load = async () => {
       try {
         const { data, error } = await supabase.from("attendance").select("*").order("date", { ascending: false });
-        if (!error && data && data.length > 0) setRecords(data.map(mapRow));
-        else setRecords(SAMPLE);
-      } catch { setRecords(SAMPLE); }
+        if (!error && data) setRecords(data.map(mapRow));
+        else setRecords([]);
+      } catch { setRecords([]); }
     };
     load();
   }, [refreshKey]);
@@ -116,7 +106,7 @@ export default function HRAttendance() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Clock className="h-7 w-7 text-green-700" />
-            <h1 className="text-2xl font-bold">كافة الدوام</h1>
+            <h1 className="text-2xl font-bold">الحضور والانصراف</h1>
           </div>
           <div className="flex gap-2">
             <button onClick={() => navigate("/hr/dashboard")} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition">

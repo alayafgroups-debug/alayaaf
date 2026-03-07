@@ -18,6 +18,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
 type SalesOrder = {
@@ -74,13 +75,17 @@ export default function SalesOrders() {
     loadOrders();
   }, []);
 
+  const handleSaved = (order: SalesOrder) => {
+    setOrders((prev) => [order, ...prev]);
+  };
+
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" ? (
           <OrdersList onCreateClick={() => setView("create")} orders={orders} />
         ) : (
-          <OrderForm onBack={() => setView("list")} />
+          <OrderForm onBack={() => setView("list")} onSaved={handleSaved} />
         )}
       </div>
     </Layout>
@@ -257,10 +262,109 @@ function OrdersList({
   );
 }
 
-function OrderForm({ onBack }: { onBack: () => void }) {
+function OrderForm({
+  onBack,
+  onSaved,
+}: {
+  onBack: () => void;
+  onSaved: (order: SalesOrder) => void;
+}) {
+  const [quotationId, setQuotationId] = useState("");
+  const [warehouse, setWarehouse] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("2026-03-12");
+  const [orderDate, setOrderDate] = useState("2026-03-05");
+  const [customer, setCustomer] = useState("");
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState([
+    {
+      id: 1,
+      description: "",
+      unitPriceText: "",
+      quantity: 1,
+      price: 0,
+      discount: 0,
+      taxPercent: 15,
+    },
+  ]);
+
+  const handleAddItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: prev.length + 1,
+        description: "",
+        unitPriceText: "",
+        quantity: 1,
+        price: 0,
+        discount: 0,
+        taxPercent: 15,
+      },
+    ]);
+  };
+
+  const updateItem = (id: number, changes: Partial<(typeof items)[number]>) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...changes } : item))
+    );
+  };
+
+  const removeItem = (id: number) => {
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const totals = items.reduce(
+    (acc, item) => {
+      const lineSubtotal = item.quantity * item.price - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      const lineTotal = lineSubtotal + tax;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + tax,
+        total: acc.total + lineTotal,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
+
+  const handleSave = async () => {
+    const orderId = `SO-${Date.now()}`;
+    const payload = {
+      id: orderId,
+      date: orderDate,
+      delivery_date: deliveryDate,
+      customer,
+      total: `ريال ${totals.total.toFixed(2)}`,
+      quotation_id: quotationId,
+      status: "confirmed",
+    };
+
+    const { data, error } = await supabase
+      .from("sales_orders")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (!error && data) {
+      onSaved({
+        id: data.id ?? orderId,
+        date: data.date ?? orderDate,
+        deliveryDate: data.delivery_date ?? deliveryDate,
+        customer: data.customer ?? customer,
+        total: data.total ?? payload.total,
+        quotationId: data.quotation_id ?? quotationId,
+        status: data.status ?? "confirmed",
+        statusColor: statusColors[data.status ?? "confirmed"] ?? "bg-slate-600 text-white",
+      });
+      toast({ title: "تم حفظ أمر البيع", description: `الأمر: ${data.id ?? orderId}` });
+      onBack();
+    } else {
+      toast({ title: "تعذر حفظ أمر البيع", description: "يرجى المحاولة لاحقاً" });
+    }
+  };
+
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      {/* Header */}
       <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
         <div className="flex gap-2">
           <button
@@ -270,7 +374,10 @@ function OrderForm({ onBack }: { onBack: () => void }) {
             <X className="h-4 w-4" />
             إلغاء
           </button>
-          <button className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors">
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors"
+          >
             <svg
               className="h-4 w-4"
               fill="none"
@@ -288,9 +395,7 @@ function OrderForm({ onBack }: { onBack: () => void }) {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">
-            إنشاء أمر بيع جديد
-          </h1>
+          <h1 className="text-xl font-bold text-slate-800">إنشاء أمر بيع جديد</h1>
           <ShoppingCart className="h-5 w-5 text-blue-600" />
         </div>
         <button
@@ -303,46 +408,35 @@ function OrderForm({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="p-4 space-y-6">
-        {/* Basic Info */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">
-              معلومات الأمر الأساسية
-            </h2>
-            <svg
-              className="h-5 w-5 text-slate-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <h2 className="font-semibold text-slate-800">معلومات الأمر الأساسية</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 العرض المرجع <span className="text-slate-400 font-normal">(المفتوحة فقط)</span>
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
-                <option value="">اختر عرض سعر...</option>
-              </select>
-              <p className="text-xs text-slate-500 text-right mt-1">
-                عروض الأسعار المفتوحة وغير المحولة
-              </p>
+              <input
+                type="text"
+                value={quotationId}
+                onChange={(event) => setQuotationId(event.target.value)}
+                placeholder="اكتب رقم عرض السعر..."
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
             </div>
-            
+
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 المخزن <span className="text-red-500">*</span>
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
-                <option value="">ابحث عن مخزن...</option>
-              </select>
+              <input
+                type="text"
+                value={warehouse}
+                onChange={(event) => setWarehouse(event.target.value)}
+                placeholder="اكتب اسم المخزن..."
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
             </div>
 
             <div className="space-y-1">
@@ -351,62 +445,50 @@ function OrderForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="date"
-                defaultValue="2026-03-12"
+                value={deliveryDate}
+                onChange={(event) => setDeliveryDate(event.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
-            
+
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 تاريخ الأمر <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
-                defaultValue="2026-03-05"
+                value={orderDate}
+                onChange={(event) => setOrderDate(event.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
-            
+
             <div className="space-y-1 md:col-span-4">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 العميل <span className="text-red-500">*</span>
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
-                <option value="">ابحث عن عميل...</option>
-              </select>
+              <input
+                type="text"
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                placeholder="اكتب اسم العميل..."
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
             </div>
 
-            <div className="space-y-1 md:col-span-2">
+            <div className="space-y-1 md:col-span-3">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 ملاحظات
               </label>
               <input
                 type="text"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
                 placeholder="ملاحظات..."
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
 
-            <div className="space-y-1 md:col-span-2">
-              <div className="flex justify-between items-center mb-1">
-                <div className="w-8 h-4 bg-green-500 rounded-full flex items-center p-0.5">
-                  <div className="w-3 h-3 bg-white rounded-full shadow-sm ml-auto"></div>
-                </div>
-                <label className="text-sm font-medium text-slate-700 text-right block">
-                  مركز التكلفة
-                </label>
-              </div>
-              <input
-                type="text"
-                defaultValue="بدون مركز تكلفة"
-                disabled
-                className="w-full px-3 py-2 border border-slate-300 bg-slate-50 rounded text-sm text-right outline-none text-slate-500"
-              />
-              <p className="text-xs text-amber-500 text-right mt-1">
-                يرجى اختيار مركز تكلفة من القائمة أعلاه ⚠️
-              </p>
-            </div>
-            
             <div className="space-y-1 md:col-start-4">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 مرجع الأمر
@@ -421,28 +503,17 @@ function OrderForm({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        {/* Items */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-            <button className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1">
+            <button
+              onClick={handleAddItem}
+              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+            >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
             <div className="flex items-center gap-2">
               <h2 className="font-semibold text-slate-800">بنود الأمر</h2>
-              <svg
-                className="h-5 w-5 text-slate-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 10h16M4 14h16M4 18h16"
-                />
-              </svg>
             </div>
           </div>
           <div className="p-4 overflow-x-auto">
@@ -454,80 +525,129 @@ function OrderForm({ onBack }: { onBack: () => void }) {
                   <th className="pb-2 font-medium w-24">الضريبة</th>
                   <th className="pb-2 font-medium w-20">خصم</th>
                   <th className="pb-2 font-medium w-24">السعر *</th>
-                  <th className="pb-2 font-medium w-24">الوحدة</th>
+                  <th className="pb-2 font-medium w-28">سعر الوحدة</th>
                   <th className="pb-2 font-medium w-20">الكمية *</th>
-                  <th className="pb-2 font-medium">وصف البند *</th>
+                  <th className="pb-2 font-medium">وصف البند</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td className="pt-4 align-top">
-                    <div className="flex items-center justify-center gap-1 h-10">
-                      <button className="w-7 h-7 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="text"
-                      disabled
-                      className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="text"
-                      defaultValue="15%"
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      defaultValue={0}
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                      <option>اختر الوحدة...</option>
-                    </select>
-                  </td>
-                  <td className="pt-4 px-1 align-top">
-                    <input
-                      type="number"
-                      defaultValue={1}
-                      className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                    />
-                  </td>
-                  <td className="pt-4 pl-1 align-top">
-                    <select className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10 text-slate-400">
-                      <option>ابحث عن منتج بالاسم أو الكود...</option>
-                    </select>
-                  </td>
-                </tr>
+                {items.map((item) => {
+                  const lineSubtotal = item.quantity * item.price - item.discount;
+                  const lineTax = (lineSubtotal * item.taxPercent) / 100;
+                  const lineTotal = lineSubtotal + lineTax;
+
+                  return (
+                    <tr key={item.id}>
+                      <td className="pt-4 align-top">
+                        <div className="flex items-center justify-center gap-1 h-10">
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="text"
+                          value={lineTotal.toFixed(2)}
+                          disabled
+                          className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.taxPercent}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              taxPercent: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.discount}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              discount: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.price}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              price: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="text"
+                          value={item.unitPriceText}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              unitPriceText: event.target.value,
+                            })
+                          }
+                          placeholder="اختياري"
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 px-1 align-top">
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              quantity: Number(event.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        />
+                      </td>
+                      <td className="pt-4 pl-1 align-top min-w-[320px]">
+                        <textarea
+                          rows={3}
+                          value={item.description}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              description: event.target.value,
+                            })
+                          }
+                          placeholder="اكتب وصف البند (اختياري)..."
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none min-h-[88px] resize-y"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            
-            {/* Totals */}
+
             <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">
               <div className="w-96 flex justify-between">
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">0.00 ريال</span>
+                    <span className="font-semibold text-slate-800">
+                      {totals.tax.toFixed(2)} ريال
+                    </span>
                   </div>
                   <div className="text-sm">
-                    <span className="font-bold text-blue-600">0.00 ريال</span>
+                    <span className="font-bold text-blue-600">
+                      {totals.total.toFixed(2)} ريال
+                    </span>
                   </div>
                 </div>
                 <div className="space-y-2 text-right">
@@ -536,10 +656,14 @@ function OrderForm({ onBack }: { onBack: () => void }) {
                 </div>
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">0.00 ريال</span>
+                    <span className="font-semibold text-slate-800">
+                      {totals.subtotal.toFixed(2)} ريال
+                    </span>
                   </div>
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">0.00 ريال</span>
+                    <span className="font-semibold text-slate-800">
+                      {totals.discount.toFixed(2)} ريال
+                    </span>
                   </div>
                 </div>
                 <div className="space-y-2 text-right">

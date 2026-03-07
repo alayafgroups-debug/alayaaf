@@ -38,10 +38,14 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "تقارير المشتريات الشاملة", href: "/purchases/reports" },
   ],
   "/hr": [
-    { label: "بيانات الموظفين", href: "/hr" },
-    { label: "إدارة الرواتب", href: "/hr" },
-    { label: "الحضور والانصراف", href: "/hr" },
-    { label: "الإجازات والغيابات", href: "/hr" },
+    { label: "لوحة التحكم", href: "/hr/dashboard" },
+    { label: "الموظفون", href: "/hr/employees" },
+    { label: "مسير الرواتب", href: "/hr/payroll" },
+    { label: "كافة الدوام", href: "/hr/attendance" },
+    { label: "الهيكل التنظيمي", href: "/hr/structure" },
+    { label: "تصفية المستحقات", href: "/hr/settlements" },
+    { label: "السلف", href: "/hr/advances" },
+    { label: "التقارير", href: "/hr/reports" },
   ],
   "/crm": [
     { label: "العملاء", href: "/crm/customers" },

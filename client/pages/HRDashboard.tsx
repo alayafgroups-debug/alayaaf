@@ -18,20 +18,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
-// Fallback sample data (same as HREmployees)
-const SAMPLE_EMPLOYEES = [
-  { nationality: "مصر", totalSalary: 16150, status: "نشط" },
-  { nationality: "سوريا", totalSalary: 14500, status: "نشط" },
-  { nationality: "المملكة العربية السعودية", totalSalary: 13500, status: "نشط" },
-  { nationality: "باكستان", totalSalary: 4050, status: "نشط" },
-  { nationality: "سوريا", totalSalary: 50000, status: "نشط" },
-  { nationality: "باكستان", totalSalary: 10800, status: "نشط" },
-  { nationality: "المملكة العربية السعودية", totalSalary: 9500, status: "نشط" },
-];
-
 export default function HRDashboard() {
   const navigate = useNavigate();
-  const [empData, setEmpData] = useState(SAMPLE_EMPLOYEES);
+  const [empData, setEmpData] = useState<{ nationality: string; totalSalary: number; status: string }[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -39,7 +28,7 @@ export default function HRDashboard() {
         const { data, error } = await supabase
           .from("employees")
           .select("nationality, total_salary, status");
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           setEmpData(data.map((r) => ({
             nationality: String(r.nationality ?? ""),
             totalSalary: Number(r.total_salary ?? 0),

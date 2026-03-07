@@ -78,17 +78,6 @@ const DEPARTMENTS = ["قسم الصيانة والتشغيل", "قسم شركة 
 const BRANCHES = ["فرع التشغيل والصيانة", "الفرع الرئيسي", "فرع المبيعات"];
 const STATUSES = ["نشط", "غير نشط", "إجازة", "منتهي"];
 
-// ─── Sample data (used as fallback when DB table doesn't exist) ──────────────
-const SAMPLE_EMPLOYEES: Employee[] = [
-  { id: "1", empId: "EMP-0001", name: "سائق سائق", nationality: "مصر", department: "قسم الصيانة والتشغيل", jobTitle: "Chief Financial Officer (CFO)", branch: "-", costCenter: "0000192101", hireDate: "2026-01-09", totalSalary: 16150, status: "نشط", phone: "", email: "", nationalId: "", notes: "" },
-  { id: "2", empId: "EMP-0002", name: "مشرف حركة", nationality: "سوريا", department: "قسم الصيانة والتشغيل", jobTitle: "مشرف حركة", branch: "-", costCenter: "0000192101", hireDate: "2025-03-23", totalSalary: 14500, status: "نشط", phone: "", email: "", nationalId: "", notes: "" },
-  { id: "3", empId: "EMP-0003", name: "مدير الشؤون الإدارية", nationality: "المملكة العربية السعودية", department: "قسم الصيانة والتشغيل", jobTitle: "IT Manager", branch: "فرع التشغيل والصيانة", costCenter: "0000192101", hireDate: "2026-01-01", totalSalary: 13500, status: "نشط", phone: "", email: "", nationalId: "", notes: "" },
-  { id: "4", empId: "EMP-0008", name: "ندوى مبيعات", nationality: "باكستان", department: "قسم شركة البرمجيات", jobTitle: "سائق نقل أثقل", branch: "فرع التشغيل والصيانة", costCenter: "0000192101", hireDate: "2025-11-03", totalSalary: 4050, status: "نشط", phone: "", email: "", nationalId: "", notes: "" },
-  { id: "5", empId: "EMP-0007", name: "مدير النظام", nationality: "سوريا", department: "قسم الصيانة والتشغيل", jobTitle: "مدير النظام", branch: "-", costCenter: "0000192101", hireDate: "2026-01-31", totalSalary: 50000, status: "نشط", phone: "", email: "", nationalId: "", notes: "" },
-  { id: "6", empId: "EMP-0009", name: "علي عديل", nationality: "باكستان", department: "قسم الصيانة والتشغيل", jobTitle: "Network Administrator", branch: "فرع التشغيل والصيانة", costCenter: "0000192101", hireDate: "2026-02-06", totalSalary: 10800, status: "نشط", phone: "", email: "", nationalId: "", notes: "" },
-  { id: "7", empId: "EMP-0010", name: "أحمد المحمدي", nationality: "المملكة العربية السعودية", department: "قسم المحاسبة", jobTitle: "محاسب", branch: "الفرع الرئيسي", costCenter: "0000192102", hireDate: "2025-06-15", totalSalary: 9500, status: "نشط", phone: "", email: "", nationalId: "", notes: "" },
-];
-
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HREmployees() {
   const navigate = useNavigate();
@@ -111,13 +100,13 @@ export default function HREmployees() {
           .from("employees")
           .select("*")
           .order("emp_id", { ascending: true });
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           setEmployees(data.map(mapRow));
         } else {
-          setEmployees(SAMPLE_EMPLOYEES);
+          setEmployees([]);
         }
       } catch {
-        setEmployees(SAMPLE_EMPLOYEES);
+        setEmployees([]);
       }
     };
     load();

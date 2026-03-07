@@ -15,6 +15,8 @@ import {
   ChevronDown,
   ArrowLeftRight,
   MoreVertical,
+  Save,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
@@ -48,6 +50,7 @@ const mockRequests: PurchaseRequestRow[] = [];
 export default function PurchaseRequests() {
   const [view, setView] = useState<"list" | "create">("list");
   const [requests, setRequests] = useState<PurchaseRequestRow[]>(mockRequests);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const loadRequests = async () => {
@@ -78,7 +81,12 @@ export default function PurchaseRequests() {
     };
 
     loadRequests();
-  }, []);
+  }, [refreshKey]);
+
+  const handleSaved = () => {
+    setRefreshKey((k) => k + 1);
+    setView("list");
+  };
 
   return (
     <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
@@ -89,7 +97,7 @@ export default function PurchaseRequests() {
             requests={requests}
           />
         ) : (
-          <RequestForm onBack={() => setView("list")} />
+          <RequestForm onBack={() => setView("list")} onSaved={handleSaved} />
         )}
       </div>
     </Layout>
@@ -294,7 +302,29 @@ function RequestsList({
   );
 }
 
-function RequestForm({ onBack }: { onBack: () => void }) {
+function RequestForm({
+  onBack,
+  onSaved,
+}: {
+  onBack: () => void;
+  onSaved: () => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+
+  const [form, setForm] = useState({
+    date: today,
+    type: "مواد",
+    priority: "عادية",
+    referenceNo: "",
+    requesterName: "",
+    department: "",
+    position: "",
+    costCenter: "بدون مركز تكلفة",
+    costType: "نوع تكلفة افتراضي",
+    budget: "0.00",
+    notes: "",
+  });
+
   const [items, setItems] = useState([
     {
       id: 1,
@@ -307,11 +337,17 @@ function RequestForm({ onBack }: { onBack: () => void }) {
     },
   ]);
 
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setField = (field: keyof typeof form, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
   const handleAddItem = () => {
     setItems((prev) => [
       ...prev,
       {
-        id: prev.length + 1,
+        id: Date.now(),
         description: "",
         unitPriceText: "",
         quantity: 1,
@@ -347,6 +383,54 @@ function RequestForm({ onBack }: { onBack: () => void }) {
     { subtotal: 0, discount: 0, tax: 0, total: 0 }
   );
 
+  const handleSave = async () => {
+    if (!form.date) {
+      setError("يرجى إدخال تاريخ الطلب");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+
+    const { error: insertError } = await supabase
+      .from("purchase_requests")
+      .insert([
+        {
+          date: form.date,
+          type: form.type,
+          priority: form.priority,
+          reference_no: form.referenceNo || null,
+          requester: form.requesterName,
+          department: form.department,
+          position: form.position,
+          cost_center: form.costCenter,
+          cost_type: form.costType,
+          budget: parseFloat(form.budget) || 0,
+          notes: form.notes || null,
+          total: totals.total.toFixed(2),
+          status: "قيد المراجعة",
+          approval: "بانتظار",
+          section: form.department,
+          items: items.map((item) => ({
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+            discount: item.discount,
+            tax_percent: item.taxPercent,
+            unit_price_text: item.unitPriceText,
+          })),
+        },
+      ]);
+
+    setSaving(false);
+
+    if (insertError) {
+      setError("حدث خطأ أثناء الحفظ: " + insertError.message);
+      return;
+    }
+
+    onSaved();
+  };
+
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
       {/* Header */}
@@ -354,26 +438,23 @@ function RequestForm({ onBack }: { onBack: () => void }) {
         <div className="flex gap-2">
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-slate-500 text-white text-sm font-medium rounded hover:bg-slate-600 transition-colors flex items-center gap-1"
+            disabled={saving}
+            className="px-4 py-2 bg-slate-500 text-white text-sm font-medium rounded hover:bg-slate-600 transition-colors flex items-center gap-1 disabled:opacity-50"
           >
             <X className="h-4 w-4" />
             إلغاء
           </button>
-          <button className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors">
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-              />
-            </svg>
-            حفظ طلب الشراء
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-60"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saving ? "جارٍ الحفظ..." : "حفظ طلب الشراء"}
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -384,12 +465,19 @@ function RequestForm({ onBack }: { onBack: () => void }) {
         </div>
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          disabled={saving}
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2 disabled:opacity-50"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
       </div>
+
+      {error && (
+        <div className="mx-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm text-right">
+          {error}
+        </div>
+      )}
 
       <div className="p-4 space-y-6">
         {/* Basic Info */}
@@ -419,7 +507,8 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="date"
-                defaultValue="2026-03-05"
+                value={form.date}
+                onChange={(e) => setField("date", e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -427,16 +516,29 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               <label className="text-sm font-medium text-slate-700 text-right block">
                 نوع الطلب
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
+              <select
+                value={form.type}
+                onChange={(e) => setField("type", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white"
+              >
                 <option>مواد</option>
+                <option>خدمات</option>
+                <option>أصول</option>
+                <option>أخرى</option>
               </select>
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 أولوية الطلب
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
+              <select
+                value={form.priority}
+                onChange={(e) => setField("priority", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white"
+              >
                 <option>عادية</option>
+                <option>عاجلة</option>
+                <option>حرجة</option>
               </select>
             </div>
             <div className="space-y-1">
@@ -445,6 +547,8 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="text"
+                value={form.referenceNo}
+                onChange={(e) => setField("referenceNo", e.target.value)}
                 placeholder="رقم مرجع اختياري"
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -464,6 +568,8 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="text"
+                value={form.requesterName}
+                onChange={(e) => setField("requesterName", e.target.value)}
                 placeholder="اسم مقدم الطلب"
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -474,6 +580,8 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="text"
+                value={form.department}
+                onChange={(e) => setField("department", e.target.value)}
                 placeholder="الجهة أو القسم"
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -484,6 +592,8 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="text"
+                value={form.position}
+                onChange={(e) => setField("position", e.target.value)}
                 placeholder="المسمى الوظيفي"
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -501,16 +611,28 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               <label className="text-sm font-medium text-slate-700 text-right block">
                 مركز التكلفة
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
+              <select
+                value={form.costCenter}
+                onChange={(e) => setField("costCenter", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white"
+              >
                 <option>بدون مركز تكلفة</option>
+                <option>مركز التكلفة الرئيسي</option>
+                <option>مركز التكلفة الفرعي</option>
               </select>
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700 text-right block">
                 نوع التكلفة
               </label>
-              <select className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
+              <select
+                value={form.costType}
+                onChange={(e) => setField("costType", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white"
+              >
                 <option>نوع تكلفة افتراضي</option>
+                <option>تشغيلي</option>
+                <option>رأسمالي</option>
               </select>
             </div>
             <div className="space-y-1">
@@ -518,8 +640,9 @@ function RequestForm({ onBack }: { onBack: () => void }) {
                 الميزانية
               </label>
               <input
-                type="text"
-                defaultValue="0.00"
+                type="number"
+                value={form.budget}
+                onChange={(e) => setField("budget", e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -529,8 +652,9 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </label>
               <input
                 type="text"
-                defaultValue="0.00"
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                readOnly
+                value={(parseFloat(form.budget) - totals.total).toFixed(2)}
+                className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none"
               />
             </div>
           </div>
@@ -569,7 +693,7 @@ function RequestForm({ onBack }: { onBack: () => void }) {
                 <tr className="text-slate-600 border-b border-slate-200">
                   <th className="pb-2 font-medium w-16 text-center"></th>
                   <th className="pb-2 font-medium w-24">المجموع</th>
-                  <th className="pb-2 font-medium w-24">الضريبة</th>
+                  <th className="pb-2 font-medium w-24">الضريبة %</th>
                   <th className="pb-2 font-medium w-20">خصم</th>
                   <th className="pb-2 font-medium w-24">السعر *</th>
                   <th className="pb-2 font-medium w-28">سعر الوحدة</th>
@@ -579,7 +703,8 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </thead>
               <tbody>
                 {items.map((item) => {
-                  const lineSubtotal = item.quantity * item.price - item.discount;
+                  const lineSubtotal =
+                    item.quantity * item.price - item.discount;
                   const lineTax = (lineSubtotal * item.taxPercent) / 100;
                   const lineTotal = lineSubtotal + lineTax;
 
@@ -683,34 +808,51 @@ function RequestForm({ onBack }: { onBack: () => void }) {
               </tbody>
             </table>
 
-            <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">
-              <div className="w-96 flex justify-between">
-                <div className="space-y-2 text-left">
-                  <div className="text-sm">
-                    <span className="font-semibold text-slate-800">{totals.tax.toFixed(2)} ريال</span>
-                  </div>
-                  <div className="text-sm">
-                    <span className="font-bold text-blue-600">{totals.total.toFixed(2)} ريال</span>
-                  </div>
+            {/* Totals */}
+            <div className="border-t border-slate-200 pt-4 mt-4 flex justify-end">
+              <div className="w-80 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.subtotal.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">المجموع الفرعي</span>
                 </div>
-                <div className="space-y-2 text-right">
-                  <div className="text-sm text-slate-600">الضريبة</div>
-                  <div className="text-sm font-bold text-slate-800">المجموع الكلي</div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.discount.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">الخصم</span>
                 </div>
-                <div className="space-y-2 text-left">
-                  <div className="text-sm">
-                    <span className="font-semibold text-slate-800">{totals.subtotal.toFixed(2)} ريال</span>
-                  </div>
-                  <div className="text-sm">
-                    <span className="font-semibold text-slate-800">{totals.discount.toFixed(2)} ريال</span>
-                  </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-slate-800">
+                    {totals.tax.toFixed(2)} ريال
+                  </span>
+                  <span className="text-slate-600">الضريبة</span>
                 </div>
-                <div className="space-y-2 text-right">
-                  <div className="text-sm text-slate-600">المجموع الفرعي</div>
-                  <div className="text-sm text-slate-600">الخصم</div>
+                <div className="flex justify-between text-sm border-t border-slate-200 pt-2">
+                  <span className="font-bold text-blue-600 text-base">
+                    {totals.total.toFixed(2)} ريال
+                  </span>
+                  <span className="font-bold text-slate-800">المجموع الكلي</span>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
+            <h2 className="font-semibold text-slate-800">ملاحظات</h2>
+          </div>
+          <div className="p-4">
+            <textarea
+              rows={3}
+              value={form.notes}
+              onChange={(e) => setField("notes", e.target.value)}
+              placeholder="أي ملاحظات إضافية..."
+              className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-y"
+            />
           </div>
         </div>
       </div>

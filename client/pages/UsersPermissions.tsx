@@ -45,7 +45,7 @@ const emptyForm: UserForm = {
   name: "",
   email: "",
   role: "User",
-  company: "Kore Holding Company",
+  company: "شركة لاكجري العياف",
   phone: "",
   status: "نشط",
 };
@@ -55,7 +55,7 @@ const mapUserRow = (row: Record<string, unknown>): UserRow => ({
   name: String(row.full_name ?? row.name ?? ""),
   email: String(row.email ?? ""),
   role: String(row.role ?? "User"),
-  company: String(row.company ?? "Kore Holding Company"),
+  company: String(row.company ?? "شركة لاكجري العياف"),
   phone: String(row.phone ?? ""),
   status: String(row.status ?? "نشط"),
 });
@@ -194,7 +194,7 @@ export default function UsersPermissions() {
       full_name: form.name.trim(),
       email: form.email.trim(),
       role: form.role,
-      company: form.company.trim() || "Kore Holding Company",
+      company: form.company.trim() || "شركة لاكجري العياف",
       phone: form.phone.trim(),
       status: form.status,
       updated_at: new Date().toISOString(),

@@ -49,7 +49,7 @@ export default function Settings() {
                 </label>
                 <input
                   className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  defaultValue="Kore Holding Company"
+                  defaultValue="شركة لاكجري العياف"
                 />
               </div>
               <div>

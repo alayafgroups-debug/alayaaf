@@ -490,7 +490,7 @@ function InvoiceDetails({
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div className="space-y-2 text-right">
-                <h2 className="text-lg font-semibold text-slate-800">شركة الكجري العياف</h2>
+                <h2 className="text-lg font-semibold text-slate-800">شركة لاكجري العياف</h2>
                 <p className="text-sm text-slate-600">
                   8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة
                 </p>
@@ -504,7 +504,7 @@ function InvoiceDetails({
                 </div>
               </div>
               <div className="space-y-2 text-left md:text-right">
-                <h2 className="text-lg font-semibold text-slate-800">Luxury Al Ayaf company</h2>
+                <h2 className="text-lg font-semibold text-slate-800">Luxury Al Ayaf Company</h2>
                 <p className="text-sm text-slate-600">
                   8529, Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca
                 </p>
@@ -624,7 +624,7 @@ function InvoiceDetails({
             <div className="border-t border-slate-200 pt-4 text-sm text-slate-700">
               <h4 className="font-semibold mb-2">بيانات الحساب البنكي</h4>
               <div className="space-y-1">
-                <div>اسم المستفيد: شركة الكجري العياف</div>
+                <div>اسم المستفيد: شركة لاكجري العياف</div>
                 <div>رقم الحساب: 1575917249940</div>
                 <div>رقم الآيبان: SA3520000001575917249940</div>
                 <div>بنك الرياض</div>

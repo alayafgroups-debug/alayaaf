@@ -139,7 +139,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           {sidebarOpen && (
             <span className="text-sm font-semibold text-sidebar-foreground">
-              نظام الفواتير
+              شركة لاكجري العياف
             </span>
           )}
         </Link>
@@ -231,7 +231,7 @@ export default function Layout({ children }: LayoutProps) {
         <header className="sticky top-0 z-40 border-b border-border/60 bg-card/90 backdrop-blur">
           <div className="flex h-16 items-center justify-between px-8">
             <h1 className="text-xl font-semibold text-foreground">
-              نظام الفواتير الإلكترونية المتكامل
+              شركة لاكجري العياف
             </h1>
             <div className="flex items-center gap-4">
               <span className="text-sm text-muted-foreground">

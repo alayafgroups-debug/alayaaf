@@ -597,20 +597,15 @@ function OrderForm({
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
-                        <select
+                        <input
+                          type="text"
                           value={item.unit}
                           onChange={(e) =>
                             updateItem(item.id, { unit: e.target.value })
                           }
+                          placeholder="اختياري"
                           className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
-                        >
-                          <option value="">اختر الوحدة...</option>
-                          <option>قطعة</option>
-                          <option>كيلو</option>
-                          <option>لتر</option>
-                          <option>متر</option>
-                          <option>صندوق</option>
-                        </select>
+                        />
                       </td>
                       <td className="pt-4 px-1 align-top">
                         <input
@@ -633,7 +628,7 @@ function OrderForm({
                               description: e.target.value,
                             })
                           }
-                          placeholder="ابحث عن منتج بالاسم أو الكود..."
+                          placeholder="وصف البند..."
                           className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                         />
                       </td>

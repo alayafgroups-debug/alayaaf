@@ -43,7 +43,6 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "الحضور والانصراف", href: "/hr/attendance" },
     { label: "مسير الرواتب", href: "/hr/payroll" },
     { label: "السلف", href: "/hr/advances" },
-    { label: "تصفية المستحقات", href: "/hr/settlements" },
     { label: "شهادات الخبرة", href: "/hr/certificates" },
     { label: "تقارير الموارد البشرية", href: "/hr/reports" },
     { label: "إعدادات الموارد البشرية", href: "/hr/settings" },

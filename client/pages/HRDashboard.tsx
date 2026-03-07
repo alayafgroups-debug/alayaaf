@@ -9,12 +9,10 @@ import {
   ClipboardList,
   Clock,
   Building2,
-  FileX,
   Wallet,
   BarChart2,
   Plus,
   Eye,
-  List,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -154,27 +152,6 @@ export default function HRDashboard() {
                 <button className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">الأقسام</button>
                 <button className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">الوظائف</button>
                 <button className="px-3 py-2 rounded-lg bg-gray-600 text-white text-xs font-medium hover:bg-gray-700 transition">الجنسيات</button>
-              </div>
-            </div>
-          </div>
-
-          {/* تصفية المستحقات */}
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="bg-red-600 text-white px-4 py-3 flex items-center gap-2">
-              <FileX className="h-5 w-5" />
-              <span className="font-semibold">تصفية المستحقات</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">تصفية مستحقات الموظفين المنتهية خدمتهم</p>
-              <div className="flex gap-2 flex-wrap">
-                <button className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
-                  <List className="h-3.5 w-3.5" />
-                  عرض التصفيات
-                </button>
-                <button className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition">
-                  <Plus className="h-3.5 w-3.5" />
-                  تصفية جديدة
-                </button>
               </div>
             </div>
           </div>

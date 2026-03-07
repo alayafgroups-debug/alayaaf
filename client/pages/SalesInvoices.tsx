@@ -843,7 +843,7 @@ function InvoiceEdit({
                   <th className="pb-2 font-medium w-20">خصم</th>
                   <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
                   <th className="pb-2 font-medium w-20">الكمية *</th>
-                  <th className="pb-2 font-medium">وصف البند</th>
+                  <th className="pb-2 font-medium w-[320px]">وصف البند</th>
                 </tr>
               </thead>
               <tbody>
@@ -920,9 +920,9 @@ function InvoiceEdit({
                           className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
                         />
                       </td>
-                      <td className="pt-4 pl-1 align-top">
-                        <input
-                          type="text"
+                      <td className="pt-4 pl-1 align-top min-w-[320px]">
+                        <textarea
+                          rows={3}
                           placeholder="اكتب وصف البند..."
                           value={item.description}
                           onChange={(event) =>
@@ -930,7 +930,7 @@ function InvoiceEdit({
                               description: event.target.value,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none min-h-[88px] resize-y"
                         />
                       </td>
                     </tr>
@@ -1403,7 +1403,7 @@ function InvoiceForm({
                   <th className="pb-2 font-medium w-20">خصم</th>
                   <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
                   <th className="pb-2 font-medium w-20">الكمية *</th>
-                  <th className="pb-2 font-medium">وصف البند</th>
+                  <th className="pb-2 font-medium w-[320px]">وصف البند</th>
                 </tr>
               </thead>
               <tbody>
@@ -1480,9 +1480,9 @@ function InvoiceForm({
                         className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
                       />
                     </td>
-                    <td className="pt-4 pl-1 align-top">
-                      <input
-                        type="text"
+                    <td className="pt-4 pl-1 align-top min-w-[320px]">
+                      <textarea
+                        rows={3}
                         placeholder="اكتب وصف البند..."
                         value={item.description}
                         onChange={(event) =>
@@ -1490,7 +1490,7 @@ function InvoiceForm({
                             description: event.target.value,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none min-h-[88px] resize-y"
                       />
                     </td>
                   </tr>

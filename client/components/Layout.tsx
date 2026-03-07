@@ -13,6 +13,9 @@ import {
   X,
   Settings,
   ChevronDown,
+  LogOut,
+  Bell,
+  Search,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,7 +25,6 @@ interface LayoutProps {
   subMenu?: { title: string; items: { label: string; href?: string }[] } | null;
 }
 
-// Static submenu definitions for each main section
 const navSubMenus: Record<string, { label: string; href: string }[]> = {
   "/sales": [
     { label: "عروض الأسعار", href: "/sales/quotations" },
@@ -89,7 +91,6 @@ export default function Layout({ children }: LayoutProps) {
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
 
-  // Auto-expand menu when navigating to a page with submenu
   useEffect(() => {
     const currentPath = location.pathname;
     navItems.forEach((item) => {
@@ -104,48 +105,41 @@ export default function Layout({ children }: LayoutProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen bg-muted/20 overflow-hidden">
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* ── Sidebar ── */}
       <aside
         className={cn(
-          "flex flex-col flex-shrink-0 h-full border-r border-sidebar-border bg-sidebar/95 shadow-lg transition-all duration-300 ease-in-out",
-          sidebarOpen ? "w-64" : "w-20"
+          "relative flex flex-col flex-shrink-0 h-full transition-all duration-300",
+          "bg-[hsl(224,71%,12%)] text-white shadow-2xl",
+          sidebarOpen ? "w-[270px]" : "w-[72px]"
         )}
       >
-        {/* Header */}
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border/70 px-4">
+        {/* decorative gradient orb */}
+        <div className="pointer-events-none absolute -top-20 -left-20 h-56 w-56 rounded-full bg-primary/20 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-10 -right-16 h-40 w-40 rounded-full bg-secondary/15 blur-3xl" />
+
+        {/* Logo + Toggle */}
+        <div className="relative z-10 flex h-[72px] items-center justify-between px-4 border-b border-white/[0.08]">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-white font-bold text-sm shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
+              LX
+            </div>
+            {sidebarOpen && (
+              <span className="text-[13px] font-bold text-white/90 leading-tight">
+                شركة لاكجري العياف
+              </span>
+            )}
+          </Link>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-lg p-2 transition hover:bg-sidebar-accent/70"
+            className="rounded-lg p-1.5 text-white/50 hover:text-white hover:bg-white/[0.08] transition-colors"
           >
-            {sidebarOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
+            {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
 
-        {/* Logo Area */}
-        <Link
-          to="/"
-          className={cn(
-            "flex items-center gap-3 border-b border-sidebar-border px-4 py-4 transition-all duration-300",
-            !sidebarOpen && "flex-col"
-          )}
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold shadow-sm">
-            نظ
-          </div>
-          {sidebarOpen && (
-            <span className="text-sm font-semibold text-sidebar-foreground">
-              شركة لاكجري العياف
-            </span>
-          )}
-        </Link>
-
         {/* Navigation */}
-        <nav className="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
+        <nav className="relative z-10 flex flex-col gap-0.5 p-3 flex-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isItemActive = isActive(item.href);
@@ -156,27 +150,33 @@ export default function Layout({ children }: LayoutProps) {
               <div key={item.href}>
                 {item.hasSubmenu ? (
                   <button
-                    onClick={() => {
-                      // Only toggle submenu - never navigate to main section page
-                      setExpandedMenu(
-                        expandedMenu === item.href ? null : item.href
-                      );
-                    }}
+                    onClick={() =>
+                      setExpandedMenu(expandedMenu === item.href ? null : item.href)
+                    }
                     className={cn(
-                      "w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
+                      "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
                       isItemActive
-                        ? "bg-sidebar-accent/80 text-sidebar-primary shadow-sm"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-primary"
+                        ? "bg-white/[0.12] text-white shadow-sm"
+                        : "text-white/60 hover:bg-white/[0.07] hover:text-white/90"
                     )}
                     title={item.label}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-lg transition-colors flex-shrink-0",
+                        isItemActive
+                          ? "bg-primary/80 text-white shadow-sm shadow-primary/30"
+                          : "bg-white/[0.06] text-white/50"
+                      )}
+                    >
+                      <Icon className="h-[18px] w-[18px]" />
+                    </div>
                     {sidebarOpen && (
                       <>
                         <span className="flex-1 text-right">{item.label}</span>
                         <ChevronDown
                           className={cn(
-                            "h-4 w-4 transition-transform duration-200",
+                            "h-3.5 w-3.5 transition-transform duration-200 text-white/40",
                             isExpanded && "rotate-180"
                           )}
                         />
@@ -187,33 +187,49 @@ export default function Layout({ children }: LayoutProps) {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
                       isItemActive
-                        ? "bg-sidebar-accent/80 text-sidebar-primary shadow-sm"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-primary"
+                        ? "bg-white/[0.12] text-white shadow-sm"
+                        : "text-white/60 hover:bg-white/[0.07] hover:text-white/90"
                     )}
                     title={item.label}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-lg transition-colors flex-shrink-0",
+                        isItemActive
+                          ? "bg-primary/80 text-white shadow-sm shadow-primary/30"
+                          : "bg-white/[0.06] text-white/50"
+                      )}
+                    >
+                      <Icon className="h-[18px] w-[18px]" />
+                    </div>
                     {sidebarOpen && <span>{item.label}</span>}
                   </Link>
                 )}
 
-                {/* Submenu - shows when expanded, no need to be on main route */}
+                {/* Submenu */}
                 {isExpanded && sidebarOpen && subItems && (
-                  <div className="mt-2 ml-4 border-r-2 border-sidebar-primary space-y-1">
+                  <div className="mt-1 mr-5 space-y-0.5 border-r border-white/[0.1] pr-0.5 animate-fade-in">
                     {subItems.map((subItem, index) => (
                       <button
                         key={index}
                         onClick={() => navigate(subItem.href)}
                         className={cn(
-                          "w-full text-right flex items-start gap-2 px-4 py-2 text-xs font-medium rounded transition-colors duration-200",
+                          "w-full text-right flex items-center gap-2 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors duration-150",
                           location.pathname === subItem.href
-                            ? "text-sidebar-primary bg-sidebar-accent"
-                            : "text-sidebar-foreground hover:text-sidebar-primary hover:bg-sidebar-accent"
+                            ? "text-white bg-primary/60"
+                            : "text-white/45 hover:text-white/80 hover:bg-white/[0.05]"
                         )}
                       >
-                        <span className="h-1.5 w-1.5 rounded-full bg-sidebar-primary flex-shrink-0 mt-1" />
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full flex-shrink-0",
+                            location.pathname === subItem.href
+                              ? "bg-white"
+                              : "bg-white/30"
+                          )}
+                        />
                         <span>{subItem.label}</span>
                       </button>
                     ))}
@@ -223,26 +239,66 @@ export default function Layout({ children }: LayoutProps) {
             );
           })}
         </nav>
+
+        {/* Bottom user area */}
+        {sidebarOpen && (
+          <div className="relative z-10 border-t border-white/[0.08] p-3">
+            <div className="flex items-center gap-3 rounded-xl bg-white/[0.06] px-3 py-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-[11px] font-bold text-white">
+                م
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold text-white/90 truncate">مدير النظام</p>
+                <p className="text-[11px] text-white/40 truncate">admin@luxury-ayaf.com</p>
+              </div>
+              <button className="text-white/30 hover:text-white/70 transition-colors">
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 min-w-0 overflow-auto">
+      {/* ── Main Content ── */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="sticky top-0 z-40 border-b border-border/60 bg-card/90 backdrop-blur">
-          <div className="flex h-16 items-center justify-between px-8">
-            <h1 className="text-xl font-semibold text-foreground">
+        <header className="sticky top-0 z-40 h-[72px] flex items-center justify-between px-8 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-bold text-foreground">
               شركة لاكجري العياف
             </h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">
-                {new Date().toLocaleDateString("ar-SA")}
+            <span className="hidden sm:inline-block h-5 w-px bg-border/70" />
+            <span className="hidden sm:inline-block text-xs text-muted-foreground font-medium">
+              نظام إدارة الأعمال المتكامل
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Search */}
+            <button className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/40 px-3.5 py-2 text-xs text-muted-foreground hover:bg-muted/70 transition-colors">
+              <Search className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">بحث...</span>
+            </button>
+            {/* Notifications */}
+            <button className="relative rounded-xl p-2.5 text-muted-foreground hover:bg-muted/60 transition-colors">
+              <Bell className="h-[18px] w-[18px]" />
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive animate-pulse-soft" />
+            </button>
+            {/* Date */}
+            <div className="hidden lg:flex items-center gap-2 rounded-xl bg-muted/40 px-3.5 py-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                {new Date().toLocaleDateString("ar-SA", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
               </span>
             </div>
           </div>
         </header>
 
-        {/* Content Area */}
-        <div className="p-8">{children}</div>
+        {/* Page Content */}
+        <div className="flex-1 overflow-auto p-8">{children}</div>
       </main>
     </div>
   );

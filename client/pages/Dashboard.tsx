@@ -7,223 +7,220 @@ import {
   DollarSign,
   FileText,
   Users,
+  ShoppingCart,
   AlertCircle,
-  ArrowRight,
+  ArrowLeft,
+  Plus,
+  Sparkles,
+  Activity,
+  BarChart3,
+  Clock,
 } from "lucide-react";
 
+/* ── Static data ── */
+const kpis = [
+  {
+    label: "إجمالي المبيعات",
+    value: "1,250,000",
+    currency: true,
+    change: 12,
+    trend: "up" as const,
+    icon: DollarSign,
+    gradient: "from-blue-500 to-blue-600",
+    shadow: "shadow-blue-500/25",
+    bg: "bg-blue-50",
+  },
+  {
+    label: "إجمالي المشتريات",
+    value: "750,000",
+    currency: true,
+    change: 8,
+    trend: "up" as const,
+    icon: ShoppingCart,
+    gradient: "from-violet-500 to-purple-600",
+    shadow: "shadow-violet-500/25",
+    bg: "bg-violet-50",
+  },
+  {
+    label: "عدد الفواتير",
+    value: "342",
+    currency: false,
+    change: 5,
+    trend: "up" as const,
+    icon: FileText,
+    gradient: "from-emerald-500 to-teal-600",
+    shadow: "shadow-emerald-500/25",
+    bg: "bg-emerald-50",
+  },
+  {
+    label: "العملاء النشطين",
+    value: "145",
+    currency: false,
+    change: 3,
+    trend: "down" as const,
+    icon: Users,
+    gradient: "from-amber-500 to-orange-600",
+    shadow: "shadow-amber-500/25",
+    bg: "bg-amber-50",
+  },
+];
+
+const recentInvoices = [
+  { id: "INV-001", customer: "شركة الزهراء للتجارة", amount: 45000, status: "مقبولة", date: "2024-01-15" },
+  { id: "INV-002", customer: "مؤسسة النور", amount: 32500, status: "قيد المعالجة", date: "2024-01-14" },
+  { id: "INV-003", customer: "شركة الإمارات للتوزيع", amount: 67000, status: "مقبولة", date: "2024-01-13" },
+  { id: "INV-004", customer: "مصنع النجاح", amount: 28000, status: "مرفوضة", date: "2024-01-12" },
+];
+
+const modules = [
+  { title: "المبيعات", description: "إدارة عروض الأسعار والفواتير والمردودات", href: "/sales", icon: FileText, gradient: "from-blue-500 to-indigo-600", shadow: "shadow-blue-500/20" },
+  { title: "المشتريات", description: "طلبات الشراء والفواتير والتقارير", href: "/purchases", icon: ShoppingCart, gradient: "from-violet-500 to-purple-600", shadow: "shadow-violet-500/20" },
+  { title: "الموارد البشرية", description: "إدارة الموظفين والرواتب والحضور", href: "/hr", icon: Users, gradient: "from-emerald-500 to-teal-600", shadow: "shadow-emerald-500/20" },
+  { title: "إدارة العملاء", description: "قاعدة بيانات العملاء والتفاعلات", href: "/crm", icon: Users, gradient: "from-amber-500 to-orange-600", shadow: "shadow-amber-500/20" },
+];
+
+/* ── Status badge helper ── */
+function statusClasses(status: string) {
+  if (status === "مقبولة") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "قيد المعالجة") return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-red-50 text-red-700 border-red-200";
+}
+
+/* ── Component ── */
 export default function Dashboard() {
-  const kpis = [
-    {
-      label: "إجمالي المبيعات",
-      value: "1,250,000",
-      currency: true,
-      change: 12,
-      trend: "up",
-    },
-    {
-      label: "إجمالي المشتريات",
-      value: "750,000",
-      currency: true,
-      change: 8,
-      trend: "up",
-    },
-    {
-      label: "عدد الفواتير",
-      value: "342",
-      currency: false,
-      change: 5,
-      trend: "up",
-    },
-    {
-      label: "العملاء النشطين",
-      value: "145",
-      currency: false,
-      change: 3,
-      trend: "down",
-    },
-  ];
-
-  const recentInvoices = [
-    {
-      id: "INV-001",
-      customer: "شركة الزهراء للتجارة",
-      amount: 45000,
-      status: "مقبولة",
-      date: "2024-01-15",
-    },
-    {
-      id: "INV-002",
-      customer: "مؤسسة النور",
-      amount: 32500,
-      status: "قيد المعالجة",
-      date: "2024-01-14",
-    },
-    {
-      id: "INV-003",
-      customer: "شركة الإمارات للتوزيع",
-      amount: 67000,
-      status: "مقبولة",
-      date: "2024-01-13",
-    },
-    {
-      id: "INV-004",
-      customer: "مصنع النجاح",
-      amount: 28000,
-      status: "مرفوضة",
-      date: "2024-01-12",
-    },
-  ];
-
-  const modules = [
-    {
-      title: "المبيعات",
-      description: "إدارة عروض الأسعار والفواتير والمردودات",
-      href: "/sales",
-      icon: FileText,
-      color: "primary",
-    },
-    {
-      title: "المشتريات",
-      description: "طلبات الشراء والفواتير والتقارير",
-      href: "/purchases",
-      icon: Users,
-      color: "accent",
-    },
-    {
-      title: "الموارد البشرية",
-      description: "إدارة الموظفين والرواتب والحضور",
-      href: "/hr",
-      icon: Users,
-      color: "success",
-    },
-    {
-      title: "إدارة العملاء",
-      description: "قاعدة بيانات العملاء والتفاعلات",
-      href: "/crm",
-      icon: Users,
-      color: "warning",
-    },
-  ];
-
   return (
     <Layout subMenu={null}>
-      {/* Welcome Section */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-primary">
-          أهلاً وسهلاً بك
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          إليك ملخص أداء عملك اليوم
-        </p>
-      </div>
+      {/* ── Welcome Banner ── */}
+      <section className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-bl from-[hsl(221,83%,53%)] via-[hsl(224,76%,38%)] to-[hsl(262,83%,40%)] p-8 text-white shadow-xl shadow-primary/15 animate-fade-in-up">
+        {/* decorative shapes */}
+        <div className="pointer-events-none absolute -top-12 -left-12 h-48 w-48 rounded-full bg-white/[0.07] blur-2xl" />
+        <div className="pointer-events-none absolute bottom-0 right-0 h-36 w-36 rounded-full bg-white/[0.05] blur-2xl" />
+        <div className="pointer-events-none absolute top-6 right-1/3 h-20 w-20 rounded-full bg-secondary/20 blur-xl animate-float" />
 
-      {/* KPIs Grid */}
-      <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-5 w-5 text-amber-300" />
+              <span className="text-[13px] font-medium text-white/70">مرحباً بعودتك</span>
+            </div>
+            <h1 className="text-3xl font-extrabold leading-tight">
+              أهلاً وسهلاً بك
+            </h1>
+            <p className="mt-2 max-w-md text-[15px] text-white/70 leading-relaxed">
+              إليك ملخص أداء عملك اليوم — تابع المبيعات والمشتريات وحالة الفواتير في مكان واحد.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Link
+              to="/sales/invoices"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-[hsl(224,76%,38%)] shadow-lg shadow-black/10 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
+            >
+              <Plus className="h-4 w-4" />
+              فاتورة جديدة
+            </Link>
+            <Link
+              to="/sales"
+              className="inline-flex items-center gap-2 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/25 transition-all duration-200"
+            >
+              <BarChart3 className="h-4 w-4" />
+              التقارير
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── KPIs Grid ── */}
+      <section className="mb-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4 stagger-children">
         {kpis.map((kpi) => {
+          const Icon = kpi.icon;
           const TrendIcon = kpi.trend === "up" ? TrendingUp : TrendingDown;
           return (
             <div
               key={kpi.label}
-              className="erp-card relative flex flex-col justify-between overflow-hidden border border-primary/10 bg-gradient-to-br from-white via-white to-primary/5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              className={cn(
+                "group relative overflow-hidden rounded-2xl bg-white border border-border/50 p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 animate-fade-in-up"
+              )}
             >
-              <span className="pointer-events-none absolute -left-6 -top-6 h-16 w-16 rounded-full bg-primary/10" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  {kpi.label}
-                </p>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-2xl font-bold text-foreground">
-                    {kpi.currency && "﷼"}
+              {/* bg accent */}
+              <div className={cn("pointer-events-none absolute -top-8 -left-8 h-24 w-24 rounded-full opacity-[0.07] bg-gradient-to-br", kpi.gradient)} />
+
+              <div className="relative z-10 flex items-start justify-between">
+                <div>
+                  <p className="text-[13px] font-medium text-muted-foreground mb-1">
+                    {kpi.label}
+                  </p>
+                  <p className="text-[26px] font-extrabold text-foreground leading-none tracking-tight">
+                    {kpi.currency && <span className="text-lg ml-0.5">﷼</span>}
                     {kpi.value}
-                  </span>
+                  </p>
+                </div>
+                <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg", kpi.gradient, kpi.shadow)}>
+                  <Icon className="h-5 w-5" />
                 </div>
               </div>
-              <div
-                className={cn(
-                  "mt-4 flex items-center gap-1 text-sm font-medium",
+
+              <div className="relative z-10 mt-4 flex items-center gap-1.5">
+                <div className={cn(
+                  "flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[12px] font-bold",
                   kpi.trend === "up"
-                    ? "text-success"
-                    : "text-destructive"
-                )}
-              >
-                <TrendIcon className="h-4 w-4" />
-                <span>{Math.abs(kpi.change)}%</span>
+                    ? "bg-emerald-50 text-emerald-600"
+                    : "bg-red-50 text-red-500"
+                )}>
+                  <TrendIcon className="h-3 w-3" />
+                  {Math.abs(kpi.change)}%
+                </div>
+                <span className="text-[11px] text-muted-foreground">من الشهر السابق</span>
               </div>
             </div>
           );
         })}
-      </div>
+      </section>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-8 lg:grid-cols-3">
+      {/* ── Main Content Grid ── */}
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Recent Invoices */}
-        <div className="lg:col-span-2">
-          <div className="erp-card">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-foreground">
-                آخر الفواتير
-              </h2>
+        <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
+          <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-border/40">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Clock className="h-[18px] w-[18px]" />
+                </div>
+                <h2 className="text-base font-bold text-foreground">آخر الفواتير</h2>
+              </div>
               <Link
                 to="/sales"
-                className="flex items-center gap-1 text-sm text-primary hover:text-primary-700"
+                className="flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:text-primary/80 transition-colors"
               >
                 عرض الكل
-                <ArrowRight className="h-4 w-4" />
+                <ArrowLeft className="h-3.5 w-3.5" />
               </Link>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">
-                      رقم الفاتورة
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">
-                      العميل
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">
-                      المبلغ
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">
-                      الحالة
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">
-                      التاريخ
-                    </th>
+                  <tr className="bg-muted/30">
+                    <th className="px-6 py-3 text-right text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">رقم الفاتورة</th>
+                    <th className="px-6 py-3 text-right text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">العميل</th>
+                    <th className="px-6 py-3 text-right text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">المبلغ</th>
+                    <th className="px-6 py-3 text-right text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">الحالة</th>
+                    <th className="px-6 py-3 text-right text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">التاريخ</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {recentInvoices.map((invoice) => (
-                    <tr
-                      key={invoice.id}
-                      className="border-b border-border hover:bg-secondary/50"
-                    >
-                      <td className="px-4 py-3 font-medium text-foreground">
-                        {invoice.id}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {invoice.customer}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-primary">
-                        ﷼{invoice.amount.toLocaleString("ar-SA")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-3 py-1 text-xs font-semibold",
-                            invoice.status === "مقبولة"
-                              ? "bg-success/10 text-success"
-                              : invoice.status === "قيد المعالجة"
-                                ? "bg-warning/10 text-warning"
-                                : "bg-destructive/10 text-destructive"
-                          )}
-                        >
-                          {invoice.status}
+                <tbody className="divide-y divide-border/30">
+                  {recentInvoices.map((inv) => (
+                    <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-foreground text-[13px]">{inv.id}</td>
+                      <td className="px-6 py-4 text-muted-foreground text-[13px]">{inv.customer}</td>
+                      <td className="px-6 py-4 font-bold text-primary text-[13px]">﷼{inv.amount.toLocaleString("ar-SA")}</td>
+                      <td className="px-6 py-4">
+                        <span className={cn("inline-flex rounded-full border px-3 py-0.5 text-[11px] font-bold", statusClasses(inv.status))}>
+                          {inv.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(invoice.date).toLocaleDateString("ar-SA")}
+                      <td className="px-6 py-4 text-muted-foreground text-[13px]">
+                        {new Date(inv.date).toLocaleDateString("ar-SA")}
                       </td>
                     </tr>
                   ))}
@@ -233,93 +230,121 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Alerts and Pending Tasks */}
-        <div className="flex flex-col gap-6">
-          <div className="erp-card">
-            <h3 className="mb-4 font-semibold text-foreground">
-              التنبيهات المهمة
-            </h3>
+        {/* Sidebar cards */}
+        <div className="flex flex-col gap-5 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+          {/* Alerts */}
+          <div className="rounded-2xl bg-white border border-border/50 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                <AlertCircle className="h-4 w-4" />
+              </div>
+              <h3 className="text-sm font-bold text-foreground">التنبيهات</h3>
+            </div>
             <div className="flex flex-col gap-3">
-              <div className="flex gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3">
-                <AlertCircle className="h-5 w-5 flex-shrink-0 text-warning" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    فواتير قيد المعالجة
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    هناك 5 فواتير بانتظار التأكيد
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                <AlertCircle className="h-5 w-5 flex-shrink-0 text-destructive" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    فواتير مرفوضة
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    فاتورة واحدة تم رفضها من ZATCA
-                  </p>
-                </div>
-              </div>
+              <AlertItem
+                color="amber"
+                title="فواتير قيد المعالجة"
+                desc="هناك 5 فواتير بانتظار التأكيد"
+              />
+              <AlertItem
+                color="red"
+                title="فواتير مرفوضة"
+                desc="فاتورة واحدة تم رفضها من ZATCA"
+              />
             </div>
           </div>
 
           {/* Quick Actions */}
-          <div className="erp-card">
-            <h3 className="mb-4 font-semibold text-foreground">
-              الإجراءات السريعة
-            </h3>
-            <div className="flex flex-col gap-2">
+          <div className="rounded-2xl bg-white border border-border/50 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <Activity className="h-4 w-4" />
+              </div>
+              <h3 className="text-sm font-bold text-foreground">إجراءات سريعة</h3>
+            </div>
+            <div className="flex flex-col gap-2.5">
               <Link
-                to="/sales"
-                className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary-700"
+                to="/sales/invoices"
+                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-blue-600 to-blue-500 px-4 py-3 text-[13px] font-bold text-white shadow-md shadow-blue-500/20 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
               >
+                <Plus className="h-4 w-4" />
                 إنشاء فاتورة جديدة
               </Link>
               <Link
                 to="/purchases"
-                className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-secondary"
+                className="flex items-center justify-center gap-2 rounded-xl border-2 border-border/60 bg-white px-4 py-3 text-[13px] font-bold text-foreground hover:bg-muted/40 hover:border-border transition-all duration-200"
               >
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
                 طلب شراء جديد
+              </Link>
+              <Link
+                to="/hr/employees"
+                className="flex items-center justify-center gap-2 rounded-xl border-2 border-border/60 bg-white px-4 py-3 text-[13px] font-bold text-foreground hover:bg-muted/40 hover:border-border transition-all duration-200"
+              >
+                <Users className="h-4 w-4 text-muted-foreground" />
+                إدارة الموظفين
               </Link>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modules Quick Access */}
-      <div className="mt-12">
-        <h2 className="mb-6 text-2xl font-semibold text-foreground">
-          الوحدات الرئيسية
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {modules.map((module) => {
-            const Icon = module.icon;
+      {/* ── Modules Quick Access ── */}
+      <section className="mt-10 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-white shadow-md shadow-primary/20">
+            <Sparkles className="h-[18px] w-[18px]" />
+          </div>
+          <h2 className="text-xl font-extrabold text-foreground">الوحدات الرئيسية</h2>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 stagger-children">
+          {modules.map((mod) => {
+            const Icon = mod.icon;
             return (
               <Link
-                key={module.href}
-                to={module.href}
-                className="erp-card group"
+                key={mod.href}
+                to={mod.href}
+                className="group relative overflow-hidden rounded-2xl bg-white border border-border/50 p-6 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 animate-fade-in-up"
               >
-                <div className="mb-4 inline-flex rounded-lg bg-primary-100 p-3 group-hover:bg-primary-200 transition-colors">
-                  <Icon className="h-6 w-6 text-primary" />
+                {/* hover gradient overlay */}
+                <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-[0.04] transition-opacity duration-300", mod.gradient)} />
+
+                <div className={cn("mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg transition-transform duration-300 group-hover:scale-110", mod.gradient, mod.shadow)}>
+                  <Icon className="h-5 w-5" />
                 </div>
-                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                  {module.title}
+                <h3 className="font-bold text-foreground group-hover:text-primary transition-colors text-[15px]">
+                  {mod.title}
                 </h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {module.description}
+                <p className="mt-1.5 text-[13px] text-muted-foreground leading-relaxed">
+                  {mod.description}
                 </p>
-                <div className="mt-4 flex items-center gap-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                  <span className="text-sm font-medium">اذهب</span>
-                  <ArrowRight className="h-4 w-4" />
+                <div className="mt-4 flex items-center gap-1.5 text-primary opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+                  <span className="text-[13px] font-bold">اذهب</span>
+                  <ArrowLeft className="h-3.5 w-3.5" />
                 </div>
               </Link>
             );
           })}
         </div>
-      </div>
+      </section>
     </Layout>
+  );
+}
+
+/* ── Alert Item ── */
+function AlertItem({ color, title, desc }: { color: "amber" | "red"; title: string; desc: string }) {
+  const colors = color === "amber"
+    ? "border-amber-200 bg-amber-50/60 text-amber-700"
+    : "border-red-200 bg-red-50/60 text-red-700";
+  const iconColor = color === "amber" ? "text-amber-500" : "text-red-500";
+
+  return (
+    <div className={cn("flex gap-3 rounded-xl border p-3", colors)}>
+      <AlertCircle className={cn("h-4 w-4 flex-shrink-0 mt-0.5", iconColor)} />
+      <div>
+        <p className="text-[13px] font-bold">{title}</p>
+        <p className="text-[11px] opacity-75 mt-0.5">{desc}</p>
+      </div>
+    </div>
   );
 }

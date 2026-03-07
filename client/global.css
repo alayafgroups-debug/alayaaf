@@ -1,78 +1,73 @@
 /** @import must precede all other statements */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /**
-   * Tailwind CSS theme
-   * tailwind.config.ts expects the following color variables to be expressed as HSL values.
-   * Professional ERP System for Saudi Arabia with ZATCA Compliance
-  */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 217 33% 17%;
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 217 33% 17%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 217 33% 17%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 217 91% 40%;
-    --primary-50: 217 100% 95%;
-    --primary-100: 217 91% 85%;
-    --primary-200: 217 91% 75%;
-    --primary-600: 217 91% 35%;
-    --primary-700: 217 91% 30%;
-    --primary-800: 217 91% 25%;
+    --primary: 221 83% 53%;
+    --primary-50: 214 100% 97%;
+    --primary-100: 214 95% 93%;
+    --primary-200: 213 97% 87%;
+    --primary-600: 221 83% 45%;
+    --primary-700: 224 76% 38%;
+    --primary-800: 226 71% 32%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 42 95% 51%;
-    --secondary-foreground: 217 33% 17%;
+    --secondary: 262 83% 58%;
+    --secondary-foreground: 0 0% 100%;
 
-    --accent: 42 95% 51%;
-    --accent-50: 42 100% 95%;
-    --accent-foreground: 217 33% 17%;
+    --accent: 43 96% 56%;
+    --accent-50: 43 100% 96%;
+    --accent-foreground: 222 47% 11%;
 
-    --success: 142 72% 44%;
+    --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 217 33% 17%;
+    --warning: 36 100% 50%;
+    --warning-foreground: 222 47% 11%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --muted: 217 16% 85%;
-    --muted-foreground: 217 12% 43%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    --border: 217 25% 88%;
-    --input: 217 25% 88%;
-    --ring: 217 91% 40%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 83% 53%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 217 33% 97%;
-    --sidebar-foreground: 217 33% 17%;
-    --sidebar-primary: 217 91% 40%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 42 95% 51%;
-    --sidebar-accent-foreground: 217 33% 17%;
-    --sidebar-border: 217 25% 88%;
-    --sidebar-ring: 217 91% 40%;
+    --sidebar-background: 224 71% 15%;
+    --sidebar-foreground: 214 32% 91%;
+    --sidebar-primary: 213 97% 87%;
+    --sidebar-primary-foreground: 224 71% 15%;
+    --sidebar-accent: 221 83% 53%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 224 50% 22%;
+    --sidebar-ring: 221 83% 53%;
   }
 
   .dark {
-    --background: 217 28% 12%;
+    --background: 224 71% 7%;
     --foreground: 0 0% 98%;
 
-    --card: 217 28% 16%;
+    --card: 224 71% 11%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 217 28% 16%;
+    --popover: 224 71% 11%;
     --popover-foreground: 0 0% 98%;
 
     --primary: 217 91% 60%;
@@ -82,38 +77,38 @@
     --primary-600: 217 91% 35%;
     --primary-700: 217 91% 30%;
     --primary-800: 217 91% 25%;
-    --primary-foreground: 217 28% 12%;
+    --primary-foreground: 224 71% 7%;
 
-    --secondary: 42 95% 51%;
-    --secondary-foreground: 217 28% 12%;
+    --secondary: 262 83% 58%;
+    --secondary-foreground: 0 0% 100%;
 
-    --accent: 42 95% 51%;
-    --accent-50: 42 100% 95%;
-    --accent-foreground: 217 28% 12%;
+    --accent: 43 96% 56%;
+    --accent-50: 43 100% 96%;
+    --accent-foreground: 224 71% 7%;
 
-    --success: 142 72% 44%;
+    --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 217 28% 12%;
+    --warning: 36 100% 50%;
+    --warning-foreground: 224 71% 7%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --muted: 217 16% 35%;
-    --muted-foreground: 217 12% 70%;
+    --muted: 224 30% 18%;
+    --muted-foreground: 220 12% 65%;
 
-    --border: 217 28% 25%;
-    --input: 217 28% 25%;
+    --border: 224 28% 22%;
+    --input: 224 28% 22%;
     --ring: 217 91% 60%;
 
-    --sidebar-background: 217 28% 10%;
+    --sidebar-background: 224 71% 7%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 217 28% 12%;
-    --sidebar-accent: 42 95% 51%;
-    --sidebar-accent-foreground: 217 28% 10%;
-    --sidebar-border: 217 28% 25%;
+    --sidebar-primary-foreground: 224 71% 7%;
+    --sidebar-accent: 221 83% 53%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 224 28% 22%;
     --sidebar-ring: 217 91% 60%;
   }
 }
@@ -129,22 +124,20 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Tajawal', 'Inter', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
   h1 {
     @apply text-3xl font-bold tracking-tight;
   }
-
   h2 {
     @apply text-2xl font-bold tracking-tight;
   }
-
   h3 {
     @apply text-xl font-semibold tracking-tight;
   }
-
   h4 {
     @apply text-lg font-semibold;
   }
@@ -154,8 +147,7 @@
     word-break: break-word;
   }
 
-  pre,
-  code {
+  pre, code {
     overflow-x: auto;
     white-space: pre;
   }
@@ -163,14 +155,77 @@
 
 @layer components {
   .erp-card {
-    @apply rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md;
+    @apply rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition-all duration-300;
+  }
+  .erp-card:hover {
+    @apply shadow-lg -translate-y-1;
   }
 
   .erp-button {
-    @apply inline-flex items-center justify-center rounded-lg font-medium transition-colors;
+    @apply inline-flex items-center justify-center rounded-xl font-semibold transition-all duration-200;
   }
 
   .currency {
     @apply font-semibold text-primary;
   }
+
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20;
+  }
 }
+
+/* ── Animations ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.7; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-6px); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out both;
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.4s ease-out both;
+}
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Stagger children */
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 80ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 160ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 320ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 400ms; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.25); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }

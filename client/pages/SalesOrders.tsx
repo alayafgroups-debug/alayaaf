@@ -421,8 +421,39 @@ function OrderDetails({
           };
         })
       );
+      return;
     }
-  }, [order.id]);
+
+    const totalValue = parseCurrency(order.total);
+    const taxableValue = totalValue ? totalValue / 1.15 : totalValue;
+    const taxValue = totalValue - taxableValue;
+
+    setItems([
+      {
+        id: 1,
+        description: "-",
+        quantity: 1,
+        price: taxableValue,
+        discount: 0,
+        taxPercent: 15,
+        lineTotal: taxableValue + taxValue,
+      },
+    ]);
+  }, [order.id, order.total]);
+
+  const totals = items.reduce(
+    (acc, item) => {
+      const lineSubtotal = item.quantity * item.price - item.discount;
+      const tax = (lineSubtotal * item.taxPercent) / 100;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + item.discount,
+        tax: acc.tax + tax,
+        total: acc.total + lineSubtotal + tax,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
 
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
@@ -455,41 +486,60 @@ function OrderDetails({
           </div>
         </div>
 
-        {items.length > 0 && (
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-              <h2 className="font-semibold text-slate-800 text-right">بنود الأمر</h2>
-            </div>
-            <div className="p-4 overflow-x-auto">
-              <table className="w-full text-sm text-right">
-                <thead className="bg-slate-100">
-                  <tr>
-                    <th className="px-3 py-2 border border-slate-200">#</th>
-                    <th className="px-3 py-2 border border-slate-200">وصف البند</th>
-                    <th className="px-3 py-2 border border-slate-200">الكمية</th>
-                    <th className="px-3 py-2 border border-slate-200">السعر</th>
-                    <th className="px-3 py-2 border border-slate-200">الخصم</th>
-                    <th className="px-3 py-2 border border-slate-200">الضريبة</th>
-                    <th className="px-3 py-2 border border-slate-200">الإجمالي</th>
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800 text-right">بنود الأمر</h2>
+          </div>
+          <div className="p-4 overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="px-3 py-2 border border-slate-200">#</th>
+                  <th className="px-3 py-2 border border-slate-200">وصف البند</th>
+                  <th className="px-3 py-2 border border-slate-200">الكمية</th>
+                  <th className="px-3 py-2 border border-slate-200">السعر</th>
+                  <th className="px-3 py-2 border border-slate-200">الخصم</th>
+                  <th className="px-3 py-2 border border-slate-200">الضريبة</th>
+                  <th className="px-3 py-2 border border-slate-200">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="px-3 py-2 border border-slate-200">{item.id}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.description || "-"}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.quantity}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.price.toFixed(2)}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.discount.toFixed(2)}</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.taxPercent}%</td>
+                    <td className="px-3 py-2 border border-slate-200">{item.lineTotal.toFixed(2)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-2 border border-slate-200">{item.id}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.description || "-"}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.quantity}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.price.toFixed(2)}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.discount.toFixed(2)}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.taxPercent}%</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.lineTotal.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="border-t border-slate-200 pt-4 flex justify-end mt-6">
+              <div className="w-72 space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-slate-800">{totals.subtotal.toFixed(2)} ريال</span>
+                  <span className="text-slate-600">المجموع الفرعي</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-slate-800">{totals.discount.toFixed(2)} ريال</span>
+                  <span className="text-slate-600">الخصم</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-slate-800">{totals.tax.toFixed(2)} ريال</span>
+                  <span className="text-slate-600">الضريبة</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                  <span className="font-bold text-blue-600">{totals.total.toFixed(2)} ريال</span>
+                  <span className="font-bold text-slate-800">الإجمالي</span>
+                </div>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

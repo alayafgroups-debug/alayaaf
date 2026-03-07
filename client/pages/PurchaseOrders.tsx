@@ -319,21 +319,8 @@ function OrderForm({
         {
           vendor: form.vendor,
           date: form.date,
-          expected_date: form.expectedDate || null,
-          reference_no: form.referenceNo || null,
-          notes: form.notes || null,
-          cost_center: form.costCenter,
-          cost_center_name: form.costCenterName || null,
           total: totals.total.toFixed(2),
           status: "مفتوح",
-          items: items.map((item) => ({
-            description: item.description,
-            unit: item.unit,
-            quantity: item.quantity,
-            price: item.price,
-            discount: item.discount,
-            tax_percent: item.taxPercent,
-          })),
         },
       ]);
 

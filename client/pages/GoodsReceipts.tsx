@@ -82,12 +82,16 @@ export default function GoodsReceipts() {
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
-        .from("goods_receipts")
-        .select("*")
-        .order("date", { ascending: false });
-      if (!error && data) {
-        setReceipts(data.map(mapRow));
+      try {
+        const { data, error } = await supabase
+          .from("goods_receipts")
+          .select("*")
+          .order("date", { ascending: false });
+        if (!error && data) {
+          setReceipts(data.map(mapRow));
+        }
+      } catch (e) {
+        console.warn("goods_receipts table not found or network error:", e);
       }
     };
     load();

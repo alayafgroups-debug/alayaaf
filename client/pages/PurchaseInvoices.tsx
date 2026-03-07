@@ -88,11 +88,15 @@ export default function PurchaseInvoices() {
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
-        .from("purchase_invoices")
-        .select("*")
-        .order("date", { ascending: false });
-      if (!error && data) setInvoices(data.map(mapRow));
+      try {
+        const { data, error } = await supabase
+          .from("purchase_invoices")
+          .select("*")
+          .order("date", { ascending: false });
+        if (!error && data) setInvoices(data.map(mapRow));
+      } catch (e) {
+        console.warn("purchase_invoices table not found or network error:", e);
+      }
     };
     load();
   }, [refreshKey]);

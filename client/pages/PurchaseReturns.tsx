@@ -101,11 +101,15 @@ export default function PurchaseReturns() {
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
-        .from("purchase_returns")
-        .select("*")
-        .order("date", { ascending: false });
-      if (!error && data) setReturns(data.map(mapRow));
+      try {
+        const { data, error } = await supabase
+          .from("purchase_returns")
+          .select("*")
+          .order("date", { ascending: false });
+        if (!error && data) setReturns(data.map(mapRow));
+      } catch (e) {
+        console.warn("purchase_returns table not found or network error:", e);
+      }
     };
     load();
   }, [refreshKey]);

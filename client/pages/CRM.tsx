@@ -1,9 +1,10 @@
 import PlaceholderModule from "@/components/PlaceholderModule";
 import Layout from "@/components/Layout";
-import { Plus, Search, Filter, Eye, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Save, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/hooks/use-toast";
 
 type PartyRow = {
   id: string;
@@ -16,65 +17,83 @@ type PartyRow = {
   status: string;
 };
 
-const customers: PartyRow[] = [];
+type PartyForm = {
+  name: string;
+  type: string;
+  email: string;
+  phone: string;
+  openingBalance: string;
+  creditLimit: string;
+  status: string;
+};
 
+const customers: PartyRow[] = [];
 const vendors: PartyRow[] = [];
+
+const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
+  id: String(row.id ?? ""),
+  name: String(row.name ?? ""),
+  type: String(row.type ?? ""),
+  email: String(row.email ?? ""),
+  phone: String(row.phone ?? ""),
+  openingBalance: String(row.opening_balance ?? row.openingBalance ?? "0.00"),
+  creditLimit: String(row.credit_limit ?? row.creditLimit ?? "0.00"),
+  status: String(row.status ?? "نشط"),
+});
+
+const emptyForm = (isVendor: boolean): PartyForm => ({
+  name: "",
+  type: isVendor ? "مورد محلي" : "شركة",
+  email: "",
+  phone: "",
+  openingBalance: "0",
+  creditLimit: "0",
+  status: "نشط",
+});
 
 export default function CRM() {
   const location = useLocation();
-  const [customerRows, setCustomerRows] = useState<PartyRow[]>(customers);
-  const [vendorRows, setVendorRows] = useState<PartyRow[]>(vendors);
-
-  useEffect(() => {
-    const loadCustomers = async () => {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("*")
-        .order("id", { ascending: false });
-
-      if (!error && data) {
-        setCustomerRows(
-          data.map((row) => ({
-            id: row.id ?? "",
-            name: row.name ?? "",
-            type: row.type ?? "",
-            email: row.email ?? "",
-            phone: row.phone ?? "",
-            openingBalance: row.opening_balance ?? row.openingBalance ?? "0.00",
-            creditLimit: row.credit_limit ?? row.creditLimit ?? "0.00",
-            status: row.status ?? "",
-          }))
-        );
-      }
-    };
-
-    const loadVendors = async () => {
-      const { data, error } = await supabase
-        .from("vendors")
-        .select("*")
-        .order("id", { ascending: false });
-
-      if (!error && data) {
-        setVendorRows(
-          data.map((row) => ({
-            id: row.id ?? "",
-            name: row.name ?? "",
-            type: row.type ?? "",
-            email: row.email ?? "",
-            phone: row.phone ?? "",
-            openingBalance: row.opening_balance ?? row.openingBalance ?? "0.00",
-            creditLimit: row.credit_limit ?? row.creditLimit ?? "0.00",
-            status: row.status ?? "",
-          }))
-        );
-      }
-    };
-
-    loadCustomers();
-    loadVendors();
-  }, []);
   const isVendors = location.pathname.includes("/crm/vendors");
   const isReports = location.pathname.includes("/crm/reports");
+
+  const [customerRows, setCustomerRows] = useState<PartyRow[]>(customers);
+  const [vendorRows, setVendorRows] = useState<PartyRow[]>(vendors);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<PartyForm>(emptyForm(false));
+
+  useEffect(() => {
+    const loadTable = async (
+      tableName: "customers" | "vendors",
+      setter: (rows: PartyRow[]) => void
+    ) => {
+      const result = await supabase
+        .from(tableName)
+        .select("*")
+        .order("id", { ascending: false })
+        .then((res) => ({ ...res, failed: false as const }))
+        .catch(() => ({ data: null, error: new Error("fetch_failed"), failed: true as const }));
+
+      if (!result.error && result.data) {
+        setter(result.data.map((row) => mapPartyRow(row as Record<string, unknown>)));
+      } else {
+        setter([]);
+      }
+    };
+
+    void Promise.allSettled([
+      loadTable("customers", setCustomerRows),
+      loadTable("vendors", setVendorRows),
+    ]);
+  }, []);
+
+  useEffect(() => {
+    if (!isReports) {
+      setForm(emptyForm(isVendors));
+      setIsFormOpen(false);
+    }
+  }, [isVendors, isReports]);
+
   const title = isReports
     ? "التقارير"
     : isVendors
@@ -97,6 +116,69 @@ export default function CRM() {
     ? "ابحث بالاسم أو رقم المورد"
     : "ابحث بالاسم أو رقم العميل";
 
+  const typeOptions = isVendors
+    ? ["مورد محلي", "مورد دولي", "مورد خدمات"]
+    : ["شركة", "فرد", "جهة حكومية"];
+
+  const openCreateForm = () => {
+    if (isReports) return;
+    setForm(emptyForm(isVendors));
+    setIsFormOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      toast({ title: "تنبيه", description: "أدخل الاسم", variant: "destructive" });
+      return;
+    }
+
+    if (!form.phone.trim()) {
+      toast({ title: "تنبيه", description: "أدخل رقم الهاتف", variant: "destructive" });
+      return;
+    }
+
+    const tableName = isVendors ? "vendors" : "customers";
+    const payload = {
+      id: crypto.randomUUID(),
+      name: form.name.trim(),
+      type: form.type,
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      opening_balance: form.openingBalance || "0",
+      credit_limit: form.creditLimit || "0",
+      status: form.status,
+    };
+
+    setSaving(true);
+    const result = await supabase
+      .from(tableName)
+      .insert([payload])
+      .then((res) => ({ ...res, failed: false as const }))
+      .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+
+    if (!result.error) {
+      const newRow = mapPartyRow(payload as unknown as Record<string, unknown>);
+      if (isVendors) {
+        setVendorRows((prev) => [newRow, ...prev]);
+      } else {
+        setCustomerRows((prev) => [newRow, ...prev]);
+      }
+
+      setIsFormOpen(false);
+      toast({ title: "تم الحفظ", description: isVendors ? "تمت إضافة المورد" : "تمت إضافة العميل" });
+    } else {
+      toast({
+        title: "فشل الحفظ",
+        description: result.failed
+          ? "تعذر الاتصال بقاعدة البيانات، تحقق من الاتصال"
+          : "تعذر حفظ البيانات",
+        variant: "destructive",
+      });
+    }
+
+    setSaving(false);
+  };
+
   return (
     <Layout
       subMenu={{
@@ -114,11 +196,120 @@ export default function CRM() {
             <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
             <p className="mt-2 text-sm text-muted-foreground">{description}</p>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success/90">
+          <button
+            onClick={openCreateForm}
+            disabled={isReports}
+            className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Plus className="h-4 w-4" />
             {actionLabel}
           </button>
         </div>
+
+        {!isReports && isFormOpen ? (
+          <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+            <h3 className="text-base font-semibold text-foreground">
+              {isVendors ? "إضافة مورد جديد" : "إضافة عميل جديد"}
+            </h3>
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="text-xs text-muted-foreground">الاسم</label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  placeholder={isVendors ? "اسم المورد" : "اسم العميل"}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">{typeLabel}</label>
+                <select
+                  value={form.type}
+                  onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                >
+                  {typeOptions.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">البريد الإلكتروني</label>
+                <input
+                  value={form.email}
+                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  placeholder="example@email.com"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">الهاتف</label>
+                <input
+                  value={form.phone}
+                  onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  placeholder="05xxxxxxxx"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">الرصيد الافتتاحي</label>
+                <input
+                  type="number"
+                  value={form.openingBalance}
+                  onChange={(e) => setForm((prev) => ({ ...prev, openingBalance: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">حد الائتمان</label>
+                <input
+                  type="number"
+                  value={form.creditLimit}
+                  onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">الحالة</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option>نشط</option>
+                  <option>غير نشط</option>
+                  <option>موقوف</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success/90 disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? "جاري الحفظ..." : "حفظ"}
+              </button>
+
+              <button
+                onClick={() => setIsFormOpen(false)}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground"
+              >
+                <X className="h-4 w-4" />
+                إلغاء
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {isReports ? (
           <div className="space-y-6">
@@ -232,8 +423,9 @@ export default function CRM() {
               <div className="flex flex-wrap gap-2">
                 <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                   <option>{typeLabel}</option>
-                  <option>شركة</option>
-                  <option>فرد</option>
+                  {typeOptions.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
                 </select>
                 <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                   <option>المدينة</option>

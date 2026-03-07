@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import { useNavigate } from "react-router-dom";
 import {
@@ -6,12 +6,9 @@ import {
   ArrowRight,
   Plus,
   Eye,
-  Pencil,
   Trash2,
   Search,
   CheckCircle,
-  Clock,
-  XCircle,
   Save,
   X,
   Printer,
@@ -33,6 +30,17 @@ type PayrollEntry = {
   status: string;
   paidDate: string;
   notes: string;
+};
+
+type PayrollRun = {
+  runNo: string;
+  month: string;
+  monthLabel: string;
+  employeesCount: number;
+  grossTotal: number;
+  deductionsTotal: number;
+  netTotal: number;
+  status: "مدفوعة" | "قيد المعالجة" | "ملغاة";
 };
 
 const emptyEntry = (): PayrollEntry => ({
@@ -65,70 +73,175 @@ const mapRow = (r: Record<string, unknown>): PayrollEntry => ({
   notes: String(r.notes ?? ""),
 });
 
-const STATUS_COLORS: Record<string, string> = {
-  "مدفوع": "bg-green-100 text-green-700 border-green-200",
-  "معلق": "bg-yellow-100 text-yellow-700 border-yellow-200",
-  "ملغي": "bg-red-100 text-red-700 border-red-200",
+const RUN_STATUS_COLORS: Record<PayrollRun["status"], string> = {
+  "مدفوعة": "bg-cyan-100 text-cyan-700 border-cyan-200",
+  "قيد المعالجة": "bg-yellow-100 text-yellow-700 border-yellow-200",
+  "ملغاة": "bg-red-100 text-red-700 border-red-200",
 };
 
 export default function HRPayroll() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [mode, setMode] = useState<"list" | "create" | "edit">("list");
-  const [selected, setSelected] = useState<PayrollEntry | null>(null);
+  const [mode, setMode] = useState<"list" | "create">("list");
   const [fMonth, setFMonth] = useState("");
   const [fSearch, setFSearch] = useState("");
-  const [fStatus, setFStatus] = useState("");
+  const [fStatus, setFStatus] = useState<"" | PayrollRun["status"]>("");
+  const [detailsMonth, setDetailsMonth] = useState("");
 
   useEffect(() => {
     const load = async () => {
       try {
-        const { data, error } = await supabase.from("payroll").select("*").order("month", { ascending: false });
+        const { data, error } = await supabase
+          .from("payroll")
+          .select("*")
+          .order("month", { ascending: false });
         if (!error && data) setEntries(data.map(mapRow));
         else setEntries([]);
-      } catch { setEntries([]); }
+      } catch {
+        setEntries([]);
+      }
     };
     load();
   }, [refreshKey]);
 
-  const filtered = entries.filter((e) => {
-    if (fMonth && e.month !== fMonth) return false;
-    if (fSearch && !e.empName.includes(fSearch) && !e.empId.includes(fSearch)) return false;
-    if (fStatus && e.status !== fStatus) return false;
-    return true;
-  });
+  const filteredEntries = useMemo(() => {
+    return entries.filter((e) => {
+      if (fMonth && e.month !== fMonth) return false;
+      if (fSearch && !e.empName.includes(fSearch) && !e.empId.includes(fSearch)) return false;
+      return true;
+    });
+  }, [entries, fMonth, fSearch]);
 
-  const totalNet = filtered.reduce((s, e) => s + e.netSalary, 0);
-  const paidCount = filtered.filter((e) => e.status === "مدفوع").length;
-  const pendingCount = filtered.filter((e) => e.status === "معلق").length;
+  const payrollRuns = useMemo(() => {
+    const grouped = new Map<string, PayrollEntry[]>();
 
-  if (mode === "create" || (mode === "edit" && selected))
-    return <PayrollForm mode={mode} entry={mode === "edit" ? selected! : undefined} onBack={() => setMode("list")} onSaved={() => { setMode("list"); setRefreshKey((k) => k + 1); }} />;
+    filteredEntries.forEach((entry) => {
+      if (!grouped.has(entry.month)) grouped.set(entry.month, []);
+      grouped.get(entry.month)!.push(entry);
+    });
 
-  const handleMarkPaid = async (entry: PayrollEntry) => {
+    const runs = Array.from(grouped.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([month, monthEntries], index) => {
+        const grossTotal = monthEntries.reduce(
+          (sum, e) => sum + e.basicSalary + e.allowances,
+          0
+        );
+        const deductionsTotal = monthEntries.reduce(
+          (sum, e) => sum + e.deductions,
+          0
+        );
+        const netTotal = monthEntries.reduce((sum, e) => sum + e.netSalary, 0);
+
+        const statuses = monthEntries.map((e) => e.status);
+        const allCanceled = statuses.every((s) => s === "ملغي");
+        const allPaid = statuses.every((s) => s === "مدفوع");
+
+        const status: PayrollRun["status"] = allCanceled
+          ? "ملغاة"
+          : allPaid
+            ? "مدفوعة"
+            : "قيد المعالجة";
+
+        return {
+          runNo: `PAY-${month.replace("-", "")}-${String(index + 1).padStart(2, "0")}`,
+          month,
+          monthLabel: formatMonthLabel(month),
+          employeesCount: monthEntries.length,
+          grossTotal,
+          deductionsTotal,
+          netTotal,
+          status,
+        };
+      });
+
+    if (!fStatus) return runs;
+    return runs.filter((run) => run.status === fStatus);
+  }, [filteredEntries, fStatus]);
+
+  const detailsEntries = useMemo(
+    () => entries.filter((e) => e.month === detailsMonth),
+    [entries, detailsMonth]
+  );
+
+  const totalNet = payrollRuns.reduce((sum, run) => sum + run.netTotal, 0);
+  const paidRunsCount = payrollRuns.filter((run) => run.status === "مدفوعة").length;
+  const processingRunsCount = payrollRuns.filter((run) => run.status === "قيد المعالجة").length;
+
+  if (mode === "create") {
+    return (
+      <PayrollForm
+        onBack={() => setMode("list")}
+        onSaved={() => {
+          setMode("list");
+          setRefreshKey((k) => k + 1);
+        }}
+      />
+    );
+  }
+
+  const handleMarkRunPaid = async (run: PayrollRun) => {
     const today = new Date().toISOString().slice(0, 10);
-    try { await supabase.from("payroll").update({ status: "مدفوع", paid_date: today }).eq("id", entry.id); } catch {}
-    setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, status: "مدفوع", paidDate: today } : e));
-    toast({ title: "تم الدفع", description: `تم تسجيل راتب ${entry.empName} كمدفوع` });
+    try {
+      await supabase
+        .from("payroll")
+        .update({ status: "مدفوع", paid_date: today })
+        .eq("month", run.month);
+    } catch {}
+
+    setEntries((prev) =>
+      prev.map((e) =>
+        e.month === run.month ? { ...e, status: "مدفوع", paidDate: today } : e
+      )
+    );
+
+    toast({ title: "تم اعتماد المسير", description: `تم اعتماد مسير ${run.monthLabel}` });
   };
 
-  const handleDelete = async (entry: PayrollEntry) => {
-    if (!confirm(`حذف سجل راتب "${entry.empName}"؟`)) return;
-    try { await supabase.from("payroll").delete().eq("id", entry.id); } catch {}
-    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+  const handleDeleteRun = async (run: PayrollRun) => {
+    if (!confirm(`حذف مسير الرواتب للفترة ${run.monthLabel}؟`)) return;
+
+    try {
+      await supabase.from("payroll").delete().eq("month", run.month);
+    } catch {}
+
+    setEntries((prev) => prev.filter((e) => e.month !== run.month));
+    if (detailsMonth === run.month) setDetailsMonth("");
     toast({ title: "تم الحذف" });
   };
 
   const handlePrint = () => {
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>مسير الرواتب</title>
-    <style>body{font-family:Arial;direction:rtl;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1d4ed8;color:white}</style></head><body>
-    <h2>مسير الرواتب</h2>
-    <table><thead><tr><th>رقم الموظف</th><th>الاسم</th><th>القسم</th><th>الشهر</th><th>الراتب الأساسي</th><th>البدلات</th><th>الاستقطاعات</th><th>الصافي</th><th>الحالة</th></tr></thead><tbody>
-    ${filtered.map((e) => `<tr><td>${e.empId}</td><td>${e.empName}</td><td>${e.department}</td><td>${e.month}</td><td>${e.basicSalary.toLocaleString()}</td><td>${e.allowances.toLocaleString()}</td><td>${e.deductions.toLocaleString()}</td><td>${e.netSalary.toLocaleString()}</td><td>${e.status}</td></tr>`).join("")}
-    </tbody></table><p><strong>الإجمالي: ${totalNet.toLocaleString()} ر.س</strong></p></body></html>`);
+
+    w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>مسير الرواتب الشهري</title>
+      <style>
+      body{font-family:Arial;direction:rtl;padding:20px}
+      table{width:100%;border-collapse:collapse}
+      th,td{border:1px solid #ddd;padding:8px;text-align:right}
+      th{background:#111827;color:#fff}
+      </style></head><body>
+      <h2>مسير الرواتب الشهري</h2>
+      <table><thead><tr>
+      <th>رقم المسير</th><th>الفترة</th><th>عدد الموظفين</th><th>إجمالي الرواتب</th><th>إجمالي الخصومات</th><th>صافي الرواتب</th><th>الحالة</th>
+      </tr></thead><tbody>
+      ${payrollRuns
+        .map(
+          (r) => `<tr>
+            <td>${r.runNo}</td>
+            <td>${r.monthLabel}</td>
+            <td>${r.employeesCount}</td>
+            <td>${r.grossTotal.toLocaleString()}</td>
+            <td>${r.deductionsTotal.toLocaleString()}</td>
+            <td>${r.netTotal.toLocaleString()}</td>
+            <td>${r.status}</td>
+          </tr>`
+        )
+        .join("")}
+      </tbody></table>
+      </body></html>`);
+
     w.document.close();
     w.print();
   };
@@ -136,138 +249,214 @@ export default function HRPayroll() {
   return (
     <Layout>
       <div dir="rtl" className="space-y-4">
-        {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <DollarSign className="h-7 w-7 text-green-600" />
-            <h1 className="text-2xl font-bold">مسير الرواتب</h1>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => navigate("/hr/dashboard")} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition">
-              <ArrowRight className="h-4 w-4" /> رجوع
-            </button>
-            <button onClick={handlePrint} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition">
-              <Printer className="h-4 w-4" /> طباعة
-            </button>
-            <button onClick={() => setMode("create")} className="flex items-center gap-1 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition">
-              <Plus className="h-4 w-4" /> إدخال راتب
-            </button>
-          </div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <DollarSign className="h-6 w-6 text-cyan-600" />
+            مسير الرواتب الشهري
+          </h1>
+          <button
+            onClick={() => navigate("/hr/dashboard")}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-slate-700 text-white text-sm hover:bg-slate-800 transition"
+          >
+            <ArrowRight className="h-4 w-4" /> رجوع
+          </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-blue-700 rounded-xl p-4 text-white text-center shadow">
-            <div className="text-2xl font-bold">{totalNet.toLocaleString("ar-SA")} ر.س</div>
-            <div className="text-sm opacity-90 mt-1">إجمالي الرواتب</div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow overflow-hidden">
+          <div className="bg-blue-600 text-white px-4 py-2 text-sm font-semibold flex items-center justify-between">
+            <span>جميع مسيرات الرواتب</span>
+            <span className="bg-blue-800 px-2 py-0.5 rounded text-xs">{payrollRuns.length} مسير</span>
           </div>
-          <div className="bg-green-600 rounded-xl p-4 text-white text-center shadow">
-            <div className="text-2xl font-bold">{paidCount}</div>
-            <div className="text-sm opacity-90 mt-1">تم الصرف</div>
-          </div>
-          <div className="bg-yellow-500 rounded-xl p-4 text-white text-center shadow">
-            <div className="text-2xl font-bold">{pendingCount}</div>
-            <div className="text-sm opacity-90 mt-1">معلق</div>
-          </div>
-        </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow p-4 border border-gray-100">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="relative">
-              <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
-              <input value={fSearch} onChange={(e) => setFSearch(e.target.value)} placeholder="بحث بالاسم أو الرقم" className="w-full pr-9 pl-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-green-500" />
+          <div className="p-3 border-b bg-gray-50">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div className="relative md:col-span-2">
+                <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
+                <input
+                  value={fSearch}
+                  onChange={(e) => setFSearch(e.target.value)}
+                  placeholder="بحث باسم الموظف أو رقمه"
+                  className="w-full pr-9 pl-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <input
+                type="month"
+                value={fMonth}
+                onChange={(e) => setFMonth(e.target.value)}
+                className="px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <select
+                value={fStatus}
+                onChange={(e) => setFStatus(e.target.value as "" | PayrollRun["status"])}
+                className="px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">كل الحالات</option>
+                <option value="مدفوعة">مدفوعة</option>
+                <option value="قيد المعالجة">قيد المعالجة</option>
+                <option value="ملغاة">ملغاة</option>
+              </select>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handlePrint}
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50"
+                >
+                  <Printer className="h-4 w-4 inline ml-1" /> طباعة
+                </button>
+                <button
+                  onClick={() => setMode("create")}
+                  className="flex-1 px-3 py-2 rounded-lg bg-green-600 text-white text-sm hover:bg-green-700"
+                >
+                  <Plus className="h-4 w-4 inline ml-1" /> إضافة
+                </button>
+              </div>
             </div>
-            <input type="month" value={fMonth} onChange={(e) => setFMonth(e.target.value)} className="px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-green-500" />
-            <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white">
-              <option value="">كل الحالات</option>
-              <option>مدفوع</option>
-              <option>معلق</option>
-              <option>ملغي</option>
-            </select>
-            <button onClick={() => { setFSearch(""); setFMonth(""); setFStatus(""); }} className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm hover:bg-gray-200 transition">
-              إعادة ضبط
-            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead>
+                <tr className="bg-gray-900 text-white">
+                  <th className="px-3 py-2 font-semibold">#</th>
+                  <th className="px-3 py-2 font-semibold">رقم المسير</th>
+                  <th className="px-3 py-2 font-semibold">الفترة</th>
+                  <th className="px-3 py-2 font-semibold">عدد الموظفين</th>
+                  <th className="px-3 py-2 font-semibold">إجمالي الرواتب</th>
+                  <th className="px-3 py-2 font-semibold">إجمالي الخصومات</th>
+                  <th className="px-3 py-2 font-semibold">صافي الرواتب</th>
+                  <th className="px-3 py-2 font-semibold">الحالة</th>
+                  <th className="px-3 py-2 font-semibold">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payrollRuns.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-14 text-center text-gray-400">
+                      لا توجد مسيرات رواتب
+                    </td>
+                  </tr>
+                ) : (
+                  payrollRuns.map((run, index) => (
+                    <tr
+                      key={run.runNo}
+                      className={cn(
+                        "border-b border-gray-100 hover:bg-blue-50 transition",
+                        detailsMonth === run.month && "bg-blue-50"
+                      )}
+                    >
+                      <td className="px-3 py-2 text-gray-500">{index + 1}</td>
+                      <td className="px-3 py-2 font-mono text-blue-700 font-semibold">{run.runNo}</td>
+                      <td className="px-3 py-2">{run.monthLabel}</td>
+                      <td className="px-3 py-2">
+                        <span className="inline-block bg-cyan-100 text-cyan-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                          {run.employeesCount} موظفين
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-blue-700 font-semibold">{run.grossTotal.toLocaleString("ar-SA", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 text-red-500">{run.deductionsTotal.toLocaleString("ar-SA", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 text-emerald-600 font-bold">{run.netTotal.toLocaleString("ar-SA", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2">
+                        <span className={cn("inline-block px-2 py-0.5 rounded text-xs font-semibold border", RUN_STATUS_COLORS[run.status])}>
+                          {run.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setDetailsMonth(detailsMonth === run.month ? "" : run.month)}
+                            className="p-1.5 rounded bg-sky-600 text-white hover:bg-sky-700"
+                            title="عرض التفاصيل"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                          {run.status !== "مدفوعة" && (
+                            <button
+                              onClick={() => handleMarkRunPaid(run)}
+                              className="p-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                              title="اعتماد المسير"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteRun(run)}
+                            className="p-1.5 rounded bg-red-600 text-white hover:bg-red-700"
+                            title="حذف المسير"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {payrollRuns.length > 0 && (
+                <tfoot>
+                  <tr className="bg-gray-100 font-bold">
+                    <td colSpan={6} className="px-3 py-2">الإجمالي</td>
+                    <td className="px-3 py-2 text-blue-700">{totalNet.toLocaleString("ar-SA", { minimumFractionDigits: 2 })}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl shadow border border-gray-100 overflow-x-auto">
-          <table className="w-full text-sm text-right">
-            <thead>
-              <tr className="bg-green-700 text-white">
-                <th className="px-3 py-3 font-semibold">رقم الموظف</th>
-                <th className="px-3 py-3 font-semibold">الاسم</th>
-                <th className="px-3 py-3 font-semibold">القسم</th>
-                <th className="px-3 py-3 font-semibold">الشهر</th>
-                <th className="px-3 py-3 font-semibold">الأساسي</th>
-                <th className="px-3 py-3 font-semibold">البدلات</th>
-                <th className="px-3 py-3 font-semibold">الاستقطاعات</th>
-                <th className="px-3 py-3 font-semibold">الصافي</th>
-                <th className="px-3 py-3 font-semibold">الحالة</th>
-                <th className="px-3 py-3 font-semibold">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="py-12 text-center text-gray-400">لا توجد بيانات</td></tr>
-              ) : filtered.map((e, idx) => (
-                <tr key={e.id} className={cn("border-b border-gray-100 hover:bg-green-50 transition", idx % 2 === 0 ? "bg-white" : "bg-gray-50/50")}>
-                  <td className="px-3 py-3 font-mono text-green-700 font-semibold">{e.empId}</td>
-                  <td className="px-3 py-3 font-medium">{e.empName}</td>
-                  <td className="px-3 py-3 text-gray-600 max-w-[130px] truncate">{e.department}</td>
-                  <td className="px-3 py-3 text-gray-600">{e.month}</td>
-                  <td className="px-3 py-3">{e.basicSalary.toLocaleString()} ر.س</td>
-                  <td className="px-3 py-3 text-green-600">+{e.allowances.toLocaleString()}</td>
-                  <td className="px-3 py-3 text-red-500">-{e.deductions.toLocaleString()}</td>
-                  <td className="px-3 py-3 font-bold text-blue-700">{e.netSalary.toLocaleString()} ر.س</td>
-                  <td className="px-3 py-3">
-                    <span className={cn("inline-block px-2 py-0.5 rounded-full text-xs font-semibold border", STATUS_COLORS[e.status] ?? "bg-gray-100 text-gray-600")}>
-                      {e.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1">
-                      {e.status === "معلق" && (
-                        <button onClick={() => handleMarkPaid(e)} className="p-1.5 rounded bg-green-500 text-white hover:bg-green-600 transition" title="تسجيل كمدفوع">
-                          <CheckCircle className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      <button onClick={() => { setSelected(e); setMode("edit"); }} className="p-1.5 rounded bg-blue-500 text-white hover:bg-blue-600 transition" title="تعديل">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => handleDelete(e)} className="p-1.5 rounded bg-red-500 text-white hover:bg-red-600 transition" title="حذف">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {filtered.length > 0 && (
-              <tfoot>
-                <tr className="bg-gray-50 font-bold text-gray-700 border-t-2">
-                  <td colSpan={7} className="px-3 py-3 text-right">الإجمالي</td>
-                  <td className="px-3 py-3 text-blue-700">{totalNet.toLocaleString()} ر.س</td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
+        {detailsMonth && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow overflow-hidden">
+            <div className="bg-slate-700 text-white px-4 py-2 text-sm font-semibold">
+              تفاصيل المسير - {formatMonthLabel(detailsMonth)}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-right">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700">
+                    <th className="px-3 py-2">رقم الموظف</th>
+                    <th className="px-3 py-2">الاسم</th>
+                    <th className="px-3 py-2">القسم</th>
+                    <th className="px-3 py-2">الأساسي</th>
+                    <th className="px-3 py-2">البدلات</th>
+                    <th className="px-3 py-2">الاستقطاعات</th>
+                    <th className="px-3 py-2">الصافي</th>
+                    <th className="px-3 py-2">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailsEntries.map((e) => (
+                    <tr key={e.id} className="border-b border-gray-100">
+                      <td className="px-3 py-2 font-mono text-blue-700">{e.empId}</td>
+                      <td className="px-3 py-2">{e.empName}</td>
+                      <td className="px-3 py-2">{e.department}</td>
+                      <td className="px-3 py-2">{e.basicSalary.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-green-600">{e.allowances.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-red-500">{e.deductions.toLocaleString()}</td>
+                      <td className="px-3 py-2 font-semibold text-emerald-600">{e.netSalary.toLocaleString()}</td>
+                      <td className="px-3 py-2">{e.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <SummaryCard color="bg-cyan-500" value={totalNet.toLocaleString("ar-SA", { maximumFractionDigits: 0 })} label="إجمالي الرواتب" />
+          <SummaryCard color="bg-amber-500" value={processingRunsCount} label="قيد المعالجة" />
+          <SummaryCard color="bg-emerald-600" value={paidRunsCount} label="مسيرات مدفوعة" />
+          <SummaryCard color="bg-blue-600" value={payrollRuns.length} label="إجمالي المسيرات" />
         </div>
       </div>
     </Layout>
   );
 }
 
-// ─── Payroll Form ─────────────────────────────────────────────────────────────
-function PayrollForm({ mode, entry, onBack, onSaved }: {
-  mode: "create" | "edit";
-  entry?: PayrollEntry;
-  onBack: () => void;
-  onSaved: () => void;
-}) {
-  const [form, setForm] = useState<PayrollEntry>(entry ?? emptyEntry());
+function PayrollForm({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<PayrollEntry>(emptyEntry());
   const [saving, setSaving] = useState(false);
 
   const set = (field: keyof PayrollEntry, value: string | number) => {
@@ -279,14 +468,31 @@ function PayrollForm({ mode, entry, onBack, onSaved }: {
   };
 
   const handleSave = async () => {
-    if (!form.empName.trim()) { toast({ title: "خطأ", description: "اسم الموظف مطلوب", variant: "destructive" }); return; }
+    if (!form.empName.trim()) {
+      toast({ title: "خطأ", description: "اسم الموظف مطلوب", variant: "destructive" });
+      return;
+    }
+
     setSaving(true);
     try {
-      const payload = { id: form.id, emp_id: form.empId, emp_name: form.empName, department: form.department, month: form.month, basic_salary: form.basicSalary, allowances: form.allowances, deductions: form.deductions, net_salary: form.netSalary, status: form.status, paid_date: form.paidDate || null, notes: form.notes };
-      if (mode === "create") await supabase.from("payroll").insert([payload]);
-      else await supabase.from("payroll").update(payload).eq("id", form.id);
+      const payload = {
+        id: form.id,
+        emp_id: form.empId,
+        emp_name: form.empName,
+        department: form.department,
+        month: form.month,
+        basic_salary: form.basicSalary,
+        allowances: form.allowances,
+        deductions: form.deductions,
+        net_salary: form.netSalary,
+        status: form.status,
+        paid_date: form.paidDate || null,
+        notes: form.notes,
+      };
+      await supabase.from("payroll").insert([payload]);
     } catch {}
-    toast({ title: mode === "create" ? "تم الإضافة" : "تم التعديل", description: `راتب ${form.empName}` });
+
+    toast({ title: "تم الإضافة", description: `تمت إضافة راتب ${form.empName}` });
     setSaving(false);
     onSaved();
   };
@@ -295,10 +501,9 @@ function PayrollForm({ mode, entry, onBack, onSaved }: {
     <Layout>
       <div dir="rtl" className="space-y-6 max-w-3xl">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <DollarSign className="h-7 w-7 text-green-600" />
-            <h1 className="text-2xl font-bold">{mode === "create" ? "إدخال راتب جديد" : "تعديل الراتب"}</h1>
-          </div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <DollarSign className="h-6 w-6 text-green-600" /> إضافة راتب
+          </h1>
           <div className="flex gap-2">
             <button onClick={onBack} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition">
               <X className="h-4 w-4" /> إلغاء
@@ -315,28 +520,28 @@ function PayrollForm({ mode, entry, onBack, onSaved }: {
             <F label="اسم الموظف *" value={form.empName} onChange={(v) => set("empName", v)} placeholder="الاسم الكامل" />
             <F label="القسم" value={form.department} onChange={(v) => set("department", v)} placeholder="القسم" />
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <F label="الشهر" value={form.month} onChange={(v) => set("month", v)} type="month" />
+            <F label="الفترة" value={form.month} onChange={(v) => set("month", v)} type="month" />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
-              <select value={form.status} onChange={(e) => set("status", e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
-                <option>معلق</option><option>مدفوع</option><option>ملغي</option>
+              <select value={form.status} onChange={(e) => set("status", e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option>معلق</option>
+                <option>مدفوع</option>
+                <option>ملغي</option>
               </select>
             </div>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <NumF label="الراتب الأساسي (ر.س)" value={form.basicSalary} onChange={(v) => set("basicSalary", v)} />
             <NumF label="البدلات (ر.س)" value={form.allowances} onChange={(v) => set("allowances", v)} />
-            <NumF label="الاستقطاعات (ر.س)" value={form.deductions} onChange={(v) => set("deductions", v)} />
+            <NumF label="الخصومات (ر.س)" value={form.deductions} onChange={(v) => set("deductions", v)} />
           </div>
-          <div className="bg-green-50 rounded-xl p-4 flex items-center justify-between">
-            <span className="text-green-700 font-semibold">صافي الراتب</span>
-            <span className="text-2xl font-bold text-green-700">{form.netSalary.toLocaleString()} ر.س</span>
-          </div>
-          {form.status === "مدفوع" && <F label="تاريخ الصرف" value={form.paidDate} onChange={(v) => set("paidDate", v)} type="date" />}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 resize-none" />
+
+          <div className="bg-blue-50 rounded-xl p-4 flex items-center justify-between">
+            <span className="text-blue-700 font-semibold">صافي الراتب</span>
+            <span className="text-2xl font-bold text-blue-700">{form.netSalary.toLocaleString()} ر.س</span>
           </div>
         </div>
       </div>
@@ -344,11 +549,20 @@ function PayrollForm({ mode, entry, onBack, onSaved }: {
   );
 }
 
+function SummaryCard({ color, value, label }: { color: string; value: string | number; label: string }) {
+  return (
+    <div className={cn("rounded-md p-4 text-white text-center shadow", color)}>
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-sm opacity-90 mt-1">{label}</div>
+    </div>
+  );
+}
+
 function F({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
     </div>
   );
 }
@@ -357,7 +571,29 @@ function NumF({ label, value, onChange }: { label: string; value: number; onChan
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} min={0} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500" />
+      <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} min={0} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
     </div>
   );
+}
+
+function formatMonthLabel(month: string) {
+  const [year, monthNum] = month.split("-");
+  const monthNames = [
+    "يناير",
+    "فبراير",
+    "مارس",
+    "أبريل",
+    "مايو",
+    "يونيو",
+    "يوليو",
+    "أغسطس",
+    "سبتمبر",
+    "أكتوبر",
+    "نوفمبر",
+    "ديسمبر",
+  ];
+
+  const idx = Number(monthNum) - 1;
+  if (idx < 0 || idx > 11) return month;
+  return `${monthNames[idx]} ${year}`;
 }

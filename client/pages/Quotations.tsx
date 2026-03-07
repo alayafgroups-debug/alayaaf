@@ -10,8 +10,27 @@ import {
   Edit,
   Eye,
   FileSpreadsheet,
+  Save,
+  FileText,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+  FormHeaderBar,
+  FormCard,
+  SectionHeader,
+  AddItemBtn,
+  TotalsSummary,
+  PrimaryBtn,
+  SecondaryBtn,
+} from "@/components/SalesPageUI";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -422,165 +441,82 @@ function QuotationsList({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <FileSpreadsheet className="h-6 w-6 text-primary" />
-          <h1>عروض الأسعار</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-[#1b8c56] text-white px-4 py-2 rounded-md hover:bg-[#157347] transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          إضافة عرض سعر جديد
-        </button>
-      </div>
+      <PageHeader
+        icon={FileSpreadsheet}
+        title="عروض الأسعار"
+        subtitle="إدارة وتتبع جميع عروض الأسعار"
+        actionLabel="إضافة عرض سعر جديد"
+        onAction={onCreateClick}
+        gradient="from-blue-600 to-indigo-700"
+      />
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1 md:col-span-2">
-          <label className="text-sm text-slate-600 text-right block">
-            البحث
-          </label>
-          <input
-            type="text"
-            placeholder="رقم العرض، المرجع، اسم العميل..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right"
-            dir="rtl"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            العميل
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            الحالة
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="md:col-span-4 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm">
-            <X className="h-4 w-4" />
-            إعادة تعيين
-          </button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-primary px-6 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm font-medium">
-            <Search className="h-4 w-4" />
-            بحث
-          </button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput label="البحث" placeholder="رقم العرض، المرجع، اسم العميل..." colSpan={2} />
+        <FilterSelect label="العميل" options={["الكل"]} />
+        <FilterSelect label="الحالة" options={["الكل", "مفتوح", "مغلق"]} />
+        <FilterActions />
+      </FilterBar>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold text-right">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold text-right">الحالة</th>
-              <th className="px-4 py-3 font-semibold text-right">الإجمالي</th>
-              <th className="px-4 py-3 font-semibold text-right">العميل</th>
-              <th className="px-4 py-3 font-semibold text-right">
-                تاريخ الصلاحية
-              </th>
-              <th className="px-4 py-3 font-semibold text-right">تاريخ العرض</th>
-              <th className="px-4 py-3 font-semibold text-right">رقم العرض</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {quotations.map((quo, i) => (
-              <tr
-                key={quo.id}
-                className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
+      <DataTable
+        headers={["الإجراءات", "الحالة", "الإجمالي", "العميل", "تاريخ الصلاحية", "تاريخ العرض", "رقم العرض"]}
+        gradient="from-[#1e293b] to-[#334155]"
+      >
+        {quotations.map((quo, i) => (
+          <tr
+            key={quo.id}
+            className={cn("hover:bg-muted/30 transition-colors", i % 2 !== 0 && "bg-muted/10")}
+          >
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(quo)} />
+                <ActionBtn icon={Edit} label="تعديل" color="green" onClick={() => onEdit(quo)} />
+                <ActionBtn icon={ArrowLeftRight} label="تحويل لفاتورة" color="amber" />
+                <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(quo)} />
+                <ActionBtn icon={Trash2} color="red" onClick={() => onDelete(quo.id)} />
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right space-y-1">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
+                  quo.status === "مفتوح"
+                    ? "bg-sky-50 text-sky-700 border-sky-200"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                )}
               >
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <button
-                      title="عرض عرض السعر"
-                      onClick={() => onView(quo)}
-                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="تعديل عرض السعر"
-                      onClick={() => onEdit(quo)}
-                      className="p-1.5 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-amber-700 border border-amber-200 rounded hover:bg-amber-50 transition-colors text-xs font-semibold">
-                      <ArrowLeftRight className="h-3.5 w-3.5" />
-                      تحويل إلى فاتورة مبيعات
-                    </button>
-                    <button
-                      title="تحميل PDF"
-                      onClick={() => onDownloadPdf(quo)}
-                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
-                    >
-                      تحميل PDF
-                    </button>
-                    <button
-                      title="حذف عرض السعر"
-                      onClick={() => onDelete(quo.id)}
-                      className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle text-right space-y-1">
-                  <div
-                    className={cn(
-                      "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap",
-                      quo.statusColor
-                    )}
-                  >
-                    {quo.status === "مغلق" ? (
-                      <span className="h-2 w-2 bg-white rounded-full ml-1" />
-                    ) : (
-                      <FileSpreadsheet className="h-3 w-3 ml-1" />
-                    )}
-                    {quo.status}
-                  </div>
-                  {quo.subStatus && (
-                    <div
-                      className={cn(
-                        "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap block mt-1",
-                        quo.subStatusColor
-                      )}
-                    >
-                      <ShoppingCart className="h-3 w-3 ml-1" />
-                      {quo.subStatus}
-                    </div>
+                {quo.status}
+              </span>
+              {quo.subStatus && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap block mt-1",
+                    quo.subStatusColor
                   )}
-                </td>
-                <td className="px-4 py-3 align-middle text-right whitespace-nowrap">
-                  {quo.total}
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  {quo.customer}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-slate-600">
-                  {quo.validity}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-slate-600">
-                  {quo.date}
-                </td>
-                <td className="px-4 py-3 align-middle text-right font-medium text-blue-600 hover:underline cursor-pointer">
-                  {quo.id}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                >
+                  {quo.subStatus}
+                </span>
+              )}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap font-bold text-primary">
+              {quo.total}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-foreground font-medium">
+              {quo.customer}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+              {quo.validity}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+              {quo.date}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right font-bold text-primary hover:underline cursor-pointer">
+              {quo.id}
+            </td>
+          </tr>
+        ))}
+      </DataTable>
     </div>
   );
 }
@@ -647,63 +583,63 @@ function QuotationDetails({
   );
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تفاصيل عرض السعر</h1>
+          <h1 className="text-lg font-extrabold text-foreground">تفاصيل عرض السعر</h1>
           <FileSpreadsheet className="h-5 w-5 text-blue-600" />
         </div>
       </div>
 
       <div className="p-4 space-y-6">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">بيانات العرض</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">بيانات العرض</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">رقم العرض</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">رقم العرض</label>
+              <div className="text-base text-sm font-bold text-foreground text-right">
                 {quotation.id}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">العميل</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">العميل</label>
+              <div className="text-base text-sm font-bold text-foreground text-right">
                 {quotation.customer}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ العرض</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ العرض</label>
+              <div className="text-base text-sm font-bold text-foreground text-right">
                 {quotation.date}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ الصلاحية</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ الصلاحية</label>
+              <div className="text-base text-sm font-bold text-foreground text-right">
                 {quotation.validity}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">الإجمالي</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">الإجمالي</label>
+              <div className="text-base text-sm font-bold text-foreground text-right">
                 {quotation.total}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">بنود العرض</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">بنود العرض</h2>
           </div>
           <div className="p-4 overflow-x-auto">
             <table className="w-full text-sm text-right">
@@ -738,19 +674,19 @@ function QuotationDetails({
             <div className="border-t border-slate-200 pt-4 flex justify-end mt-6">
               <div className="w-64 space-y-2">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.subtotal.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">المجموع الفرعي</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.discount.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">الخصم</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.tax.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">الضريبة</span>
@@ -881,73 +817,73 @@ function QuotationEdit({
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تعديل عرض السعر</h1>
+          <h1 className="text-lg font-extrabold text-foreground">تعديل عرض السعر</h1>
           <Edit className="h-5 w-5 text-emerald-600" />
         </div>
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 transition-colors"
+          className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:shadow-lg transition-all"
         >
           حفظ التعديلات
         </button>
       </div>
 
       <div className="p-4 space-y-6">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">معلومات العرض</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">معلومات العرض</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ العرض</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ العرض</label>
               <input
                 type="date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ الصلاحية</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ الصلاحية</label>
               <input
                 type="date"
                 value={validity}
                 onChange={(event) => setValidity(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">العميل</label>
               <input
                 type="text"
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-between">
             <button
               onClick={handleAddItem}
-              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+              className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
             >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
-            <h2 className="font-semibold text-slate-800">بنود العرض</h2>
+            <h2 className="text-sm font-bold text-foreground">بنود العرض</h2>
           </div>
           <div className="p-4 overflow-x-auto">
             <table className="w-full text-sm text-right mb-4">
@@ -975,7 +911,7 @@ function QuotationEdit({
                         <div className="flex items-center justify-center gap-1 h-10">
                           <button
                             onClick={() => removeItem(item.id)}
-                            className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                            className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -986,7 +922,7 @@ function QuotationEdit({
                           type="text"
                           value={lineTotal.toFixed(2)}
                           disabled
-                          className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -998,7 +934,7 @@ function QuotationEdit({
                               taxPercent: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1010,7 +946,7 @@ function QuotationEdit({
                               discount: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1022,7 +958,7 @@ function QuotationEdit({
                               price: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1034,7 +970,7 @@ function QuotationEdit({
                               quantity: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1047,7 +983,7 @@ function QuotationEdit({
                               unit: event.target.value,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
@@ -1060,7 +996,7 @@ function QuotationEdit({
                               description: event.target.value,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none min-h-[88px] resize-y"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                         />
                       </td>
                     </tr>
@@ -1072,19 +1008,19 @@ function QuotationEdit({
             <div className="border-t border-slate-200 pt-4 flex justify-end">
               <div className="w-64 space-y-2">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.subtotal.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">المجموع الفرعي</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.discount.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">الخصم</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.tax.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">الضريبة</span>
@@ -1207,19 +1143,19 @@ function QuotationForm({
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+    <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <div className="flex gap-2">
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-slate-500 text-white text-sm font-medium rounded hover:bg-slate-600 transition-colors"
+            className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all"
           >
             إلغاء
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-blue-600 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20 hover:shadow-lg transition-all flex items-center gap-2"
           >
             <svg
               className="h-4 w-4"
@@ -1238,14 +1174,14 @@ function QuotationForm({
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">
+          <h1 className="text-lg font-extrabold text-foreground">
             إضافة عرض سعر جديد
           </h1>
           <Plus className="h-5 w-5 text-blue-600" />
         </div>
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-slate-600 text-white text-sm font-medium rounded hover:bg-slate-700 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <svg
@@ -1266,9 +1202,9 @@ function QuotationForm({
 
       <div className="p-4 space-y-6">
         {/* Basic Info */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">
               معلومات العرض الأساسية
             </h2>
             <svg
@@ -1287,7 +1223,7 @@ function QuotationForm({
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 مرجع العرض
               </label>
               <input
@@ -1295,22 +1231,22 @@ function QuotationForm({
                 value={reference}
                 onChange={(event) => setReference(event.target.value)}
                 placeholder="أدخل مرجع العرض (اختياري)"
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 العملة
               </label>
               <input
                 type="text"
                 defaultValue="SAR"
                 disabled
-                className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-center text-slate-600 outline-none"
+                className="w-full px-3 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-center text-muted-foreground outline-none"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 الحالة
               </label>
               <div className="w-full px-3 py-2 border border-slate-300 rounded bg-white flex justify-center">
@@ -1323,29 +1259,29 @@ function QuotationForm({
               </p>
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 تاريخ الصلاحية <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={validity}
                 onChange={(event) => setValidity(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 تاريخ العرض <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1 md:col-span-3">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 العميل <span className="text-red-500">*</span>
               </label>
               <input
@@ -1353,12 +1289,12 @@ function QuotationForm({
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
                 placeholder="اكتب اسم العميل..."
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-span-3">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 ملاحظات
               </label>
               <textarea
@@ -1366,7 +1302,7 @@ function QuotationForm({
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="أدخل ملاحظات إضافية"
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none"
               />
             </div>
 
@@ -1374,17 +1310,17 @@ function QuotationForm({
         </div>
 
         {/* Items */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-between">
             <button
               onClick={handleAddItem}
-              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+              className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
             >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-slate-800">بنود العرض</h2>
+              <h2 className="text-sm font-bold text-foreground">بنود العرض</h2>
               <svg
                 className="h-5 w-5 text-slate-500"
                 fill="none"
@@ -1420,7 +1356,7 @@ function QuotationForm({
                       <div className="flex items-center justify-end gap-2 h-10">
                         <button
                           onClick={() => removeItem(item.id)}
-                          className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                          className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1434,7 +1370,7 @@ function QuotationForm({
                             taxPercent: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       >
                         <option value={15}>ضريبة 15% (15.0000%)</option>
                         <option value={0}>معفاة (0%)</option>
@@ -1449,7 +1385,7 @@ function QuotationForm({
                             discount: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
@@ -1461,7 +1397,7 @@ function QuotationForm({
                             price: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
@@ -1473,7 +1409,7 @@ function QuotationForm({
                             quantity: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
@@ -1486,7 +1422,7 @@ function QuotationForm({
                             unit: event.target.value,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 pl-1 align-top min-w-[320px]">
@@ -1499,7 +1435,7 @@ function QuotationForm({
                             description: event.target.value,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none min-h-[88px] resize-y"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                       />
                     </td>
                   </tr>
@@ -1511,19 +1447,19 @@ function QuotationForm({
             <div className="border-t border-slate-200 pt-4 flex justify-end">
               <div className="w-64 space-y-2">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.subtotal.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">المجموع الفرعي</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.discount.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">الخصم</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-bold text-foreground">
                     {totals.tax.toFixed(2)} ريال
                   </span>
                   <span className="text-slate-600">الضريبة</span>

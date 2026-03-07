@@ -13,8 +13,18 @@ import {
   FileText,
   CreditCard,
   Settings,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -228,170 +238,78 @@ function InvoicesList({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <FileText className="h-6 w-6 text-primary" />
-          <h1>فواتير المبيعات</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-[#1b8c56] text-white px-4 py-2 rounded-md hover:bg-[#157347] transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          إضافة فاتورة مبيعات جديدة
-        </button>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="فواتير المبيعات"
+        subtitle="إدارة وتتبع جميع فواتير المبيعات والمدفوعات"
+        actionLabel="إضافة فاتورة مبيعات جديدة"
+        onAction={onCreateClick}
+        gradient="from-emerald-600 to-teal-700"
+      />
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1 md:col-span-2">
-          <label className="text-sm text-slate-600 text-right block">
-            البحث
-          </label>
-          <input
-            type="text"
-            placeholder="رقم الفاتورة، المرجع، اسم العميل..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right"
-            dir="rtl"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            العميل
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            الحالة
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="md:col-span-4 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm">
-            <X className="h-4 w-4" />
-            إعادة تعيين
-          </button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-primary px-6 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm font-medium">
-            <Search className="h-4 w-4" />
-            بحث
-          </button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput label="البحث" placeholder="رقم الفاتورة، المرجع، اسم العميل..." colSpan={2} />
+        <FilterSelect label="العميل" options={["الكل"]} />
+        <FilterSelect label="الحالة" options={["الكل", "مفتوحة", "مدفوعة جزئياً", "مدفوعة بالكامل"]} />
+        <FilterActions />
+      </FilterBar>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold text-right">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold text-right">الحالة</th>
-              <th className="px-4 py-3 font-semibold text-right">
-                المبلغ المتبقي
-              </th>
-              <th className="px-4 py-3 font-semibold text-right">
-                المبلغ المدفوع
-              </th>
-              <th className="px-4 py-3 font-semibold text-right">الإجمالي</th>
-              <th className="px-4 py-3 font-semibold text-right">العميل</th>
-              <th className="px-4 py-3 font-semibold text-right">
-                تاريخ الاستحقاق
-              </th>
-              <th className="px-4 py-3 font-semibold text-right">
-                تاريخ الفاتورة
-              </th>
-              <th className="px-4 py-3 font-semibold text-right">رقم الفاتورة</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {invoices.map((invoice, i) => (
-              <tr
-                key={invoice.id}
-                className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
+      <DataTable
+        headers={["الإجراءات", "الحالة", "المبلغ المتبقي", "المبلغ المدفوع", "الإجمالي", "العميل", "تاريخ الاستحقاق", "تاريخ الفاتورة", "رقم الفاتورة"]}
+        gradient="from-[#1e293b] to-[#334155]"
+      >
+        {invoices.map((invoice, i) => (
+          <tr key={invoice.id} className={cn("hover:bg-muted/30 transition-colors", i % 2 !== 0 && "bg-muted/10")}>
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(invoice)} />
+                <ActionBtn icon={Edit} label="تعديل" color="green" onClick={() => onEdit(invoice)} />
+                <ActionBtn icon={CreditCard} label="تسديد" color="blue" onClick={() => onPayment(invoice)} />
+                <ActionBtn icon={Trash2} color="red" onClick={() => onDelete(invoice.id)} />
+                <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => {
+                  onDownloadPdf(invoice);
+                  notifyAction("تحميل PDF", `الفاتورة: ${invoice.id}`);
+                }} />
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
+                  invoice.status === "مدفوعة بالكامل"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : invoice.status === "مدفوعة جزئياً"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-sky-50 text-sky-700 border-sky-200"
+                )}
               >
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <button
-                      title="عرض الفاتورة"
-                      onClick={() => onView(invoice)}
-                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="تعديل الفاتورة"
-                      onClick={() => onEdit(invoice)}
-                      className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="تسديد الفاتورة"
-                      onClick={() => onPayment(invoice)}
-                      className="p-1.5 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-50 transition-colors"
-                    >
-                      <CreditCard className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="حذف الفاتورة"
-                      onClick={() => onDelete(invoice.id)}
-                      className="p-1.5 text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="تحميل PDF"
-                      onClick={() => {
-                        onDownloadPdf(invoice);
-                        notifyAction("تحميل PDF", `الفاتورة: ${invoice.id}`);
-                      }}
-                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
-                    >
-                      تحميل PDF
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  <div
-                    className={cn(
-                      "inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap",
-                      invoice.statusColor
-                    )}
-                  >
-                    {invoice.status}
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle text-right whitespace-nowrap text-slate-600">
-                  {invoice.remaining}
-                </td>
-                <td className="px-4 py-3 align-middle text-right whitespace-nowrap text-slate-600">
-                  {invoice.paid}
-                </td>
-                <td className="px-4 py-3 align-middle text-right whitespace-nowrap">
-                  {invoice.total}
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  {invoice.customer}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-slate-600">
-                  {invoice.dueDate}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-slate-600">
-                  {invoice.date}
-                </td>
-                <td className="px-4 py-3 align-middle text-right font-medium text-blue-600 hover:underline cursor-pointer">
-                  {invoice.id}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                {invoice.status}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap text-red-500 font-semibold text-[13px]">
+              {invoice.remaining}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap text-emerald-600 font-semibold text-[13px]">
+              {invoice.paid}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap font-bold text-primary">
+              {invoice.total}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-foreground font-medium">
+              {invoice.customer}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+              {invoice.dueDate}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+              {invoice.date}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right font-bold text-primary hover:underline cursor-pointer">
+              {invoice.id}
+            </td>
+          </tr>
+        ))}
+      </DataTable>
     </div>
   );
 }
@@ -470,27 +388,27 @@ function InvoiceDetails({
   );
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تفاصيل الفاتورة الضريبية</h1>
+          <h1 className="text-lg font-extrabold text-foreground">تفاصيل الفاتورة الضريبية</h1>
           <FileText className="h-5 w-5 text-blue-600" />
         </div>
       </div>
 
       <div className="p-4">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div className="space-y-2 text-right">
-                <h2 className="text-lg font-semibold text-slate-800">شركة لاكجري العياف</h2>
+                <h2 className="text-lg text-sm font-bold text-foreground">شركة لاكجري العياف</h2>
                 <p className="text-sm text-slate-600">
                   8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة
                 </p>
@@ -504,7 +422,7 @@ function InvoiceDetails({
                 </div>
               </div>
               <div className="space-y-2 text-left md:text-right">
-                <h2 className="text-lg font-semibold text-slate-800">Luxury Al Ayaf Company</h2>
+                <h2 className="text-lg text-sm font-bold text-foreground">Luxury Al Ayaf Company</h2>
                 <p className="text-sm text-slate-600">
                   8529, Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca
                 </p>
@@ -524,29 +442,29 @@ function InvoiceDetails({
                 <div className="p-3 border-b md:border-b-0 md:border-l border-slate-200 space-y-2 text-right">
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">العميل</span>
-                    <span className="font-semibold text-slate-800">{invoice.customer}</span>
+                    <span className="text-sm font-bold text-foreground">{invoice.customer}</span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">العنوان</span>
-                    <span className="font-semibold text-slate-800">العزيزية، مكة المكرمة</span>
+                    <span className="text-sm font-bold text-foreground">العزيزية، مكة المكرمة</span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">رقم التسجيل الضريبي</span>
-                    <span className="font-semibold text-slate-800">300726885600003</span>
+                    <span className="text-sm font-bold text-foreground">300726885600003</span>
                   </div>
                 </div>
                 <div className="p-3 space-y-2 text-right">
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">رقم الفاتورة</span>
-                    <span className="font-semibold text-slate-800">{invoice.id}</span>
+                    <span className="text-sm font-bold text-foreground">{invoice.id}</span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">التاريخ</span>
-                    <span className="font-semibold text-slate-800">{invoice.date}</span>
+                    <span className="text-sm font-bold text-foreground">{invoice.date}</span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">تاريخ الاستحقاق</span>
-                    <span className="font-semibold text-slate-800">{invoice.dueDate}</span>
+                    <span className="text-sm font-bold text-foreground">{invoice.dueDate}</span>
                   </div>
                 </div>
               </div>
@@ -608,11 +526,11 @@ function InvoiceDetails({
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-600">المجموع الفرعي</span>
-                  <span className="font-semibold text-slate-800">{totals.taxable.toFixed(2)} ﷼</span>
+                  <span className="text-sm font-bold text-foreground">{totals.taxable.toFixed(2)} ﷼</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">إجمالي ضريبة القيمة المضافة</span>
-                  <span className="font-semibold text-slate-800">{totals.vat.toFixed(2)} ﷼</span>
+                  <span className="text-sm font-bold text-foreground">{totals.vat.toFixed(2)} ﷼</span>
                 </div>
                 <div className="flex justify-between text-blue-600 font-bold">
                   <span>المجموع شامل القيمة المضافة</span>
@@ -749,70 +667,70 @@ function InvoiceEdit({
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تعديل الفاتورة</h1>
+          <h1 className="text-lg font-extrabold text-foreground">تعديل الفاتورة</h1>
           <Edit className="h-5 w-5 text-emerald-600" />
         </div>
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 transition-colors"
+          className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:shadow-lg transition-all"
         >
           حفظ التعديلات
         </button>
       </div>
 
       <div className="p-4 space-y-6">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">معلومات الفاتورة</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">معلومات الفاتورة</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
                 تاريخ الفاتورة
               </label>
               <input
                 type="date"
                 value={invoiceDate}
                 onChange={(event) => setInvoiceDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
                 تاريخ الاستحقاق
               </label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">العميل</label>
               <input
                 type="text"
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">الحالة</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">الحالة</label>
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none bg-white"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-white"
               >
                 <option value="مفتوحة">مفتوحة</option>
                 <option value="مدفوعة جزئياً">مدفوعة جزئياً</option>
@@ -822,16 +740,16 @@ function InvoiceEdit({
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-between">
             <button
               onClick={handleAddItem}
-              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+              className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
             >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
-            <h2 className="font-semibold text-slate-800">بنود الفاتورة</h2>
+            <h2 className="text-sm font-bold text-foreground">بنود الفاتورة</h2>
           </div>
           <div className="p-4 overflow-x-auto">
             <table className="w-full text-sm text-right mb-4">
@@ -858,7 +776,7 @@ function InvoiceEdit({
                         <div className="flex items-center justify-center gap-1 h-10">
                           <button
                             onClick={() => removeItem(item.id)}
-                            className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                            className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -869,7 +787,7 @@ function InvoiceEdit({
                           type="text"
                           value={lineTotal.toFixed(2)}
                           disabled
-                          className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -881,7 +799,7 @@ function InvoiceEdit({
                               taxPercent: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -893,7 +811,7 @@ function InvoiceEdit({
                               discount: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -905,7 +823,7 @@ function InvoiceEdit({
                               unitPrice: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -917,7 +835,7 @@ function InvoiceEdit({
                               quantity: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
@@ -930,7 +848,7 @@ function InvoiceEdit({
                               description: event.target.value,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none min-h-[88px] resize-y"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                         />
                       </td>
                     </tr>
@@ -943,7 +861,7 @@ function InvoiceEdit({
               <div className="w-96 flex justify-between">
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.tax.toFixed(2)} ريال
                     </span>
                   </div>
@@ -959,12 +877,12 @@ function InvoiceEdit({
                 </div>
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.subtotal.toFixed(2)} ريال
                     </span>
                   </div>
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.discount.toFixed(2)} ريال
                     </span>
                   </div>
@@ -1032,17 +950,17 @@ function InvoicePayment({
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تسديد الفاتورة</h1>
+          <h1 className="text-lg font-extrabold text-foreground">تسديد الفاتورة</h1>
           <CreditCard className="h-5 w-5 text-indigo-600" />
         </div>
         <button
@@ -1054,25 +972,25 @@ function InvoicePayment({
       </div>
 
       <div className="p-4">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">معلومات السداد</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">معلومات السداد</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">رقم الفاتورة</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">رقم الفاتورة</label>
+              <div className="text-base text-sm font-bold text-foreground text-right">
                 {invoice.id}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">المتبقي</label>
-              <div className="text-base font-semibold text-slate-800 text-right">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">المتبقي</label>
+              <div className="text-base text-sm font-bold text-foreground text-right">
                 {invoice.remaining}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">المبلغ المدفوع الآن</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">المبلغ المدفوع الآن</label>
               <input
                 type="number"
                 value={amount}
@@ -1081,7 +999,7 @@ function InvoicePayment({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">الحالة</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">الحالة</label>
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
@@ -1198,20 +1116,20 @@ function InvoiceForm({
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+    <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <div className="flex gap-2">
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-slate-500 text-white text-sm font-medium rounded hover:bg-slate-600 transition-colors flex items-center gap-1"
+            className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all flex items-center gap-1"
           >
             <X className="h-4 w-4" />
             إلغاء
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-blue-600 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20 hover:shadow-lg transition-all flex items-center gap-2"
           >
             <svg
               className="h-4 w-4"
@@ -1237,14 +1155,14 @@ function InvoiceForm({
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">
+          <h1 className="text-lg font-extrabold text-foreground">
             إنشاء فاتورة مبيعات جديدة
           </h1>
           <CreditCard className="h-5 w-5 text-blue-600" />
         </div>
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
@@ -1253,9 +1171,9 @@ function InvoiceForm({
 
       <div className="p-4 space-y-6">
         {/* Basic Info */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">
               معلومات الفاتورة الأساسية
             </h2>
             <svg
@@ -1274,17 +1192,17 @@ function InvoiceForm({
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 رقم المرجع
               </label>
               <input
                 type="text"
                 placeholder="أدخل رقم المرجع (اختياري)"
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 العملة
               </label>
               <input
@@ -1295,7 +1213,7 @@ function InvoiceForm({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 الحالة
               </label>
               <div className="w-full px-3 py-2 border border-slate-300 rounded bg-white flex justify-center">
@@ -1305,42 +1223,42 @@ function InvoiceForm({
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 تاريخ الاستحقاق <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 تاريخ الفاتورة <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={invoiceDate}
                 onChange={(event) => setInvoiceDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1 md:col-span-3">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 العميل <span className="text-red-500">*</span>
               </label>
               <select
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all appearance-none bg-white"
               >
                 <option value="">ابحث عن عميل...</option>
                 <option value="عميل جديد">عميل جديد</option>
               </select>
             </div>
             <div className="space-y-1 md:col-span-4">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 ملاحظات
               </label>
               <input
@@ -1348,12 +1266,12 @@ function InvoiceForm({
                 placeholder="ملاحظات إضافية"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-start-4">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 رقم الفاتورة
               </label>
               <input
@@ -1367,17 +1285,17 @@ function InvoiceForm({
         </div>
 
         {/* Items */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-between">
             <button
               onClick={handleAddItem}
-              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+              className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
             >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-slate-800">بنود الفاتورة</h2>
+              <h2 className="text-sm font-bold text-foreground">بنود الفاتورة</h2>
               <svg
                 className="h-5 w-5 text-slate-500"
                 fill="none"
@@ -1419,7 +1337,7 @@ function InvoiceForm({
                         <button className="w-7 h-7 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
                           <Settings className="w-3.5 h-3.5" />
                         </button>
-                        <button className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600">
+                        <button className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1429,7 +1347,7 @@ function InvoiceForm({
                         type="text"
                         value={lineTotal.toFixed(2)}
                         disabled
-                        className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
@@ -1441,7 +1359,7 @@ function InvoiceForm({
                             taxPercent: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
@@ -1453,7 +1371,7 @@ function InvoiceForm({
                             discount: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
@@ -1465,7 +1383,7 @@ function InvoiceForm({
                             unitPrice: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 px-1 align-top">
@@ -1477,7 +1395,7 @@ function InvoiceForm({
                             quantity: Number(event.target.value) || 0,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                       />
                     </td>
                     <td className="pt-4 pl-1 align-top min-w-[320px]">
@@ -1490,7 +1408,7 @@ function InvoiceForm({
                             description: event.target.value,
                           })
                         }
-                        className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none min-h-[88px] resize-y"
+                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                       />
                     </td>
                   </tr>
@@ -1504,7 +1422,7 @@ function InvoiceForm({
               <div className="w-96 flex justify-between">
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.tax.toFixed(2)} ريال
                     </span>
                   </div>
@@ -1520,12 +1438,12 @@ function InvoiceForm({
                 </div>
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.subtotal.toFixed(2)} ريال
                     </span>
                   </div>
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.discount.toFixed(2)} ريال
                     </span>
                   </div>

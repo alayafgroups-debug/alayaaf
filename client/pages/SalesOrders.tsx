@@ -11,8 +11,26 @@ import {
   Eye,
   FileText,
   ShoppingCart,
+  Download,
+  Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+  FormHeaderBar,
+  FormCard,
+  SectionHeader,
+  AddItemBtn,
+  TotalsSummary,
+  PrimaryBtn,
+  SecondaryBtn,
+} from "@/components/SalesPageUI";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -228,154 +246,66 @@ function OrdersList({
 }) {
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-          <ShoppingCart className="h-6 w-6 text-primary" />
-          <h1>أوامر البيع</h1>
-        </div>
-        <button
-          onClick={onCreateClick}
-          className="inline-flex items-center gap-2 bg-[#1b8c56] text-white px-4 py-2 rounded-md hover:bg-[#157347] transition-colors font-medium text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          إضافة أمر بيع جديد
-        </button>
-      </div>
+      <PageHeader
+        icon={ShoppingCart}
+        title="أوامر البيع"
+        subtitle="إدارة وتتبع جميع أوامر البيع"
+        actionLabel="إضافة أمر بيع جديد"
+        onAction={onCreateClick}
+        gradient="from-indigo-600 to-violet-700"
+      />
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-        <div className="space-y-1 md:col-span-2">
-          <label className="text-sm text-slate-600 text-right block">
-            البحث
-          </label>
-          <input
-            type="text"
-            placeholder="رقم الأمر، المرجع، اسم العميل..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right"
-            dir="rtl"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            العميل
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm text-slate-600 text-right block">
-            الحالة
-          </label>
-          <select className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm text-right bg-white appearance-none text-slate-700">
-            <option>الكل</option>
-          </select>
-        </div>
-        <div className="md:col-span-4 flex items-center justify-start gap-2 pt-2">
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm">
-            <X className="h-4 w-4" />
-            إعادة تعيين
-          </button>
-          <button className="inline-flex items-center gap-2 bg-white border border-slate-300 text-primary px-6 py-1.5 rounded-md hover:bg-slate-50 transition-colors text-sm font-medium">
-            <Search className="h-4 w-4" />
-            بحث
-          </button>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput label="البحث" placeholder="رقم الأمر، المرجع، اسم العميل..." colSpan={2} />
+        <FilterSelect label="العميل" options={["الكل"]} />
+        <FilterSelect label="الحالة" options={["الكل", "مؤكد", "تم التسليم"]} />
+        <FilterActions />
+      </FilterBar>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-[#222831] text-white">
-            <tr>
-              <th className="px-4 py-3 font-semibold text-right">الإجراءات</th>
-              <th className="px-4 py-3 font-semibold text-right">الحالة</th>
-              <th className="px-4 py-3 font-semibold text-right">رقم عرض السعر</th>
-              <th className="px-4 py-3 font-semibold text-right">الإجمالي</th>
-              <th className="px-4 py-3 font-semibold text-right">العميل</th>
-              <th className="px-4 py-3 font-semibold text-right">
-                تاريخ التسليم
-              </th>
-              <th className="px-4 py-3 font-semibold text-right">تاريخ الأمر</th>
-              <th className="px-4 py-3 font-semibold text-right">رقم الأمر</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {orders.map((order, i) => (
-              <tr
-                key={order.id}
-                className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-              >
-                <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <button
-                      title="عرض أمر البيع"
-                      onClick={() => onView(order)}
-                      className="p-1.5 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="تعديل أمر البيع"
-                      onClick={() => onEdit(order)}
-                      className="p-1.5 text-emerald-600 border border-emerald-200 rounded hover:bg-emerald-50 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      title="طباعة PDF"
-                      onClick={() => onDownloadPdf(order)}
-                      className="px-2 py-1.5 text-slate-600 border border-slate-300 rounded hover:bg-slate-100 transition-colors text-xs font-semibold"
-                    >
-                      طباعة PDF
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-middle text-right space-y-1">
-                  <div
-                    className={cn(
-                      "inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap",
-                      order.statusColor
-                    )}
-                  >
-                    {order.status}
-                  </div>
-                  {order.subStatus && (
-                    <div
-                      className={cn(
-                        "inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap block mt-1",
-                        order.subStatusColor
-                      )}
-                    >
-                      <FileText className="h-3 w-3 ml-1" />
-                      {order.subStatus}
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-blue-600 hover:underline cursor-pointer">
-                  {order.quotationId}
-                </td>
-                <td className="px-4 py-3 align-middle text-right whitespace-nowrap">
-                  {order.total}
-                </td>
-                <td className="px-4 py-3 align-middle text-right">
-                  {order.customer}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-slate-600">
-                  {order.deliveryDate}
-                </td>
-                <td className="px-4 py-3 align-middle text-right text-slate-600">
-                  {order.date}
-                </td>
-                <td className="px-4 py-3 align-middle text-right font-medium text-blue-600 hover:underline cursor-pointer">
-                  {order.id}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        headers={["الإجراءات", "الحالة", "رقم عرض السعر", "الإجمالي", "العميل", "تاريخ التسليم", "تاريخ الأمر", "رقم الأمر"]}
+        gradient="from-[#1e293b] to-[#334155]"
+      >
+        {orders.map((order, i) => (
+          <tr key={order.id} className={cn("hover:bg-muted/30 transition-colors", i % 2 !== 0 && "bg-muted/10")}>
+            <td className="px-5 py-3.5 align-middle">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(order)} />
+                <ActionBtn icon={Edit} label="تعديل" color="green" onClick={() => onEdit(order)} />
+                <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(order)} />
+              </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right space-y-1">
+              <span className="inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap bg-slate-50 text-slate-700 border-slate-200">
+                {order.status}
+              </span>
+              {order.subStatus && (
+                <span className={cn("inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap block mt-1", order.subStatusColor)}>
+                  {order.subStatus}
+                </span>
+              )}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-primary hover:underline cursor-pointer font-medium">
+              {order.quotationId}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap font-bold text-primary">
+              {order.total}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-foreground font-medium">
+              {order.customer}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+              {order.deliveryDate}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+              {order.date}
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right font-bold text-primary hover:underline cursor-pointer">
+              {order.id}
+            </td>
+          </tr>
+        ))}
+      </DataTable>
     </div>
   );
 }
@@ -456,39 +386,39 @@ function OrderDetails({
   );
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تفاصيل أمر البيع</h1>
+          <h1 className="text-lg font-extrabold text-foreground">تفاصيل أمر البيع</h1>
           <ShoppingCart className="h-5 w-5 text-blue-600" />
         </div>
       </div>
 
       <div className="p-4 space-y-6">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800 text-right">بيانات الأمر</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20">
+            <h2 className="text-sm font-bold text-foreground text-right">بيانات الأمر</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">رقم الأمر</label><div className="text-right font-semibold">{order.id}</div></div>
-            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">العميل</label><div className="text-right font-semibold">{order.customer}</div></div>
-            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">تاريخ الأمر</label><div className="text-right font-semibold">{order.date}</div></div>
-            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">تاريخ التسليم</label><div className="text-right font-semibold">{order.deliveryDate}</div></div>
-            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">رقم عرض السعر</label><div className="text-right font-semibold">{order.quotationId || "-"}</div></div>
-            <div className="space-y-1"><label className="text-sm text-slate-600 block text-right">الإجمالي</label><div className="text-right font-semibold">{order.total}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">رقم الأمر</label><div className="text-right font-semibold">{order.id}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">العميل</label><div className="text-right font-semibold">{order.customer}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ الأمر</label><div className="text-right font-semibold">{order.date}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ التسليم</label><div className="text-right font-semibold">{order.deliveryDate}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">رقم عرض السعر</label><div className="text-right font-semibold">{order.quotationId || "-"}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">الإجمالي</label><div className="text-right font-semibold">{order.total}</div></div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800 text-right">بنود الأمر</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20">
+            <h2 className="text-sm font-bold text-foreground text-right">بنود الأمر</h2>
           </div>
           <div className="p-4 overflow-x-auto">
             <table className="w-full text-sm text-right">
@@ -521,15 +451,15 @@ function OrderDetails({
             <div className="border-t border-slate-200 pt-4 flex justify-end mt-6">
               <div className="w-72 space-y-2 text-sm">
                 <div className="flex justify-between items-center">
-                  <span className="font-semibold text-slate-800">{totals.subtotal.toFixed(2)} ريال</span>
+                  <span className="text-sm font-bold text-foreground">{totals.subtotal.toFixed(2)} ريال</span>
                   <span className="text-slate-600">المجموع الفرعي</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="font-semibold text-slate-800">{totals.discount.toFixed(2)} ريال</span>
+                  <span className="text-sm font-bold text-foreground">{totals.discount.toFixed(2)} ريال</span>
                   <span className="text-slate-600">الخصم</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="font-semibold text-slate-800">{totals.tax.toFixed(2)} ريال</span>
+                  <span className="text-sm font-bold text-foreground">{totals.tax.toFixed(2)} ريال</span>
                   <span className="text-slate-600">الضريبة</span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-slate-200">
@@ -585,58 +515,58 @@ function OrderEdit({
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تعديل أمر البيع</h1>
+          <h1 className="text-lg font-extrabold text-foreground">تعديل أمر البيع</h1>
           <Edit className="h-5 w-5 text-emerald-600" />
         </div>
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 transition-colors"
+          className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:shadow-lg transition-all"
         >
           حفظ التعديلات
         </button>
       </div>
 
       <div className="p-4">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800 text-right">معلومات الأمر</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20">
+            <h2 className="text-sm font-bold text-foreground text-right">معلومات الأمر</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ الأمر</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ الأمر</label>
               <input
                 type="date"
                 value={orderDate}
                 onChange={(event) => setOrderDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-600 block text-right">تاريخ التسليم</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ التسليم</label>
               <input
                 type="date"
                 value={deliveryDate}
                 onChange={(event) => setDeliveryDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <label className="text-sm text-slate-600 block text-right">العميل</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">العميل</label>
               <input
                 type="text"
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
           </div>
@@ -752,19 +682,19 @@ function OrderForm({
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
+    <div className="space-y-6 pb-12">
+      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <div className="flex gap-2">
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-slate-500 text-white text-sm font-medium rounded hover:bg-slate-600 transition-colors flex items-center gap-1"
+            className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all flex items-center gap-1"
           >
             <X className="h-4 w-4" />
             إلغاء
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-blue-700 transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-blue-600 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20 hover:shadow-lg transition-all flex items-center gap-2"
           >
             <svg
               className="h-4 w-4"
@@ -783,12 +713,12 @@ function OrderForm({
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">إنشاء أمر بيع جديد</h1>
+          <h1 className="text-lg font-extrabold text-foreground">إنشاء أمر بيع جديد</h1>
           <ShoppingCart className="h-5 w-5 text-blue-600" />
         </div>
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />
@@ -796,13 +726,13 @@ function OrderForm({
       </div>
 
       <div className="p-4 space-y-6">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-end gap-2">
-            <h2 className="font-semibold text-slate-800">معلومات الأمر الأساسية</h2>
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
+            <h2 className="text-sm font-bold text-foreground">معلومات الأمر الأساسية</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 العرض المرجع <span className="text-slate-400 font-normal">(المفتوحة فقط)</span>
               </label>
               <input
@@ -810,12 +740,12 @@ function OrderForm({
                 value={quotationId}
                 onChange={(event) => setQuotationId(event.target.value)}
                 placeholder="اكتب رقم عرض السعر..."
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 المخزن <span className="text-red-500">*</span>
               </label>
               <input
@@ -823,36 +753,36 @@ function OrderForm({
                 value={warehouse}
                 onChange={(event) => setWarehouse(event.target.value)}
                 placeholder="اكتب اسم المخزن..."
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 تاريخ التسليم المتوقع
               </label>
               <input
                 type="date"
                 value={deliveryDate}
                 onChange={(event) => setDeliveryDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 تاريخ الأمر <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={orderDate}
                 onChange={(event) => setOrderDate(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-span-4">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 العميل <span className="text-red-500">*</span>
               </label>
               <input
@@ -860,12 +790,12 @@ function OrderForm({
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
                 placeholder="اكتب اسم العميل..."
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-span-3">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 ملاحظات
               </label>
               <input
@@ -873,12 +803,12 @@ function OrderForm({
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="ملاحظات..."
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-start-4">
-              <label className="text-sm font-medium text-slate-700 text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
                 مرجع الأمر
               </label>
               <input
@@ -891,17 +821,17 @@ function OrderForm({
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-between">
             <button
               onClick={handleAddItem}
-              className="bg-[#1b8c56] text-white px-3 py-1 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-1"
+              className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
             >
               <Plus className="h-4 w-4" />
               إضافة بند
             </button>
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-slate-800">بنود الأمر</h2>
+              <h2 className="text-sm font-bold text-foreground">بنود الأمر</h2>
             </div>
           </div>
           <div className="p-4 overflow-x-auto">
@@ -930,7 +860,7 @@ function OrderForm({
                         <div className="flex items-center justify-center gap-1 h-10">
                           <button
                             onClick={() => removeItem(item.id)}
-                            className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                            className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -941,7 +871,7 @@ function OrderForm({
                           type="text"
                           value={lineTotal.toFixed(2)}
                           disabled
-                          className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -953,7 +883,7 @@ function OrderForm({
                               taxPercent: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -965,7 +895,7 @@ function OrderForm({
                               discount: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -977,7 +907,7 @@ function OrderForm({
                               price: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -990,7 +920,7 @@ function OrderForm({
                             })
                           }
                           placeholder="اختياري"
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1002,7 +932,7 @@ function OrderForm({
                               quantity: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
@@ -1015,7 +945,7 @@ function OrderForm({
                             })
                           }
                           placeholder="اكتب وصف البند (اختياري)..."
-                          className="w-full px-2 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none min-h-[88px] resize-y"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                         />
                       </td>
                     </tr>
@@ -1028,7 +958,7 @@ function OrderForm({
               <div className="w-96 flex justify-between">
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.tax.toFixed(2)} ريال
                     </span>
                   </div>
@@ -1044,12 +974,12 @@ function OrderForm({
                 </div>
                 <div className="space-y-2 text-left">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.subtotal.toFixed(2)} ريال
                     </span>
                   </div>
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-foreground">
                       {totals.discount.toFixed(2)} ريال
                     </span>
                   </div>

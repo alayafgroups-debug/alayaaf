@@ -100,11 +100,11 @@ export default function Layout({ children }: LayoutProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen bg-muted/20">
+    <div className="flex h-screen bg-muted/20 overflow-hidden">
       {/* Sidebar */}
       <aside
         className={cn(
-          "border-r border-sidebar-border bg-sidebar/95 shadow-lg transition-all duration-300 ease-in-out",
+          "flex flex-col flex-shrink-0 h-full border-r border-sidebar-border bg-sidebar/95 shadow-lg transition-all duration-300 ease-in-out",
           sidebarOpen ? "w-64" : "w-20"
         )}
       >
@@ -141,7 +141,7 @@ export default function Layout({ children }: LayoutProps) {
         </Link>
 
         {/* Navigation */}
-        <nav className="flex flex-col gap-1 p-4">
+        <nav className="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isItemActive = isActive(item.href);
@@ -222,7 +222,7 @@ export default function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 min-w-0 overflow-auto">
         {/* Header */}
         <header className="sticky top-0 z-40 border-b border-border/60 bg-card/90 backdrop-blur">
           <div className="flex h-16 items-center justify-between px-8">

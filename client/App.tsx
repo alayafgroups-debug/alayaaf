@@ -20,6 +20,7 @@ import PurchaseReturns from "./pages/PurchaseReturns";
 import PurchaseReports from "./pages/PurchaseReports";
 import HR from "./pages/HR";
 import HRDashboard from "./pages/HRDashboard";
+import HREmployees from "./pages/HREmployees";
 import CRM from "./pages/CRM";
 import Tax from "./pages/Tax";
 import UsersPermissions from "./pages/UsersPermissions";
@@ -50,6 +51,8 @@ const App = () => (
           <Route path="/purchases/reports" element={<PurchaseReports />} />
           <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
           <Route path="/hr/dashboard" element={<HRDashboard />} />
+          <Route path="/hr/employees" element={<HREmployees />} />
+          <Route path="/hr/employees/new" element={<HREmployees />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />

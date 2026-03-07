@@ -1,4 +1,5 @@
 import Layout from "@/components/Layout";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users,
@@ -15,39 +16,51 @@ import {
   Eye,
   List,
 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+
+// Fallback sample data (same as HREmployees)
+const SAMPLE_EMPLOYEES = [
+  { nationality: "مصر", totalSalary: 16150, status: "نشط" },
+  { nationality: "سوريا", totalSalary: 14500, status: "نشط" },
+  { nationality: "المملكة العربية السعودية", totalSalary: 13500, status: "نشط" },
+  { nationality: "باكستان", totalSalary: 4050, status: "نشط" },
+  { nationality: "سوريا", totalSalary: 50000, status: "نشط" },
+  { nationality: "باكستان", totalSalary: 10800, status: "نشط" },
+  { nationality: "المملكة العربية السعودية", totalSalary: 9500, status: "نشط" },
+];
 
 export default function HRDashboard() {
   const navigate = useNavigate();
+  const [empData, setEmpData] = useState(SAMPLE_EMPLOYEES);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("nationality, total_salary, status");
+        if (!error && data && data.length > 0) {
+          setEmpData(data.map((r) => ({
+            nationality: String(r.nationality ?? ""),
+            totalSalary: Number(r.total_salary ?? 0),
+            status: String(r.status ?? "نشط"),
+          })));
+        }
+      } catch {}
+    };
+    load();
+  }, []);
+
+  const totalEmployees = empData.length;
+  const activeBeneficiaries = empData.filter((e) => e.status === "نشط").length;
+  const totalSalaries = empData.reduce((s, e) => s + e.totalSalary, 0);
+  const saudiEmployees = empData.filter((e) => e.nationality === "المملكة العربية السعودية").length;
 
   const stats = [
-    {
-      label: "منتفع قائمة",
-      value: "500",
-      icon: UserCheck,
-      bg: "bg-yellow-400",
-      text: "text-white",
-    },
-    {
-      label: "إجمالي الرواتب",
-      value: "109,000",
-      icon: DollarSign,
-      bg: "bg-blue-500",
-      text: "text-white",
-    },
-    {
-      label: "موظفين سعوديين",
-      value: "7",
-      icon: Flag,
-      bg: "bg-green-600",
-      text: "text-white",
-    },
-    {
-      label: "إجمالي الموظفين",
-      value: "7",
-      icon: Users,
-      bg: "bg-blue-700",
-      text: "text-white",
-    },
+    { label: "منتفع قائمة", value: activeBeneficiaries, icon: UserCheck, bg: "bg-yellow-400" },
+    { label: "إجمالي الرواتب", value: totalSalaries.toLocaleString("ar-SA"), icon: DollarSign, bg: "bg-blue-500" },
+    { label: "موظفين سعوديين", value: saudiEmployees, icon: Flag, bg: "bg-green-600" },
+    { label: "إجمالي الموظفين", value: totalEmployees, icon: Users, bg: "bg-blue-700" },
   ];
 
   return (
@@ -64,10 +77,8 @@ export default function HRDashboard() {
           {stats.map((s, i) => {
             const Icon = s.icon;
             return (
-              <div
-                key={i}
-                className={`${s.bg} rounded-xl p-5 flex flex-col items-center gap-2 shadow`}
-              >
+              <div key={i} className={`${s.bg} rounded-xl p-5 flex flex-col items-center gap-2 shadow cursor-pointer hover:opacity-90 transition`}
+                onClick={() => i === 0 || i === 3 ? navigate("/hr/employees") : undefined}>
                 <Icon className="h-8 w-8 text-white/90" />
                 <span className="text-3xl font-bold text-white">{s.value}</span>
                 <span className="text-sm text-white/90 font-medium">{s.label}</span>
@@ -87,17 +98,11 @@ export default function HRDashboard() {
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600">إدارة بيانات الموظفين والعقود</p>
               <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => navigate("/hr/employees")}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition"
-                >
+                <button onClick={() => navigate("/hr/employees")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
                   <Eye className="h-3.5 w-3.5" />
                   عرض الموظفين
                 </button>
-                <button
-                  onClick={() => navigate("/hr/employees/new")}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition"
-                >
+                <button onClick={() => navigate("/hr/employees")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">
                   <Plus className="h-3.5 w-3.5" />
                   إضافة موظف
                 </button>
@@ -112,17 +117,12 @@ export default function HRDashboard() {
                 <DollarSign className="h-5 w-5" />
                 <span className="font-semibold">مسير الرواتب</span>
               </div>
-              <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-full">
-                معلق
-              </span>
+              <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-full">معلق</span>
             </div>
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600">حساب وصرف الرواتب الشهرية</p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => navigate("/hr/payroll")}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition"
-                >
+                <button onClick={() => navigate("/hr/payroll")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition">
                   <ClipboardList className="h-3.5 w-3.5" />
                   مسير الرواتب
                 </button>
@@ -137,17 +137,12 @@ export default function HRDashboard() {
                 <Clock className="h-5 w-5" />
                 <span className="font-semibold">كافة الدوام</span>
               </div>
-              <span className="bg-green-400 text-green-900 text-xs font-bold px-2 py-0.5 rounded-full">
-                ممتمة
-              </span>
+              <span className="bg-green-400 text-green-900 text-xs font-bold px-2 py-0.5 rounded-full">ممتمة</span>
             </div>
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600">تسجيل الحضور والغياب الشهري</p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => navigate("/hr/attendance")}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-700 text-white text-xs font-medium hover:bg-green-800 transition"
-                >
+                <button onClick={() => navigate("/hr/attendance")} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-700 text-white text-xs font-medium hover:bg-green-800 transition">
                   <Clock className="h-3.5 w-3.5" />
                   كافة الدوام
                 </button>
@@ -167,15 +162,9 @@ export default function HRDashboard() {
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600">الأقسام والوظائف والجنسيات</p>
               <div className="flex gap-2 flex-wrap">
-                <button className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
-                  الأقسام
-                </button>
-                <button className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">
-                  الوظائف
-                </button>
-                <button className="px-3 py-2 rounded-lg bg-gray-600 text-white text-xs font-medium hover:bg-gray-700 transition">
-                  الجنسيات
-                </button>
+                <button className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">الأقسام</button>
+                <button className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition">الوظائف</button>
+                <button className="px-3 py-2 rounded-lg bg-gray-600 text-white text-xs font-medium hover:bg-gray-700 transition">الجنسيات</button>
               </div>
             </div>
           </div>
@@ -187,9 +176,7 @@ export default function HRDashboard() {
               <span className="font-semibold">تصفية المستحقات</span>
             </div>
             <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">
-                تصفية مستحقات الموظفين المنتهية خدمتهم
-              </p>
+              <p className="text-sm text-gray-600">تصفية مستحقات الموظفين المنتهية خدمتهم</p>
               <div className="flex gap-2 flex-wrap">
                 <button className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition">
                   <List className="h-3.5 w-3.5" />

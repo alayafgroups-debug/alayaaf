@@ -7,15 +7,23 @@ import {
   Plus,
   Eye,
   Trash2,
-  Search,
-  CheckCircle,
   Save,
   X,
   Printer,
+  Edit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 type PayrollEntry = {
   id: string;

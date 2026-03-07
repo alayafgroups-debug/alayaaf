@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Plus,
-  Search,
   Save,
   X,
   Trash2,
@@ -12,10 +11,20 @@ import {
   Wallet,
   Calendar,
   CheckCircle,
+  Edit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 type EmployeeOption = {
   id: string;

@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { ArrowRight, Award, Eye, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { ArrowRight, Award, Eye, Plus, Save, Trash2, X, Edit } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 type EmployeeOption = {
   id: string;

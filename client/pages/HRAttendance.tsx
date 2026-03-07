@@ -1,10 +1,19 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { useNavigate } from "react-router-dom";
-import { Clock, ArrowRight, Plus, Pencil, Trash2, Search, Save, X, CheckCircle } from "lucide-react";
+import { Clock, ArrowRight, Plus, Edit, Trash2, Save, X, CheckCircle, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  PageHeader,
+  FilterBar,
+  FilterInput,
+  FilterSelect,
+  FilterActions,
+  DataTable,
+  ActionBtn,
+} from "@/components/SalesPageUI";
 
 type AttendanceRecord = {
   id: string;
@@ -99,115 +108,78 @@ export default function HRAttendance() {
     toast({ title: "تم الحذف" });
   };
 
+  const getStatusColor = (status: string): string => {
+    const colors: Record<string, string> = {
+      "حاضر": "bg-green-500 text-white",
+      "غائب": "bg-red-500 text-white",
+      "متأخر": "bg-yellow-500 text-white",
+      "إجازة": "bg-blue-500 text-white",
+      "مأمورية": "bg-purple-500 text-white",
+    };
+    return colors[status] ?? "bg-slate-500 text-white";
+  };
+
   return (
     <Layout>
-      <div dir="rtl" className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Clock className="h-7 w-7 text-green-700" />
-            <h1 className="text-2xl font-bold">الحضور والانصراف</h1>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => navigate("/hr/dashboard")} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition">
-              <ArrowRight className="h-4 w-4" /> رجوع
-            </button>
-            <button onClick={() => setMode("create")} className="flex items-center gap-1 px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-800 transition">
-              <Plus className="h-4 w-4" /> تسجيل حضور
-            </button>
-          </div>
-        </div>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <PageHeader
+          icon={Clock}
+          title="الحضور والانصراف"
+          subtitle="إدارة وتتبع حضور وغياب الموظفين"
+          actionLabel="تسجيل حضور جديد"
+          onAction={() => setMode("create")}
+          gradient="from-sky-600 to-cyan-700"
+        />
 
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-green-600 rounded-xl p-4 text-white text-center shadow">
-            <div className="text-2xl font-bold">{presentCount}</div>
-            <div className="text-sm opacity-90 mt-1">حاضر</div>
-          </div>
-          <div className="bg-yellow-500 rounded-xl p-4 text-white text-center shadow">
-            <div className="text-2xl font-bold">{lateCount}</div>
-            <div className="text-sm opacity-90 mt-1">متأخر</div>
-          </div>
-          <div className="bg-red-500 rounded-xl p-4 text-white text-center shadow">
-            <div className="text-2xl font-bold">{absentCount}</div>
-            <div className="text-sm opacity-90 mt-1">غائب</div>
-          </div>
-          <div className="bg-blue-500 rounded-xl p-4 text-white text-center shadow">
-            <div className="text-2xl font-bold">{leaveCount}</div>
-            <div className="text-sm opacity-90 mt-1">إجازة / مأمورية</div>
-          </div>
-        </div>
+        <FilterBar>
+          <FilterInput placeholder="البحث برقم الموظف أو الاسم..." />
+          <FilterSelect label="الحالة">
+            <option value="">الكل</option>
+            {STATUSES.map((s) => <option key={s}>{s}</option>)}
+          </FilterSelect>
+          <FilterActions
+            onReset={() => { setFSearch(""); setFDate(""); setFStatus(""); }}
+            onSearch={() => {}}
+          />
+        </FilterBar>
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow p-4 border border-gray-100">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="relative">
-              <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
-              <input value={fSearch} onChange={(e) => setFSearch(e.target.value)} placeholder="بحث بالاسم أو الرقم" className="w-full pr-9 pl-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-green-600" />
-            </div>
-            <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} className="px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-green-600" />
-            <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-green-600 bg-white">
-              <option value="">كل الحالات</option>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
-            </select>
-            <button onClick={() => { setFSearch(""); setFDate(""); setFStatus(""); }} className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm hover:bg-gray-200 transition">
-              إعادة ضبط
-            </button>
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-xl shadow border border-gray-100 overflow-x-auto">
-          <table className="w-full text-sm text-right">
-            <thead>
-              <tr className="bg-green-700 text-white">
-                <th className="px-3 py-3 font-semibold">رقم الموظف</th>
-                <th className="px-3 py-3 font-semibold">الاسم</th>
-                <th className="px-3 py-3 font-semibold">القسم</th>
-                <th className="px-3 py-3 font-semibold">التاريخ</th>
-                <th className="px-3 py-3 font-semibold">وقت الدخول</th>
-                <th className="px-3 py-3 font-semibold">وقت الخروج</th>
-                <th className="px-3 py-3 font-semibold">الحالة</th>
-                <th className="px-3 py-3 font-semibold">دقائق التأخر</th>
-                <th className="px-3 py-3 font-semibold">ملاحظات</th>
-                <th className="px-3 py-3 font-semibold">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="py-12 text-center text-gray-400">لا توجد بيانات</td></tr>
-              ) : filtered.map((r, idx) => (
-                <tr key={r.id} className={cn("border-b border-gray-100 hover:bg-green-50 transition", idx % 2 === 0 ? "bg-white" : "bg-gray-50/50")}>
-                  <td className="px-3 py-3 font-mono text-green-700 font-semibold">{r.empId}</td>
-                  <td className="px-3 py-3 font-medium">{r.empName}</td>
-                  <td className="px-3 py-3 text-gray-600 max-w-[130px] truncate">{r.department}</td>
-                  <td className="px-3 py-3 text-gray-600">{r.date}</td>
-                  <td className="px-3 py-3 text-gray-700 font-mono">{r.checkIn || "—"}</td>
-                  <td className="px-3 py-3 text-gray-700 font-mono">{r.checkOut || "—"}</td>
-                  <td className="px-3 py-3">
-                    <span className={cn("inline-block px-2 py-0.5 rounded-full text-xs font-semibold border", STATUS_COLORS[r.status] ?? "bg-gray-100 text-gray-600")}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    {r.lateMinutes > 0 ? <span className="text-yellow-600 font-semibold">{r.lateMinutes} د</span> : "—"}
-                  </td>
-                  <td className="px-3 py-3 text-gray-500 text-xs max-w-[100px] truncate">{r.notes || "—"}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => { setSelected(r); setMode("edit"); }} className="p-1.5 rounded bg-blue-500 text-white hover:bg-blue-600 transition" title="تعديل">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => handleDelete(r)} className="p-1.5 rounded bg-red-500 text-white hover:bg-red-600 transition" title="حذف">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          headers={["الإجراءات", "ملاحظات", "دقائق التأخر", "الحالة", "وقت الخروج", "وقت الدخول", "التاريخ", "القسم", "الاسم", "رقم الموظف"]}
+          gradient="from-sky-800 to-cyan-900"
+        >
+          {filtered.map((r) => (
+            <tr key={r.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+              <td className="px-4 py-3 align-middle">
+                <div className="flex items-center gap-1">
+                  <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => { setSelected(r); setMode("edit"); }} />
+                  <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => handleDelete(r)} />
+                </div>
+              </td>
+              <td className="px-4 py-3 align-middle text-xs max-w-xs truncate">{r.notes || "—"}</td>
+              <td className="px-4 py-3 align-middle whitespace-nowrap">
+                {r.lateMinutes > 0 ? <span className="text-yellow-600 font-semibold">{r.lateMinutes} د</span> : "—"}
+              </td>
+              <td className="px-4 py-3 align-middle">
+                <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", getStatusColor(r.status))}>
+                  {r.status}
+                </span>
+              </td>
+              <td className="px-4 py-3 align-middle font-mono whitespace-nowrap">{r.checkOut || "—"}</td>
+              <td className="px-4 py-3 align-middle font-mono whitespace-nowrap">{r.checkIn || "—"}</td>
+              <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">{r.date}</td>
+              <td className="px-4 py-3 align-middle">{r.department}</td>
+              <td className="px-4 py-3 align-middle font-semibold">{r.empName}</td>
+              <td className="px-4 py-3 align-middle font-mono text-sky-700 whitespace-nowrap">{r.empId}</td>
+            </tr>
+          ))}
+          {filtered.length === 0 && (
+            <tr>
+              <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
+                لا يوجد سجلات حضور
+              </td>
+            </tr>
+          )}
+        </DataTable>
       </div>
     </Layout>
   );

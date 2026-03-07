@@ -60,7 +60,9 @@ const App = () => (
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/settlements" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRDashboard />} />
+          <Route path="/hr/certificates" element={<HRDashboard />} />
           <Route path="/hr/reports" element={<HRDashboard />} />
+          <Route path="/hr/settings" element={<HRDashboard />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />

@@ -125,11 +125,11 @@ export function DataTable({
   return (
     <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: "200ms" }}>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-right">
+        <table className="w-full min-w-[1100px] text-sm text-right">
           <thead>
             <tr className={cn("bg-gradient-to-l text-white", gradient)}>
               {headers.map((h) => (
-                <th key={h} className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                <th key={h} className="px-5 py-3.5 text-[12px] font-bold text-right whitespace-nowrap tracking-normal">
                   {h}
                 </th>
               ))}

@@ -210,8 +210,8 @@ export default function HREmployees() {
         >
           {filtered.map((emp) => (
             <tr key={emp.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-              <td className="px-4 py-3 align-middle">
-                <div className="flex items-center gap-1">
+              <td className="px-4 py-3 align-middle whitespace-nowrap">
+                <div className="flex items-center gap-1 flex-wrap">
                   <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => { setSelected(emp); setMode("view"); }} />
                   <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => { setSelected(emp); setMode("edit"); }} />
                   <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => handleDelete(emp)} />

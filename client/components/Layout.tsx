@@ -71,16 +71,16 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
 };
 
 /* ── Per-item accent colors for active state ── */
-const itemColors: Record<string, { icon: string; active: string; glow: string }> = {
-  "/":          { icon: "from-sky-400 to-blue-600",    active: "bg-sky-500/15 border-sky-500/25",    glow: "shadow-sky-500/20" },
-  "/sales":     { icon: "from-blue-400 to-indigo-600", active: "bg-blue-500/15 border-blue-500/25",  glow: "shadow-blue-500/20" },
-  "/purchases": { icon: "from-violet-400 to-purple-600", active: "bg-violet-500/15 border-violet-500/25", glow: "shadow-violet-500/20" },
-  "/hr":        { icon: "from-emerald-400 to-teal-600", active: "bg-emerald-500/15 border-emerald-500/25", glow: "shadow-emerald-500/20" },
-  "/crm":       { icon: "from-amber-400 to-orange-600", active: "bg-amber-500/15 border-amber-500/25", glow: "shadow-amber-500/20" },
-  "/tax":       { icon: "from-rose-400 to-pink-600",   active: "bg-rose-500/15 border-rose-500/25",   glow: "shadow-rose-500/20" },
-  "/users":     { icon: "from-cyan-400 to-teal-600",   active: "bg-cyan-500/15 border-cyan-500/25",   glow: "shadow-cyan-500/20" },
-  "/ai":        { icon: "from-fuchsia-400 to-purple-600", active: "bg-fuchsia-500/15 border-fuchsia-500/25", glow: "shadow-fuchsia-500/20" },
-  "/settings":  { icon: "from-slate-400 to-gray-600",  active: "bg-slate-500/15 border-slate-500/25", glow: "shadow-slate-500/20" },
+const itemColors: Record<string, { icon: string; active: string; glow: string; dot: string; text: string; subBg: string; border: string }> = {
+  "/":          { icon: "from-sky-400 to-blue-600",      active: "bg-sky-500/15 border-sky-500/25",      glow: "shadow-sky-500/20",      dot: "bg-sky-400",      text: "text-sky-300",      subBg: "bg-sky-500/[0.06]",      border: "border-sky-400/20" },
+  "/sales":     { icon: "from-blue-400 to-indigo-600",   active: "bg-blue-500/15 border-blue-500/25",    glow: "shadow-blue-500/20",     dot: "bg-blue-400",     text: "text-blue-300",     subBg: "bg-blue-500/[0.06]",     border: "border-blue-400/20" },
+  "/purchases": { icon: "from-violet-400 to-purple-600", active: "bg-violet-500/15 border-violet-500/25",glow: "shadow-violet-500/20",   dot: "bg-violet-400",   text: "text-violet-300",   subBg: "bg-violet-500/[0.06]",   border: "border-violet-400/20" },
+  "/hr":        { icon: "from-emerald-400 to-teal-600",  active: "bg-emerald-500/15 border-emerald-500/25",glow: "shadow-emerald-500/20",dot: "bg-emerald-400",  text: "text-emerald-300",  subBg: "bg-emerald-500/[0.06]",  border: "border-emerald-400/20" },
+  "/crm":       { icon: "from-amber-400 to-orange-600",  active: "bg-amber-500/15 border-amber-500/25",  glow: "shadow-amber-500/20",   dot: "bg-amber-400",    text: "text-amber-300",    subBg: "bg-amber-500/[0.06]",    border: "border-amber-400/20" },
+  "/tax":       { icon: "from-rose-400 to-pink-600",     active: "bg-rose-500/15 border-rose-500/25",    glow: "shadow-rose-500/20",    dot: "bg-rose-400",     text: "text-rose-300",     subBg: "bg-rose-500/[0.06]",     border: "border-rose-400/20" },
+  "/users":     { icon: "from-cyan-400 to-teal-600",     active: "bg-cyan-500/15 border-cyan-500/25",    glow: "shadow-cyan-500/20",    dot: "bg-cyan-400",     text: "text-cyan-300",     subBg: "bg-cyan-500/[0.06]",     border: "border-cyan-400/20" },
+  "/ai":        { icon: "from-fuchsia-400 to-purple-600",active: "bg-fuchsia-500/15 border-fuchsia-500/25",glow: "shadow-fuchsia-500/20",dot: "bg-fuchsia-400", text: "text-fuchsia-300",  subBg: "bg-fuchsia-500/[0.06]",  border: "border-fuchsia-400/20" },
+  "/settings":  { icon: "from-slate-400 to-gray-600",    active: "bg-slate-500/15 border-slate-500/25",  glow: "shadow-slate-500/20",   dot: "bg-slate-400",    text: "text-slate-300",    subBg: "bg-slate-500/[0.06]",    border: "border-slate-400/20" },
 };
 
 export default function Layout({ children }: LayoutProps) {
@@ -241,7 +241,10 @@ export default function Layout({ children }: LayoutProps) {
 
                 {/* Submenu */}
                 {isExpanded && sidebarOpen && subItems && (
-                  <div className="mt-1.5 mr-4 ml-2 rounded-xl bg-white/[0.03] border border-white/[0.05] p-1.5 space-y-0.5 animate-fade-in">
+                  <div className={cn(
+                    "mt-1.5 mr-4 ml-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border",
+                    colors.subBg, colors.border
+                  )}>
                     {subItems.map((subItem, index) => {
                       const isSubActive = location.pathname === subItem.href;
                       return (
@@ -252,15 +255,15 @@ export default function Layout({ children }: LayoutProps) {
                             "w-full text-right flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium rounded-lg transition-all duration-200",
                             isSubActive
                               ? cn("text-white", colors.active)
-                              : "text-white/40 hover:text-white/75 hover:bg-white/[0.05]"
+                              : cn("hover:bg-white/[0.05]", colors.text, "opacity-60 hover:opacity-100")
                           )}
                         >
                           <span
                             className={cn(
                               "h-1.5 w-1.5 rounded-full flex-shrink-0 transition-all duration-200",
                               isSubActive
-                                ? cn("h-2 w-2 bg-gradient-to-br shadow-sm", colors.icon, colors.glow)
-                                : "bg-white/15"
+                                ? cn("h-2 w-2 shadow-sm", colors.dot, colors.glow)
+                                : cn(colors.dot, "opacity-40")
                             )}
                           />
                           <span>{subItem.label}</span>

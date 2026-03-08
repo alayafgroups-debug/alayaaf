@@ -323,7 +323,7 @@ export default function Layout({ children }: LayoutProps) {
               شركة لاكجري العياف
             </h1>
             <span className="hidden sm:inline-block h-5 w-px bg-border/60" />
-            <span className="hidden sm:inline-block text-[11px] text-muted-foreground font-medium">
+            <span className="hidden sm:inline-block text-[11px] text-muted-foreground font-bold">
               نظام إدارة الأعمال المتكامل
             </span>
           </div>

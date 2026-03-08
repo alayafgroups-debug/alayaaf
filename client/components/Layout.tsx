@@ -57,9 +57,9 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "التقارير", href: "/crm/reports" },
   ],
   "/expenses": [
-    { label: "سندات الصرف", href: "/crm/expenses/vouchers" },
-    { label: "سندات القيض", href: "/crm/expenses/petty-cash" },
-    { label: "التقارير", href: "/crm/expenses/reports" },
+    { label: "سندات الصرف", href: "/expenses/vouchers" },
+    { label: "سندات القيض", href: "/expenses/petty-cash" },
+    { label: "التقارير", href: "/expenses/reports" },
   ],
   "/tax": [
     { label: "حساب الضرائب", href: "/tax" },

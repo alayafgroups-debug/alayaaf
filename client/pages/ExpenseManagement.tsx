@@ -46,6 +46,7 @@ type VoucherForm = {
 };
 
 type VoucherViewData = VoucherRow & { items: VoucherItemForm[] };
+type PettyCashViewData = PettyCashRow;
 
 type PettyCashForm = {
   id?: string;
@@ -91,6 +92,17 @@ const getEmptyVoucherForm = (): VoucherForm => ({
   items: [{ description: "", accountCode: "", amount: "" }],
 });
 
+const getEmptyPettyCashForm = (): PettyCashForm => ({
+  id: undefined,
+  voucherNumber: "",
+  voucherDate: new Date().toISOString().split("T")[0],
+  beneficiaryName: "",
+  purpose: "",
+  amount: "",
+  paidBy: "",
+  receivedBy: "",
+});
+
 export default function ExpenseManagement() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -104,16 +116,9 @@ export default function ExpenseManagement() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [voucherView, setVoucherView] = useState<VoucherViewData | null>(null);
+  const [pettyCashView, setPettyCashView] = useState<PettyCashViewData | null>(null);
   const [voucherForm, setVoucherForm] = useState<VoucherForm>(getEmptyVoucherForm());
-  const [pettyCashForm, setPettyCashForm] = useState<PettyCashForm>({
-    voucherNumber: "",
-    voucherDate: new Date().toISOString().split("T")[0],
-    beneficiaryName: "",
-    purpose: "",
-    amount: "",
-    paidBy: "",
-    receivedBy: "",
-  });
+  const [pettyCashForm, setPettyCashForm] = useState<PettyCashForm>(getEmptyPettyCashForm());
 
   useEffect(() => {
     if (!isReports) {
@@ -191,10 +196,46 @@ export default function ExpenseManagement() {
     setIsFormOpen(true);
   };
 
+  const generateVoucherNumber = async (
+    tableName: "expense_vouchers" | "petty_cash_vouchers",
+    prefix: "SRF" | "QBD"
+  ) => {
+    const { data } = await supabase
+      .from(tableName)
+      .select("voucher_number")
+      .like("voucher_number", `${prefix}-%`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const lastVoucherNumber = String(data?.[0]?.voucher_number ?? "");
+    const lastNumber = Number(lastVoucherNumber.split("-")[1] ?? "0");
+    const nextNumber = String(lastNumber + 1).padStart(4, "0");
+    return `${prefix}-${nextNumber}`;
+  };
+
+  const handleViewPettyCash = (row: PettyCashRow) => {
+    setPettyCashView(row);
+  };
+
+  const handleEditPettyCash = (row: PettyCashRow) => {
+    setPettyCashForm({
+      id: row.id,
+      voucherNumber: row.voucherNumber,
+      voucherDate: row.voucherDate,
+      beneficiaryName: row.beneficiaryName,
+      purpose: row.purpose,
+      amount: row.amount,
+      paidBy: row.paidBy,
+      receivedBy: row.receivedBy,
+    });
+    setPettyCashView(null);
+    setIsFormOpen(true);
+  };
+
   const title = isReports
     ? "تقرير المصروفات"
     : isPettyCash
-      ? "سندات القيض"
+      ? "سندات القبض"
       : isVouchers
         ? "سندات الصرف"
         : "المصرفات";
@@ -202,7 +243,7 @@ export default function ExpenseManagement() {
   const description = isReports
     ? "ملخصات وتقارير المصروفات والسندات."
     : isPettyCash
-      ? "إدارة سندات القيض وتتبع النقد الصغير."
+      ? "إدارة سندات القبض وتتبع النقد الصغير."
       : isVouchers
         ? "إنشاء وإدارة سندات الصرف والمصروفات."
         : "إدارة المصرفات والسندات والتقارير.";
@@ -214,7 +255,7 @@ export default function ExpenseManagement() {
           title: "المصرفات",
           items: [
             { label: "سندات الصرف", href: "/expenses/vouchers" },
-            { label: "سندات القيض", href: "/expenses/petty-cash" },
+            { label: "سندات القبض", href: "/expenses/petty-cash" },
             { label: "التقارير", href: "/expenses/reports" },
           ],
         }}
@@ -251,9 +292,9 @@ export default function ExpenseManagement() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">سندات القيض</h3>
+                  <h3 className="text-lg font-semibold text-foreground">سندات القبض</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    إدارة سندات القيض وتتبع النقد الصغير
+                    إدارة سندات القبض وتتبع النقد الصغير
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-lg bg-sky-500/10 flex items-center justify-center">
@@ -290,7 +331,7 @@ export default function ExpenseManagement() {
         title: "المصرفات",
         items: [
           { label: "سندات الصرف", href: "/expenses/vouchers" },
-          { label: "سندات القيض", href: "/expenses/petty-cash" },
+          { label: "سندات القبض", href: "/expenses/petty-cash" },
           { label: "التقارير", href: "/expenses/reports" },
         ],
       }}
@@ -303,27 +344,21 @@ export default function ExpenseManagement() {
           </div>
           {!isReports && (
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (isVouchers) {
-                  setVoucherForm(getEmptyVoucherForm());
+                  const voucherNumber = await generateVoucherNumber("expense_vouchers", "SRF");
+                  setVoucherForm({ ...getEmptyVoucherForm(), voucherNumber });
                 }
                 if (isPettyCash) {
-                  setPettyCashForm({
-                    voucherNumber: "",
-                    voucherDate: new Date().toISOString().split("T")[0],
-                    beneficiaryName: "",
-                    purpose: "",
-                    amount: "",
-                    paidBy: "",
-                    receivedBy: "",
-                  });
+                  const voucherNumber = await generateVoucherNumber("petty_cash_vouchers", "QBD");
+                  setPettyCashForm({ ...getEmptyPettyCashForm(), voucherNumber });
                 }
                 setIsFormOpen(true);
               }}
               className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success/90"
             >
               <Plus className="h-4 w-4" />
-              {isVouchers ? "إنشاء سند صرف جديد" : "إنشاء سند قيض جديد"}
+              {isVouchers ? "إنشاء سند صرف جديد" : "إنشاء سند قبض جديد"}
             </button>
           )}
         </div>
@@ -340,9 +375,13 @@ export default function ExpenseManagement() {
                 (item) => item.description.trim() || item.accountCode.trim() || item.amount
               );
 
+              const voucherNumber = voucherForm.id
+                ? voucherForm.voucherNumber
+                : voucherForm.voucherNumber || (await generateVoucherNumber("expense_vouchers", "SRF"));
+
               const payload = {
                 id: voucherId,
-                voucher_number: voucherForm.voucherNumber,
+                voucher_number: voucherNumber,
                 voucher_date: voucherForm.voucherDate,
                 description: voucherForm.description,
                 department: voucherForm.department,
@@ -387,9 +426,14 @@ export default function ExpenseManagement() {
             setForm={setPettyCashForm}
             onSave={async () => {
               setSaving(true);
+              const voucherId = pettyCashForm.id ?? crypto.randomUUID();
+              const voucherNumber = pettyCashForm.id
+                ? pettyCashForm.voucherNumber
+                : pettyCashForm.voucherNumber || (await generateVoucherNumber("petty_cash_vouchers", "QBD"));
+
               const payload = {
-                id: pettyCashForm.id ?? crypto.randomUUID(),
-                voucher_number: pettyCashForm.voucherNumber,
+                id: voucherId,
+                voucher_number: voucherNumber,
                 voucher_date: pettyCashForm.voucherDate,
                 beneficiary_name: pettyCashForm.beneficiaryName,
                 purpose: pettyCashForm.purpose,
@@ -409,15 +453,7 @@ export default function ExpenseManagement() {
               if (!result.error) {
                 await loadPettyCash();
                 setIsFormOpen(false);
-                setPettyCashForm({
-                  voucherNumber: "",
-                  voucherDate: new Date().toISOString().split("T")[0],
-                  beneficiaryName: "",
-                  purpose: "",
-                  amount: "",
-                  paidBy: "",
-                  receivedBy: "",
-                });
+                setPettyCashForm(getEmptyPettyCashForm());
                 toast({ title: "تم الحفظ", description: "تم حفظ السند بنجاح" });
               } else {
                 toast({ title: "فشل الحفظ", description: "تعذر حفظ السند", variant: "destructive" });
@@ -451,18 +487,23 @@ export default function ExpenseManagement() {
         )}
 
         {isPettyCash && !isFormOpen && (
-          <PettyCashList rows={pettyCashRows} onDelete={async (id) => {
-            if (!confirm("هل متأكد من حذف السند؟")) return;
-            setDeleting(true);
-            const result = await supabase.from("petty_cash_vouchers").delete().eq("id", id);
-            if (!result.error) {
-              await loadPettyCash();
-              toast({ title: "تم الحذف", description: "تم حذف السند بنجاح" });
-            } else {
-              toast({ title: "فشل الحذف", variant: "destructive" });
-            }
-            setDeleting(false);
-          }} />
+          <PettyCashList
+            rows={pettyCashRows}
+            onView={handleViewPettyCash}
+            onEdit={handleEditPettyCash}
+            onDelete={async (id) => {
+              if (!confirm("هل متأكد من حذف السند؟")) return;
+              setDeleting(true);
+              const result = await supabase.from("petty_cash_vouchers").delete().eq("id", id);
+              if (!result.error) {
+                await loadPettyCash();
+                toast({ title: "تم الحذف", description: "تم حذف السند بنجاح" });
+              } else {
+                toast({ title: "فشل الحذف", variant: "destructive" });
+              }
+              setDeleting(false);
+            }}
+          />
         )}
 
         {isReports && <ExpenseReportsList />}
@@ -546,6 +587,64 @@ export default function ExpenseManagement() {
             </div>
           </div>
         )}
+
+        {pettyCashView && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-xl rounded-xl border border-border bg-card p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-foreground">تفاصيل سند القبض</h3>
+                <button
+                  onClick={() => setPettyCashView(null)}
+                  className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">رقم السند</p>
+                  <p className="font-medium text-foreground">{pettyCashView.voucherNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">التاريخ</p>
+                  <p className="font-medium text-foreground">{pettyCashView.voucherDate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">المستفيد</p>
+                  <p className="font-medium text-foreground">{pettyCashView.beneficiaryName || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">المبلغ</p>
+                  <p className="font-medium text-foreground">{pettyCashView.amount || "0"} ريال</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">صرفه</p>
+                  <p className="font-medium text-foreground">{pettyCashView.paidBy || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">استلمه</p>
+                  <p className="font-medium text-foreground">{pettyCashView.receivedBy || "—"}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground">الغرض</p>
+                <p className="font-medium text-foreground">{pettyCashView.purpose || "—"}</p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => handleEditPettyCash(pettyCashView)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+                >
+                  <Pencil className="h-4 w-4" />
+                  تعديل السند
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
@@ -575,9 +674,9 @@ function VoucherForm({
           <label className="text-xs text-muted-foreground">رقم السند</label>
           <input
             value={form.voucherNumber}
-            onChange={(e) => setForm({ ...form, voucherNumber: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            placeholder="مثلاً: SVN-001"
+            readOnly
+            className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+            placeholder="يتولد تلقائياً"
           />
         </div>
 
@@ -728,16 +827,18 @@ function PettyCashForm({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-      <h3 className="text-lg font-semibold text-foreground">إنشاء سند قيض جديد</h3>
+      <h3 className="text-lg font-semibold text-foreground">
+        {form.id ? "تعديل سند القبض" : "إنشاء سند قبض جديد"}
+      </h3>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="text-xs text-muted-foreground">رقم السند</label>
           <input
             value={form.voucherNumber}
-            onChange={(e) => setForm({ ...form, voucherNumber: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            placeholder="مثلاً: PCN-001"
+            readOnly
+            className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+            placeholder="يتولد تلقائياً"
           />
         </div>
 
@@ -913,7 +1014,17 @@ function VouchersList({
   );
 }
 
-function PettyCashList({ rows, onDelete }: { rows: PettyCashRow[]; onDelete: (id: string) => void }) {
+function PettyCashList({
+  rows,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  rows: PettyCashRow[];
+  onView: (row: PettyCashRow) => void;
+  onEdit: (row: PettyCashRow) => void;
+  onDelete: (id: string) => void;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="mb-4 flex flex-wrap items-center gap-3 p-4">
@@ -955,6 +1066,20 @@ function PettyCashList({ rows, onDelete }: { rows: PettyCashRow[]; onDelete: (id
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => onView(row)}
+                      title="عرض"
+                      className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => onEdit(row)}
+                      title="تعديل"
+                      className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={() => onDelete(row.id)}
                       title="حذف"
                       className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-destructive transition"
@@ -986,7 +1111,7 @@ function ExpenseReportsList() {
 
         <div className="overflow-hidden rounded-xl border border-border bg-card p-4">
           <div className="bg-sky-600 px-4 py-3 text-sm font-semibold text-white rounded-lg mb-3">
-            إجمالي سندات القيض
+            إجمالي سندات القبض
           </div>
           <p className="text-2xl font-bold text-foreground">﷼ 0.00</p>
           <p className="text-xs text-muted-foreground mt-1">0 سند</p>

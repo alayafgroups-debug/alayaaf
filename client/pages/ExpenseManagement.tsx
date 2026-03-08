@@ -121,9 +121,17 @@ export default function ExpenseManagement() {
   const [pettyCashForm, setPettyCashForm] = useState<PettyCashForm>(getEmptyPettyCashForm());
 
   useEffect(() => {
-    if (!isReports) {
-      if (isVouchers) loadVouchers();
-      if (isPettyCash) loadPettyCash();
+    if (isReports) {
+      void Promise.allSettled([loadVouchers(), loadPettyCash()]);
+      return;
+    }
+
+    if (isVouchers) {
+      void loadVouchers();
+    }
+
+    if (isPettyCash) {
+      void loadPettyCash();
     }
   }, [isVouchers, isPettyCash, isReports]);
 
@@ -506,7 +514,7 @@ export default function ExpenseManagement() {
           />
         )}
 
-        {isReports && <ExpenseReportsList />}
+        {isReports && <ExpenseReportsList voucherRows={voucherRows} pettyCashRows={pettyCashRows} />}
 
         {voucherView && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -1097,7 +1105,52 @@ function PettyCashList({
   );
 }
 
-function ExpenseReportsList() {
+function ExpenseReportsList({
+  voucherRows,
+  pettyCashRows,
+}: {
+  voucherRows: VoucherRow[];
+  pettyCashRows: PettyCashRow[];
+}) {
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat("ar-SA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+
+  const vouchersTotal = voucherRows.reduce(
+    (sum, row) => sum + Number.parseFloat(row.totalAmount || "0"),
+    0
+  );
+
+  const pettyCashTotal = pettyCashRows.reduce(
+    (sum, row) => sum + Number.parseFloat(row.amount || "0"),
+    0
+  );
+
+  const overallTotal = vouchersTotal + pettyCashTotal;
+
+  const transactions = [
+    ...voucherRows.map((row) => ({
+      id: row.id,
+      number: row.voucherNumber,
+      date: row.voucherDate,
+      type: "سند صرف",
+      description: row.description || row.department || "—",
+      amount: Number.parseFloat(row.totalAmount || "0"),
+      status: row.status,
+    })),
+    ...pettyCashRows.map((row) => ({
+      id: row.id,
+      number: row.voucherNumber,
+      date: row.voucherDate,
+      type: "سند قبض",
+      description: row.purpose || row.beneficiaryName || "—",
+      amount: Number.parseFloat(row.amount || "0"),
+      status: row.status,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-3">
@@ -1105,32 +1158,62 @@ function ExpenseReportsList() {
           <div className="bg-emerald-600 px-4 py-3 text-sm font-semibold text-white rounded-lg mb-3">
             إجمالي سندات الصرف
           </div>
-          <p className="text-2xl font-bold text-foreground">﷼ 0.00</p>
-          <p className="text-xs text-muted-foreground mt-1">0 سند</p>
+          <p className="text-2xl font-bold text-foreground">{formatMoney(vouchersTotal)} ريال</p>
+          <p className="text-xs text-muted-foreground mt-1">{voucherRows.length} سند</p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border bg-card p-4">
           <div className="bg-sky-600 px-4 py-3 text-sm font-semibold text-white rounded-lg mb-3">
             إجمالي سندات القبض
           </div>
-          <p className="text-2xl font-bold text-foreground">﷼ 0.00</p>
-          <p className="text-xs text-muted-foreground mt-1">0 سند</p>
+          <p className="text-2xl font-bold text-foreground">{formatMoney(pettyCashTotal)} ريال</p>
+          <p className="text-xs text-muted-foreground mt-1">{pettyCashRows.length} سند</p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border bg-card p-4">
           <div className="bg-rose-600 px-4 py-3 text-sm font-semibold text-white rounded-lg mb-3">
             إجمالي المصروفات
           </div>
-          <p className="text-2xl font-bold text-foreground">﷼ 0.00</p>
+          <p className="text-2xl font-bold text-foreground">{formatMoney(overallTotal)} ريال</p>
           <p className="text-xs text-muted-foreground mt-1">من جميع السندات</p>
         </div>
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6">
         <h3 className="text-lg font-semibold text-foreground mb-4">تقرير تفصيلي</h3>
-        <div className="text-sm text-muted-foreground">
-          <p>لا توجد بيانات للعرض حالياً.</p>
-        </div>
+
+        {transactions.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            <p>لا توجد بيانات للعرض حالياً.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm text-right">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="px-4 py-3 font-semibold">رقم السند</th>
+                  <th className="px-4 py-3 font-semibold">النوع</th>
+                  <th className="px-4 py-3 font-semibold">التاريخ</th>
+                  <th className="px-4 py-3 font-semibold">الوصف</th>
+                  <th className="px-4 py-3 font-semibold">المبلغ</th>
+                  <th className="px-4 py-3 font-semibold">الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((row) => (
+                  <tr key={`${row.type}-${row.id}`} className="border-t border-border hover:bg-muted/30">
+                    <td className="px-4 py-3 font-medium text-primary">{row.number}</td>
+                    <td className="px-4 py-3">{row.type}</td>
+                    <td className="px-4 py-3">{row.date}</td>
+                    <td className="px-4 py-3">{row.description}</td>
+                    <td className="px-4 py-3 font-semibold">{formatMoney(row.amount)} ريال</td>
+                    <td className="px-4 py-3">{row.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

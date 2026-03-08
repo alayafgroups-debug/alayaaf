@@ -18,6 +18,7 @@ type PartyRow = {
 };
 
 type PartyForm = {
+  id?: string;
   name: string;
   type: string;
   email: string;
@@ -26,6 +27,8 @@ type PartyForm = {
   creditLimit: string;
   status: string;
 };
+
+type ViewModalData = PartyRow | null;
 
 const customers: PartyRow[] = [];
 const vendors: PartyRow[] = [];
@@ -42,6 +45,7 @@ const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
 });
 
 const emptyForm = (isVendor: boolean): PartyForm => ({
+  id: undefined,
   name: "",
   type: isVendor ? "مورد محلي" : "شركة",
   email: "",
@@ -60,7 +64,9 @@ export default function CRM() {
   const [vendorRows, setVendorRows] = useState<PartyRow[]>(vendors);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState<PartyForm>(emptyForm(false));
+  const [viewModal, setViewModal] = useState<ViewModalData>(null);
 
   useEffect(() => {
     const loadTable = async (
@@ -138,45 +144,144 @@ export default function CRM() {
     }
 
     const tableName = isVendors ? "vendors" : "customers";
-    const payload = {
-      id: crypto.randomUUID(),
-      name: form.name.trim(),
-      type: form.type,
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      opening_balance: form.openingBalance || "0",
-      credit_limit: form.creditLimit || "0",
-      status: form.status,
-    };
-
     setSaving(true);
+
+    if (form.id) {
+      // Update existing
+      const payload = {
+        name: form.name.trim(),
+        type: form.type,
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        opening_balance: form.openingBalance || "0",
+        credit_limit: form.creditLimit || "0",
+        status: form.status,
+      };
+
+      const result = await supabase
+        .from(tableName)
+        .update(payload)
+        .eq("id", form.id)
+        .then((res) => ({ ...res, failed: false as const }))
+        .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+
+      if (!result.error) {
+        const updatedRow = mapPartyRow({ id: form.id, ...payload } as Record<string, unknown>);
+        if (isVendors) {
+          setVendorRows((prev) =>
+            prev.map((row) => (row.id === form.id ? updatedRow : row))
+          );
+        } else {
+          setCustomerRows((prev) =>
+            prev.map((row) => (row.id === form.id ? updatedRow : row))
+          );
+        }
+
+        setIsFormOpen(false);
+        toast({ title: "تم التحديث", description: isVendors ? "تم تحديث بيانات المورد" : "تم تحديث بيانات العميل" });
+      } else {
+        toast({
+          title: "فشل التحديث",
+          description: result.failed
+            ? "تعذر الاتصال بقاعدة البيانات"
+            : "تعذر تحديث البيانات",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Create new
+      const payload = {
+        id: crypto.randomUUID(),
+        name: form.name.trim(),
+        type: form.type,
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        opening_balance: form.openingBalance || "0",
+        credit_limit: form.creditLimit || "0",
+        status: form.status,
+      };
+
+      const result = await supabase
+        .from(tableName)
+        .insert([payload])
+        .then((res) => ({ ...res, failed: false as const }))
+        .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+
+      if (!result.error) {
+        const newRow = mapPartyRow(payload as unknown as Record<string, unknown>);
+        if (isVendors) {
+          setVendorRows((prev) => [newRow, ...prev]);
+        } else {
+          setCustomerRows((prev) => [newRow, ...prev]);
+        }
+
+        setIsFormOpen(false);
+        toast({ title: "تم الحفظ", description: isVendors ? "تمت إضافة المورد" : "تمت إضافة العميل" });
+      } else {
+        toast({
+          title: "فشل الحفظ",
+          description: result.failed
+            ? "تعذر الاتصال بقاعدة البيانات، تحقق من الاتصال"
+            : "تعذر حفظ البيانات",
+          variant: "destructive",
+        });
+      }
+    }
+
+    setSaving(false);
+  };
+
+  const handleView = (row: PartyRow) => {
+    setViewModal(row);
+  };
+
+  const handleEdit = (row: PartyRow) => {
+    setForm({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      email: row.email,
+      phone: row.phone,
+      openingBalance: row.openingBalance,
+      creditLimit: row.creditLimit,
+      status: row.status,
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(isVendors ? "هل متأكد من حذف المورد؟" : "هل متأكد من حذف العميل؟")) {
+      return;
+    }
+
+    const tableName = isVendors ? "vendors" : "customers";
+    setDeleting(true);
+
     const result = await supabase
       .from(tableName)
-      .insert([payload])
+      .delete()
+      .eq("id", id)
       .then((res) => ({ ...res, failed: false as const }))
       .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
 
     if (!result.error) {
-      const newRow = mapPartyRow(payload as unknown as Record<string, unknown>);
       if (isVendors) {
-        setVendorRows((prev) => [newRow, ...prev]);
+        setVendorRows((prev) => prev.filter((row) => row.id !== id));
       } else {
-        setCustomerRows((prev) => [newRow, ...prev]);
+        setCustomerRows((prev) => prev.filter((row) => row.id !== id));
       }
-
-      setIsFormOpen(false);
-      toast({ title: "تم الحفظ", description: isVendors ? "تمت إضافة المورد" : "تمت إضافة العميل" });
+      toast({ title: "تم الحذف", description: isVendors ? "تم حذف المورد" : "تم حذف العميل" });
     } else {
       toast({
-        title: "فشل الحفظ",
+        title: "فشل الحذف",
         description: result.failed
-          ? "تعذر الاتصال بقاعدة البيانات، تحقق من الاتصال"
-          : "تعذر حفظ البيانات",
+          ? "تعذر الاتصال بقاعدة البيانات"
+          : "تعذر حذف البيانات",
         variant: "destructive",
       });
     }
 
-    setSaving(false);
+    setDeleting(false);
   };
 
   return (
@@ -209,7 +314,13 @@ export default function CRM() {
         {!isReports && isFormOpen ? (
           <div className="rounded-xl border border-border bg-card p-4 space-y-4">
             <h3 className="text-base font-semibold text-foreground">
-              {isVendors ? "إضافة مورد جديد" : "إضافة عميل جديد"}
+              {form.id
+                ? isVendors
+                  ? "تعديل بيانات المورد"
+                  : "تعديل بيانات العميل"
+                : isVendors
+                  ? "إضافة مورد جديد"
+                  : "إضافة عميل جديد"}
             </h3>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -502,13 +613,26 @@ export default function CRM() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <button className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary">
+                          <button
+                            onClick={() => handleView(customer)}
+                            title="عرض التفاصيل"
+                            className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
+                          >
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary">
+                          <button
+                            onClick={() => handleEdit(customer)}
+                            title="تعديل"
+                            className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
+                          >
                             <Pencil className="h-4 w-4" />
                           </button>
-                          <button className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-destructive">
+                          <button
+                            onClick={() => handleDelete(customer.id)}
+                            disabled={deleting}
+                            title="حذف"
+                            className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-destructive transition disabled:opacity-50"
+                          >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
@@ -517,6 +641,83 @@ export default function CRM() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {viewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="rounded-xl border border-border bg-card p-6 w-full max-w-md space-y-4 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-lg font-semibold text-foreground">
+                {isVendors ? "تفاصيل المورد" : "تفاصيل العميل"}
+              </h3>
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">الرقم</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.id}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">الاسم</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.name}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">{typeLabel}</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.type}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.email || "—"}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">الهاتف</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.phone}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">الرصيد الافتتاحي</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.openingBalance} ريال</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">حد الائتمان</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.creditLimit} ريال</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <p className="text-sm">
+                    <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
+                      {viewModal.status}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    handleEdit(viewModal);
+                    setViewModal(null);
+                  }}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90"
+                >
+                  <Pencil className="h-4 w-4" />
+                  تعديل
+                </button>
+
+                <button
+                  onClick={() => setViewModal(null)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                  إغلاق
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -80,9 +80,9 @@ const mapPettyCashRow = (row: Record<string, unknown>): PettyCashRow => ({
 export default function ExpenseManagement() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isVouchers = location.pathname.includes("/crm/expenses/vouchers");
-  const isPettyCash = location.pathname.includes("/crm/expenses/petty-cash");
-  const isReports = location.pathname.includes("/crm/expenses/reports");
+  const isVouchers = location.pathname.includes("/expenses/vouchers");
+  const isPettyCash = location.pathname.includes("/expenses/petty-cash");
+  const isReports = location.pathname.includes("/expenses/reports");
 
   const [voucherRows, setVoucherRows] = useState<VoucherRow[]>([]);
   const [pettyCashRows, setPettyCashRows] = useState<PettyCashRow[]>([]);
@@ -166,9 +166,9 @@ export default function ExpenseManagement() {
         subMenu={{
           title: "المصرفات",
           items: [
-            { label: "سندات الصرف", href: "/crm/expenses/vouchers" },
-            { label: "سندات القيض", href: "/crm/expenses/petty-cash" },
-            { label: "التقارير", href: "/crm/expenses/reports" },
+            { label: "سندات الصرف", href: "/expenses/vouchers" },
+            { label: "سندات القيض", href: "/expenses/petty-cash" },
+            { label: "التقارير", href: "/expenses/reports" },
           ],
         }}
       >
@@ -182,7 +182,7 @@ export default function ExpenseManagement() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             <button
-              onClick={() => navigate("/crm/expenses/vouchers")}
+              onClick={() => navigate("/expenses/vouchers")}
               className="overflow-hidden rounded-xl border border-border bg-card p-6 transition hover:shadow-md hover:border-primary"
             >
               <div className="flex items-center justify-between">
@@ -199,7 +199,7 @@ export default function ExpenseManagement() {
             </button>
 
             <button
-              onClick={() => navigate("/crm/expenses/petty-cash")}
+              onClick={() => navigate("/expenses/petty-cash")}
               className="overflow-hidden rounded-xl border border-border bg-card p-6 transition hover:shadow-md hover:border-primary"
             >
               <div className="flex items-center justify-between">
@@ -216,7 +216,7 @@ export default function ExpenseManagement() {
             </button>
 
             <button
-              onClick={() => navigate("/crm/expenses/reports")}
+              onClick={() => navigate("/expenses/reports")}
               className="overflow-hidden rounded-xl border border-border bg-card p-6 transition hover:shadow-md hover:border-primary"
             >
               <div className="flex items-center justify-between">
@@ -242,9 +242,9 @@ export default function ExpenseManagement() {
       subMenu={{
         title: "المصرفات",
         items: [
-          { label: "سندات الصرف", href: "/crm/expenses/vouchers" },
-          { label: "سندات القيض", href: "/crm/expenses/petty-cash" },
-          { label: "التقارير", href: "/crm/expenses/reports" },
+          { label: "سندات الصرف", href: "/expenses/vouchers" },
+          { label: "سندات القيض", href: "/expenses/petty-cash" },
+          { label: "التقارير", href: "/expenses/reports" },
         ],
       }}
     >

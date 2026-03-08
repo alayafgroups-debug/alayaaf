@@ -71,10 +71,10 @@ const App = () => (
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />
           <Route path="/crm/reports" element={<CRM />} />
-          <Route path="/crm/expenses" element={<ExpenseManagement />} />
-          <Route path="/crm/expenses/vouchers" element={<ExpenseManagement />} />
-          <Route path="/crm/expenses/petty-cash" element={<ExpenseManagement />} />
-          <Route path="/crm/expenses/reports" element={<ExpenseManagement />} />
+          <Route path="/expenses" element={<ExpenseManagement />} />
+          <Route path="/expenses/vouchers" element={<ExpenseManagement />} />
+          <Route path="/expenses/petty-cash" element={<ExpenseManagement />} />
+          <Route path="/expenses/reports" element={<ExpenseManagement />} />
           <Route path="/tax" element={<Tax />} />
           <Route path="/users" element={<UsersPermissions />} />
           <Route path="/users/roles" element={<UsersPermissions />} />

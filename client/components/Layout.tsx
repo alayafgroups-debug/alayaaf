@@ -17,6 +17,7 @@ import {
   Bell,
   Search,
   Crown,
+  Receipt,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,11 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "الموردين", href: "/crm/vendors" },
     { label: "التقارير", href: "/crm/reports" },
   ],
+  "/expenses": [
+    { label: "سندات الصرف", href: "/crm/expenses/vouchers" },
+    { label: "سندات القيض", href: "/crm/expenses/petty-cash" },
+    { label: "التقارير", href: "/crm/expenses/reports" },
+  ],
   "/tax": [
     { label: "حساب الضرائب", href: "/tax" },
     { label: "تقارير ضريبية", href: "/tax" },
@@ -77,6 +83,7 @@ const itemColors: Record<string, { icon: string; active: string; glow: string; d
   "/purchases": { icon: "from-violet-400 to-purple-600", active: "bg-violet-500/15 border-violet-500/25",glow: "shadow-violet-500/20",   dot: "bg-violet-400",   text: "text-violet-300",   subBg: "bg-violet-500/[0.06]",   border: "border-violet-400/20" },
   "/hr":        { icon: "from-emerald-400 to-teal-600",  active: "bg-emerald-500/15 border-emerald-500/25",glow: "shadow-emerald-500/20",dot: "bg-emerald-400",  text: "text-emerald-300",  subBg: "bg-emerald-500/[0.06]",  border: "border-emerald-400/20" },
   "/crm":       { icon: "from-amber-400 to-orange-600",  active: "bg-amber-500/15 border-amber-500/25",  glow: "shadow-amber-500/20",   dot: "bg-amber-400",    text: "text-amber-300",    subBg: "bg-amber-500/[0.06]",    border: "border-amber-400/20" },
+  "/expenses":  { icon: "from-green-400 to-emerald-600", active: "bg-green-500/15 border-green-500/25",  glow: "shadow-green-500/20",   dot: "bg-green-400",    text: "text-green-300",    subBg: "bg-green-500/[0.06]",    border: "border-green-400/20" },
   "/tax":       { icon: "from-rose-400 to-pink-600",     active: "bg-rose-500/15 border-rose-500/25",    glow: "shadow-rose-500/20",    dot: "bg-rose-400",     text: "text-rose-300",     subBg: "bg-rose-500/[0.06]",     border: "border-rose-400/20" },
   "/users":     { icon: "from-cyan-400 to-teal-600",     active: "bg-cyan-500/15 border-cyan-500/25",    glow: "shadow-cyan-500/20",    dot: "bg-cyan-400",     text: "text-cyan-300",     subBg: "bg-cyan-500/[0.06]",     border: "border-cyan-400/20" },
   "/ai":        { icon: "from-fuchsia-400 to-purple-600",active: "bg-fuchsia-500/15 border-fuchsia-500/25",glow: "shadow-fuchsia-500/20",dot: "bg-fuchsia-400", text: "text-fuchsia-300",  subBg: "bg-fuchsia-500/[0.06]",  border: "border-fuchsia-400/20" },
@@ -99,6 +106,7 @@ export default function Layout({ children }: LayoutProps) {
     { icon: ShoppingCart, label: "المشتريات", href: "/purchases", hasSubmenu: true },
     { icon: Users, label: "الموارد البشرية", href: "/hr", hasSubmenu: true },
     { icon: CreditCard, label: "العملاء والموردين", href: "/crm", hasSubmenu: true },
+    { icon: Receipt, label: "المصرفات", href: "/expenses", hasSubmenu: true },
     { icon: DollarSign, label: "إدارة الضرائب", href: "/tax", hasSubmenu: true },
     { icon: ShieldCheck, label: "المستخدمين والصلاحيات", href: "/users", hasSubmenu: true },
     { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },

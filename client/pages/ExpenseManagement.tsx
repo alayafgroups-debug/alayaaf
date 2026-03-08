@@ -28,6 +28,13 @@ type PettyCashRow = {
   status: string;
 };
 
+type VoucherItemForm = {
+  id?: string;
+  description: string;
+  accountCode: string;
+  amount: string;
+};
+
 type VoucherForm = {
   id?: string;
   voucherNumber: string;
@@ -35,13 +42,10 @@ type VoucherForm = {
   description: string;
   department: string;
   approvedBy: string;
-  items: Array<{
-    id?: string;
-    description: string;
-    accountCode: string;
-    amount: string;
-  }>;
+  items: VoucherItemForm[];
 };
+
+type VoucherViewData = VoucherRow & { items: VoucherItemForm[] };
 
 type PettyCashForm = {
   id?: string;
@@ -77,6 +81,16 @@ const mapPettyCashRow = (row: Record<string, unknown>): PettyCashRow => ({
   status: String(row.status ?? "قيد المراجعة"),
 });
 
+const getEmptyVoucherForm = (): VoucherForm => ({
+  id: undefined,
+  voucherNumber: "",
+  voucherDate: new Date().toISOString().split("T")[0],
+  description: "",
+  department: "",
+  approvedBy: "",
+  items: [{ description: "", accountCode: "", amount: "" }],
+});
+
 export default function ExpenseManagement() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -89,14 +103,8 @@ export default function ExpenseManagement() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [voucherForm, setVoucherForm] = useState<VoucherForm>({
-    voucherNumber: "",
-    voucherDate: new Date().toISOString().split("T")[0],
-    description: "",
-    department: "",
-    approvedBy: "",
-    items: [{ description: "", accountCode: "", amount: "" }],
-  });
+  const [voucherView, setVoucherView] = useState<VoucherViewData | null>(null);
+  const [voucherForm, setVoucherForm] = useState<VoucherForm>(getEmptyVoucherForm());
   const [pettyCashForm, setPettyCashForm] = useState<PettyCashForm>({
     voucherNumber: "",
     voucherDate: new Date().toISOString().split("T")[0],
@@ -142,6 +150,45 @@ export default function ExpenseManagement() {
     } else {
       setPettyCashRows([]);
     }
+  };
+
+  const loadVoucherItems = async (voucherId: string): Promise<VoucherItemForm[]> => {
+    const { data, error } = await supabase
+      .from("expense_voucher_items")
+      .select("id, item_description, account_code, amount")
+      .eq("voucher_id", voucherId)
+      .order("created_at", { ascending: true });
+
+    if (error || !data) {
+      return [];
+    }
+
+    return data.map((item) => ({
+      id: String(item.id ?? ""),
+      description: String(item.item_description ?? ""),
+      accountCode: String(item.account_code ?? ""),
+      amount: String(item.amount ?? "0"),
+    }));
+  };
+
+  const handleViewVoucher = async (row: VoucherRow) => {
+    const items = await loadVoucherItems(row.id);
+    setVoucherView({ ...row, items });
+  };
+
+  const handleEditVoucher = async (row: VoucherRow) => {
+    const items = await loadVoucherItems(row.id);
+    setVoucherForm({
+      id: row.id,
+      voucherNumber: row.voucherNumber,
+      voucherDate: row.voucherDate,
+      description: row.description,
+      department: row.department,
+      approvedBy: row.approvedBy,
+      items: items.length > 0 ? items : [{ description: "", accountCode: "", amount: "" }],
+    });
+    setVoucherView(null);
+    setIsFormOpen(true);
   };
 
   const title = isReports
@@ -256,7 +303,23 @@ export default function ExpenseManagement() {
           </div>
           {!isReports && (
             <button
-              onClick={() => setIsFormOpen(true)}
+              onClick={() => {
+                if (isVouchers) {
+                  setVoucherForm(getEmptyVoucherForm());
+                }
+                if (isPettyCash) {
+                  setPettyCashForm({
+                    voucherNumber: "",
+                    voucherDate: new Date().toISOString().split("T")[0],
+                    beneficiaryName: "",
+                    purpose: "",
+                    amount: "",
+                    paidBy: "",
+                    receivedBy: "",
+                  });
+                }
+                setIsFormOpen(true);
+              }}
               className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success/90"
             >
               <Plus className="h-4 w-4" />
@@ -271,35 +334,44 @@ export default function ExpenseManagement() {
             setForm={setVoucherForm}
             onSave={async () => {
               setSaving(true);
+
+              const voucherId = voucherForm.id ?? crypto.randomUUID();
+              const cleanedItems = voucherForm.items.filter(
+                (item) => item.description.trim() || item.accountCode.trim() || item.amount
+              );
+
               const payload = {
-                id: voucherForm.id ?? crypto.randomUUID(),
+                id: voucherId,
                 voucher_number: voucherForm.voucherNumber,
                 voucher_date: voucherForm.voucherDate,
                 description: voucherForm.description,
                 department: voucherForm.department,
                 approved_by: voucherForm.approvedBy,
-                total_amount: voucherForm.items.reduce((sum, item) => sum + parseFloat(item.amount || "0"), 0),
+                total_amount: cleanedItems.reduce((sum, item) => sum + parseFloat(item.amount || "0"), 0),
                 status: "مسودة",
               };
 
               const result = voucherForm.id
-                ? await supabase
-                    .from("expense_vouchers")
-                    .update(payload)
-                    .eq("id", voucherForm.id)
+                ? await supabase.from("expense_vouchers").update(payload).eq("id", voucherForm.id)
                 : await supabase.from("expense_vouchers").insert([payload]);
 
               if (!result.error) {
+                await supabase.from("expense_voucher_items").delete().eq("voucher_id", voucherId);
+
+                if (cleanedItems.length > 0) {
+                  await supabase.from("expense_voucher_items").insert(
+                    cleanedItems.map((item) => ({
+                      voucher_id: voucherId,
+                      item_description: item.description,
+                      account_code: item.accountCode,
+                      amount: item.amount || "0",
+                    }))
+                  );
+                }
+
                 await loadVouchers();
                 setIsFormOpen(false);
-                setVoucherForm({
-                  voucherNumber: "",
-                  voucherDate: new Date().toISOString().split("T")[0],
-                  description: "",
-                  department: "",
-                  approvedBy: "",
-                  items: [{ description: "", accountCode: "", amount: "" }],
-                });
+                setVoucherForm(getEmptyVoucherForm());
                 toast({ title: "تم الحفظ", description: "تم حفظ السند بنجاح" });
               } else {
                 toast({ title: "فشل الحفظ", description: "تعذر حفظ السند", variant: "destructive" });
@@ -358,18 +430,24 @@ export default function ExpenseManagement() {
         ) : null}
 
         {isVouchers && !isFormOpen && (
-          <VouchersList rows={voucherRows} onDelete={async (id) => {
-            if (!confirm("هل متأكد من حذف السند؟")) return;
-            setDeleting(true);
-            const result = await supabase.from("expense_vouchers").delete().eq("id", id);
-            if (!result.error) {
-              await loadVouchers();
-              toast({ title: "تم الحذف", description: "تم حذف السند بنجاح" });
-            } else {
-              toast({ title: "فشل الحذف", variant: "destructive" });
-            }
-            setDeleting(false);
-          }} />
+          <VouchersList
+            rows={voucherRows}
+            onView={handleViewVoucher}
+            onEdit={handleEditVoucher}
+            onDelete={async (id) => {
+              if (!confirm("هل متأكد من حذف السند؟")) return;
+              setDeleting(true);
+              await supabase.from("expense_voucher_items").delete().eq("voucher_id", id);
+              const result = await supabase.from("expense_vouchers").delete().eq("id", id);
+              if (!result.error) {
+                await loadVouchers();
+                toast({ title: "تم الحذف", description: "تم حذف السند بنجاح" });
+              } else {
+                toast({ title: "فشل الحذف", variant: "destructive" });
+              }
+              setDeleting(false);
+            }}
+          />
         )}
 
         {isPettyCash && !isFormOpen && (
@@ -388,6 +466,86 @@ export default function ExpenseManagement() {
         )}
 
         {isReports && <ExpenseReportsList />}
+
+        {voucherView && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-foreground">تفاصيل سند الصرف</h3>
+                <button
+                  onClick={() => setVoucherView(null)}
+                  className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">رقم السند</p>
+                  <p className="font-medium text-foreground">{voucherView.voucherNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">التاريخ</p>
+                  <p className="font-medium text-foreground">{voucherView.voucherDate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">القسم</p>
+                  <p className="font-medium text-foreground">{voucherView.department || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">الموافق</p>
+                  <p className="font-medium text-foreground">{voucherView.approvedBy || "—"}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground">الوصف</p>
+                <p className="font-medium text-foreground">{voucherView.description || "—"}</p>
+              </div>
+
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50">
+                      <th className="px-3 py-2 text-right font-semibold">البند</th>
+                      <th className="px-3 py-2 text-right font-semibold">الحساب</th>
+                      <th className="px-3 py-2 text-right font-semibold">المبلغ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {voucherView.items.length > 0 ? (
+                      voucherView.items.map((item, index) => (
+                        <tr key={item.id ?? index} className="border-t border-border">
+                          <td className="px-3 py-2">{item.description || "—"}</td>
+                          <td className="px-3 py-2">{item.accountCode || "—"}</td>
+                          <td className="px-3 py-2">{item.amount || "0"} ريال</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr className="border-t border-border">
+                        <td colSpan={3} className="px-3 py-4 text-center text-muted-foreground">
+                          لا توجد بنود لهذا السند
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-sm font-semibold text-foreground">الإجمالي: {voucherView.totalAmount} ريال</p>
+                <button
+                  onClick={() => void handleEditVoucher(voucherView)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+                >
+                  <Pencil className="h-4 w-4" />
+                  تعديل السند
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
@@ -408,7 +566,9 @@ function VoucherForm({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-      <h3 className="text-lg font-semibold text-foreground">إنشاء سند صرف جديد</h3>
+      <h3 className="text-lg font-semibold text-foreground">
+        {form.id ? "تعديل سند الصرف" : "إنشاء سند صرف جديد"}
+      </h3>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div>
@@ -670,7 +830,17 @@ function PettyCashForm({
   );
 }
 
-function VouchersList({ rows, onDelete }: { rows: VoucherRow[]; onDelete: (id: string) => void }) {
+function VouchersList({
+  rows,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  rows: VoucherRow[];
+  onView: (row: VoucherRow) => void;
+  onEdit: (row: VoucherRow) => void;
+  onDelete: (id: string) => void;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="mb-4 flex flex-wrap items-center gap-3 p-4">
@@ -711,6 +881,20 @@ function VouchersList({ rows, onDelete }: { rows: VoucherRow[]; onDelete: (id: s
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onView(row)}
+                      title="عرض"
+                      className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => onEdit(row)}
+                      title="تعديل"
+                      className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => onDelete(row.id)}
                       title="حذف"

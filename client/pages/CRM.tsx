@@ -59,6 +59,7 @@ export default function CRM() {
   const location = useLocation();
   const isVendors = location.pathname.includes("/crm/vendors");
   const isReports = location.pathname.includes("/crm/reports");
+  const isExpenses = location.pathname.includes("/crm/expenses");
 
   const [customerRows, setCustomerRows] = useState<PartyRow[]>(customers);
   const [vendorRows, setVendorRows] = useState<PartyRow[]>(vendors);
@@ -291,6 +292,7 @@ export default function CRM() {
         items: [
           { label: "العملاء", href: "/crm/customers" },
           { label: "الموردين", href: "/crm/vendors" },
+          { label: "المصرفات", href: "/crm/expenses" },
           { label: "التقارير", href: "/crm/reports" },
         ],
       }}

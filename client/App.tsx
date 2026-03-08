@@ -28,6 +28,7 @@ import HRCertificates from "./pages/HRCertificates";
 import HRReports from "./pages/HRReports";
 import HRSettings from "./pages/HRSettings";
 import CRM from "./pages/CRM";
+import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
 import UsersPermissions from "./pages/UsersPermissions";
 import AIAssistant from "./pages/AIAssistant";
@@ -70,6 +71,10 @@ const App = () => (
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />
           <Route path="/crm/reports" element={<CRM />} />
+          <Route path="/crm/expenses" element={<ExpenseManagement />} />
+          <Route path="/crm/expenses/vouchers" element={<ExpenseManagement />} />
+          <Route path="/crm/expenses/petty-cash" element={<ExpenseManagement />} />
+          <Route path="/crm/expenses/reports" element={<ExpenseManagement />} />
           <Route path="/tax" element={<Tax />} />
           <Route path="/users" element={<UsersPermissions />} />
           <Route path="/users/roles" element={<UsersPermissions />} />

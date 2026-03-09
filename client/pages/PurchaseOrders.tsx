@@ -580,13 +580,13 @@ function OrderEdit({
 
           <div className="px-6 space-y-6">
             {/* Company Info Section */}
-            <div className="bg-slate-800 text-white rounded-lg p-6 flex justify-between items-center">
-              <div className="text-right space-y-1">
+            <div className="rounded-lg border border-slate-200 p-4 flex justify-between items-start bg-white">
+              <div className="text-right space-y-1 text-slate-700">
                 <div className="text-xs opacity-75">رقم التسجيل التجاري</div>
                 <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
               </div>
-              <div className="text-right space-y-2">
-                <div className="font-semibold text-lg">{companyProfile.name || "اسم الشركة"}</div>
+              <div className="text-right space-y-2 text-slate-900">
+                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || "اسم الشركة"}</div>
                 <div className="text-xs opacity-75">{companyProfile.country || "الدولة"}</div>
               </div>
             </div>
@@ -605,12 +605,12 @@ function OrderEdit({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">الصنف *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">المورد *</label>
                   <input
                     type="text"
-                    value={form.category ?? ""}
-                    onChange={(e) => setField("category", e.target.value)}
-                    placeholder="مشتريات"
+                    value={form.vendor ?? ""}
+                    onChange={(e) => setField("vendor", e.target.value)}
+                    placeholder="مطلوب"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
                 </div>
@@ -648,10 +648,10 @@ function OrderEdit({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">الرصيح</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">المرجع</label>
                   <input
-                    value={form.budget ?? ""}
-                    onChange={(e) => setField("budget", e.target.value)}
+                    value={form.notes ?? ""}
+                    onChange={(e) => setField("notes", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
@@ -872,13 +872,13 @@ function OrderForm({
 
           <div className="px-6 space-y-6">
             {/* Company Info Section */}
-            <div className="bg-slate-800 text-white rounded-lg p-6 flex justify-between items-center">
-              <div className="text-right space-y-1">
+            <div className="rounded-lg border border-slate-200 p-4 flex justify-between items-start bg-white">
+              <div className="text-right space-y-1 text-slate-700">
                 <div className="text-xs opacity-75">رقم التسجيل التجاري</div>
                 <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
               </div>
-              <div className="text-right space-y-2">
-                <div className="font-semibold text-lg">{companyProfile.name || "اسم الشركة"}</div>
+              <div className="text-right space-y-2 text-slate-900">
+                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || "اسم الشركة"}</div>
                 <div className="text-xs opacity-75">{companyProfile.country || "الدولة"}</div>
               </div>
             </div>
@@ -897,12 +897,12 @@ function OrderForm({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">الصنف *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">المورد *</label>
                   <input
                     type="text"
-                    value={form.category ?? ""}
-                    onChange={(e) => setField("category", e.target.value)}
-                    placeholder="مشتريات"
+                    value={form.vendor ?? ""}
+                    onChange={(e) => setField("vendor", e.target.value)}
+                    placeholder="مطلوب"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
                 </div>
@@ -940,10 +940,10 @@ function OrderForm({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">الرصيح</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">المرجع</label>
                   <input
-                    value={form.budget ?? ""}
-                    onChange={(e) => setField("budget", e.target.value)}
+                    value={form.notes ?? ""}
+                    onChange={(e) => setField("notes", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />

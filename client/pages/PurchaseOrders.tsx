@@ -580,7 +580,7 @@ function OrderEdit({
                   <label className="text-sm font-medium text-slate-700 text-right block">رقم امر الشراء *</label>
                   <input
                     type="text"
-                    value={form.referenceNo}
+                    value={form.referenceNo ?? ""}
                     onChange={(e) => setField("referenceNo", e.target.value)}
                     placeholder="PO-000100"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
@@ -590,7 +590,7 @@ function OrderEdit({
                   <label className="text-sm font-medium text-slate-700 text-right block">الصنف *</label>
                   <input
                     type="text"
-                    value={form.category}
+                    value={form.category ?? ""}
                     onChange={(e) => setField("category", e.target.value)}
                     placeholder="مشتريات"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
@@ -612,7 +612,7 @@ function OrderEdit({
                   <label className="text-sm font-medium text-slate-700 text-right block">التاريخ *</label>
                   <input
                     type="date"
-                    value={form.date}
+                    value={form.date ?? ""}
                     onChange={(e) => setField("date", e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
@@ -623,7 +623,7 @@ function OrderEdit({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">المشروع</label>
                   <input
-                    value={form.project}
+                    value={form.project ?? ""}
                     onChange={(e) => setField("project", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
@@ -632,7 +632,7 @@ function OrderEdit({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">الرصيح</label>
                   <input
-                    value={form.budget}
+                    value={form.budget ?? ""}
                     onChange={(e) => setField("budget", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
@@ -679,25 +679,25 @@ function OrderEdit({
                               </button>
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={lineTotal.toFixed(2)} disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
+                              <input type="text" value={lineTotal.toFixed(2)} readOnly disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.taxPercent} onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
+                              <input type="number" value={item.taxPercent ?? 0} onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.discount} onChange={(e) => updateItem(item.id, { discount: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
+                              <input type="number" value={item.discount ?? 0} onChange={(e) => updateItem(item.id, { discount: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.price} onChange={(e) => updateItem(item.id, { price: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
+                              <input type="number" value={item.price ?? 0} onChange={(e) => updateItem(item.id, { price: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={item.unit} onChange={(e) => updateItem(item.id, { unit: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
+                              <input type="text" value={item.unit ?? ""} onChange={(e) => updateItem(item.id, { unit: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.quantity} onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
+                              <input type="number" value={item.quantity ?? 0} onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={item.description} onChange={(e) => updateItem(item.id, { description: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
+                              <input type="text" value={item.description ?? ""} onChange={(e) => updateItem(item.id, { description: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
                             </td>
                           </tr>
                         );
@@ -872,7 +872,7 @@ function OrderForm({
                   <label className="text-sm font-medium text-slate-700 text-right block">رقم امر الشراء *</label>
                   <input
                     type="text"
-                    value={form.referenceNo}
+                    value={form.referenceNo ?? ""}
                     onChange={(e) => setField("referenceNo", e.target.value)}
                     placeholder="PO-000100"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -882,7 +882,7 @@ function OrderForm({
                   <label className="text-sm font-medium text-slate-700 text-right block">الصنف *</label>
                   <input
                     type="text"
-                    value={form.category}
+                    value={form.category ?? ""}
                     onChange={(e) => setField("category", e.target.value)}
                     placeholder="مشتريات"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -904,7 +904,7 @@ function OrderForm({
                   <label className="text-sm font-medium text-slate-700 text-right block">التاريخ *</label>
                   <input
                     type="date"
-                    value={form.date}
+                    value={form.date ?? ""}
                     onChange={(e) => setField("date", e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
@@ -915,7 +915,7 @@ function OrderForm({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">المشروع</label>
                   <input
-                    value={form.project}
+                    value={form.project ?? ""}
                     onChange={(e) => setField("project", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -924,7 +924,7 @@ function OrderForm({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">الرصيح</label>
                   <input
-                    value={form.budget}
+                    value={form.budget ?? ""}
                     onChange={(e) => setField("budget", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -971,25 +971,25 @@ function OrderForm({
                               </button>
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={lineTotal.toFixed(2)} disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
+                              <input type="text" value={lineTotal.toFixed(2)} readOnly disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.taxPercent} onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
+                              <input type="number" value={item.taxPercent ?? 0} onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.discount} onChange={(e) => updateItem(item.id, { discount: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
+                              <input type="number" value={item.discount ?? 0} onChange={(e) => updateItem(item.id, { discount: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.price} onChange={(e) => updateItem(item.id, { price: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
+                              <input type="number" value={item.price ?? 0} onChange={(e) => updateItem(item.id, { price: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={item.unit} onChange={(e) => updateItem(item.id, { unit: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
+                              <input type="text" value={item.unit ?? ""} onChange={(e) => updateItem(item.id, { unit: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="number" value={item.quantity} onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
+                              <input type="number" value={item.quantity ?? 0} onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={item.description} onChange={(e) => updateItem(item.id, { description: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
+                              <input type="text" value={item.description ?? ""} onChange={(e) => updateItem(item.id, { description: e.target.value })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
                             </td>
                           </tr>
                         );

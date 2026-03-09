@@ -260,73 +260,36 @@ export default function ExpenseManagement() {
     return (
       <Layout
         subMenu={{
-          title: "المصرفات",
+          title: "المحاسبة والمالية",
           items: [
             { label: "سندات الصرف", href: "/expenses/vouchers" },
             { label: "سندات القبض", href: "/expenses/petty-cash" },
-            { label: "التقارير", href: "/expenses/reports" },
           ],
         }}
       >
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">المصرفات</h1>
+            <h1 className="text-2xl font-semibold text-foreground">المحاسبة والمالية</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              إدارة المصرفات والسندات والتقارير المالية.
+              إدارة الحسابات المالية عبر شجرة الحسابات.
             </p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <button
-              onClick={() => navigate("/expenses/vouchers")}
-              className="overflow-hidden rounded-xl border border-border bg-card p-6 transition hover:shadow-md hover:border-primary"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">سندات الصرف</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    إنشاء وإدارة سندات الصرف والمصروفات
-                  </p>
-                </div>
-                <div className="h-12 w-12 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                  <Plus className="h-6 w-6 text-emerald-600" />
-                </div>
-              </div>
-            </button>
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="text-lg font-semibold text-foreground text-right">شجرة الحسابات</h3>
+            <p className="mt-1 text-sm text-muted-foreground text-right">عرض مبسط للحسابات الرئيسية والفرعية.</p>
 
-            <button
-              onClick={() => navigate("/expenses/petty-cash")}
-              className="overflow-hidden rounded-xl border border-border bg-card p-6 transition hover:shadow-md hover:border-primary"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">سندات القبض</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    إدارة سندات القبض وتتبع النقد الصغير
-                  </p>
-                </div>
-                <div className="h-12 w-12 rounded-lg bg-sky-500/10 flex items-center justify-center">
-                  <Plus className="h-6 w-6 text-sky-600" />
-                </div>
-              </div>
-            </button>
+            <div className="mt-4 space-y-2 text-sm">
+              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">الأصول</div>
+              <div className="mr-4 rounded-md border border-border bg-background px-3 py-2 text-right">النقدية والبنوك</div>
+              <div className="mr-4 rounded-md border border-border bg-background px-3 py-2 text-right">العملاء</div>
 
-            <button
-              onClick={() => navigate("/expenses/reports")}
-              className="overflow-hidden rounded-xl border border-border bg-card p-6 transition hover:shadow-md hover:border-primary"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">التقارير</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    عرض تقارير المصروفات والإحصائيات
-                  </p>
-                </div>
-                <div className="h-12 w-12 rounded-lg bg-rose-500/10 flex items-center justify-center">
-                  <Plus className="h-6 w-6 text-rose-600" />
-                </div>
-              </div>
-            </button>
+              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">الالتزامات</div>
+              <div className="mr-4 rounded-md border border-border bg-background px-3 py-2 text-right">الموردون</div>
+
+              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">الإيرادات</div>
+              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">المصروفات</div>
+            </div>
           </div>
         </div>
       </Layout>
@@ -336,7 +299,7 @@ export default function ExpenseManagement() {
   return (
     <Layout
       subMenu={{
-        title: "المصرفات",
+        title: "المحاسبة والمالية",
         items: [
           { label: "سندات الصرف", href: "/expenses/vouchers" },
           { label: "سندات القبض", href: "/expenses/petty-cash" },

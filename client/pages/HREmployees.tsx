@@ -12,19 +12,15 @@ import {
   X,
   Save,
   UserCheck,
+  FileText,
+  Download,
+  Settings,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import {
-  PageHeader,
-  FilterBar,
-  FilterInput,
-  FilterSelect,
-  FilterActions,
-  DataTable,
-  ActionBtn,
-} from "@/components/SalesPageUI";
+import { PageHeader } from "@/components/SalesPageUI";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Employee = {
@@ -184,62 +180,123 @@ export default function HREmployees() {
           gradient="from-emerald-600 to-green-700"
         />
 
-        <FilterBar>
-          <FilterInput placeholder="البحث برقم الموظف أو الاسم..." />
-          <FilterSelect label="الجنسية">
-            <option value="">الكل</option>
-            {NATIONALITIES.map((n) => <option key={n}>{n}</option>)}
-          </FilterSelect>
-          <FilterSelect label="القسم">
-            <option value="">الكل</option>
-            {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
-          </FilterSelect>
-          <FilterSelect label="الحالة">
-            <option value="">الكل</option>
-            {STATUSES.map((s) => <option key={s}>{s}</option>)}
-          </FilterSelect>
-          <FilterActions
-            onReset={() => { setFSearch(""); setFNationality(""); setFDepartment(""); setFBranch(""); setFStatus(""); }}
-            onSearch={() => {}}
-          />
-        </FilterBar>
+        {/* Toolbar */}
+        <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 flex items-center justify-between text-white rounded-t-lg">
+            <div className="flex items-center gap-3">
+              <Users className="h-5 w-5" />
+              <h2 className="font-semibold">قائمة الموظفين ({filtered.length})</h2>
+            </div>
+            <div className="flex items-center gap-1">
+              <button className="p-1.5 hover:bg-white/20 rounded-lg transition" title="بحث">
+                <Search className="h-5 w-5" />
+              </button>
+              <button className="p-1.5 hover:bg-white/20 rounded-lg transition" title="تصفية">
+                <Filter className="h-5 w-5" />
+              </button>
+              <button className="p-1.5 hover:bg-white/20 rounded-lg transition" title="تصدير">
+                <Download className="h-5 w-5" />
+              </button>
+              <button className="p-1.5 hover:bg-white/20 rounded-lg transition" title="إعدادات">
+                <Settings className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
 
-        <DataTable
-          headers={["الإجراءات", "الحالة", "الراتب الإجمالي", "تاريخ التعيين", "الفرع", "الوظيفة", "القسم", "الجنسية", "الاسم", "رقم الموظف"]}
-          gradient="from-emerald-800 to-green-900"
-        >
-          {filtered.map((emp) => (
-            <tr key={emp.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-              <td className="px-4 py-3 align-middle whitespace-nowrap">
-                <div className="flex items-center gap-1 flex-wrap">
-                  <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => { setSelected(emp); setMode("view"); }} />
-                  <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => { setSelected(emp); setMode("edit"); }} />
-                  <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => handleDelete(emp)} />
-                </div>
-              </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap">
-                <span className={cn("inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold", getStatusColor(emp.status))}>
-                  {emp.status}
-                </span>
-              </td>
-              <td className="px-4 py-3 align-middle font-medium whitespace-nowrap">{emp.totalSalary.toLocaleString()}</td>
-              <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">{emp.hireDate}</td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap">{emp.branch || "-"}</td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap">{emp.jobTitle || "-"}</td>
-              <td className="px-4 py-3 align-middle">{emp.department}</td>
-              <td className="px-4 py-3 align-middle">{emp.nationality}</td>
-              <td className="px-4 py-3 align-middle font-semibold">{emp.name}</td>
-              <td className="px-4 py-3 align-middle font-mono text-emerald-700 whitespace-nowrap">{emp.empId}</td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
+          {/* Search & Filter Row */}
+          <div className="px-5 py-3 border-b border-border/30 flex flex-wrap items-center gap-3" dir="rtl">
+            <div className="flex-1 min-w-[200px] relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="البحث برقم الموظف أو الاسم..."
+                value={fSearch}
+                onChange={(e) => setFSearch(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background pr-9 pl-3 py-2 text-sm text-right"
+              />
+            </div>
+            <select
+              value={fDepartment}
+              onChange={(e) => setFDepartment(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
+            >
+              <option value="">جميع الأقسام</option>
+              {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+            </select>
+            <select
+              value={fStatus}
+              onChange={(e) => setFStatus(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
+            >
+              <option value="">جميع الحالات</option>
+              {STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+            <button
+              onClick={() => { setFSearch(""); setFNationality(""); setFDepartment(""); setFBranch(""); setFStatus(""); }}
+              className="px-3 py-2 text-sm rounded-lg border border-border hover:bg-muted/50 transition"
+            >
+              إعادة تعيين
+            </button>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" dir="rtl">
+              <thead>
+                <tr className="border-b border-border/30 bg-muted/40">
+                  <th className="px-4 py-3 text-right font-semibold text-foreground w-[100px]">الإجراءات</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">الحالة</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">الراتب</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">تاريخ التعيين</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">الفرع</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">الوظيفة</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">القسم</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">الجنسية</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">الاسم</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">رقم الموظف</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((emp) => (
+                  <tr key={emp.id} className="border-b border-border/20 hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => { setSelected(emp); setMode("view"); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="عرض">
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => { setSelected(emp); setMode("edit"); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition" title="تعديل">
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => handleDelete(emp)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="حذف">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", getStatusColor(emp.status))}>
+                        {emp.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 align-middle font-medium whitespace-nowrap">{emp.totalSalary.toLocaleString()}</td>
+                    <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">{emp.hireDate}</td>
+                    <td className="px-4 py-3 align-middle text-muted-foreground">{emp.branch || "-"}</td>
+                    <td className="px-4 py-3 align-middle text-muted-foreground">{emp.jobTitle || "-"}</td>
+                    <td className="px-4 py-3 align-middle text-muted-foreground">{emp.department}</td>
+                    <td className="px-4 py-3 align-middle text-muted-foreground">{emp.nationality}</td>
+                    <td className="px-4 py-3 align-middle font-semibold">{emp.name}</td>
+                    <td className="px-4 py-3 align-middle font-mono text-emerald-700 font-semibold whitespace-nowrap">{emp.empId}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {filtered.length === 0 && (
+              <div className="px-4 py-12 text-center text-muted-foreground">
                 لا يوجد موظفون
-              </td>
-            </tr>
-          )}
-        </DataTable>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </Layout>
   );

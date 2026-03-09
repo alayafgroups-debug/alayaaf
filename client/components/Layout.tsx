@@ -32,6 +32,7 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "عروض الأسعار", href: "/sales/quotations" },
     { label: "أوامر البيع", href: "/sales/orders" },
     { label: "فواتير المبيعات", href: "/sales/invoices" },
+    { label: "إشعار دائن", href: "/sales/credit-note" },
     { label: "سندات العملاء (صرف)", href: "/expenses/vouchers" },
     { label: "سندات العملاء (قبض)", href: "/expenses/petty-cash" },
   ],

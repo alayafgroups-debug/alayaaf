@@ -1,6 +1,6 @@
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2, ArrowRight } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 
@@ -73,6 +73,7 @@ const createEmptyForm = (sequence: number): CreditNoteForm => ({
 export default function SalesCreditNote() {
   const [savedNotes, setSavedNotes] = useState<SavedCreditNote[]>([]);
   const [nextSequence, setNextSequence] = useState(START_NUMBER);
+  const [mode, setMode] = useState<"list" | "create">("list");
   const [form, setForm] = useState<CreditNoteForm>(() => createEmptyForm(START_NUMBER));
 
   useEffect(() => {
@@ -106,33 +107,24 @@ export default function SalesCreditNote() {
   const tax = useMemo(() => subtotal * 0.15, [subtotal]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
-  const updateItem = (
-    id: string,
-    key: keyof CreditNoteItem,
-    value: string | number
-  ) => {
+  const updateItem = (id: string, key: keyof CreditNoteItem, value: string | number) => {
     setForm((prev) => ({
       ...prev,
-      items: prev.items.map((item) =>
-        item.id === id ? { ...item, [key]: value } : item
-      ),
+      items: prev.items.map((item) => (item.id === id ? { ...item, [key]: value } : item)),
     }));
   };
 
-  const addItem = () =>
-    setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
+  const addItem = () => setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
 
   const removeItem = (id: string) =>
     setForm((prev) => ({
       ...prev,
-      items:
-        prev.items.length > 1
-          ? prev.items.filter((item) => item.id !== id)
-          : prev.items,
+      items: prev.items.length > 1 ? prev.items.filter((item) => item.id !== id) : prev.items,
     }));
 
   const createNewNote = () => {
     setForm(createEmptyForm(nextSequence));
+    setMode("create");
   };
 
   const handleSave = () => {
@@ -168,6 +160,7 @@ export default function SalesCreditNote() {
     const sequence = extractSequence(form.noteNumber) + 1;
     setNextSequence(sequence);
     setForm(createEmptyForm(sequence));
+    setMode("list");
 
     toast({
       title: "تم حفظ إشعار دائن",
@@ -181,258 +174,269 @@ export default function SalesCreditNote() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-foreground">إشعار دائن</h1>
-            <p className="text-sm text-muted-foreground">Credit note / إشعار دائن</p>
+            <p className="text-sm text-muted-foreground">
+              {mode === "list" ? "عرض الإشعارات الدائنة" : "إنشاء إشعار دائن جديد"}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={createNewNote}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              إشعار جديد
-            </button>
-            <button
-              onClick={handleSave}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
-            >
-              <Save className="h-4 w-4" />
-              حفظ الإشعار
-            </button>
+            {mode === "list" ? (
+              <button
+                onClick={createNewNote}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
+              >
+                <Plus className="h-4 w-4" />
+                إنشاء إشعار دائن جديد
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setMode("list")}
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  الرجوع للإشعارات
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
+                >
+                  <Save className="h-4 w-4" />
+                  حفظ الإشعار
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">
-            عدد الإشعارات المحفوظة: <span className="font-semibold text-foreground">{savedNotes.length}</span>
-          </p>
-        </div>
+        {mode === "list" ? (
+          <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+            <p className="text-sm text-muted-foreground">
+              عدد الإشعارات المحفوظة: <span className="font-semibold text-foreground">{savedNotes.length}</span>
+            </p>
 
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-            <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
-              شركة لاكجري العياف
-            </div>
-            <h2 className="text-xl font-bold text-foreground">شركة لاكجري العياف</h2>
-            <p className="text-sm text-muted-foreground">الشيخ محمد بن جبير</p>
-            <p className="text-sm text-muted-foreground">مكة المكرمة</p>
-            <p className="text-sm text-muted-foreground">المملكة العربية السعودية</p>
-            <p className="text-sm text-muted-foreground">رقم التسجيل الضريبي: 314559705300003</p>
-          </div>
-
-          <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-            <Field label="رقم الإشعار">
-              <input
-                value={form.noteNumber}
-                readOnly
-                className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
-              />
-            </Field>
-
-            <Field label="العميل*">
-              <input
-                value={form.customer}
-                onChange={(e) => setForm({ ...form, customer: e.target.value })}
-                placeholder="مطلوب"
-                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-              />
-            </Field>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="العملة*">
-                <input
-                  value={form.currency}
-                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </Field>
-              <Field label="التاريخ*">
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </Field>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="أمر الشراء">
-                <input
-                  value={form.orderRef}
-                  onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
-                  placeholder="اختياري"
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </Field>
-              <Field label="المرجع">
-                <input
-                  value={form.reference}
-                  onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                  placeholder="اختياري"
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </Field>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="المشروع">
-                <input
-                  value={form.project}
-                  onChange={(e) => setForm({ ...form, project: e.target.value })}
-                  placeholder="اختياري"
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </Field>
-              <Field label="المستودع">
-                <input
-                  value={form.warehouse}
-                  onChange={(e) => setForm({ ...form, warehouse: e.target.value })}
-                  placeholder="اختياري"
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </Field>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-foreground">السعر شامل من الضريبة</p>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-right text-sm">
-              <thead>
-                <tr className="bg-muted/40">
-                  <th className="px-3 py-2">الوصف</th>
-                  <th className="px-3 py-2">حساب*</th>
-                  <th className="px-3 py-2">الكمية*</th>
-                  <th className="px-3 py-2">السعر*</th>
-                  <th className="px-3 py-2">المجموع</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {form.items.map((item) => {
-                  const lineTotal = item.quantity * item.unitPrice;
-                  return (
-                    <tr key={item.id} className="border-t border-border">
-                      <td className="px-3 py-2">
-                        <input
-                          value={item.description}
-                          onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                          placeholder="مفتاح أو خدمة"
-                          className="h-10 w-full rounded-md border border-border bg-background px-3"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          value={item.account}
-                          onChange={(e) => updateItem(item.id, "account", e.target.value)}
-                          placeholder="مطلوب"
-                          className="h-10 w-full rounded-md border border-border bg-background px-3"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) =>
-                            updateItem(item.id, "quantity", Number(e.target.value) || 1)
-                          }
-                          className="h-10 w-24 rounded-md border border-border bg-background px-3"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={item.unitPrice}
-                          onChange={(e) =>
-                            updateItem(item.id, "unitPrice", Number(e.target.value) || 0)
-                          }
-                          className="h-10 w-32 rounded-md border border-border bg-background px-3"
-                        />
-                      </td>
-                      <td className="px-3 py-2 font-semibold">{lineTotal.toFixed(2)} ﷼</td>
-                      <td className="px-3 py-2">
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="rounded-md border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
+            {savedNotes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">لا يوجد إشعارات محفوظة حالياً.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px] text-right text-sm">
+                  <thead>
+                    <tr className="bg-muted/40">
+                      <th className="px-3 py-2">رقم الإشعار</th>
+                      <th className="px-3 py-2">العميل</th>
+                      <th className="px-3 py-2">التاريخ</th>
+                      <th className="px-3 py-2">العملة</th>
+                      <th className="px-3 py-2">الإجمالي</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {savedNotes.map((note) => (
+                      <tr key={note.id} className="border-t border-border">
+                        <td className="px-3 py-2 font-semibold text-primary">{note.noteNumber}</td>
+                        <td className="px-3 py-2">{note.customer}</td>
+                        <td className="px-3 py-2">{note.date}</td>
+                        <td className="px-3 py-2">{note.currency}</td>
+                        <td className="px-3 py-2">{note.total.toFixed(2)} ﷼</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
+        ) : (
+          <>
+            <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+              <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
+                  شركة لاكجري العياف
+                </div>
+                <h2 className="text-xl font-bold text-foreground">شركة لاكجري العياف</h2>
+                <p className="text-sm text-muted-foreground">الشيخ محمد بن جبير</p>
+                <p className="text-sm text-muted-foreground">مكة المكرمة</p>
+                <p className="text-sm text-muted-foreground">المملكة العربية السعودية</p>
+                <p className="text-sm text-muted-foreground">رقم التسجيل الضريبي: 314559705300003</p>
+              </div>
 
-          <div className="flex justify-end">
-            <button
-              onClick={addItem}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              أضف بند
-            </button>
-          </div>
-        </div>
+              <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                <Field label="رقم الإشعار">
+                  <input
+                    value={form.noteNumber}
+                    readOnly
+                    className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
+                  />
+                </Field>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-            رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.
-          </div>
+                <Field label="العميل*">
+                  <input
+                    value={form.customer}
+                    onChange={(e) => setForm({ ...form, customer: e.target.value })}
+                    placeholder="مطلوب"
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  />
+                </Field>
 
-          <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
-            <div className="flex items-center justify-between">
-              <span>المجموع الفرعي</span>
-              <span>{subtotal.toFixed(2)} ﷼</span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="العملة*">
+                    <input
+                      value={form.currency}
+                      onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                  <Field label="التاريخ*">
+                    <input
+                      type="date"
+                      value={form.date}
+                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="أمر الشراء">
+                    <input
+                      value={form.orderRef}
+                      onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
+                      placeholder="اختياري"
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                  <Field label="المرجع">
+                    <input
+                      value={form.reference}
+                      onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                      placeholder="اختياري"
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="المشروع">
+                    <input
+                      value={form.project}
+                      onChange={(e) => setForm({ ...form, project: e.target.value })}
+                      placeholder="اختياري"
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                  <Field label="المستودع">
+                    <input
+                      value={form.warehouse}
+                      onChange={(e) => setForm({ ...form, warehouse: e.target.value })}
+                      placeholder="اختياري"
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span>إجمالي ضريبة القيمة المضافة</span>
-              <span>{tax.toFixed(2)} ﷼</span>
-            </div>
-            <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold">
-              <span>المجموع</span>
-              <span>{total.toFixed(2)} ﷼</span>
-            </div>
-          </div>
-        </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="mb-3 text-base font-semibold text-foreground">الإشعارات المحفوظة</h3>
-          {savedNotes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">لا يوجد إشعارات محفوظة حالياً.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-right text-sm">
-                <thead>
-                  <tr className="bg-muted/40">
-                    <th className="px-3 py-2">رقم الإشعار</th>
-                    <th className="px-3 py-2">العميل</th>
-                    <th className="px-3 py-2">التاريخ</th>
-                    <th className="px-3 py-2">العملة</th>
-                    <th className="px-3 py-2">الإجمالي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {savedNotes.map((note) => (
-                    <tr key={note.id} className="border-t border-border">
-                      <td className="px-3 py-2 font-semibold text-primary">{note.noteNumber}</td>
-                      <td className="px-3 py-2">{note.customer}</td>
-                      <td className="px-3 py-2">{note.date}</td>
-                      <td className="px-3 py-2">{note.currency}</td>
-                      <td className="px-3 py-2">{note.total.toFixed(2)} ﷼</td>
+            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <p className="text-sm font-semibold text-foreground">السعر شامل من الضريبة</p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] text-right text-sm">
+                  <thead>
+                    <tr className="bg-muted/40">
+                      <th className="px-3 py-2">الوصف</th>
+                      <th className="px-3 py-2">حساب*</th>
+                      <th className="px-3 py-2">الكمية*</th>
+                      <th className="px-3 py-2">السعر*</th>
+                      <th className="px-3 py-2">المجموع</th>
+                      <th className="px-3 py-2" />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {form.items.map((item) => {
+                      const lineTotal = item.quantity * item.unitPrice;
+                      return (
+                        <tr key={item.id} className="border-t border-border">
+                          <td className="px-3 py-2">
+                            <input
+                              value={item.description}
+                              onChange={(e) => updateItem(item.id, "description", e.target.value)}
+                              placeholder="مفتاح أو خدمة"
+                              className="h-10 w-full rounded-md border border-border bg-background px-3"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={item.account}
+                              onChange={(e) => updateItem(item.id, "account", e.target.value)}
+                              placeholder="مطلوب"
+                              className="h-10 w-full rounded-md border border-border bg-background px-3"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value) || 1)}
+                              className="h-10 w-24 rounded-md border border-border bg-background px-3"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              value={item.unitPrice}
+                              onChange={(e) => updateItem(item.id, "unitPrice", Number(e.target.value) || 0)}
+                              className="h-10 w-32 rounded-md border border-border bg-background px-3"
+                            />
+                          </td>
+                          <td className="px-3 py-2 font-semibold">{lineTotal.toFixed(2)} ﷼</td>
+                          <td className="px-3 py-2">
+                            <button
+                              onClick={() => removeItem(item.id)}
+                              className="rounded-md border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={addItem}
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
+                >
+                  <Plus className="h-4 w-4" />
+                  أضف بند
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+              <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
+                رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>المجموع الفرعي</span>
+                  <span>{subtotal.toFixed(2)} ﷼</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>إجمالي ضريبة القيمة المضافة</span>
+                  <span>{tax.toFixed(2)} ﷼</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold">
+                  <span>المجموع</span>
+                  <span>{total.toFixed(2)} ﷼</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </Layout>
   );

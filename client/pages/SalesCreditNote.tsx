@@ -1,7 +1,8 @@
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
-import { Plus, Trash2 } from "lucide-react";
-import { ReactNode, useMemo, useState } from "react";
+import { Plus, Save, Trash2 } from "lucide-react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { toast } from "@/hooks/use-toast";
 
 type CreditNoteItem = {
   id: string;
@@ -11,6 +12,37 @@ type CreditNoteItem = {
   unitPrice: number;
 };
 
+type SavedCreditNote = {
+  id: string;
+  noteNumber: string;
+  customer: string;
+  currency: string;
+  date: string;
+  orderRef: string;
+  reference: string;
+  project: string;
+  warehouse: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  items: CreditNoteItem[];
+};
+
+type CreditNoteForm = {
+  noteNumber: string;
+  customer: string;
+  currency: string;
+  date: string;
+  orderRef: string;
+  reference: string;
+  project: string;
+  warehouse: string;
+  items: CreditNoteItem[];
+};
+
+const STORAGE_KEY = "sales-credit-notes";
+const START_NUMBER = 100;
+
 const emptyItem = (): CreditNoteItem => ({
   id: crypto.randomUUID(),
   description: "",
@@ -19,42 +51,161 @@ const emptyItem = (): CreditNoteItem => ({
   unitPrice: 0,
 });
 
+const buildNoteNumber = (sequence: number) => `CN-${String(sequence).padStart(6, "0")}`;
+
+const extractSequence = (noteNumber: string) => {
+  const parsed = Number(noteNumber.replace("CN-", ""));
+  return Number.isFinite(parsed) ? parsed : START_NUMBER;
+};
+
+const createEmptyForm = (sequence: number): CreditNoteForm => ({
+  noteNumber: buildNoteNumber(sequence),
+  customer: "",
+  currency: "SAR",
+  date: new Date().toISOString().split("T")[0],
+  orderRef: "",
+  reference: "",
+  project: "",
+  warehouse: "",
+  items: [emptyItem()],
+});
+
 export default function SalesCreditNote() {
-  const [noteNumber] = useState("CN-000100");
-  const [customer, setCustomer] = useState("");
-  const [currency, setCurrency] = useState("SAR");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [orderRef, setOrderRef] = useState("");
-  const [reference, setReference] = useState("");
-  const [project, setProject] = useState("");
-  const [warehouse, setWarehouse] = useState("");
-  const [items, setItems] = useState<CreditNoteItem[]>([emptyItem()]);
+  const [savedNotes, setSavedNotes] = useState<SavedCreditNote[]>([]);
+  const [nextSequence, setNextSequence] = useState(START_NUMBER);
+  const [form, setForm] = useState<CreditNoteForm>(() => createEmptyForm(START_NUMBER));
+
+  useEffect(() => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as SavedCreditNote[];
+      setSavedNotes(parsed);
+
+      const maxSequence = parsed.reduce(
+        (max, note) => Math.max(max, extractSequence(note.noteNumber)),
+        START_NUMBER - 1
+      );
+      const sequence = maxSequence + 1;
+      setNextSequence(sequence);
+      setForm(createEmptyForm(sequence));
+    } catch {
+      setSavedNotes([]);
+      setNextSequence(START_NUMBER);
+      setForm(createEmptyForm(START_NUMBER));
+    }
+  }, []);
 
   const subtotal = useMemo(
-    () => items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-    [items]
+    () => form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    [form.items]
   );
   const tax = useMemo(() => subtotal * 0.15, [subtotal]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
-  const updateItem = (id: string, key: keyof CreditNoteItem, value: string | number) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))
-    );
+  const updateItem = (
+    id: string,
+    key: keyof CreditNoteItem,
+    value: string | number
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      items: prev.items.map((item) =>
+        item.id === id ? { ...item, [key]: value } : item
+      ),
+    }));
   };
 
-  const addItem = () => setItems((prev) => [...prev, emptyItem()]);
+  const addItem = () =>
+    setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
+
   const removeItem = (id: string) =>
-    setItems((prev) => (prev.length > 1 ? prev.filter((item) => item.id !== id) : prev));
+    setForm((prev) => ({
+      ...prev,
+      items:
+        prev.items.length > 1
+          ? prev.items.filter((item) => item.id !== id)
+          : prev.items,
+    }));
+
+  const createNewNote = () => {
+    setForm(createEmptyForm(nextSequence));
+  };
+
+  const handleSave = () => {
+    if (!form.customer.trim()) {
+      toast({ title: "العميل مطلوب", description: "يرجى إدخال اسم العميل قبل الحفظ" });
+      return;
+    }
+
+    const cleanedItems = form.items.filter(
+      (item) => item.description.trim() || item.account.trim() || item.unitPrice > 0
+    );
+
+    const payload: SavedCreditNote = {
+      id: crypto.randomUUID(),
+      noteNumber: form.noteNumber,
+      customer: form.customer,
+      currency: form.currency,
+      date: form.date,
+      orderRef: form.orderRef,
+      reference: form.reference,
+      project: form.project,
+      warehouse: form.warehouse,
+      subtotal,
+      tax,
+      total,
+      items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
+    };
+
+    const updated = [payload, ...savedNotes];
+    setSavedNotes(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    const sequence = extractSequence(form.noteNumber) + 1;
+    setNextSequence(sequence);
+    setForm(createEmptyForm(sequence));
+
+    toast({
+      title: "تم حفظ إشعار دائن",
+      description: `تم حفظ الإشعار ${payload.noteNumber} بنجاح`,
+    });
+  };
 
   return (
     <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-foreground">إشعار دائن</h1>
             <p className="text-sm text-muted-foreground">Credit note / إشعار دائن</p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={createNewNote}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              إشعار جديد
+            </button>
+            <button
+              onClick={handleSave}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
+            >
+              <Save className="h-4 w-4" />
+              حفظ الإشعار
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm text-muted-foreground">
+            عدد الإشعارات المحفوظة: <span className="font-semibold text-foreground">{savedNotes.length}</span>
+          </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -71,13 +222,17 @@ export default function SalesCreditNote() {
 
           <div className="space-y-3 rounded-xl border border-border bg-card p-4">
             <Field label="رقم الإشعار">
-              <input value={noteNumber} readOnly className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm" />
+              <input
+                value={form.noteNumber}
+                readOnly
+                className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
+              />
             </Field>
 
             <Field label="العميل*">
               <input
-                value={customer}
-                onChange={(e) => setCustomer(e.target.value)}
+                value={form.customer}
+                onChange={(e) => setForm({ ...form, customer: e.target.value })}
                 placeholder="مطلوب"
                 className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
               />
@@ -86,16 +241,16 @@ export default function SalesCreditNote() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="العملة*">
                 <input
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
+                  value={form.currency}
+                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
                   className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 />
               </Field>
               <Field label="التاريخ*">
                 <input
                   type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
                   className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 />
               </Field>
@@ -104,16 +259,16 @@ export default function SalesCreditNote() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="أمر الشراء">
                 <input
-                  value={orderRef}
-                  onChange={(e) => setOrderRef(e.target.value)}
+                  value={form.orderRef}
+                  onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
                   placeholder="اختياري"
                   className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 />
               </Field>
               <Field label="المرجع">
                 <input
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
+                  value={form.reference}
+                  onChange={(e) => setForm({ ...form, reference: e.target.value })}
                   placeholder="اختياري"
                   className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 />
@@ -123,16 +278,16 @@ export default function SalesCreditNote() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="المشروع">
                 <input
-                  value={project}
-                  onChange={(e) => setProject(e.target.value)}
+                  value={form.project}
+                  onChange={(e) => setForm({ ...form, project: e.target.value })}
                   placeholder="اختياري"
                   className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 />
               </Field>
               <Field label="المستودع">
                 <input
-                  value={warehouse}
-                  onChange={(e) => setWarehouse(e.target.value)}
+                  value={form.warehouse}
+                  onChange={(e) => setForm({ ...form, warehouse: e.target.value })}
                   placeholder="اختياري"
                   className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 />
@@ -157,7 +312,7 @@ export default function SalesCreditNote() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {form.items.map((item) => {
                   const lineTotal = item.quantity * item.unitPrice;
                   return (
                     <tr key={item.id} className="border-t border-border">
@@ -182,7 +337,9 @@ export default function SalesCreditNote() {
                           type="number"
                           min={1}
                           value={item.quantity}
-                          onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value))}
+                          onChange={(e) =>
+                            updateItem(item.id, "quantity", Number(e.target.value) || 1)
+                          }
                           className="h-10 w-24 rounded-md border border-border bg-background px-3"
                         />
                       </td>
@@ -191,7 +348,9 @@ export default function SalesCreditNote() {
                           type="number"
                           min={0}
                           value={item.unitPrice}
-                          onChange={(e) => updateItem(item.id, "unitPrice", Number(e.target.value))}
+                          onChange={(e) =>
+                            updateItem(item.id, "unitPrice", Number(e.target.value) || 0)
+                          }
                           className="h-10 w-32 rounded-md border border-border bg-background px-3"
                         />
                       </td>
@@ -241,6 +400,38 @@ export default function SalesCreditNote() {
               <span>{total.toFixed(2)} ﷼</span>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h3 className="mb-3 text-base font-semibold text-foreground">الإشعارات المحفوظة</h3>
+          {savedNotes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">لا يوجد إشعارات محفوظة حالياً.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-right text-sm">
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="px-3 py-2">رقم الإشعار</th>
+                    <th className="px-3 py-2">العميل</th>
+                    <th className="px-3 py-2">التاريخ</th>
+                    <th className="px-3 py-2">العملة</th>
+                    <th className="px-3 py-2">الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedNotes.map((note) => (
+                    <tr key={note.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-semibold text-primary">{note.noteNumber}</td>
+                      <td className="px-3 py-2">{note.customer}</td>
+                      <td className="px-3 py-2">{note.date}</td>
+                      <td className="px-3 py-2">{note.currency}</td>
+                      <td className="px-3 py-2">{note.total.toFixed(2)} ﷼</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </Layout>

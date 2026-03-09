@@ -59,6 +59,17 @@ type PettyCashForm = {
   receivedBy: string;
 };
 
+type AccountTreeRow = {
+  code: string;
+  name: string;
+  parent: string;
+  category: string;
+  nature: string;
+  postable: string;
+  level: number;
+  isMain?: boolean;
+};
+
 const mapVoucherRow = (row: Record<string, unknown>): VoucherRow => ({
   id: String(row.id ?? ""),
   voucherNumber: String(row.voucher_number ?? ""),
@@ -102,6 +113,41 @@ const getEmptyPettyCashForm = (): PettyCashForm => ({
   paidBy: "",
   receivedBy: "",
 });
+
+const chartOfAccountsRows: AccountTreeRow[] = [
+  { code: "1", name: "الأصول", parent: "-", category: "رئيسي", nature: "مدين", postable: "لا", level: 0, isMain: true },
+  { code: "1.1", name: "الأصول المتداولة", parent: "الأصول", category: "تجميعي", nature: "مدين", postable: "لا", level: 1 },
+  { code: "1.1.1", name: "الصندوق", parent: "الأصول المتداولة", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "1.1.2", name: "البنك", parent: "الأصول المتداولة", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "1.1.3", name: "العملاء", parent: "الأصول المتداولة", category: "تجميعي", nature: "مدين", postable: "لا", level: 2 },
+  { code: "1.1.3.1", name: "عملاء محليون", parent: "العملاء", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 3 },
+  { code: "1.2", name: "الأصول الثابتة", parent: "الأصول", category: "تجميعي", nature: "مدين", postable: "لا", level: 1 },
+  { code: "1.2.1", name: "المعدات", parent: "الأصول الثابتة", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "1.2.2", name: "الأثاث", parent: "الأصول الثابتة", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+
+  { code: "2", name: "الالتزامات", parent: "-", category: "رئيسي", nature: "دائن", postable: "لا", level: 0, isMain: true },
+  { code: "2.1", name: "الخصوم المتداولة", parent: "الالتزامات", category: "تجميعي", nature: "دائن", postable: "لا", level: 1 },
+  { code: "2.1.1", name: "الموردون", parent: "الخصوم المتداولة", category: "تفصيلي", nature: "دائن", postable: "نعم", level: 2 },
+  { code: "2.1.2", name: "ضريبة القيمة المضافة", parent: "الخصوم المتداولة", category: "تفصيلي", nature: "دائن", postable: "نعم", level: 2 },
+
+  { code: "3", name: "حقوق الملكية", parent: "-", category: "رئيسي", nature: "دائن", postable: "لا", level: 0, isMain: true },
+  { code: "3.1", name: "رأس المال", parent: "حقوق الملكية", category: "تفصيلي", nature: "دائن", postable: "نعم", level: 1 },
+  { code: "3.2", name: "الأرباح المبقاة", parent: "حقوق الملكية", category: "تفصيلي", nature: "دائن", postable: "نعم", level: 1 },
+
+  { code: "4", name: "الإيرادات", parent: "-", category: "رئيسي", nature: "دائن", postable: "لا", level: 0, isMain: true },
+  { code: "4.1", name: "إيرادات المبيعات", parent: "الإيرادات", category: "تفصيلي", nature: "دائن", postable: "نعم", level: 1 },
+  { code: "4.2", name: "إيرادات الخدمات", parent: "الإيرادات", category: "تفصيلي", nature: "دائن", postable: "نعم", level: 1 },
+
+  { code: "5", name: "المصروفات", parent: "-", category: "رئيسي", nature: "مدين", postable: "لا", level: 0, isMain: true },
+  { code: "5.1", name: "مصروفات التشغيل", parent: "المصروفات", category: "تجميعي", nature: "مدين", postable: "لا", level: 1 },
+  { code: "5.1.1", name: "الرواتب والأجور", parent: "مصروفات التشغيل", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "5.1.2", name: "الإيجارات", parent: "مصروفات التشغيل", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "5.1.3", name: "الكهرباء والمياه", parent: "مصروفات التشغيل", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "5.1.4", name: "الاتصالات والإنترنت", parent: "مصروفات التشغيل", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "5.2", name: "مصروفات إدارية", parent: "المصروفات", category: "تجميعي", nature: "مدين", postable: "لا", level: 1 },
+  { code: "5.2.1", name: "مستلزمات مكتبية", parent: "مصروفات إدارية", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+  { code: "5.2.2", name: "رسوم حكومية", parent: "مصروفات إدارية", category: "تفصيلي", nature: "مدين", postable: "نعم", level: 2 },
+];
 
 export default function ExpenseManagement() {
   const location = useLocation();
@@ -279,66 +325,32 @@ export default function ExpenseManagement() {
             <p className="mt-1 text-sm text-muted-foreground text-right">هيكل الحسابات المحاسبي كما في دليل الحسابات.</p>
 
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm border border-slate-200">
+              <table className="w-full min-w-[1100px] text-sm border border-slate-200">
                 <thead className="bg-slate-100">
                   <tr>
                     <th className="px-3 py-2 border border-slate-200 text-right">كود الحساب</th>
                     <th className="px-3 py-2 border border-slate-200 text-right">اسم الحساب</th>
-                    <th className="px-3 py-2 border border-slate-200 text-right">نوع الحساب</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">الحساب الأب</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">تصنيف الحساب</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">طبيعة الحساب</th>
                     <th className="px-3 py-2 border border-slate-200 text-right">يقبل الترحيل</th>
                     <th className="px-3 py-2 border border-slate-200 text-right">الحالة</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="bg-slate-50 font-semibold">
-                    <td className="px-3 py-2 border border-slate-200">1</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">الأصول</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">رئيسي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 border border-slate-200">1.1</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right pr-6">النقدية والبنوك</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">فرعي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 border border-slate-200">1.1.1</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right pr-10">الصندوق الرئيسي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">تفصيلي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نعم</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 border border-slate-200">1.2</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right pr-6">العملاء</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">فرعي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
-                  </tr>
-                  <tr className="bg-slate-50 font-semibold">
-                    <td className="px-3 py-2 border border-slate-200">2</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">الالتزامات</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">رئيسي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 border border-slate-200">2.1</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right pr-6">الموردون</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">فرعي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نعم</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
-                  </tr>
-                  <tr className="bg-yellow-50 font-semibold">
-                    <td className="px-3 py-2 border border-slate-200">5</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">المصروفات</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">رئيسي</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
-                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
-                  </tr>
+                  {chartOfAccountsRows.map((row) => (
+                    <tr key={row.code} className={row.isMain ? "bg-slate-50 font-semibold" : "bg-white"}>
+                      <td className="px-3 py-2 border border-slate-200">{row.code}</td>
+                      <td className="px-3 py-2 border border-slate-200 text-right" style={{ paddingRight: `${row.level * 16 + 12}px` }}>
+                        {row.name}
+                      </td>
+                      <td className="px-3 py-2 border border-slate-200 text-right">{row.parent}</td>
+                      <td className="px-3 py-2 border border-slate-200 text-right">{row.category}</td>
+                      <td className="px-3 py-2 border border-slate-200 text-right">{row.nature}</td>
+                      <td className="px-3 py-2 border border-slate-200 text-right">{row.postable}</td>
+                      <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -353,8 +365,7 @@ export default function ExpenseManagement() {
       subMenu={{
         title: "المحاسبة والمالية",
         items: [
-          { label: "سندات الصرف", href: "/expenses/vouchers" },
-          { label: "سندات القبض", href: "/expenses/petty-cash" },
+          { label: "شجرة الحسابات", href: "/expenses" },
         ],
       }}
     >

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactElement } from "react";
 import Layout from "@/components/Layout";
 import { Search, Eye, CheckCircle, XCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,7 @@ const STATUS_STYLE: Record<string, string> = {
   "مرفوض": "bg-red-100 text-red-700 border-red-200",
 };
 
-const STATUS_ICON: Record<string, JSX.Element> = {
+const STATUS_ICON: Record<string, ReactElement> = {
   "معلق":   <Clock className="h-3 w-3" />,
   "موافق":  <CheckCircle className="h-3 w-3" />,
   "مرفوض": <XCircle className="h-3 w-3" />,

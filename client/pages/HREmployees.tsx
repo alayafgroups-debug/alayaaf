@@ -360,10 +360,11 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
     setForm((f) => ({ ...f, [field]: value }));
 
   const steps = [
-    { title: "المعلومات الأساسية", id: "basic" },
-    { title: "المعلومات الشخصية", id: "personal" },
-    { title: "المعلومات الوظيفية", id: "job" },
-    { title: "الراتب والاستحقاقات", id: "salary" },
+    { title: "بيانات الموظف الأساسية", id: "basic" },
+    { title: "البيانات الشخصية والتواصل", id: "personal" },
+    { title: "البيانات الوظيفية", id: "job" },
+    { title: "الراتب والخصومات", id: "salary" },
+    { title: "الخيارات والإعدادات", id: "options" },
     { title: "البيانات الإضافية", id: "additional" },
   ];
 
@@ -454,18 +455,14 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
                 >
                   {idx < currentStep ? "✓" : idx + 1}
                 </button>
-                <div className={cn(
-                  "h-1 flex-1 mx-2 rounded-full",
-                  idx < currentStep ? "bg-green-600" : idx === currentStep ? "bg-blue-600" : "bg-gray-300"
-                )} />
+                {idx < steps.length - 1 && (
+                  <div className={cn(
+                    "h-1 flex-1 mx-2 rounded-full",
+                    idx < currentStep ? "bg-green-600" : idx === currentStep ? "bg-blue-600" : "bg-gray-300"
+                  )} />
+                )}
               </div>
             ))}
-            <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white",
-              currentStep === steps.length - 1 ? "bg-green-600" : "bg-gray-200 text-gray-700"
-            )}>
-              {currentStep === steps.length - 1 ? "✓" : steps.length}
-            </div>
           </div>
           <div className="text-center">
             <p className="text-sm text-gray-600">
@@ -478,53 +475,62 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
 
         {/* Step Content */}
         <div className="bg-white rounded-xl shadow border border-gray-100 p-6 space-y-6">
+          {/* Step 1: Basic Info with Profile Picture */}
           {currentStep === 0 && (
             <>
-              <Section title="المعلومات الأساسية">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="رقم الموظف" value={form.empId} onChange={(v) => set("empId", v)} placeholder="EMP-0001" />
-                  <Field label="الاسم الكامل *" value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الموظف" />
+              <Section title="بيانات الموظف الأساسية">
+                <div className="flex flex-col items-center gap-4 pb-4">
+                  <div className="h-24 w-24 rounded-full bg-gray-300 flex items-center justify-center text-gray-500 text-4xl">
+                    👤
+                  </div>
+                  <button className="text-blue-600 text-sm hover:underline">
+                    تحميل الصورة
+                  </button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <SelectField label="الجنسية" value={form.nationality} onChange={(v) => set("nationality", v)} options={NATIONALITIES} />
-                  <Field label="رقم الهوية الوطنية" value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1234567890" />
+                <div className="border-t pt-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <Field label="الاسم الكامل *" value={form.name} onChange={(v) => set("name", v)} placeholder="أدخل الاسم الكامل" />
+                    <Field label="البريد الإلكتروني *" value={form.email} onChange={(v) => set("email", v)} placeholder="example@email.com" type="email" />
+                  </div>
                 </div>
               </Section>
             </>
           )}
 
+          {/* Step 2: Personal Data */}
           {currentStep === 1 && (
             <>
-              <Section title="المعلومات الشخصية">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Section title="البيانات الشخصية والتواصل">
+                <div className="grid grid-cols-1 gap-4">
+                  <SelectField label="الجنسية *" value={form.nationality} onChange={(v) => set("nationality", v)} options={NATIONALITIES} />
+                  <Field label="رقم الهوية الوطنية" value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1234567890" />
                   <Field label="رقم الهاتف" value={form.phone} onChange={(v) => set("phone", v)} placeholder="05xxxxxxxx" />
-                  <Field label="البريد الإلكتروني" value={form.email} onChange={(v) => set("email", v)} placeholder="example@email.com" type="email" />
                 </div>
               </Section>
             </>
           )}
 
+          {/* Step 3: Job Info */}
           {currentStep === 2 && (
             <>
-              <Section title="المعلومات الوظيفية">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Section title="البيانات الوظيفية">
+                <div className="grid grid-cols-1 gap-4">
                   <SelectField label="القسم *" value={form.department} onChange={(v) => set("department", v)} options={DEPARTMENTS} />
-                  <Field label="المسمى الوظيفي" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} placeholder="مدير، محاسب، مهندس..." />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="المسمى الوظيفي" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} placeholder="مثال: مدير، محاسب، مهندس" />
                   <SelectField label="الفرع" value={form.branch} onChange={(v) => set("branch", v)} options={BRANCHES} />
-                  <Field label="مركز التكلفة" value={form.costCenter} onChange={(v) => set("costCenter", v)} placeholder="0000192101" />
+                  <Field label="تاريخ التعيين" value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
                 </div>
               </Section>
             </>
           )}
 
+          {/* Step 4: Salary */}
           {currentStep === 3 && (
             <>
-              <Section title="الراتب والاستحقاقات">
+              <Section title="الراتب والخصومات">
                 <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">الراتب الإجمالي (ر.س)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">الراتب الإجمالي (ر.س) *</label>
                     <input
                       type="number"
                       value={form.totalSalary}
@@ -534,31 +540,50 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
                       min={0}
                     />
                   </div>
+                  <Field label="مركز التكلفة" value={form.costCenter} onChange={(v) => set("costCenter", v)} placeholder="0000192101" />
                 </div>
               </Section>
             </>
           )}
 
+          {/* Step 5: Options & Checkboxes */}
           {currentStep === 4 && (
+            <>
+              <Section title="الخيارات والإعدادات">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">الخيارات المتاحة:</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {["استقطاعات", "علاوات", "إجازات مرضية", "إجازات سنوية", "بدل السكن", "بدل النقل"].map((option) => (
+                        <label key={option} className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" className="rounded border-gray-300" />
+                          <span className="text-sm text-gray-700">{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Section>
+            </>
+          )}
+
+          {/* Step 6: Additional Info */}
+          {currentStep === 5 && (
             <>
               <Section title="البيانات الإضافية">
                 <div className="grid grid-cols-1 gap-4">
+                  <SelectField label="الحالة" value={form.status} onChange={(v) => set("status", v)} options={STATUSES} />
+                  <Field label="رقم الموظف" value={form.empId} onChange={(v) => set("empId", v)} placeholder="EMP-0001" />
                   <div>
-                    <Field label="تاريخ التعيين" value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
+                    <textarea
+                      value={form.notes}
+                      onChange={(e) => set("notes", e.target.value)}
+                      rows={4}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                      placeholder="أي ملاحظات إضافية عن الموظف..."
+                    />
                   </div>
-                  <div>
-                    <SelectField label="الحالة" value={form.status} onChange={(v) => set("status", v)} options={STATUSES} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => set("notes", e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                    placeholder="أي ملاحظات إضافية..."
-                  />
                 </div>
               </Section>
             </>
@@ -580,14 +605,14 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
             {currentStep + 1} من {steps.length}
           </div>
 
-          {currentStep === steps.length - 1 ? (
+          {currentStep === 5 ? (
             <button
               onClick={handleSave}
               disabled={saving}
               className="flex items-center gap-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
-              {saving ? "جاري الحفظ..." : "حفظ"}
+              {saving ? "جاري الحفظ..." : "حفظ الموظف"}
             </button>
           ) : (
             <button

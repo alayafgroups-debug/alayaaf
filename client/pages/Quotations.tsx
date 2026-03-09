@@ -1047,10 +1047,12 @@ function QuotationForm({
   onBack: () => void;
   onSaved: (quotation: QuotationRow) => void;
 }) {
+  const [quotationNumber, setQuotationNumber] = useState("");
   const [reference, setReference] = useState("");
-  const [validity, setValidity] = useState("2026-04-04");
-  const [date, setDate] = useState("2026-03-05");
+  const [validity, setValidity] = useState("");
+  const [date, setDate] = useState("");
   const [customer, setCustomer] = useState("");
+  const customerOptions = ["فندي بن سالم", "فندي كوزوبد", "شركة لاكجري العياف"];
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState([
     {
@@ -1063,6 +1065,31 @@ function QuotationForm({
       taxPercent: 15,
     },
   ]);
+
+  useEffect(() => {
+    const loadDefaults = async () => {
+      const today = new Date();
+      const nextMonth = new Date();
+      nextMonth.setDate(today.getDate() + 30);
+
+      setDate(today.toISOString().split("T")[0]);
+      setValidity(nextMonth.toISOString().split("T")[0]);
+
+      const { data } = await supabase
+        .from("sales_quotations")
+        .select("id")
+        .like("id", "QUO-%")
+        .order("id", { ascending: false })
+        .limit(1);
+
+      const latestId = data?.[0]?.id ?? "QUO-000099";
+      const latestNumber = Number(String(latestId).split("-")[1] ?? "99");
+      const nextNumber = `QUO-${String(latestNumber + 1).padStart(6, "0")}`;
+      setQuotationNumber(nextNumber);
+    };
+
+    void loadDefaults();
+  }, []);
 
   const handleAddItem = () => {
     setItems((prev) => [
@@ -1105,7 +1132,7 @@ function QuotationForm({
   );
 
   const handleSave = async () => {
-    const quotationId = `QT-${Date.now()}`;
+    const quotationId = quotationNumber || `QUO-${Date.now()}`;
     const payload = {
       id: quotationId,
       date,
@@ -1144,168 +1171,131 @@ function QuotationForm({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white border border-border/50 shadow-sm px-4 py-3 animate-fade-in-up">
+        <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all"
+            className="rounded-lg border border-border/70 bg-white px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/30"
           >
             إلغاء
           </button>
           <button
             onClick={handleSave}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-blue-600 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20 hover:shadow-lg transition-all flex items-center gap-2"
+            className="rounded-lg bg-[#51314f] px-4 py-2 text-sm font-bold text-white"
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-              />
-            </svg>
-            حفظ العرض
+            حفظ
+          </button>
+          <button
+            onClick={handleSave}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white"
+          >
+            حفظ ثم إرسال
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-extrabold text-foreground">
-            إضافة عرض سعر جديد
-          </h1>
-          <Plus className="h-5 w-5 text-blue-600" />
-        </div>
+
+        <h1 className="text-lg font-extrabold text-foreground">إنشاء عرض سعر</h1>
+
         <button
           onClick={onBack}
-          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
+          className="rounded-lg border border-border/70 bg-white px-4 py-2 text-sm font-semibold text-muted-foreground"
         >
           العودة للقائمة
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M14 5l7 7m0 0l-7 7m7-7H3"
-            />
-          </svg>
         </button>
       </div>
 
-      <div className="p-4 space-y-6">
-        {/* Basic Info */}
-        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
-            <h2 className="text-sm font-bold text-foreground">
-              معلومات العرض الأساسية
-            </h2>
-            <svg
-              className="h-5 w-5 text-slate-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+      <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+            <div className="h-16 w-16 rounded-lg bg-slate-700 text-white text-[11px] font-bold flex items-center justify-center text-center">
+              شركة لاكجري العياف
+            </div>
+            <div>
+              <p className="text-base font-bold text-foreground">شركة لاكجري العياف</p>
+              <p className="text-xs text-muted-foreground mt-1">الشارع رقم 20</p>
+              <p className="text-xs text-muted-foreground">المملكة العربية السعودية</p>
+              <p className="text-xs text-muted-foreground">315597905300003 : الرقم الضريبي</p>
+            </div>
           </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                مرجع العرض
-              </label>
-              <input
-                type="text"
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                placeholder="أدخل مرجع العرض (اختياري)"
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                العملة
-              </label>
-              <input
-                type="text"
-                defaultValue="SAR"
-                disabled
-                className="w-full px-3 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-center text-muted-foreground outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                الحالة
-              </label>
-              <div className="w-full px-3 py-2 border border-slate-300 rounded bg-white flex justify-center">
-                <span className="bg-blue-600 text-white text-xs px-3 py-1 rounded font-medium">
-                  مفتوح
-                </span>
+
+          <div className="lg:col-span-2 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[12px] font-semibold text-muted-foreground text-right block">رقم عرض السعر</label>
+                <input
+                  type="text"
+                  value={quotationNumber}
+                  readOnly
+                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-muted/30"
+                />
               </div>
-              <p className="text-[10px] text-slate-400 text-center mt-1">
-                الحالة تتغير تلقائياً
-              </p>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                تاريخ الصلاحية <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={validity}
-                onChange={(event) => setValidity(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                تاريخ العرض <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1 md:col-span-3">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                العميل <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={customer}
-                onChange={(event) => setCustomer(event.target.value)}
-                placeholder="اكتب اسم العميل..."
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
+
+              <div className="space-y-1">
+                <label className="text-[12px] font-semibold text-muted-foreground text-right block">العميل</label>
+                <select
+                  value={customer}
+                  onChange={(event) => setCustomer(event.target.value)}
+                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
+                >
+                  <option value="">اختر العميل</option>
+                  {customerOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[12px] font-semibold text-muted-foreground text-right block">تاريخ العرض</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[12px] font-semibold text-muted-foreground text-right block">تاريخ الصلاحية</label>
+                <input
+                  type="date"
+                  value={validity}
+                  onChange={(event) => setValidity(event.target.value)}
+                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[12px] font-semibold text-muted-foreground text-right block">أمر الشراء</label>
+                <input
+                  type="text"
+                  value={reference}
+                  onChange={(event) => setReference(event.target.value)}
+                  placeholder="اختياري"
+                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[12px] font-semibold text-muted-foreground text-right block">المشروع</label>
+                <input
+                  type="text"
+                  placeholder="اختياري"
+                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                />
+              </div>
             </div>
 
-            <div className="space-y-1 md:col-span-3">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                ملاحظات
-              </label>
+            <div className="space-y-1">
+              <label className="text-[12px] font-semibold text-muted-foreground text-right block">المرجع</label>
               <textarea
                 rows={2}
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                placeholder="أدخل ملاحظات إضافية"
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none"
+                placeholder="وصف العرض، تعليمات، مرجع داخلي..."
+                className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right resize-none"
               />
             </div>
-
           </div>
         </div>
 

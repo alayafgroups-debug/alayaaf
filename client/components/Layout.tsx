@@ -80,19 +80,34 @@ const navSubMenus: Record<string, { label: string; href: string; isHeader?: bool
   ],
 };
 
+/* ── HR nav item types ── */
+type HRNavItem = {
+  icon: typeof LayoutDashboard;
+  label: string;
+  href: string;
+  isHeader?: boolean;
+  hasChildren?: boolean;
+  children?: { icon: typeof LayoutDashboard; label: string; href: string }[];
+};
+
 /* ── HR-specific navigation items ── */
-const hrNavItems: { icon: typeof LayoutDashboard; label: string; href: string; isHeader?: boolean }[] = [
+const hrNavItems: HRNavItem[] = [
   { icon: LayoutDashboard, label: "لوحة التحكم", href: "/hr/dashboard" },
-  { icon: Users2, label: "الموظفون", href: "/hr/employees" },
-  { icon: Handshake, label: "الموظفون المتعاونون", href: "/hr/employees/cooperative" },
-  { icon: UserX, label: "الموظفون غير الفعالين", href: "/hr/employees/inactive" },
+  {
+    icon: Users2, label: "الموظفون", href: "/hr/employees", hasChildren: true,
+    children: [
+      { icon: Users2, label: "الموظفون", href: "/hr/employees" },
+      { icon: Handshake, label: "الموظفون المتعاونون", href: "/hr/employees/cooperative" },
+      { icon: UserX, label: "الموظفون غير الفعالين", href: "/hr/employees/inactive" },
+      { icon: ScrollText, label: "سجلات المستخدمين", href: "/hr/user-logs" },
+    ],
+  },
   { icon: Clock, label: "الحضور والانصراف", href: "/hr/attendance" },
   { icon: Wallet, label: "مسير الرواتب", href: "/hr/payroll" },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: FileBarChart, label: "تقارير الموارد البشرية", href: "/hr/reports" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },
-  { icon: ScrollText, label: "سجلات المستخدمين", href: "/hr/user-logs" },
   // Header for requests group
   { icon: Send, label: "الطلبات", href: "", isHeader: true },
   { icon: Send, label: "إرسال الطلبات", href: "/hr/requests/send" },
@@ -117,8 +132,22 @@ const itemColors: Record<string, { icon: string; active: string; glow: string; d
    HR Sidebar Component
    ═══════════════════════════════════════════════════════ */
 function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setSidebarOpen: (v: boolean) => void }) {
+  const [expandedHRMenu, setExpandedHRMenu] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Auto-expand if we're on a child route
+  useEffect(() => {
+    for (const item of hrNavItems) {
+      if (item.hasChildren && item.children) {
+        const isChildActive = item.children.some(c => location.pathname === c.href);
+        if (isChildActive) {
+          setExpandedHRMenu(item.href);
+          break;
+        }
+      }
+    }
+  }, [location.pathname]);
 
   return (
     <aside
@@ -205,42 +234,94 @@ function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setS
           }
 
           const Icon = item.icon;
-          const isItemActive = location.pathname === item.href ||
-            (item.href === "/hr/employees" && location.pathname === "/hr/employees");
+          const isExpanded = expandedHRMenu === item.href;
+          const hasChildActive = item.hasChildren && item.children?.some(c => location.pathname === c.href);
+          const isItemActive = item.hasChildren
+            ? hasChildActive
+            : location.pathname === item.href;
 
           return (
-            <button
-              key={item.href}
-              onClick={() => navigate(item.href)}
-              className={cn(
-                "group w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200 border border-transparent",
-                isItemActive
-                  ? "text-white bg-emerald-500/15 border-emerald-500/25"
-                  : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
-              )}
-              title={item.label}
-            >
-              <div
+            <div key={item.href}>
+              <button
+                onClick={() => {
+                  if (item.hasChildren) {
+                    setExpandedHRMenu(isExpanded ? null : item.href);
+                  } else {
+                    navigate(item.href);
+                  }
+                }}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300 flex-shrink-0",
+                  "group w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200 border border-transparent",
                   isItemActive
-                    ? "bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
-                    : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70"
+                    ? "text-white bg-emerald-500/15 border-emerald-500/25"
+                    : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
                 )}
+                title={item.label}
               >
-                <Icon className="h-4 w-4" />
-              </div>
-              {sidebarOpen && (
-                <>
-                  <span className={cn("flex-1 text-right", isItemActive && "font-semibold")}>
-                    {item.label}
-                  </span>
-                  {isItemActive && (
-                    <span className="h-1 w-5 rounded-full bg-gradient-to-l from-emerald-400 to-teal-500 opacity-60" />
+                <div
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300 flex-shrink-0",
+                    isItemActive
+                      ? "bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
+                      : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70"
                   )}
-                </>
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                {sidebarOpen && (
+                  <>
+                    <span className={cn("flex-1 text-right", isItemActive && "font-semibold")}>
+                      {item.label}
+                    </span>
+                    {item.hasChildren ? (
+                      <ChevronDown
+                        className={cn(
+                          "h-3.5 w-3.5 transition-transform duration-300 text-white/25",
+                          isExpanded && "rotate-180 text-white/50"
+                        )}
+                      />
+                    ) : isItemActive ? (
+                      <span className="h-1 w-5 rounded-full bg-gradient-to-l from-emerald-400 to-teal-500 opacity-60" />
+                    ) : null}
+                  </>
+                )}
+              </button>
+
+              {/* Children sub-menu */}
+              {item.hasChildren && isExpanded && sidebarOpen && item.children && (
+                <div className="mt-1.5 mr-4 ml-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border bg-emerald-500/[0.06] border-emerald-400/15">
+                  {item.children.map((child) => {
+                    const ChildIcon = child.icon;
+                    const isChildActive = location.pathname === child.href;
+                    return (
+                      <button
+                        key={child.href}
+                        onClick={() => navigate(child.href)}
+                        className={cn(
+                          "w-full text-right flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
+                          isChildActive
+                            ? "text-white bg-emerald-500/15 border border-emerald-500/25"
+                            : "text-emerald-300 opacity-60 hover:opacity-100 hover:bg-white/[0.05] border border-transparent"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full flex-shrink-0 transition-all duration-200",
+                            isChildActive
+                              ? "h-2 w-2 bg-emerald-400 shadow-sm shadow-emerald-500/20"
+                              : "bg-emerald-400 opacity-40"
+                          )}
+                        />
+                        <span>{child.label}</span>
+                        {isChildActive && (
+                          <span className="mr-auto h-1 w-5 rounded-full bg-gradient-to-l from-emerald-400 to-teal-500 opacity-60" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            </button>
+            </div>
           );
         })}
       </nav>

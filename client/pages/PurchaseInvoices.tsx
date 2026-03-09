@@ -680,10 +680,12 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
 function FormFields({
   form,
   setField,
+  invoiceNumber,
   accentClass = "focus:border-blue-500 focus:ring-blue-500",
 }: {
   form: ReturnType<typeof useInvoiceForm>["form"];
   setField: ReturnType<typeof useInvoiceForm>["setField"];
+  invoiceNumber?: string;
   accentClass?: string;
 }) {
   const inputClass = `w-full px-3 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none`;
@@ -721,7 +723,7 @@ function FormFields({
       </div>
       <div className="space-y-1">
         <label className="text-sm font-medium text-slate-700 text-right block">رقم الفاتورة</label>
-        <input type="text" defaultValue="تلقائي" disabled className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none text-slate-500" />
+        <input type="text" value={invoiceNumber || "تلقائي"} disabled className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none text-slate-500" />
       </div>
       <div className="space-y-1 md:col-span-2">
         <label className="text-sm font-medium text-slate-700 text-right block">مركز التكلفة</label>
@@ -748,13 +750,31 @@ function InvoiceForm({ onBack, onSaved }: { onBack: () => void; onSaved: (i: Pur
   const { form, setField, items, addItem, updateItem, removeItem, totals } = useInvoiceForm();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+
+  useEffect(() => {
+    const loadInvoiceNumber = async () => {
+      const { data } = await supabase
+        .from("purchase_invoices")
+        .select("id")
+        .like("id", "PIN-%")
+        .order("id", { ascending: false })
+        .limit(1);
+
+      const latestId = data?.[0]?.id ?? "PIN-000100";
+      const latestNumber = Number(String(latestId).split("-")[1] ?? "100");
+      setInvoiceNumber(`PIN-${String(latestNumber + 1).padStart(6, "0")}`);
+    };
+
+    void loadInvoiceNumber();
+  }, []);
 
   const handleSave = async () => {
     if (!form.date) { setError("يرجى إدخال تاريخ الفاتورة"); return; }
     setSaving(true);
     setError(null);
 
-    const newId = crypto.randomUUID();
+    const newId = invoiceNumber || crypto.randomUUID();
     const totalStr = totals.total.toFixed(2);
     const payload = {
       id: newId,
@@ -820,7 +840,7 @@ function InvoiceForm({ onBack, onSaved }: { onBack: () => void; onSaved: (i: Pur
           <div className="bg-amber-400 px-4 py-2 text-right font-semibold text-slate-800">
             معلومات الفاتورة
           </div>
-          <FormFields form={form} setField={setField} />
+          <FormFields form={form} setField={setField} invoiceNumber={invoiceNumber} />
         </div>
         <ItemsTable items={items} onAdd={addItem} onUpdate={updateItem} onRemove={removeItem} />
         <div className="flex justify-center gap-4 pt-2">

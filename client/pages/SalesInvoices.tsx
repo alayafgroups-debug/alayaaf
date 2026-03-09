@@ -1034,10 +1034,39 @@ function InvoiceForm({
       taxPercent: 15,
     },
   ]);
-  const [invoiceDate, setInvoiceDate] = useState("2026-02-01");
-  const [dueDate, setDueDate] = useState("2026-03-13");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [customer, setCustomer] = useState("");
+  const [purchaseOrder, setPurchaseOrder] = useState("");
+  const [project, setProject] = useState("");
+  const [warehouse, setWarehouse] = useState("");
   const [notes, setNotes] = useState("");
+  const customerOptions = ["فندي بن سالم", "فندي كوزوبد", "شركة لاكجري العياف"];
+
+  useEffect(() => {
+    const loadDefaults = async () => {
+      const today = new Date();
+      const due = new Date();
+      due.setDate(today.getDate() + 30);
+
+      setInvoiceDate(today.toISOString().split("T")[0]);
+      setDueDate(due.toISOString().split("T")[0]);
+
+      const { data } = await supabase
+        .from("sales_invoices")
+        .select("id")
+        .like("id", "INV-%")
+        .order("id", { ascending: false })
+        .limit(1);
+
+      const latestId = data?.[0]?.id ?? "INV-000100";
+      const latestNumber = Number(String(latestId).split("-")[1] ?? "100");
+      setInvoiceNumber(`INV-${String(latestNumber + 1).padStart(6, "0")}`);
+    };
+
+    void loadDefaults();
+  }, []);
 
   const handleAddItem = () => {
     setItems((prev) => [
@@ -1075,7 +1104,7 @@ function InvoiceForm({
   );
 
   const handleSave = async () => {
-    const invoiceId = `INV-${Date.now()}`;
+    const invoiceId = invoiceNumber || `INV-${Date.now()}`;
     const totalValue = totals.total;
     const payload = {
       id: invoiceId,
@@ -1170,116 +1199,122 @@ function InvoiceForm({
       </div>
 
       <div className="p-4 space-y-6">
-        {/* Basic Info */}
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
-            <h2 className="text-sm font-bold text-foreground">
-              معلومات الفاتورة الأساسية
-            </h2>
-            <svg
-              className="h-5 w-5 text-slate-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                رقم المرجع
-              </label>
-              <input
-                type="text"
-                placeholder="أدخل رقم المرجع (اختياري)"
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                العملة
-              </label>
-              <input
-                type="text"
-                defaultValue="SAR"
-                disabled
-                className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-center text-slate-600 outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                الحالة
-              </label>
-              <div className="w-full px-3 py-2 border border-slate-300 rounded bg-white flex justify-center">
-                <span className="bg-cyan-500 text-white text-xs px-3 py-1 rounded font-medium">
-                  مفتوحة
-                </span>
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+              <div className="h-16 w-16 rounded-lg bg-slate-700 text-white text-[11px] font-bold flex items-center justify-center text-center">
+                شركة لاكجري العياف
+              </div>
+              <div>
+                <p className="text-base font-bold text-foreground">شركة لاكجري العياف</p>
+                <p className="text-xs text-muted-foreground mt-1">الشارع رقم 20</p>
+                <p className="text-xs text-muted-foreground">المملكة العربية السعودية</p>
+                <p className="text-xs text-muted-foreground">315597905300003 : الرقم الضريبي</p>
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                تاريخ الاستحقاق <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                تاريخ الفاتورة <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(event) => setInvoiceDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1 md:col-span-3">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                العميل <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={customer}
-                onChange={(event) => setCustomer(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all appearance-none bg-white"
-              >
-                <option value="">ابحث عن عميل...</option>
-                <option value="عميل جديد">عميل جديد</option>
-              </select>
-            </div>
-            <div className="space-y-1 md:col-span-4">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                ملاحظات
-              </label>
-              <input
-                type="text"
-                placeholder="ملاحظات إضافية"
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
 
-            <div className="space-y-1 md:col-start-4">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                رقم الفاتورة
-              </label>
-              <input
-                type="text"
-                defaultValue="تلقائي"
-                disabled
-                className="w-full px-3 py-2 border border-slate-300 bg-slate-50 rounded text-sm text-right outline-none text-slate-500"
-              />
+            <div className="lg:col-span-2 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">العميل</label>
+                  <select
+                    value={customer}
+                    onChange={(event) => setCustomer(event.target.value)}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
+                  >
+                    <option value="">اختر العميل</option>
+                    {customerOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">رقم الفاتورة</label>
+                  <input
+                    type="text"
+                    value={invoiceNumber}
+                    readOnly
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-muted/30"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">العملة</label>
+                  <input
+                    type="text"
+                    value="SAR"
+                    disabled
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-muted/30"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">تاريخ الفاتورة</label>
+                  <input
+                    type="date"
+                    value={invoiceDate}
+                    onChange={(event) => setInvoiceDate(event.target.value)}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">تاريخ الاستحقاق</label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(event) => setDueDate(event.target.value)}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">أمر الشراء</label>
+                  <input
+                    type="text"
+                    value={purchaseOrder}
+                    onChange={(event) => setPurchaseOrder(event.target.value)}
+                    placeholder="اختياري"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">المرجع</label>
+                  <input
+                    type="text"
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="اختياري"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">المشروع</label>
+                  <input
+                    type="text"
+                    value={project}
+                    onChange={(event) => setProject(event.target.value)}
+                    placeholder="اختياري"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                  />
+                </div>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">المستودع</label>
+                  <input
+                    type="text"
+                    value={warehouse}
+                    onChange={(event) => setWarehouse(event.target.value)}
+                    placeholder="اختياري"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

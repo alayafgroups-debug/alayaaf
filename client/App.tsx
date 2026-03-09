@@ -53,7 +53,7 @@ const App = () => (
           <Route path="/sales/invoices" element={<SalesInvoices />} />
           <Route path="/sales/credit-note" element={<SalesCreditNote />} />
           <Route path="/sales/delivery-note" element={<SalesDeliveryNote />} />
-          <Route path="/purchases" element={<Navigate to="/purchases/requests" replace />} />
+          <Route path="/purchases" element={<Navigate to="/purchases/invoices" replace />} />
           <Route path="/purchases/requests" element={<PurchaseRequests />} />
           <Route path="/purchases/orders" element={<PurchaseOrders />} />
           <Route path="/purchases/receipts" element={<GoodsReceipts />} />

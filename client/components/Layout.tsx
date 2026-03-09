@@ -38,10 +38,10 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "سندات العملاء (قبض)", href: "/expenses/petty-cash" },
   ],
   "/purchases": [
+    { label: "فواتير المشتريات", href: "/purchases/invoices" },
     { label: "طلبات الشراء", href: "/purchases/requests" },
     { label: "أوامر الشراء", href: "/purchases/orders" },
     { label: "سندات الاستلام", href: "/purchases/receipts" },
-    { label: "فواتير المشتريات", href: "/purchases/invoices" },
     { label: "مردودات المشتريات", href: "/purchases/returns" },
     { label: "تقارير المشتريات الشاملة", href: "/purchases/reports" },
   ],

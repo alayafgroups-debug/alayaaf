@@ -539,13 +539,12 @@ function ItemsTable({
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-      <div className="bg-green-700 text-white px-4 py-2 flex items-center justify-between">
-        <button onClick={onAdd} className="bg-white text-green-700 px-3 py-1 rounded text-sm font-medium hover:bg-green-50 flex items-center gap-1">
-          <Plus className="h-4 w-4" /> إضافة بند
-        </button>
-        <h2 className="font-semibold">بنود الفاتورة</h2>
-      </div>
+      <div className="bg-slate-100 px-4 py-2 text-right font-semibold text-slate-700">منتج/منتجات</div>
       <div className="p-4 overflow-x-auto">
+        <div className="mb-3 text-sm text-slate-600 flex justify-end gap-6">
+          <label className="inline-flex items-center gap-2"><input type="radio" name="tax-mode" defaultChecked /> خالٍ من الضريبة</label>
+          <label className="inline-flex items-center gap-2"><input type="radio" name="tax-mode" /> شامل الضريبة</label>
+        </div>
         {items.length === 0 ? (
           <div className="h-20 border border-dashed border-slate-300 rounded flex items-center justify-center text-slate-400 text-sm">
             لا يوجد بنود — اضغط "إضافة بند"
@@ -556,12 +555,11 @@ function ItemsTable({
               <tr className="text-slate-600 border-b border-slate-200">
                 <th className="pb-2 font-medium w-10 text-center"></th>
                 <th className="pb-2 font-medium w-24">المجموع</th>
-                <th className="pb-2 font-medium w-20">الضريبة%</th>
                 <th className="pb-2 font-medium w-20">الخصم</th>
-                <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
+                <th className="pb-2 font-medium w-24">المبلغ *</th>
                 <th className="pb-2 font-medium w-20">الكمية *</th>
-                <th className="pb-2 font-medium w-20">الوحدة</th>
-                <th className="pb-2 font-medium">وصف البند *</th>
+                <th className="pb-2 font-medium w-24">حساب المصروفات*</th>
+                <th className="pb-2 font-medium">الوصف *</th>
               </tr>
             </thead>
             <tbody>
@@ -583,9 +581,6 @@ function ItemsTable({
                       <input type="text" value={lineTotal.toFixed(2)} disabled className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10" />
                     </td>
                     <td className="pt-3 px-1 align-top">
-                      <input type="number" value={item.taxPercent} onChange={(e) => onUpdate(item.id, { taxPercent: Number(e.target.value) || 0 })} className={inputClass} />
-                    </td>
-                    <td className="pt-3 px-1 align-top">
                       <input type="number" value={item.discount} onChange={(e) => onUpdate(item.id, { discount: Number(e.target.value) || 0 })} className={inputClass} />
                     </td>
                     <td className="pt-3 px-1 align-top">
@@ -595,15 +590,14 @@ function ItemsTable({
                       <input type="number" value={item.quantity} onChange={(e) => onUpdate(item.id, { quantity: Number(e.target.value) || 0 })} className={inputClass} />
                     </td>
                     <td className="pt-3 px-1 align-top">
-                      <input type="text" value={item.unit} onChange={(e) => onUpdate(item.id, { unit: e.target.value })} placeholder="اختياري" className={inputClass} />
+                      <input type="text" value={item.unit} onChange={(e) => onUpdate(item.id, { unit: e.target.value })} placeholder="مطلوب" className={inputClass} />
                     </td>
-                    <td className="pt-3 pl-1 align-top min-w-[200px]">
-                      <textarea
-                        rows={2}
+                    <td className="pt-3 pl-1 align-top min-w-[260px]">
+                      <input
                         value={item.description}
                         onChange={(e) => onUpdate(item.id, { description: e.target.value })}
-                        placeholder="وصف البند..."
-                        className={`w-full px-2 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none resize-none`}
+                        placeholder="مطلوب"
+                        className={`w-full h-10 px-2 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none`}
                       />
                     </td>
                   </tr>
@@ -688,59 +682,36 @@ function FormFields({
   invoiceNumber?: string;
   accentClass?: string;
 }) {
-  const inputClass = `w-full px-3 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none`;
+  const inputClass = `w-full h-10 px-3 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none`;
 
   return (
-    <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-      <div className="space-y-1 md:col-span-2">
-        <label className="text-sm font-medium text-slate-700 text-right block">المورد <span className="text-red-500">*</span></label>
-        <input value={form.vendor} onChange={(e) => setField("vendor", e.target.value)} placeholder="اسم المورد" className={inputClass} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 text-right block">تاريخ الفاتورة <span className="text-red-500">*</span></label>
-        <input type="date" value={form.date} onChange={(e) => setField("date", e.target.value)} className={inputClass} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 text-right block">تاريخ الاستحقاق</label>
-        <input type="date" value={form.dueDate} onChange={(e) => setField("dueDate", e.target.value)} className={inputClass} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 text-right block">رقم أمر الشراء المرتبط</label>
-        <input value={form.poNumber} onChange={(e) => setField("poNumber", e.target.value)} placeholder="PO-..." className={inputClass} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 text-right block">مرجع الفاتورة</label>
-        <input value={form.referenceNo} onChange={(e) => setField("referenceNo", e.target.value)} placeholder="REF-..." className={inputClass} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 text-right block">الحالة</label>
-        <select value={form.status} onChange={(e) => setField("status", e.target.value)} className={`${inputClass} appearance-none bg-white`}>
-          <option>مفتوحة</option>
-          <option>مدفوعة جزئياً</option>
-          <option>مدفوعة بالكامل</option>
-          <option>ملغاة</option>
-        </select>
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 text-right block">رقم الفاتورة</label>
-        <input type="text" value={invoiceNumber || "تلقائي"} disabled className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none text-slate-500" />
-      </div>
-      <div className="space-y-1 md:col-span-2">
-        <label className="text-sm font-medium text-slate-700 text-right block">مركز التكلفة</label>
-        <select value={form.costCenter} onChange={(e) => setField("costCenter", e.target.value)} className={`${inputClass} appearance-none bg-white`}>
-          <option>بدون مركز تكلفة</option>
-          <option>مركز التكلفة الرئيسي</option>
-          <option>مركز التكلفة الفرعي</option>
-        </select>
-      </div>
-      <div className="space-y-1 md:col-span-2">
-        <label className="text-sm font-medium text-slate-700 text-right block">اسم مركز التكلفة</label>
-        <input value={form.costCenterName} onChange={(e) => setField("costCenterName", e.target.value)} placeholder="اسم مركز التكلفة" className={inputClass} />
-      </div>
-      <div className="space-y-1 md:col-span-4">
-        <label className="text-sm font-medium text-slate-700 text-right block">ملاحظات</label>
-        <textarea value={form.notes} onChange={(e) => setField("notes", e.target.value)} rows={2} placeholder="أدخل ملاحظات إضافية" className={`${inputClass} resize-none`} />
-      </div>
+    <div className="p-6 grid grid-cols-1 md:grid-cols-[170px_1fr] gap-3 items-center">
+      <label className="text-sm font-medium text-slate-700">رقم الفاتورة*</label>
+      <input type="text" value={invoiceNumber || "تلقائي"} disabled className="w-full h-10 px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none text-slate-500" />
+
+      <label className="text-sm font-medium text-slate-700">المورد*</label>
+      <input value={form.vendor} onChange={(e) => setField("vendor", e.target.value)} placeholder="مطلوب" className={inputClass} />
+
+      <label className="text-sm font-medium text-slate-700">العملة*</label>
+      <input value="SAR" disabled className="w-full h-10 px-3 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none text-slate-500" />
+
+      <label className="text-sm font-medium text-slate-700">التاريخ*</label>
+      <input type="date" value={form.date} onChange={(e) => setField("date", e.target.value)} className={inputClass} />
+
+      <label className="text-sm font-medium text-slate-700">تاريخ الاستحقاق*</label>
+      <input type="date" value={form.dueDate} onChange={(e) => setField("dueDate", e.target.value)} className={inputClass} />
+
+      <label className="text-sm font-medium text-slate-700">أمر شراء</label>
+      <input value={form.poNumber} onChange={(e) => setField("poNumber", e.target.value)} placeholder="اختياري" className={inputClass} />
+
+      <label className="text-sm font-medium text-slate-700">المرجع</label>
+      <input value={form.referenceNo} onChange={(e) => setField("referenceNo", e.target.value)} placeholder="اختياري" className={inputClass} />
+
+      <label className="text-sm font-medium text-slate-700">فرع</label>
+      <input value={form.status} onChange={(e) => setField("status", e.target.value)} placeholder="اختياري" className={inputClass} />
+
+      <label className="text-sm font-medium text-slate-700">المشروع</label>
+      <input value={form.costCenterName} onChange={(e) => setField("costCenterName", e.target.value)} placeholder="اختياري" className={inputClass} />
     </div>
   );
 }
@@ -810,46 +781,34 @@ function InvoiceForm({ onBack, onSaved }: { onBack: () => void; onSaved: (i: Pur
   };
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
-      <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
-        <div className="flex gap-2">
-          <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
-            <X className="h-4 w-4" /> إلغاء
-          </button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white text-sm rounded flex items-center gap-2 hover:bg-blue-700 disabled:opacity-60">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "جارٍ الحفظ..." : "حفظ الفاتورة"}
-          </button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-indigo-600 text-white text-sm rounded flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-60">
-            <Printer className="h-4 w-4" /> حفظ وطباعة
+    <div className="space-y-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">فاتورة مشتريات</h1>
+            <p className="text-sm text-slate-500">معلومات فاتورة المشتريات</p>
+          </div>
+          <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50">
+            العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">إنشاء فاتورة مشتريات جديدة</h1>
-          <FileText className="h-5 w-5 text-blue-600" />
-        </div>
-        <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50">
-          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
-        </button>
       </div>
 
-      {error && <div className="mx-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm text-right">{error}</div>}
+      {error && <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm text-right">{error}</div>}
 
-      <div className="p-4 space-y-6">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-amber-400 px-4 py-2 text-right font-semibold text-slate-800">
-            معلومات الفاتورة
-          </div>
-          <FormFields form={form} setField={setField} invoiceNumber={invoiceNumber} />
-        </div>
-        <ItemsTable items={items} onAdd={addItem} onUpdate={updateItem} onRemove={removeItem} />
-        <div className="flex justify-center gap-4 pt-2">
-          <button onClick={onBack} disabled={saving} className="px-6 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 disabled:opacity-50">إلغاء</button>
-          <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "جارٍ الحفظ..." : "حفظ الفاتورة"}
-          </button>
-        </div>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-100 px-4 py-2 text-right font-semibold text-slate-800">معلومات فاتورة المشتريات</div>
+        <FormFields form={form} setField={setField} invoiceNumber={invoiceNumber} />
+      </div>
+
+      <ItemsTable items={items} onAdd={addItem} onUpdate={updateItem} onRemove={removeItem} />
+
+      <div className="flex justify-center gap-4 pt-2">
+        <button onClick={onBack} disabled={saving} className="px-6 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 disabled:opacity-50">إلغاء</button>
+        <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? "جارٍ الحفظ..." : "حفظ الفاتورة"}
+        </button>
       </div>
     </div>
   );

@@ -26,6 +26,21 @@ type PartyForm = {
   openingBalance: string;
   creditLimit: string;
   status: string;
+  country: string;
+  taxRegistrationMode: "not_registered" | "registered_sa";
+  taxNumber: string;
+  city: string;
+  street: string;
+  buildingNumber: string;
+  district: string;
+  postalCode: string;
+  invoiceRef: string;
+  invoiceEmail: string;
+  invoicePhone: string;
+  currency: string;
+  paymentTerms: string;
+  businessType: string;
+  licenseNumber: string;
 };
 
 type ViewModalData = PartyRow | null;
@@ -53,6 +68,21 @@ const emptyForm = (isVendor: boolean): PartyForm => ({
   openingBalance: "0",
   creditLimit: "0",
   status: "نشط",
+  country: "",
+  taxRegistrationMode: "not_registered",
+  taxNumber: "",
+  city: "",
+  street: "",
+  buildingNumber: "",
+  district: "",
+  postalCode: "",
+  invoiceRef: "",
+  invoiceEmail: "",
+  invoicePhone: "",
+  currency: "SAR",
+  paymentTerms: "",
+  businessType: "",
+  licenseNumber: "",
 });
 
 export default function CRM() {
@@ -142,10 +172,6 @@ export default function CRM() {
       return;
     }
 
-    if (!form.phone.trim()) {
-      toast({ title: "تنبيه", description: "أدخل رقم الهاتف", variant: "destructive" });
-      return;
-    }
 
     const tableName = isVendors ? "vendors" : "customers";
     setSaving(true);
@@ -155,8 +181,8 @@ export default function CRM() {
       const payload = {
         name: form.name.trim(),
         type: form.type,
-        email: form.email.trim(),
-        phone: form.phone.trim(),
+        email: (form.invoiceEmail || form.email).trim(),
+        phone: (form.invoicePhone || form.phone).trim(),
         opening_balance: form.openingBalance || "0",
         credit_limit: form.creditLimit || "0",
         status: form.status,
@@ -198,8 +224,8 @@ export default function CRM() {
         id: crypto.randomUUID(),
         name: form.name.trim(),
         type: form.type,
-        email: form.email.trim(),
-        phone: form.phone.trim(),
+        email: (form.invoiceEmail || form.email).trim(),
+        phone: (form.invoicePhone || form.phone).trim(),
         opening_balance: form.openingBalance || "0",
         credit_limit: form.creditLimit || "0",
         status: form.status,
@@ -241,6 +267,7 @@ export default function CRM() {
 
   const handleEdit = (row: PartyRow) => {
     setForm({
+      ...emptyForm(isVendors),
       id: row.id,
       name: row.name,
       type: row.type,
@@ -327,81 +354,153 @@ export default function CRM() {
                   : "إضافة عميل جديد"}
             </h3>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium text-slate-700 text-right block">اسم المنشأة *</label>
+            <div className="space-y-5">
+              <div className="rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-right">المنشأة والتسجيل الضريبي مطلوب</div>
+
+              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
                 <input
-                  value={form.name}
+                  value={form.name ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                   placeholder={isVendors ? "اسم المورد" : "اسم العميل"}
                 />
+                <label className="text-sm font-medium text-slate-700 text-right">اسم المنشأة *</label>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-slate-700 text-right block">{typeLabel}</label>
+              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
                 <select
-                  value={form.type}
-                  onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
-                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  value={form.country ?? ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
+                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right focus:border-slate-400 focus:outline-none"
                 >
-                  {typeOptions.map((option) => (
-                    <option key={option}>{option}</option>
-                  ))}
+                  <option value="">اختياري</option>
+                  <option value="المملكة العربية السعودية">المملكة العربية السعودية</option>
+                  <option value="الإمارات العربية المتحدة">الإمارات العربية المتحدة</option>
+                  <option value="قطر">قطر</option>
+                  <option value="الكويت">الكويت</option>
                 </select>
+                <label className="text-sm font-medium text-slate-700 text-right">البلد</label>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-slate-700 text-right block">البريد الإلكتروني</label>
+              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-start">
+                <div className="space-y-2 text-right">
+                  <label className="flex items-center justify-end gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      checked={form.taxRegistrationMode === "not_registered"}
+                      onChange={() => setForm((prev) => ({ ...prev, taxRegistrationMode: "not_registered" }))}
+                    />
+                    غير مسجل في ضريبة القيمة المضافة
+                  </label>
+                  <label className="flex items-center justify-end gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      checked={form.taxRegistrationMode === "registered_sa"}
+                      onChange={() => setForm((prev) => ({ ...prev, taxRegistrationMode: "registered_sa" }))}
+                    />
+                    جهة اتصال مسجلة في ضريبة القيمة المضافة في السعودية
+                  </label>
+                </div>
+                <label className="text-sm font-medium text-slate-700 text-right">التسجيل في ضريبة القيمة المضافة *</label>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
                 <input
-                  value={form.email}
-                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                  placeholder="example@email.com"
+                  value={form.taxNumber ?? ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, taxNumber: e.target.value }))}
+                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  placeholder="اختياري"
                 />
+                <label className="text-sm font-medium text-slate-700 text-right">رقم التسجيل الضريبي</label>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-slate-700 text-right block">الهاتف</label>
-                <input
-                  value={form.phone}
-                  onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                  placeholder="05xxxxxxxx"
-                />
-              </div>
+              <details open className="space-y-3">
+                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-right">العنوان اختياري</summary>
+                <div className="space-y-3 pt-2">
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.city ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">المدينة</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.street ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">الشارع</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.buildingNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, buildingNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">رقم المبنى</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.district ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">الحي</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.postalCode ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, postalCode: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">الرمز البريدي</label>
+                  </div>
+                </div>
+              </details>
 
-              <div>
-                <label className="text-sm font-medium text-slate-700 text-right block">الرصيد الافتتاحي</label>
-                <input
-                  type="number"
-                  value={form.openingBalance}
-                  onChange={(e) => setForm((prev) => ({ ...prev, openingBalance: e.target.value }))}
-                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                />
-              </div>
+              <details open className="space-y-3">
+                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-right">بيانات الفوترة اختياري</summary>
+                <div className="space-y-3 pt-2">
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.invoiceRef ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceRef: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">المعرّف</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.invoiceEmail ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceEmail: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">البريد الإلكتروني</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <input value={form.invoicePhone ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoicePhone: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
+                    <label className="text-sm font-medium text-slate-700 text-right">الهاتف</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <select value={form.currency ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
+                      <option value="SAR">SAR</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                    </select>
+                    <label className="text-sm font-medium text-slate-700 text-right">العملة</label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                    <select value={form.paymentTerms ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, paymentTerms: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
+                      <option value="">تحديد</option>
+                      <option value="فوري">فوري</option>
+                      <option value="15 يوم">15 يوم</option>
+                      <option value="30 يوم">30 يوم</option>
+                    </select>
+                    <label className="text-sm font-medium text-slate-700 text-right">شروط الدفع</label>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_220px] items-center">
+                    <input value={form.licenseNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, licenseNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="رقم الترخيص" />
+                    <select value={form.businessType ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
+                      <option value="">تحديد</option>
+                      <option value="فرد">فرد</option>
+                      <option value="شركة">شركة</option>
+                    </select>
+                    <label className="text-sm font-medium text-slate-700 text-right">نوع ورقم ترخيص جهة الاتصال</label>
+                  </div>
+                </div>
+              </details>
 
-              <div>
-                <label className="text-sm font-medium text-slate-700 text-right block">حد الائتمان</label>
-                <input
-                  type="number"
-                  value={form.creditLimit}
-                  onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))}
-                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700 text-right block">الحالة</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
-                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                >
-                  <option>نشط</option>
-                  <option>غير نشط</option>
-                  <option>موقوف</option>
-                </select>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{typeLabel}</label>
+                  <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
+                    {typeOptions.map((option) => (
+                      <option key={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700 text-right block">الرصيد الافتتاحي</label>
+                  <input type="number" value={form.openingBalance ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, openingBalance: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700 text-right block">حد الائتمان</label>
+                  <input type="number" value={form.creditLimit ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" />
+                </div>
               </div>
             </div>
 

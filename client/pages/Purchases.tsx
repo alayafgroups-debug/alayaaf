@@ -3,6 +3,7 @@ import { ShoppingCart } from "lucide-react";
 
 export const purchasesFeatures = [
   { label: "فواتير المشتريات", href: "/purchases/invoices" },
+  { label: "سندات الموردين", href: "/purchases/vendor-vouchers" },
   { label: "طلبات الشراء", href: "/purchases/requests" },
   { label: "أوامر الشراء", href: "/purchases/orders" },
   { label: "سندات الاستلام", href: "/purchases/receipts" },

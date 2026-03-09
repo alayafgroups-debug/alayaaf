@@ -262,8 +262,7 @@ export default function ExpenseManagement() {
         subMenu={{
           title: "المحاسبة والمالية",
           items: [
-            { label: "سندات الصرف", href: "/expenses/vouchers" },
-            { label: "سندات القبض", href: "/expenses/petty-cash" },
+            { label: "شجرة الحسابات", href: "/expenses" },
           ],
         }}
       >

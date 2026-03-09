@@ -59,7 +59,9 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "الموردين", href: "/crm/vendors" },
     { label: "التقارير", href: "/crm/reports" },
   ],
-  "/expenses": [],
+  "/expenses": [
+    { label: "شجرة الحسابات", href: "/expenses" },
+  ],
   "/tax": [
     { label: "حساب الضرائب", href: "/tax" },
     { label: "تقارير ضريبية", href: "/tax" },
@@ -105,7 +107,7 @@ export default function Layout({ children }: LayoutProps) {
     { icon: ShoppingCart, label: "المشتريات", href: "/purchases", hasSubmenu: true },
     { icon: Users, label: "الموارد البشرية", href: "/hr", hasSubmenu: true },
     { icon: CreditCard, label: "العملاء والموردين", href: "/crm", hasSubmenu: true },
-    { icon: Receipt, label: "المحاسبة والمالية", href: "/expenses" },
+    { icon: Receipt, label: "المحاسبة والمالية", href: "/expenses", hasSubmenu: true },
     { icon: DollarSign, label: "إدارة الضرائب", href: "/tax", hasSubmenu: true },
     { icon: ShieldCheck, label: "المستخدمين والصلاحيات", href: "/users", hasSubmenu: true },
     { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },

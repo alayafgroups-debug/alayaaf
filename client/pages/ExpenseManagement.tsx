@@ -275,20 +275,73 @@ export default function ExpenseManagement() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-5">
+          <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="text-lg font-semibold text-foreground text-right">شجرة الحسابات</h3>
-            <p className="mt-1 text-sm text-muted-foreground text-right">عرض مبسط للحسابات الرئيسية والفرعية.</p>
+            <p className="mt-1 text-sm text-muted-foreground text-right">هيكل الحسابات المحاسبي كما في دليل الحسابات.</p>
 
-            <div className="mt-4 space-y-2 text-sm">
-              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">الأصول</div>
-              <div className="mr-4 rounded-md border border-border bg-background px-3 py-2 text-right">النقدية والبنوك</div>
-              <div className="mr-4 rounded-md border border-border bg-background px-3 py-2 text-right">العملاء</div>
-
-              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">الالتزامات</div>
-              <div className="mr-4 rounded-md border border-border bg-background px-3 py-2 text-right">الموردون</div>
-
-              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">الإيرادات</div>
-              <div className="rounded-md border border-border bg-background px-3 py-2 text-right font-medium">المصروفات</div>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[900px] text-sm border border-slate-200">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="px-3 py-2 border border-slate-200 text-right">كود الحساب</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">اسم الحساب</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">نوع الحساب</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">يقبل الترحيل</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-slate-50 font-semibold">
+                    <td className="px-3 py-2 border border-slate-200">1</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">الأصول</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">رئيسي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 border border-slate-200">1.1</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right pr-6">النقدية والبنوك</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">فرعي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 border border-slate-200">1.1.1</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right pr-10">الصندوق الرئيسي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">تفصيلي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نعم</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 border border-slate-200">1.2</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right pr-6">العملاء</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">فرعي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                  </tr>
+                  <tr className="bg-slate-50 font-semibold">
+                    <td className="px-3 py-2 border border-slate-200">2</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">الالتزامات</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">رئيسي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 border border-slate-200">2.1</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right pr-6">الموردون</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">فرعي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نعم</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                  </tr>
+                  <tr className="bg-yellow-50 font-semibold">
+                    <td className="px-3 py-2 border border-slate-200">5</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">المصروفات</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">رئيسي</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">لا</td>
+                    <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -303,7 +356,6 @@ export default function ExpenseManagement() {
         items: [
           { label: "سندات الصرف", href: "/expenses/vouchers" },
           { label: "سندات القبض", href: "/expenses/petty-cash" },
-          { label: "التقارير", href: "/expenses/reports" },
         ],
       }}
     >

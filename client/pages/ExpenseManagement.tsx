@@ -266,6 +266,8 @@ export default function ExpenseManagement() {
           title: "المحاسبة والمالية",
           items: [
             { label: "شجرة الحسابات", href: "/expenses" },
+            { label: "حساب الضرائب", href: "/expenses/tax" },
+            { label: "تقارير ضريبية", href: "/expenses/tax-reports" },
           ],
         }}
       >

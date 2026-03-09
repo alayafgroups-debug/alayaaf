@@ -79,7 +79,8 @@ const App = () => (
           <Route path="/expenses/vouchers" element={<ExpenseManagement />} />
           <Route path="/expenses/petty-cash" element={<ExpenseManagement />} />
           <Route path="/expenses/reports" element={<ExpenseManagement />} />
-          <Route path="/tax" element={<Tax />} />
+          <Route path="/expenses/tax" element={<Tax />} />
+          <Route path="/expenses/tax-reports" element={<Tax />} />
           <Route path="/users" element={<UsersPermissions />} />
           <Route path="/users/roles" element={<UsersPermissions />} />
           <Route path="/users/audit" element={<UsersPermissions />} />

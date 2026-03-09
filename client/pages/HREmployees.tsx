@@ -16,6 +16,8 @@ import {
   Download,
   Settings,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -342,7 +344,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
   );
 }
 
-// ─── Employee Form (Create / Edit) ────────────────────────────────────────────
+// ─── Employee Form (Multi-Step) ──────────────────────────────────────────────
 function EmployeeForm({ mode, employee, onBack, onSaved }: {
   mode: "create" | "edit";
   employee?: Employee;
@@ -350,11 +352,26 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
   onSaved: () => void;
 }) {
   const [form, setForm] = useState<Employee>(employee ?? emptyEmployee());
+  const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const set = (field: keyof Employee, value: string | number) =>
     setForm((f) => ({ ...f, [field]: value }));
+
+  const steps = [
+    { title: "المعلومات الأساسية", id: "basic" },
+    { title: "المعلومات الشخصية", id: "personal" },
+    { title: "المعلومات الوظيفية", id: "job" },
+    { title: "الراتب والاستحقاقات", id: "salary" },
+    { title: "البيانات الإضافية", id: "additional" },
+  ];
+
+  const canProceed = () => {
+    if (currentStep === 0 && !form.name.trim()) return false;
+    if (currentStep === 2 && !form.department.trim()) return false;
+    return true;
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) { setError("الاسم مطلوب"); return; }
@@ -413,76 +430,175 @@ function EmployeeForm({ mode, employee, onBack, onSaved }: {
             <UserCheck className="h-7 w-7 text-blue-600" />
             <h1 className="text-2xl font-bold">{mode === "create" ? "إضافة موظف جديد" : "تعديل بيانات الموظف"}</h1>
           </div>
-          <div className="flex gap-2">
-            <button onClick={onBack} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50 transition">
-              <X className="h-4 w-4" />
-              إلغاء
-            </button>
-            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50">
-              <Save className="h-4 w-4" />
-              {saving ? "جاري الحفظ..." : "حفظ"}
-            </button>
+          <button onClick={onBack} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50 transition">
+            <X className="h-4 w-4" />
+            إلغاء
+          </button>
+        </div>
+
+        {/* Steps Indicator */}
+        <div className="bg-white rounded-xl shadow border border-gray-100 p-4">
+          <div className="flex items-center justify-between mb-4">
+            {steps.map((step, idx) => (
+              <div key={step.id} className="flex items-center flex-1">
+                <button
+                  onClick={() => setCurrentStep(idx)}
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+                    idx === currentStep
+                      ? "bg-blue-600 text-white"
+                      : idx < currentStep
+                        ? "bg-green-600 text-white"
+                        : "bg-gray-200 text-gray-700"
+                  )}
+                >
+                  {idx < currentStep ? "✓" : idx + 1}
+                </button>
+                <div className={cn(
+                  "h-1 flex-1 mx-2 rounded-full",
+                  idx < currentStep ? "bg-green-600" : idx === currentStep ? "bg-blue-600" : "bg-gray-300"
+                )} />
+              </div>
+            ))}
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white",
+              currentStep === steps.length - 1 ? "bg-green-600" : "bg-gray-200 text-gray-700"
+            )}>
+              {currentStep === steps.length - 1 ? "✓" : steps.length}
+            </div>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              {steps[currentStep].title}
+            </p>
           </div>
         </div>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
+        {/* Step Content */}
         <div className="bg-white rounded-xl shadow border border-gray-100 p-6 space-y-6">
-          {/* Basic Info */}
-          <Section title="المعلومات الأساسية">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="رقم الموظف" value={form.empId} onChange={(v) => set("empId", v)} placeholder="EMP-0001" />
-              <Field label="الاسم الكامل *" value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الموظف" />
-              <SelectField label="الجنسية" value={form.nationality} onChange={(v) => set("nationality", v)} options={NATIONALITIES} />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="رقم الهوية الوطنية" value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1234567890" />
-              <Field label="رقم الهاتف" value={form.phone} onChange={(v) => set("phone", v)} placeholder="05xxxxxxxx" />
-              <Field label="البريد الإلكتروني" value={form.email} onChange={(v) => set("email", v)} placeholder="example@email.com" type="email" />
-            </div>
-          </Section>
+          {currentStep === 0 && (
+            <>
+              <Section title="المعلومات الأساسية">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="رقم الموظف" value={form.empId} onChange={(v) => set("empId", v)} placeholder="EMP-0001" />
+                  <Field label="الاسم الكامل *" value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الموظف" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <SelectField label="الجنسية" value={form.nationality} onChange={(v) => set("nationality", v)} options={NATIONALITIES} />
+                  <Field label="رقم الهوية الوطنية" value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1234567890" />
+                </div>
+              </Section>
+            </>
+          )}
 
-          {/* Job Info */}
-          <Section title="المعلومات الوظيفية">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <SelectField label="القسم *" value={form.department} onChange={(v) => set("department", v)} options={DEPARTMENTS} />
-              <Field label="المسمى الوظيفي" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} placeholder="مدير، محاسب، مهندس..." />
-              <SelectField label="الفرع" value={form.branch} onChange={(v) => set("branch", v)} options={BRANCHES} />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="مركز التكلفة" value={form.costCenter} onChange={(v) => set("costCenter", v)} placeholder="0000192101" />
-              <Field label="تاريخ التعيين" value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
-              <SelectField label="الحالة" value={form.status} onChange={(v) => set("status", v)} options={STATUSES} />
-            </div>
-          </Section>
+          {currentStep === 1 && (
+            <>
+              <Section title="المعلومات الشخصية">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="رقم الهاتف" value={form.phone} onChange={(v) => set("phone", v)} placeholder="05xxxxxxxx" />
+                  <Field label="البريد الإلكتروني" value={form.email} onChange={(v) => set("email", v)} placeholder="example@email.com" type="email" />
+                </div>
+              </Section>
+            </>
+          )}
 
-          {/* Salary */}
-          <Section title="الراتب">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">الراتب الإجمالي (ر.س)</label>
-                <input
-                  type="number"
-                  value={form.totalSalary}
-                  onChange={(e) => set("totalSalary", Number(e.target.value))}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="0.00"
-                  min={0}
-                />
-              </div>
-            </div>
-          </Section>
+          {currentStep === 2 && (
+            <>
+              <Section title="المعلومات الوظيفية">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <SelectField label="القسم *" value={form.department} onChange={(v) => set("department", v)} options={DEPARTMENTS} />
+                  <Field label="المسمى الوظيفي" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} placeholder="مدير، محاسب، مهندس..." />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <SelectField label="الفرع" value={form.branch} onChange={(v) => set("branch", v)} options={BRANCHES} />
+                  <Field label="مركز التكلفة" value={form.costCenter} onChange={(v) => set("costCenter", v)} placeholder="0000192101" />
+                </div>
+              </Section>
+            </>
+          )}
 
-          {/* Notes */}
-          <Section title="ملاحظات">
-            <textarea
-              value={form.notes}
-              onChange={(e) => set("notes", e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-              placeholder="أي ملاحظات إضافية..."
-            />
-          </Section>
+          {currentStep === 3 && (
+            <>
+              <Section title="الراتب والاستحقاقات">
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">الراتب الإجمالي (ر.س)</label>
+                    <input
+                      type="number"
+                      value={form.totalSalary}
+                      onChange={(e) => set("totalSalary", Number(e.target.value))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="0.00"
+                      min={0}
+                    />
+                  </div>
+                </div>
+              </Section>
+            </>
+          )}
+
+          {currentStep === 4 && (
+            <>
+              <Section title="البيانات الإضافية">
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <Field label="تاريخ التعيين" value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
+                  </div>
+                  <div>
+                    <SelectField label="الحالة" value={form.status} onChange={(v) => set("status", v)} options={STATUSES} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => set("notes", e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    placeholder="أي ملاحظات إضافية..."
+                  />
+                </div>
+              </Section>
+            </>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+            disabled={currentStep === 0}
+            className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4" />
+            السابق
+          </button>
+
+          <div className="text-sm text-gray-600">
+            {currentStep + 1} من {steps.length}
+          </div>
+
+          {currentStep === steps.length - 1 ? (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? "جاري الحفظ..." : "حفظ"}
+            </button>
+          ) : (
+            <button
+              onClick={() => setCurrentStep(currentStep + 1)}
+              disabled={!canProceed()}
+              className="flex items-center gap-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              التالي
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
     </Layout>

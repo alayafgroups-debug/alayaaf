@@ -312,8 +312,8 @@ export default function CRM() {
         </div>
 
         {!isReports && isFormOpen ? (
-          <div className="rounded-xl border border-border bg-card p-4 space-y-4">
-            <h3 className="text-base font-semibold text-foreground">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-6">
+            <h3 className="text-2xl font-semibold text-slate-900 text-right">
               {form.id
                 ? isVendors
                   ? "تعديل بيانات المورد"
@@ -323,23 +323,23 @@ export default function CRM() {
                   : "إضافة عميل جديد"}
             </h3>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="text-xs text-muted-foreground">الاسم</label>
+                <label className="text-sm font-medium text-slate-700 text-right block">اسم المنشأة *</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                   placeholder={isVendors ? "اسم المورد" : "اسم العميل"}
                 />
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">{typeLabel}</label>
+                <label className="text-sm font-medium text-slate-700 text-right block">{typeLabel}</label>
                 <select
                   value={form.type}
                   onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                 >
                   {typeOptions.map((option) => (
                     <option key={option}>{option}</option>
@@ -348,51 +348,51 @@ export default function CRM() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">البريد الإلكتروني</label>
+                <label className="text-sm font-medium text-slate-700 text-right block">البريد الإلكتروني</label>
                 <input
                   value={form.email}
                   onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                   placeholder="example@email.com"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">الهاتف</label>
+                <label className="text-sm font-medium text-slate-700 text-right block">الهاتف</label>
                 <input
                   value={form.phone}
                   onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                   placeholder="05xxxxxxxx"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">الرصيد الافتتاحي</label>
+                <label className="text-sm font-medium text-slate-700 text-right block">الرصيد الافتتاحي</label>
                 <input
                   type="number"
                   value={form.openingBalance}
                   onChange={(e) => setForm((prev) => ({ ...prev, openingBalance: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">حد الائتمان</label>
+                <label className="text-sm font-medium text-slate-700 text-right block">حد الائتمان</label>
                 <input
                   type="number"
                   value={form.creditLimit}
                   onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">الحالة</label>
+                <label className="text-sm font-medium text-slate-700 text-right block">الحالة</label>
                 <select
                   value={form.status}
                   onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                 >
                   <option>نشط</option>
                   <option>غير نشط</option>
@@ -401,7 +401,7 @@ export default function CRM() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={handleSave}
                 disabled={saving}
@@ -413,7 +413,7 @@ export default function CRM() {
 
               <button
                 onClick={() => setIsFormOpen(false)}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
               >
                 <X className="h-4 w-4" />
                 إلغاء

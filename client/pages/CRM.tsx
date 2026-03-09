@@ -128,6 +128,10 @@ export default function CRM() {
 
   const openCreateForm = () => {
     if (isReports) return;
+    if (isFormOpen && !form.id) {
+      setIsFormOpen(false);
+      return;
+    }
     setForm(emptyForm(isVendors));
     setIsFormOpen(true);
   };

@@ -54,6 +54,7 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "شهادات الخبرة", href: "/hr/certificates" },
     { label: "تقارير الموارد البشرية", href: "/hr/reports" },
     { label: "إعدادات الموارد البشرية", href: "/hr/settings" },
+    { label: "سجلات المستخدمين", href: "/hr/user-logs" },
   ],
   "/crm": [
     { label: "العملاء", href: "/crm/customers" },

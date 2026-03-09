@@ -539,16 +539,15 @@ function OrderEdit({
   };
 
   return (
-    <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
-      <div className="mx-auto max-w-5xl">
-        <div className="space-y-6 bg-white min-h-screen pb-12">
-          {/* Header */}
-          <div className="flex justify-between items-center p-6 border-b border-slate-200">
-            <div className="flex gap-2">
-              <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
-                <X className="h-4 w-4" /> إلغاء
-              </button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-emerald-600 text-white text-sm rounded flex items-center gap-2 hover:bg-emerald-700 disabled:opacity-60">
+    <div className="mx-auto max-w-5xl">
+      <div className="space-y-6 bg-white min-h-screen pb-12">
+        {/* Header */}
+        <div className="flex justify-between items-center p-6 border-b border-slate-200">
+          <div className="flex gap-2">
+            <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
+              <X className="h-4 w-4" /> إلغاء
+            </button>
+            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-emerald-600 text-white text-sm rounded flex items-center gap-2 hover:bg-emerald-700 disabled:opacity-60">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {saving ? "جارٍ الحفظ..." : "حفظ التعديلات"}
               </button>
@@ -706,12 +705,11 @@ function OrderEdit({
                   </table>
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <div className="w-64 space-y-2 text-sm border-t border-slate-200 pt-4">
-                    <div className="flex justify-between text-right">
-                      <span>{totals.total.toFixed(2)} ريال</span>
-                      <span className="text-slate-600">المجموع الكلي</span>
-                    </div>
+              <div className="flex justify-end pt-4">
+                <div className="w-64 space-y-2 text-sm border-t border-slate-200 pt-4">
+                  <div className="flex justify-between text-right">
+                    <span>{totals.total.toFixed(2)} ريال</span>
+                    <span className="text-slate-600">المجموع الكلي</span>
                   </div>
                 </div>
               </div>
@@ -719,7 +717,7 @@ function OrderEdit({
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }
 
@@ -831,16 +829,15 @@ function OrderForm({
   };
 
   return (
-    <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
-      <div className="mx-auto max-w-5xl">
-        <div className="space-y-6 bg-white min-h-screen pb-12">
-          {/* Header */}
-          <div className="flex justify-between items-center p-6 border-b border-slate-200">
-            <div className="flex gap-2">
-              <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
-                <X className="h-4 w-4" /> إلغاء
-              </button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white text-sm rounded flex items-center gap-2 hover:bg-blue-700 disabled:opacity-60">
+    <div className="mx-auto max-w-5xl">
+      <div className="space-y-6 bg-white min-h-screen pb-12">
+        {/* Header */}
+        <div className="flex justify-between items-center p-6 border-b border-slate-200">
+          <div className="flex gap-2">
+            <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
+              <X className="h-4 w-4" /> إلغاء
+            </button>
+            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white text-sm rounded flex items-center gap-2 hover:bg-blue-700 disabled:opacity-60">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {saving ? "جارٍ الحفظ..." : "حفظ أمر الشراء"}
               </button>
@@ -998,12 +995,11 @@ function OrderForm({
                   </table>
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <div className="w-64 space-y-2 text-sm border-t border-slate-200 pt-4">
-                    <div className="flex justify-between text-right">
-                      <span>0.00</span>
-                      <span className="text-slate-600">المجموع</span>
-                    </div>
+              <div className="flex justify-end pt-4">
+                <div className="w-64 space-y-2 text-sm border-t border-slate-200 pt-4">
+                  <div className="flex justify-between text-right">
+                    <span>0.00</span>
+                    <span className="text-slate-600">المجموع</span>
                   </div>
                 </div>
               </div>
@@ -1011,6 +1007,6 @@ function OrderForm({
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }

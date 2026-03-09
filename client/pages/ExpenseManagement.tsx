@@ -328,13 +328,12 @@ export default function ExpenseManagement() {
               <table className="w-full min-w-[1100px] text-sm border border-slate-200">
                 <thead className="bg-slate-100">
                   <tr>
-                    <th className="px-3 py-2 border border-slate-200 text-right">كود الحساب</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">رقم الحساب</th>
                     <th className="px-3 py-2 border border-slate-200 text-right">اسم الحساب</th>
-                    <th className="px-3 py-2 border border-slate-200 text-right">الحساب الأب</th>
-                    <th className="px-3 py-2 border border-slate-200 text-right">تصنيف الحساب</th>
-                    <th className="px-3 py-2 border border-slate-200 text-right">طبيعة الحساب</th>
-                    <th className="px-3 py-2 border border-slate-200 text-right">يقبل الترحيل</th>
-                    <th className="px-3 py-2 border border-slate-200 text-right">الحالة</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">نوع التدفق النقدي</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">تفعيل عمليات الدفع</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">إظهار طلبات المصروف</th>
+                    <th className="px-3 py-2 border border-slate-200 text-right">نوع الحساب</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -344,11 +343,10 @@ export default function ExpenseManagement() {
                       <td className="px-3 py-2 border border-slate-200 text-right" style={{ paddingRight: `${row.level * 16 + 12}px` }}>
                         {row.name}
                       </td>
-                      <td className="px-3 py-2 border border-slate-200 text-right">{row.parent}</td>
-                      <td className="px-3 py-2 border border-slate-200 text-right">{row.category}</td>
                       <td className="px-3 py-2 border border-slate-200 text-right">{row.nature}</td>
                       <td className="px-3 py-2 border border-slate-200 text-right">{row.postable}</td>
-                      <td className="px-3 py-2 border border-slate-200 text-right">نشط</td>
+                      <td className="px-3 py-2 border border-slate-200 text-right">نعم</td>
+                      <td className="px-3 py-2 border border-slate-200 text-right">{row.category}</td>
                     </tr>
                   ))}
                 </tbody>

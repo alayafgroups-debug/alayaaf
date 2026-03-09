@@ -366,7 +366,7 @@ export default function ExpenseManagement() {
               className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success/90"
             >
               <Plus className="h-4 w-4" />
-              {isVouchers ? "إنشاء سند صرف جديد" : "إنشاء سند قبض جديد"}
+              {isVouchers ? "إنشاء سند صرف جديد" : "إنشاء سند قبض من عميل"}
             </button>
           )}
         </div>
@@ -833,91 +833,125 @@ function PettyCashForm({
   onCancel: () => void;
   saving: boolean;
 }) {
+  const amountValue = Number.parseFloat(form.amount || "0") || 0;
+
   return (
-    <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-      <h3 className="text-lg font-semibold text-foreground">
-        {form.id ? "تعديل سند القبض" : "إنشاء سند قبض جديد"}
+    <div className="mx-auto max-w-3xl rounded-xl border border-border bg-card p-6 space-y-6">
+      <h3 className="text-2xl font-semibold text-foreground text-right">
+        {form.id ? "تعديل سند قبض من عميل" : "سند قبض من عميل"}
       </h3>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <label className="text-xs text-muted-foreground">رقم السند</label>
-          <input
-            value={form.voucherNumber}
-            readOnly
-            className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
-            placeholder="يتولد تلقائياً"
-          />
+      <section className="space-y-4">
+        <div className="flex items-center justify-between rounded-md bg-muted/40 px-4 py-2">
+          <h4 className="text-sm font-semibold text-foreground">معلومات أساسية</h4>
+          <span className="text-xs text-muted-foreground">مطلوب</span>
         </div>
 
-        <div>
-          <label className="text-xs text-muted-foreground">التاريخ</label>
-          <input
-            type="date"
-            value={form.voucherDate}
-            onChange={(e) => setForm({ ...form, voucherDate: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-muted-foreground">المستفيد</label>
-          <input
-            value={form.beneficiaryName}
-            onChange={(e) => setForm({ ...form, beneficiaryName: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            placeholder="اسم المستفيد"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-muted-foreground">المبلغ (ريال)</label>
-          <input
-            type="number"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            placeholder="0.00"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="text-xs text-muted-foreground">الغرض</label>
-          <textarea
-            value={form.purpose}
-            onChange={(e) => setForm({ ...form, purpose: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            placeholder="غرض الصرف"
-            rows={3}
-          />
-        </div>
-
-        <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
           <div>
-            <label className="text-xs text-muted-foreground">صرفه</label>
+            <label className="mb-1 block text-xs text-muted-foreground">العميل</label>
+            <input
+              value={form.beneficiaryName}
+              onChange={(e) => setForm({ ...form, beneficiaryName: e.target.value })}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              placeholder="مطلوب"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">تم الدفع من خلال</label>
             <input
               value={form.paidBy}
               onChange={(e) => setForm({ ...form, paidBy: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              placeholder="اسم الموظف"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              placeholder="مطلوب"
             />
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground">استلمه</label>
+            <label className="mb-1 block text-xs text-muted-foreground">عملة الدفع</label>
             <input
               value={form.receivedBy}
               onChange={(e) => setForm({ ...form, receivedBy: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              placeholder="اسم المستلم"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              placeholder="مطلوب"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">المبلغ المستلم</label>
+            <input
+              type="number"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              placeholder="مطلوب"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">التاريخ</label>
+            <input
+              type="date"
+              value={form.voucherDate}
+              onChange={(e) => setForm({ ...form, voucherDate: e.target.value })}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">الوصف</label>
+            <input
+              value={form.purpose}
+              onChange={(e) => setForm({ ...form, purpose: e.target.value })}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              placeholder="غير محدد"
             />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="flex items-center gap-2 pt-4">
+      <section className="space-y-3">
+        <div className="flex items-center justify-between rounded-md bg-muted/40 px-4 py-2">
+          <h4 className="text-sm font-semibold text-foreground">معلومات إضافية (اختياري)</h4>
+          <span className="text-xs text-muted-foreground">⌄</span>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs text-muted-foreground">نوع الدفعة</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground"
+            >
+              دفعة مقدمة
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground"
+            >
+              دفعة فواتير
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-2 border-t border-border pt-4 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">إضافة لرصيد العميل</span>
+          <span className="font-medium">{amountValue.toFixed(2)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">المبلغ المدفوع</span>
+          <span className="font-medium">{amountValue.toFixed(2)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-foreground font-semibold">المتبقي</span>
+          <span className="font-semibold">0.00</span>
+        </div>
+      </section>
+
+      <div className="flex items-center gap-2 pt-2">
         <button
           onClick={onSave}
           disabled={saving}
@@ -934,6 +968,13 @@ function PettyCashForm({
           <X className="h-4 w-4" />
           إلغاء
         </button>
+
+        <input
+          value={form.voucherNumber}
+          readOnly
+          className="mr-auto w-36 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
+          placeholder="رقم السند"
+        />
       </div>
     </div>
   );

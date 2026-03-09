@@ -459,6 +459,9 @@ function OrderEdit({
     costCenter: order.costCenter || "بدون مركز تكلفة",
     costCenterName: order.costCenterName,
     status: order.status,
+    category: "مشتريات",
+    project: "",
+    budget: "",
   });
 
   const [items, setItems] = useState<OrderItem[]>(
@@ -587,6 +590,8 @@ function OrderEdit({
                   <label className="text-sm font-medium text-slate-700 text-right block">الصنف *</label>
                   <input
                     type="text"
+                    value={form.category}
+                    onChange={(e) => setField("category", e.target.value)}
                     placeholder="مشتريات"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
@@ -599,6 +604,7 @@ function OrderEdit({
                   <input
                     type="text"
                     value="SAR"
+                    readOnly
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
                 </div>
@@ -617,6 +623,8 @@ function OrderEdit({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">المشروع</label>
                   <input
+                    value={form.project}
+                    onChange={(e) => setField("project", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
@@ -624,6 +632,8 @@ function OrderEdit({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">الرصيح</label>
                   <input
+                    value={form.budget}
+                    onChange={(e) => setField("budget", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
@@ -732,6 +742,9 @@ function OrderForm({
     notes: "",
     costCenter: "بدون مركز تكلفة",
     costCenterName: "",
+    category: "مشتريات",
+    project: "",
+    budget: "",
   });
 
   const [items, setItems] = useState<OrderItem[]>([
@@ -869,6 +882,8 @@ function OrderForm({
                   <label className="text-sm font-medium text-slate-700 text-right block">الصنف *</label>
                   <input
                     type="text"
+                    value={form.category}
+                    onChange={(e) => setField("category", e.target.value)}
                     placeholder="مشتريات"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
@@ -881,6 +896,7 @@ function OrderForm({
                   <input
                     type="text"
                     value="SAR"
+                    readOnly
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
                 </div>
@@ -899,6 +915,8 @@ function OrderForm({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">المشروع</label>
                   <input
+                    value={form.project}
+                    onChange={(e) => setField("project", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
@@ -906,6 +924,8 @@ function OrderForm({
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700 text-right block">الرصيح</label>
                   <input
+                    value={form.budget}
+                    onChange={(e) => setField("budget", e.target.value)}
                     placeholder="اختياري"
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />

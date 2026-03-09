@@ -5,6 +5,7 @@ export const purchasesFeatures = [
   { label: "فواتير المشتريات", href: "/purchases/invoices" },
   { label: "سندات الموردين", href: "/purchases/vendor-vouchers" },
   { label: "مصروفات نقدية", href: "/purchases/cash-expenses" },
+  { label: "إشعارات مدينة", href: "/purchases/debit-notes" },
   { label: "طلبات الشراء", href: "/purchases/requests" },
   { label: "أوامر الشراء", href: "/purchases/orders" },
   { label: "سندات الاستلام", href: "/purchases/receipts" },

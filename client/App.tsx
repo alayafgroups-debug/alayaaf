@@ -20,6 +20,7 @@ import GoodsReceipts from "./pages/GoodsReceipts";
 import PurchaseInvoices from "./pages/PurchaseInvoices";
 import PurchaseVendorVouchers from "./pages/PurchaseVendorVouchers";
 import PurchaseCashExpenses from "./pages/PurchaseCashExpenses";
+import PurchaseDebitNotes from "./pages/PurchaseDebitNotes";
 import PurchaseReturns from "./pages/PurchaseReturns";
 import PurchaseReports from "./pages/PurchaseReports";
 import HR from "./pages/HR";
@@ -62,6 +63,7 @@ const App = () => (
           <Route path="/purchases/invoices" element={<PurchaseInvoices />} />
           <Route path="/purchases/vendor-vouchers" element={<PurchaseVendorVouchers />} />
           <Route path="/purchases/cash-expenses" element={<PurchaseCashExpenses />} />
+          <Route path="/purchases/debit-notes" element={<PurchaseDebitNotes />} />
           <Route path="/purchases/returns" element={<PurchaseReturns />} />
           <Route path="/purchases/reports" element={<PurchaseReports />} />
           <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />

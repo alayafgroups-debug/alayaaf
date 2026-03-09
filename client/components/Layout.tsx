@@ -32,6 +32,8 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "عروض الأسعار", href: "/sales/quotations" },
     { label: "أوامر البيع", href: "/sales/orders" },
     { label: "فواتير المبيعات", href: "/sales/invoices" },
+    { label: "سندات العملاء (صرف)", href: "/expenses/vouchers" },
+    { label: "سندات العملاء (قبض)", href: "/expenses/petty-cash" },
   ],
   "/purchases": [
     { label: "طلبات الشراء", href: "/purchases/requests" },
@@ -57,8 +59,6 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "التقارير", href: "/crm/reports" },
   ],
   "/expenses": [
-    { label: "سندات الصرف", href: "/expenses/vouchers" },
-    { label: "سندات القبض", href: "/expenses/petty-cash" },
     { label: "التقارير", href: "/expenses/reports" },
   ],
   "/tax": [

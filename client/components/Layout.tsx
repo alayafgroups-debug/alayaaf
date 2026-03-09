@@ -41,10 +41,7 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "سندات الموردين", href: "/purchases/vendor-vouchers" },
     { label: "مصروفات نقدية", href: "/purchases/cash-expenses" },
     { label: "إشعارات مدينة", href: "/purchases/debit-notes" },
-    { label: "طلبات الشراء", href: "/purchases/requests" },
     { label: "أوامر الشراء", href: "/purchases/orders" },
-    { label: "سندات الاستلام", href: "/purchases/receipts" },
-    { label: "مردودات المشتريات", href: "/purchases/returns" },
     { label: "تقارير المشتريات الشاملة", href: "/purchases/reports" },
   ],
   "/hr": [

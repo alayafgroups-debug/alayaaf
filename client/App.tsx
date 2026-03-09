@@ -32,6 +32,9 @@ import HRSettings from "./pages/HRSettings";
 import HREmployeesCooperative from "./pages/HREmployeesCooperative";
 import HREmployeesInactive from "./pages/HREmployeesInactive";
 import HRUserLogs from "./pages/HRUserLogs";
+import HRRequestsSend from "./pages/HRRequestsSend";
+import HRRequestsIncoming from "./pages/HRRequestsIncoming";
+import HRRequestsSent from "./pages/HRRequestsSent";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -70,6 +73,9 @@ const App = () => (
           <Route path="/hr/employees/cooperative" element={<HREmployeesCooperative />} />
           <Route path="/hr/employees/inactive" element={<HREmployeesInactive />} />
           <Route path="/hr/user-logs" element={<HRUserLogs />} />
+          <Route path="/hr/requests/send" element={<HRRequestsSend />} />
+          <Route path="/hr/requests/incoming" element={<HRRequestsIncoming />} />
+          <Route path="/hr/requests/sent" element={<HRRequestsSent />} />
           <Route path="/hr/payroll" element={<HRPayroll />} />
           <Route path="/hr/attendance" element={<HRAttendance />} />
           <Route path="/hr/structure" element={<HRDashboard />} />

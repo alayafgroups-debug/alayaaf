@@ -26,7 +26,7 @@ interface LayoutProps {
   subMenu?: { title: string; items: { label: string; href?: string }[] } | null;
 }
 
-const navSubMenus: Record<string, { label: string; href: string }[]> = {
+const navSubMenus: Record<string, { label: string; href: string; isHeader?: boolean }[]> = {
   "/sales": [
     { label: "عروض الأسعار", href: "/sales/quotations" },
     { label: "أوامر البيع", href: "/sales/orders" },
@@ -55,6 +55,10 @@ const navSubMenus: Record<string, { label: string; href: string }[]> = {
     { label: "تقارير الموارد البشرية", href: "/hr/reports" },
     { label: "إعدادات الموارد البشرية", href: "/hr/settings" },
     { label: "سجلات المستخدمين", href: "/hr/user-logs" },
+    { label: "الطلبات", href: "", isHeader: true },
+    { label: "إرسال الطلبات", href: "/hr/requests/send" },
+    { label: "الطلبات الواردة", href: "/hr/requests/incoming" },
+    { label: "الطلبات المرسلة", href: "/hr/requests/sent" },
   ],
   "/crm": [
     { label: "العملاء", href: "/crm/customers" },
@@ -252,6 +256,15 @@ export default function Layout({ children }: LayoutProps) {
                     colors.subBg, colors.border
                   )}>
                     {subItems.map((subItem, index) => {
+                      if (subItem.isHeader) {
+                        return (
+                          <div key={index} className="px-3 pt-3 pb-1">
+                            <span className={cn("text-[10px] font-bold uppercase tracking-widest opacity-40", colors.text)}>
+                              {subItem.label}
+                            </span>
+                          </div>
+                        );
+                      }
                       const isSubActive = location.pathname === subItem.href;
                       return (
                         <button

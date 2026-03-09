@@ -57,6 +57,23 @@ const statusColors: Record<string, string> = {
   "مفتوح": "bg-cyan-500 text-white",
 };
 
+type CompanyProfile = {
+  name?: string;
+  country?: string;
+  commercialRegistration?: string;
+};
+
+function getCompanyProfile(): CompanyProfile {
+  try {
+    const raw = localStorage.getItem("company_profile");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as CompanyProfile;
+    return parsed ?? {};
+  } catch {
+    return {};
+  }
+}
+
 function mapRow(row: Record<string, unknown>): PurchaseOrderRow {
   const status = (row.status as string) ?? "مفتوح";
   return {
@@ -538,6 +555,8 @@ function OrderEdit({
     }
   };
 
+  const companyProfile = getCompanyProfile();
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="space-y-6 bg-white min-h-screen pb-12">
@@ -564,11 +583,11 @@ function OrderEdit({
             <div className="bg-slate-800 text-white rounded-lg p-6 flex justify-between items-center">
               <div className="text-right space-y-1">
                 <div className="text-xs opacity-75">رقم التسجيل التجاري</div>
-                <div className="text-sm font-medium">5143567053300003</div>
+                <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
               </div>
               <div className="text-right space-y-2">
-                <div className="font-semibold text-lg">شركة الكرويساف</div>
-                <div className="text-xs opacity-75">المملكة العربية السعودية</div>
+                <div className="font-semibold text-lg">{companyProfile.name || "اسم الشركة"}</div>
+                <div className="text-xs opacity-75">{companyProfile.country || "الدولة"}</div>
               </div>
             </div>
 
@@ -828,6 +847,8 @@ function OrderForm({
     });
   };
 
+  const companyProfile = getCompanyProfile();
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="space-y-6 bg-white min-h-screen pb-12">
@@ -854,11 +875,11 @@ function OrderForm({
             <div className="bg-slate-800 text-white rounded-lg p-6 flex justify-between items-center">
               <div className="text-right space-y-1">
                 <div className="text-xs opacity-75">رقم التسجيل التجاري</div>
-                <div className="text-sm font-medium">5143567053300003</div>
+                <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
               </div>
               <div className="text-right space-y-2">
-                <div className="font-semibold text-lg">شركة الكرويساف</div>
-                <div className="text-xs opacity-75">المملكة العربية السعودية</div>
+                <div className="font-semibold text-lg">{companyProfile.name || "اسم الشركة"}</div>
+                <div className="text-xs opacity-75">{companyProfile.country || "الدولة"}</div>
               </div>
             </div>
 

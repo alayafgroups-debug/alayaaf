@@ -54,7 +54,13 @@ import HRLeavesAnnualBalance from "./pages/HRLeavesAnnualBalance";
 import HRLeavesOtherBalance from "./pages/HRLeavesOtherBalance";
 import HRLeavesChart from "./pages/HRLeavesChart";
 import HRLeavesHolidays from "./pages/HRLeavesHolidays";
-import HRTermination from "./pages/HRTermination";
+import HRTerminationDues from "./pages/HRTerminationDues";
+import HRTerminationEmployees from "./pages/HRTerminationEmployees";
+import HRTerminationClearance from "./pages/HRTerminationClearance";
+import HRTerminationEvacuation from "./pages/HRTerminationEvacuation";
+import HRTerminationReasons from "./pages/HRTerminationReasons";
+import HRTerminationSettings from "./pages/HRTerminationSettings";
+import HRTerminationInterviewSetup from "./pages/HRTerminationInterviewSetup";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -121,13 +127,13 @@ const App = () => (
           <Route path="/hr/leaves/chart" element={<HRLeavesChart />} />
           <Route path="/hr/leaves/holidays" element={<HRLeavesHolidays />} />
           <Route path="/hr/termination" element={<Navigate to="/hr/termination/dues-report" replace />} />
-          <Route path="/hr/termination/dues-report" element={<HRTermination />} />
-          <Route path="/hr/termination/employees" element={<HRTermination />} />
-          <Route path="/hr/termination/clearance" element={<HRTermination />} />
-          <Route path="/hr/termination/evacuation" element={<HRTermination />} />
-          <Route path="/hr/termination/reasons" element={<HRTermination />} />
-          <Route path="/hr/termination/settings" element={<HRTermination />} />
-          <Route path="/hr/termination/interview-setup" element={<HRTermination />} />
+          <Route path="/hr/termination/dues-report" element={<HRTerminationDues />} />
+          <Route path="/hr/termination/employees" element={<HRTerminationEmployees />} />
+          <Route path="/hr/termination/clearance" element={<HRTerminationClearance />} />
+          <Route path="/hr/termination/evacuation" element={<HRTerminationEvacuation />} />
+          <Route path="/hr/termination/reasons" element={<HRTerminationReasons />} />
+          <Route path="/hr/termination/settings" element={<HRTerminationSettings />} />
+          <Route path="/hr/termination/interview-setup" element={<HRTerminationInterviewSetup />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

@@ -110,11 +110,11 @@ const hrNavItems: HRNavItem[] = [
       { icon: MailCheck, label: "الطلبات المرسلة", href: "/hr/requests/sent" },
     ],
   },
+  { icon: FileBarChart, label: "تقارير الموارد البشرية", href: "/hr/reports" },
   { icon: Clock, label: "الحضور والانصراف", href: "/hr/attendance" },
   { icon: Wallet, label: "مسير الرواتب", href: "/hr/payroll" },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
-  { icon: FileBarChart, label: "تقارير الموارد البشرية", href: "/hr/reports" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },
 ];
 

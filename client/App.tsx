@@ -36,6 +36,11 @@ import HRRequestsIncoming from "./pages/HRRequestsIncoming";
 import HRRequestsSent from "./pages/HRRequestsSent";
 import HRAttendanceCalculate from "./pages/HRAttendanceCalculate";
 import HRAttendanceSchedules from "./pages/HRAttendanceSchedules";
+import HRPayrollStatement from "./pages/HRPayrollStatement";
+import HRPayrollArchive from "./pages/HRPayrollArchive";
+import HRPayrollFinancialData from "./pages/HRPayrollFinancialData";
+import HRPayrollTransfer from "./pages/HRPayrollTransfer";
+import HRPayrollSettings from "./pages/HRPayrollSettings";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -78,11 +83,11 @@ const App = () => (
           <Route path="/hr/requests/incoming" element={<HRRequestsIncoming />} />
           <Route path="/hr/requests/sent" element={<HRRequestsSent />} />
           <Route path="/hr/payroll" element={<Navigate to="/hr/payroll/statement" replace />} />
-          <Route path="/hr/payroll/statement" element={<HRPayroll />} />
-          <Route path="/hr/payroll/archive" element={<HRPayroll />} />
-          <Route path="/hr/payroll/financial-data" element={<HRPayroll />} />
-          <Route path="/hr/payroll/transfer" element={<HRPayroll />} />
-          <Route path="/hr/payroll/settings" element={<HRPayroll />} />
+          <Route path="/hr/payroll/statement" element={<HRPayrollStatement />} />
+          <Route path="/hr/payroll/archive" element={<HRPayrollArchive />} />
+          <Route path="/hr/payroll/financial-data" element={<HRPayrollFinancialData />} />
+          <Route path="/hr/payroll/transfer" element={<HRPayrollTransfer />} />
+          <Route path="/hr/payroll/settings" element={<HRPayrollSettings />} />
           <Route path="/hr/attendance" element={<Navigate to="/hr/attendance/calculate" replace />} />
           <Route path="/hr/attendance/calculate" element={<HRAttendanceCalculate />} />
           <Route path="/hr/attendance/schedules" element={<HRAttendanceSchedules />} />

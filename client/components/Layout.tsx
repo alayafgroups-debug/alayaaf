@@ -151,6 +151,18 @@ const hrNavItems: HRNavItem[] = [
       { icon: Clock, label: "العُطل والاجازات الرسمية", href: "/hr/leaves/holidays" },
     ],
   },
+  {
+    icon: UserX, label: "إنهاء الخدمة", href: "/hr/termination", hasChildren: true,
+    children: [
+      { icon: Receipt, label: "تقرير المستحقات", href: "/hr/termination/dues-report" },
+      { icon: UserX, label: "إنهاء خدمة الموظفين", href: "/hr/termination/employees" },
+      { icon: FileText, label: "مخالصة الذمة للموظفين", href: "/hr/termination/clearance" },
+      { icon: ScrollText, label: "إخلاء الطرف", href: "/hr/termination/evacuation" },
+      { icon: FileBarChart, label: "أسباب إنهاء الخدمة", href: "/hr/termination/reasons" },
+      { icon: Settings, label: "إعدادات", href: "/hr/termination/settings" },
+      { icon: Users2, label: "إعداد نموذج مقابلة إنهاء الخدمة", href: "/hr/termination/interview-setup" },
+    ],
+  },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },

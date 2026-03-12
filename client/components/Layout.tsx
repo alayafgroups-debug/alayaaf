@@ -117,8 +117,17 @@ const hrNavItems: HRNavItem[] = [
       { icon: Settings, label: "إعداد فترات الدوام", href: "/hr/attendance/schedules" },
     ],
   },
+  {
+    icon: Wallet, label: "حساب الراتب", href: "/hr/payroll", hasChildren: true,
+    children: [
+      { icon: Wallet, label: "كشف الرواتب", href: "/hr/payroll/statement" },
+      { icon: ScrollText, label: "ارشيف الرواتب", href: "/hr/payroll/archive" },
+      { icon: FileText, label: "البيانات المالية للموظفين", href: "/hr/payroll/financial-data" },
+      { icon: Receipt, label: "ترحيل حساب الراتب إلى النظام المحاسبي", href: "/hr/payroll/transfer" },
+      { icon: Settings, label: "إعدادات حساب الراتب", href: "/hr/payroll/settings" },
+    ],
+  },
   { icon: FileBarChart, label: "تقارير الموارد البشرية", href: "/hr/reports" },
-  { icon: Wallet, label: "مسير الرواتب", href: "/hr/payroll" },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },

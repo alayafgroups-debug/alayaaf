@@ -77,7 +77,12 @@ const App = () => (
           <Route path="/hr/requests/send" element={<HRRequestsSend />} />
           <Route path="/hr/requests/incoming" element={<HRRequestsIncoming />} />
           <Route path="/hr/requests/sent" element={<HRRequestsSent />} />
-          <Route path="/hr/payroll" element={<HRPayroll />} />
+          <Route path="/hr/payroll" element={<Navigate to="/hr/payroll/statement" replace />} />
+          <Route path="/hr/payroll/statement" element={<HRPayroll />} />
+          <Route path="/hr/payroll/archive" element={<HRPayroll />} />
+          <Route path="/hr/payroll/financial-data" element={<HRPayroll />} />
+          <Route path="/hr/payroll/transfer" element={<HRPayroll />} />
+          <Route path="/hr/payroll/settings" element={<HRPayroll />} />
           <Route path="/hr/attendance" element={<Navigate to="/hr/attendance/calculate" replace />} />
           <Route path="/hr/attendance/calculate" element={<HRAttendanceCalculate />} />
           <Route path="/hr/attendance/schedules" element={<HRAttendanceSchedules />} />

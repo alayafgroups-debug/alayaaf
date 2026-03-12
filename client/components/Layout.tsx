@@ -128,6 +128,18 @@ const hrNavItems: HRNavItem[] = [
     ],
   },
   { icon: FileBarChart, label: "تقارير الموارد البشرية", href: "/hr/reports" },
+  {
+    icon: ShieldCheck, label: "المساءلات والإنذارات", href: "/hr/penalties", hasChildren: true,
+    children: [
+      { icon: ShieldCheck, label: "المساءلات", href: "/hr/penalties/investigations" },
+      { icon: ScrollText, label: "أرشيف الجزاءات", href: "/hr/penalties/archive" },
+      { icon: FileText, label: "الإنذارات", href: "/hr/penalties/warnings" },
+      { icon: Settings, label: "أنواع المخالفات", href: "/hr/penalties/types" },
+      { icon: Users, label: "مجموعات المخالفات", href: "/hr/penalties/groups" },
+      { icon: Receipt, label: "القرارات النهائية", href: "/hr/penalties/decisions" },
+      { icon: Cog, label: "إعدادات", href: "/hr/penalties/settings" },
+    ],
+  },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },

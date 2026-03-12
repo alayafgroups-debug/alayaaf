@@ -41,6 +41,7 @@ import HRPayrollArchive from "./pages/HRPayrollArchive";
 import HRPayrollFinancialData from "./pages/HRPayrollFinancialData";
 import HRPayrollTransfer from "./pages/HRPayrollTransfer";
 import HRPayrollSettings from "./pages/HRPayrollSettings";
+import HRPenalties from "./pages/HRPenalties";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -91,6 +92,14 @@ const App = () => (
           <Route path="/hr/attendance" element={<Navigate to="/hr/attendance/calculate" replace />} />
           <Route path="/hr/attendance/calculate" element={<HRAttendanceCalculate />} />
           <Route path="/hr/attendance/schedules" element={<HRAttendanceSchedules />} />
+          <Route path="/hr/penalties" element={<Navigate to="/hr/penalties/investigations" replace />} />
+          <Route path="/hr/penalties/investigations" element={<HRPenalties />} />
+          <Route path="/hr/penalties/archive" element={<HRPenalties />} />
+          <Route path="/hr/penalties/warnings" element={<HRPenalties />} />
+          <Route path="/hr/penalties/types" element={<HRPenalties />} />
+          <Route path="/hr/penalties/groups" element={<HRPenalties />} />
+          <Route path="/hr/penalties/decisions" element={<HRPenalties />} />
+          <Route path="/hr/penalties/settings" element={<HRPenalties />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

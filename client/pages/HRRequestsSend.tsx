@@ -2,6 +2,7 @@ import { useState } from "react";
 import Layout from "@/components/Layout";
 import { ChevronDown, Send, List } from "lucide-react";
 import { cn } from "@/lib/utils";
+import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
 
 // ─── Request Types Grid ───────────────────────────────────────────────────────
 const REQUEST_TYPES = [
@@ -49,11 +50,15 @@ const DEPARTMENTS = ["إدارة الموارد البشرية", "الإدارة
 export default function HRRequestsSend() {
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
   const [delegateDept, setDelegateDept] = useState("");
+  const [leaveFormOpen, setLeaveFormOpen] = useState(false);
 
   const handleRequestClick = (id: string, label: string) => {
     if (!label) return;
     setSelectedRequest(id);
-    // TODO: open request form modal based on type
+
+    if (id === "leave") {
+      setLeaveFormOpen(true);
+    }
   };
 
   return (
@@ -171,6 +176,9 @@ export default function HRRequestsSend() {
           </div>
         </div>
       </div>
+
+      {/* Forms */}
+      <LeaveRequestForm open={leaveFormOpen} onOpenChange={setLeaveFormOpen} />
     </Layout>
   );
 }

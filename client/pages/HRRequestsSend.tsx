@@ -3,19 +3,21 @@ import Layout from "@/components/Layout";
 import { ChevronDown, Send, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
+import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
+import { requestFormSchemas } from "@/components/hr/formSchemas";
 
 // ─── Request Types Grid ───────────────────────────────────────────────────────
 const REQUEST_TYPES = [
   // Row 1
   { id: "custody",        label: "عهدة",                icon: "📋" },
   { id: "leave",          label: "الإجازات",             icon: "📅" },
-  { id: "accommodation",  label: "استكان",               icon: "🏠" },
+  { id: "accommodation",  label: "استئذان",             icon: "🏠" },
   { id: "advance",        label: "السلف",                icon: "💰" },
   { id: "disbursement",   label: "الصرف",                icon: "💳" },
-  { id: "custody2",       label: "عهدة",                 icon: "📁" },
+  { id: "maintenance",    label: "صيانة",                icon: "🔧" },
   // Row 2
   { id: "purchase",       label: "شراء",                 icon: "🛒" },
-  { id: "financial_cust", label: "عهدة مالية",           icon: "👤" },
+  { id: "clearance",      label: "إخلاء طرف",            icon: "🚪" },
   { id: "transfer",       label: "نقل",                  icon: "🔄" },
   { id: "training",       label: "دورة تدريبية",          icon: "🖥️" },
   { id: "overtime",       label: "عمل إضافي",            icon: "👥" },
@@ -31,12 +33,12 @@ const REQUEST_TYPES = [
   { id: "salary_adj",     label: "تعديل راتب",           icon: "📝" },
   { id: "add_employee",   label: "إضافة موظف",           icon: "📝" },
   { id: "vacancy",        label: "وظيفة شاغرة",          icon: "🗂️" },
-  { id: "other",          label: "أخرى",                 icon: "📦" },
-  { id: "disburse_bonus", label: "صرف إنجاز مالي",       icon: "📝" },
+  { id: "termination",    label: "إقالة موظف",           icon: "🚫" },
+  { id: "disburse_bonus", label: "صرف امتياز مالي",      icon: "📝" },
   { id: "empty4",         label: "",                     icon: "" },
   // Row 5
   { id: "empty5",         label: "",                     icon: "" },
-  { id: "disburse_removal",label: "صرف مستحقات إزالة",   icon: "📝" },
+  { id: "leave_dues",     label: "صرف مستحقات إجازة",    icon: "📝" },
   { id: "commission",     label: "صرف عمولة",            icon: "📁" },
   { id: "mission",        label: "مهمة عمل",             icon: "💼" },
   { id: "empty6",         label: "",                     icon: "" },
@@ -51,6 +53,8 @@ export default function HRRequestsSend() {
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
   const [delegateDept, setDelegateDept] = useState("");
   const [leaveFormOpen, setLeaveFormOpen] = useState(false);
+  const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
+  const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
 
   const handleRequestClick = (id: string, label: string) => {
     if (!label) return;
@@ -58,6 +62,11 @@ export default function HRRequestsSend() {
 
     if (id === "leave") {
       setLeaveFormOpen(true);
+    } else if (requestFormSchemas[id]) {
+      setActiveSchemaId(id);
+      setDynamicFormOpen(true);
+    } else {
+      alert("نموذج " + label + " غير متوفر حالياً");
     }
   };
 
@@ -179,6 +188,11 @@ export default function HRRequestsSend() {
 
       {/* Forms */}
       <LeaveRequestForm open={leaveFormOpen} onOpenChange={setLeaveFormOpen} />
+      <DynamicRequestForm
+        open={dynamicFormOpen}
+        onOpenChange={setDynamicFormOpen}
+        schema={activeSchemaId ? requestFormSchemas[activeSchemaId] : null}
+      />
     </Layout>
   );
 }

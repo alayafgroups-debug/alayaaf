@@ -24,7 +24,6 @@ import HR from "./pages/HR";
 import HRDashboard from "./pages/HRDashboard";
 import HREmployees from "./pages/HREmployees";
 import HRPayroll from "./pages/HRPayroll";
-import HRAttendance from "./pages/HRAttendance";
 import HRAdvances from "./pages/HRAdvances";
 import HRCertificates from "./pages/HRCertificates";
 import HRReports from "./pages/HRReports";
@@ -35,6 +34,8 @@ import HRUserLogs from "./pages/HRUserLogs";
 import HRRequestsSend from "./pages/HRRequestsSend";
 import HRRequestsIncoming from "./pages/HRRequestsIncoming";
 import HRRequestsSent from "./pages/HRRequestsSent";
+import HRAttendanceCalculate from "./pages/HRAttendanceCalculate";
+import HRAttendanceSchedules from "./pages/HRAttendanceSchedules";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -77,7 +78,9 @@ const App = () => (
           <Route path="/hr/requests/incoming" element={<HRRequestsIncoming />} />
           <Route path="/hr/requests/sent" element={<HRRequestsSent />} />
           <Route path="/hr/payroll" element={<HRPayroll />} />
-          <Route path="/hr/attendance" element={<HRAttendance />} />
+          <Route path="/hr/attendance" element={<Navigate to="/hr/attendance/calculate" replace />} />
+          <Route path="/hr/attendance/calculate" element={<HRAttendanceCalculate />} />
+          <Route path="/hr/attendance/schedules" element={<HRAttendanceSchedules />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

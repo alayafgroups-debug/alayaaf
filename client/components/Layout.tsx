@@ -110,8 +110,14 @@ const hrNavItems: HRNavItem[] = [
       { icon: MailCheck, label: "الطلبات المرسلة", href: "/hr/requests/sent" },
     ],
   },
+  {
+    icon: Clock, label: "حساب الدوام", href: "/hr/attendance", hasChildren: true,
+    children: [
+      { icon: Clock, label: "حساب الدوام", href: "/hr/attendance/calculate" },
+      { icon: Settings, label: "إعداد فترات الدوام", href: "/hr/attendance/schedules" },
+    ],
+  },
   { icon: FileBarChart, label: "تقارير الموارد البشرية", href: "/hr/reports" },
-  { icon: Clock, label: "الحضور والانصراف", href: "/hr/attendance" },
   { icon: Wallet, label: "مسير الرواتب", href: "/hr/payroll" },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },

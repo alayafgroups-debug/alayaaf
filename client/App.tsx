@@ -48,6 +48,12 @@ import HRPenaltiesTypes from "./pages/HRPenaltiesTypes";
 import HRPenaltiesGroups from "./pages/HRPenaltiesGroups";
 import HRPenaltiesDecisions from "./pages/HRPenaltiesDecisions";
 import HRPenaltiesSettings from "./pages/HRPenaltiesSettings";
+import HRLeavesEmployees from "./pages/HRLeavesEmployees";
+import HRLeavesTypes from "./pages/HRLeavesTypes";
+import HRLeavesAnnualBalance from "./pages/HRLeavesAnnualBalance";
+import HRLeavesOtherBalance from "./pages/HRLeavesOtherBalance";
+import HRLeavesChart from "./pages/HRLeavesChart";
+import HRLeavesHolidays from "./pages/HRLeavesHolidays";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -106,6 +112,13 @@ const App = () => (
           <Route path="/hr/penalties/groups" element={<HRPenaltiesGroups />} />
           <Route path="/hr/penalties/decisions" element={<HRPenaltiesDecisions />} />
           <Route path="/hr/penalties/settings" element={<HRPenaltiesSettings />} />
+          <Route path="/hr/leaves" element={<Navigate to="/hr/leaves/employees" replace />} />
+          <Route path="/hr/leaves/employees" element={<HRLeavesEmployees />} />
+          <Route path="/hr/leaves/types" element={<HRLeavesTypes />} />
+          <Route path="/hr/leaves/annual-balance" element={<HRLeavesAnnualBalance />} />
+          <Route path="/hr/leaves/other-balance" element={<HRLeavesOtherBalance />} />
+          <Route path="/hr/leaves/chart" element={<HRLeavesChart />} />
+          <Route path="/hr/leaves/holidays" element={<HRLeavesHolidays />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

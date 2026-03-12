@@ -140,6 +140,17 @@ const hrNavItems: HRNavItem[] = [
       { icon: Cog, label: "إعدادات", href: "/hr/penalties/settings" },
     ],
   },
+  {
+    icon: Clock, label: "الإجازات", href: "/hr/leaves", hasChildren: true,
+    children: [
+      { icon: Users, label: "إجازات الموظفين", href: "/hr/leaves/employees" },
+      { icon: FileText, label: "تصنيف الإجازات", href: "/hr/leaves/types" },
+      { icon: ShieldCheck, label: "ارصدة الإجازة السنوية", href: "/hr/leaves/annual-balance" },
+      { icon: ScrollText, label: "أرصدة الاجازات الأخرى", href: "/hr/leaves/other-balance" },
+      { icon: FileBarChart, label: "مخطط الإجازات", href: "/hr/leaves/chart" },
+      { icon: Clock, label: "العُطل والاجازات الرسمية", href: "/hr/leaves/holidays" },
+    ],
+  },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },

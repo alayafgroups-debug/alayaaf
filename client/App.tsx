@@ -61,6 +61,10 @@ import HRTerminationEvacuation from "./pages/HRTerminationEvacuation";
 import HRTerminationReasons from "./pages/HRTerminationReasons";
 import HRTerminationSettings from "./pages/HRTerminationSettings";
 import HRTerminationInterviewSetup from "./pages/HRTerminationInterviewSetup";
+import HRInsuranceSocial from "./pages/HRInsuranceSocial";
+import HRInsuranceOvertime from "./pages/HRInsuranceOvertime";
+import HRInsuranceList from "./pages/HRInsuranceList";
+import HRInsuranceMedical from "./pages/HRInsuranceMedical";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -134,6 +138,11 @@ const App = () => (
           <Route path="/hr/termination/reasons" element={<HRTerminationReasons />} />
           <Route path="/hr/termination/settings" element={<HRTerminationSettings />} />
           <Route path="/hr/termination/interview-setup" element={<HRTerminationInterviewSetup />} />
+          <Route path="/hr/insurance" element={<Navigate to="/hr/insurance/social" replace />} />
+          <Route path="/hr/insurance/social" element={<HRInsuranceSocial />} />
+          <Route path="/hr/insurance/overtime" element={<HRInsuranceOvertime />} />
+          <Route path="/hr/insurance/list" element={<HRInsuranceList />} />
+          <Route path="/hr/insurance/medical" element={<HRInsuranceMedical />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

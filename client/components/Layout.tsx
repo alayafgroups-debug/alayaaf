@@ -163,6 +163,15 @@ const hrNavItems: HRNavItem[] = [
       { icon: Users2, label: "إعداد نموذج مقابلة إنهاء الخدمة", href: "/hr/termination/interview-setup" },
     ],
   },
+  {
+    icon: ShieldCheck, label: "التأمينات", href: "/hr/insurance", hasChildren: true,
+    children: [
+      { icon: ShieldCheck, label: "التأمينات الاجتماعية", href: "/hr/insurance/social" },
+      { icon: Clock, label: "التأمينات للساعات الإضافية", href: "/hr/insurance/overtime" },
+      { icon: FileText, label: "قائمة التأمينات الاجتماعية", href: "/hr/insurance/list" },
+      { icon: Receipt, label: "التأمين الطبي", href: "/hr/insurance/medical" },
+    ],
+  },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },

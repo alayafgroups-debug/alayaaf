@@ -1,131 +1,110 @@
 import { useState } from "react";
-import type { ReactElement } from "react";
 import Layout from "@/components/Layout";
-import { Search, Eye, CheckCircle, XCircle, Clock } from "lucide-react";
+import { ChevronDown, Search, Printer, FileText, Grid, RefreshCw, Filter, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Request = {
-  id: string;
-  sender: string;
-  type: string;
-  date: string;
-  status: "معلق" | "موافق" | "مرفوض";
-  notes: string;
-};
-
-const MOCK: Request[] = [
-  { id: "1", sender: "فاطمة حمدي سلطاني", type: "إجازة سنوية", date: "2026-03-08", status: "معلق", notes: "طلب إجازة لمدة 5 أيام" },
-  { id: "2", sender: "أحمد محمد علي", type: "سلفة", date: "2026-03-07", status: "معلق", notes: "سلفة بمبلغ 2000 ريال" },
-  { id: "3", sender: "عبدالله الغامدي", type: "نقل", date: "2026-03-06", status: "موافق", notes: "طلب نقل إلى الفرع الرئيسي" },
-  { id: "4", sender: "سارة أحمد", type: "دورة تدريبية", date: "2026-03-05", status: "مرفوض", notes: "دورة إكسل متقدم" },
-  { id: "5", sender: "محمد الزهراني", type: "عمل إضافي", date: "2026-03-04", status: "موافق", notes: "عمل إضافي نهاية الأسبوع" },
-];
-
-const STATUS_STYLE: Record<string, string> = {
-  "معلق":   "bg-yellow-100 text-yellow-700 border-yellow-200",
-  "موافق":  "bg-green-100 text-green-700 border-green-200",
-  "مرفوض": "bg-red-100 text-red-700 border-red-200",
-};
-
-const STATUS_ICON: Record<string, ReactElement> = {
-  "معلق":   <Clock className="h-3 w-3" />,
-  "موافق":  <CheckCircle className="h-3 w-3" />,
-  "مرفوض": <XCircle className="h-3 w-3" />,
-};
-
 export default function HRRequestsIncoming() {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("");
+  const [needsProcessing, setNeedsProcessing] = useState(true);
 
-  const filtered = MOCK.filter((r) => {
-    if (filter && r.status !== filter) return false;
-    if (search && !r.sender.includes(search) && !r.type.includes(search)) return false;
-    return true;
-  });
+  // Example empty mock data as per screenshot
+  const MOCK: any[] = [];
 
   return (
     <Layout>
-      <div className="mx-auto max-w-7xl space-y-5" dir="rtl">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className="text-blue-600 font-medium cursor-pointer hover:underline">الطلبات</span>
-          <span>/</span>
-          <span>الطلبات الواردة</span>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "إجمالي الطلبات", value: MOCK.length, color: "from-blue-500 to-indigo-600" },
-            { label: "بانتظار الموافقة", value: MOCK.filter(r => r.status === "معلق").length, color: "from-yellow-500 to-orange-500" },
-            { label: "تمت الموافقة", value: MOCK.filter(r => r.status === "موافق").length, color: "from-emerald-500 to-teal-600" },
-          ].map((s) => (
-            <div key={s.label} className={cn("bg-gradient-to-br text-white rounded-xl p-4 shadow-sm", s.color)}>
-              <p className="text-3xl font-bold">{s.value}</p>
-              <p className="text-sm opacity-85 mt-1">{s.label}</p>
+      <div className="mx-auto h-[calc(100vh-100px)] flex flex-col bg-white border border-gray-200 rounded-lg overflow-hidden" dir="rtl">
+        
+        {/* Top Header Bar */}
+        <div className="bg-[#004e89] text-white flex items-center justify-between px-3 py-2 text-sm">
+          <div className="flex items-center gap-3">
+            <button className="hover:bg-white/10 p-1.5 rounded"><Printer className="w-4 h-4" /></button>
+            <button className="hover:bg-white/10 p-1.5 rounded"><FileText className="w-4 h-4" /></button>
+            <button className="hover:bg-white/10 p-1.5 rounded"><Grid className="w-4 h-4" /></button>
+          </div>
+          
+          <div className="flex items-center gap-3 font-semibold absolute left-1/2 -translate-x-1/2">
+            <div className="flex items-center">
+              <select className="bg-white text-gray-800 text-xs px-2 py-1 rounded-l outline-none border-none h-7">
+                <option>الإدارة</option>
+              </select>
+              <select className="bg-white text-gray-800 text-xs px-2 py-1 rounded-r border-r border-gray-200 outline-none h-7">
+                <option>اليوم</option>
+              </select>
             </div>
-          ))}
-        </div>
+            <span>الطلبات الواردة</span>
+          </div>
 
-        {/* Table card */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-          {/* Toolbar */}
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              <input type="text" placeholder="بحث..." value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
-            </div>
-            <select value={filter} onChange={e => setFilter(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 outline-none">
-              <option value="">جميع الحالات</option>
-              <option value="معلق">معلق</option>
-              <option value="موافق">موافق</option>
-              <option value="مرفوض">مرفوض</option>
+          <div className="flex items-center gap-2">
+            <select className="bg-white text-gray-800 text-xs px-2 py-1 rounded outline-none w-16 h-7 text-center">
+              <option>500</option>
             </select>
           </div>
+        </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">الإجراءات</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">الحالة</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">الملاحظات</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">التاريخ</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">نوع الطلب</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">المرسل</th>
+        {/* Table Header Row */}
+        <div className="flex-1 overflow-auto bg-white">
+          <table className="w-full text-sm text-right">
+            <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-600 font-medium sticky top-0">
+              <tr>
+                <th className="px-3 py-2 border-l border-gray-200 w-[8%] font-medium">رقم الطلب</th>
+                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">تاريخ الطلب</th>
+                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">الرقم الوظيفي</th>
+                <th className="px-3 py-2 border-l border-gray-200 w-[15%] font-medium">إسم الموظف</th>
+                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">نوع الحركة</th>
+                <th className="px-3 py-2 border-l border-gray-200 w-[12%] font-medium">نوع الطلب <ChevronDown className="inline w-3 h-3 float-left mt-0.5"/></th>
+                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">الحالة <ChevronDown className="inline w-3 h-3 float-left mt-0.5"/></th>
+                <th className="px-3 py-2 border-l border-gray-200 w-[12%] font-medium">اخر تحديث <ChevronDown className="inline w-3 h-3 float-left mt-0.5"/></th>
+                <th className="px-3 py-2 w-[13%] font-medium">الأمر</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Empty state to match screenshot */}
+              {MOCK.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="h-64 bg-white"></td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="عرض"><Eye className="h-4 w-4" /></button>
-                        <button className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="موافقة"><CheckCircle className="h-4 w-4" /></button>
-                        <button className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title="رفض"><XCircle className="h-4 w-4" /></button>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border", STATUS_STYLE[r.status])}>
-                        {STATUS_ICON[r.status]} {r.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px] truncate">{r.notes}</td>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{r.date}</td>
-                    <td className="px-4 py-3 font-medium text-gray-700">{r.type}</td>
-                    <td className="px-4 py-3 font-semibold text-gray-800">{r.sender}</td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="py-12 text-center text-gray-400">لا توجد طلبات واردة</td></tr>
-                )}
-              </tbody>
-            </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer Bar */}
+        <div className="bg-gray-50 border-t border-gray-200 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
+          <div className="flex items-center gap-2">
+            <button className="px-3 py-1 bg-white border border-gray-300 rounded text-gray-400 cursor-not-allowed">التالي</button>
+            <button className="px-3 py-1 bg-white border border-gray-300 rounded text-gray-400 cursor-not-allowed">السابق</button>
+            <button className="w-6 h-6 flex items-center justify-center bg-white border border-gray-300 rounded text-gray-500 hover:bg-gray-100">
+              <RefreshCw className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">عرض 0 إلى 0 من 0</span>
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-gray-700">
+                <span>تحتاج إلى معالجة</span>
+                <input 
+                  type="checkbox" 
+                  checked={needsProcessing}
+                  onChange={(e) => setNeedsProcessing(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-[#004e89] focus:ring-[#004e89]"
+                />
+              </label>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="flex items-center border border-gray-300 rounded bg-white overflow-hidden">
+                <button className="p-1 hover:bg-gray-100 border-l border-gray-300"><Grid className="w-4 h-4 text-gray-500"/></button>
+                <div className="px-2 flex items-center gap-2 bg-gray-50 h-full border-l border-gray-300 text-gray-600">
+                  <span>رقم الطلب</span>
+                  <ChevronDown className="w-3 h-3" />
+                </div>
+                <button className="p-1 hover:bg-gray-100 border-l border-gray-300 bg-gray-50"><ArrowUpDown className="w-3 h-3 text-gray-500"/></button>
+                <button className="p-1 hover:bg-gray-100 bg-[#004e89] text-white"><Filter className="w-4 h-4"/></button>
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
     </Layout>
   );

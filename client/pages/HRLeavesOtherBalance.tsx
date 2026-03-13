@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, Download, Printer, UserPlus, RefreshCw } from "lucide-react";
+import { Search, Download, Printer, UserPlus, RefreshCw, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 

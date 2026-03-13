@@ -24,7 +24,6 @@ import HR from "./pages/HR";
 import HRDashboard from "./pages/HRDashboard";
 import HREmployees from "./pages/HREmployees";
 import HRPayroll from "./pages/HRPayroll";
-import HRAdvances from "./pages/HRAdvances";
 import HRCertificates from "./pages/HRCertificates";
 import HRReports from "./pages/HRReports";
 import HRSettings from "./pages/HRSettings";

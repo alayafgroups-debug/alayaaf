@@ -139,31 +139,35 @@ export default function ExpenseManagement() {
   }, [isVouchers, isPettyCash, isReports]);
 
   const loadVouchers = async () => {
-    const result = await supabase
-      .from("expense_vouchers")
-      .select("*")
-      .order("voucher_date", { ascending: false })
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ data: null, error: new Error("fetch_failed"), failed: true as const }));
+    try {
+      const { data, error } = await supabase
+        .from("expense_vouchers")
+        .select("*")
+        .order("voucher_date", { ascending: false });
 
-    if (!result.error && result.data) {
-      setVoucherRows(result.data.map((row) => mapVoucherRow(row as Record<string, unknown>)));
-    } else {
+      if (!error && data) {
+        setVoucherRows(data.map((row) => mapVoucherRow(row as Record<string, unknown>)));
+      } else {
+        setVoucherRows([]);
+      }
+    } catch (e) {
       setVoucherRows([]);
     }
   };
 
   const loadPettyCash = async () => {
-    const result = await supabase
-      .from("petty_cash_vouchers")
-      .select("*")
-      .order("voucher_date", { ascending: false })
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ data: null, error: new Error("fetch_failed"), failed: true as const }));
+    try {
+      const { data, error } = await supabase
+        .from("petty_cash_vouchers")
+        .select("*")
+        .order("voucher_date", { ascending: false });
 
-    if (!result.error && result.data) {
-      setPettyCashRows(result.data.map((row) => mapPettyCashRow(row as Record<string, unknown>)));
-    } else {
+      if (!error && data) {
+        setPettyCashRows(data.map((row) => mapPettyCashRow(row as Record<string, unknown>)));
+      } else {
+        setPettyCashRows([]);
+      }
+    } catch (e) {
       setPettyCashRows([]);
     }
   };

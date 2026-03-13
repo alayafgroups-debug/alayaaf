@@ -103,16 +103,18 @@ export default function CRM() {
       tableName: "customers" | "vendors",
       setter: (rows: PartyRow[]) => void
     ) => {
-      const result = await supabase
-        .from(tableName)
-        .select("*")
-        .order("id", { ascending: false })
-        .then((res) => ({ ...res, failed: false as const }))
-        .catch(() => ({ data: null, error: new Error("fetch_failed"), failed: true as const }));
+      try {
+        const { data, error } = await supabase
+          .from(tableName)
+          .select("*")
+          .order("id", { ascending: false });
 
-      if (!result.error && result.data) {
-        setter(result.data.map((row) => mapPartyRow(row as Record<string, unknown>)));
-      } else {
+        if (!error && data) {
+          setter(data.map((row) => mapPartyRow(row as Record<string, unknown>)));
+        } else {
+          setter([]);
+        }
+      } catch (e) {
         setter([]);
       }
     };
@@ -188,12 +190,17 @@ export default function CRM() {
         status: form.status,
       };
 
-      const result = await supabase
-        .from(tableName)
-        .update(payload)
-        .eq("id", form.id)
-        .then((res) => ({ ...res, failed: false as const }))
-        .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+      let result: any = { error: null, failed: false };
+      try {
+        const res = await supabase
+          .from(tableName)
+          .update(payload)
+          .eq("id", form.id);
+        result = { ...res, failed: false };
+        if (res.error) result.error = res.error;
+      } catch (e) {
+        result = { error: new Error("fetch_failed"), failed: true };
+      }
 
       if (!result.error) {
         const updatedRow = mapPartyRow({ id: form.id, ...payload } as Record<string, unknown>);
@@ -231,11 +238,16 @@ export default function CRM() {
         status: form.status,
       };
 
-      const result = await supabase
-        .from(tableName)
-        .insert([payload])
-        .then((res) => ({ ...res, failed: false as const }))
-        .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+      let result: any = { error: null, failed: false };
+      try {
+        const res = await supabase
+          .from(tableName)
+          .insert([payload]);
+        result = { ...res, failed: false };
+        if (res.error) result.error = res.error;
+      } catch (e) {
+        result = { error: new Error("fetch_failed"), failed: true };
+      }
 
       if (!result.error) {
         const newRow = mapPartyRow(payload as unknown as Record<string, unknown>);
@@ -288,12 +300,17 @@ export default function CRM() {
     const tableName = isVendors ? "vendors" : "customers";
     setDeleting(true);
 
-    const result = await supabase
-      .from(tableName)
-      .delete()
-      .eq("id", id)
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+    let result: any = { error: null, failed: false };
+    try {
+      const res = await supabase
+        .from(tableName)
+        .delete()
+        .eq("id", id);
+      result = { ...res, failed: false };
+      if (res.error) result.error = res.error;
+    } catch (e) {
+      result = { error: new Error("fetch_failed"), failed: true };
+    }
 
     if (!result.error) {
       if (isVendors) {

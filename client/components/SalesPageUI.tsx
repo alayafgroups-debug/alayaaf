@@ -21,8 +21,8 @@ export function PageHeader({
   icon: LucideIcon;
   title: string;
   subtitle?: string;
-  actionLabel: string;
-  onAction: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
   gradient?: string;
 }) {
   return (
@@ -39,14 +39,16 @@ export function PageHeader({
             {subtitle && <p className="text-sm text-white/70 mt-0.5">{subtitle}</p>}
           </div>
         </div>
-        <button
-          onClick={onAction}
-          className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold shadow-lg shadow-black/10 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
-          style={{ color: "hsl(224, 76%, 38%)" }}
-        >
-          <Plus className="h-4 w-4" />
-          {actionLabel}
-        </button>
+        {actionLabel && onAction && (
+          <button
+            onClick={onAction}
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold shadow-lg shadow-black/10 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
+            style={{ color: "hsl(224, 76%, 38%)" }}
+          >
+            <Plus className="h-4 w-4" />
+            {actionLabel}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -69,10 +71,10 @@ export function FilterBar({ children }: { children: ReactNode }) {
   );
 }
 
-export function FilterInput({ label, placeholder, colSpan }: { label: string; placeholder: string; colSpan?: number }) {
+export function FilterInput({ label, placeholder, colSpan }: { label?: string; placeholder: string; colSpan?: number }) {
   return (
     <div className={cn("space-y-1.5", colSpan && `md:col-span-${colSpan}`)}>
-      <label className="text-[12px] font-semibold text-muted-foreground block text-right">{label}</label>
+      {label && <label className="text-[12px] font-semibold text-muted-foreground block text-right">{label}</label>}
       <div className="relative">
         <input
           type="text"
@@ -86,25 +88,25 @@ export function FilterInput({ label, placeholder, colSpan }: { label: string; pl
   );
 }
 
-export function FilterSelect({ label, children }: { label: string; children?: ReactNode }) {
+export function FilterSelect({ label, options, children }: { label: string; options?: string[]; children?: ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label className="text-[12px] font-semibold text-muted-foreground block text-right">{label}</label>
       <select className="w-full px-4 py-2.5 border border-border/60 rounded-xl bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm text-right appearance-none text-foreground transition-all">
-        {children}
+        {options ? options.map(opt => <option key={opt} value={opt}>{opt}</option>) : children}
       </select>
     </div>
   );
 }
 
-export function FilterActions() {
+export function FilterActions({ onReset, onSearch }: { onReset?: () => void; onSearch?: () => void }) {
   return (
     <div className="md:col-span-4 flex items-center gap-2 pt-1">
-      <button className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-white px-4 py-2 text-sm text-muted-foreground hover:bg-muted/30 transition-colors">
+      <button onClick={onReset} className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-white px-4 py-2 text-sm text-muted-foreground hover:bg-muted/30 transition-colors">
         <X className="h-3.5 w-3.5" />
         إعادة تعيين
       </button>
-      <button className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary/90 shadow-sm shadow-primary/20 transition-all">
+      <button onClick={onSearch} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary/90 shadow-sm shadow-primary/20 transition-all">
         <Search className="h-3.5 w-3.5" />
         بحث
       </button>

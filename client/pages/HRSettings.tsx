@@ -176,12 +176,17 @@ export default function HRSettings() {
       return;
     }
 
-    const result = await supabase
-      .from("hr_settings")
-      .select("setting_key, setting_value")
-      .in("setting_key", ["general", "recruitment", "payroll", "leaves", "attendance"])
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ data: null, error: new Error("fetch_failed"), failed: true as const }));
+    let result: any = { error: null, data: null, failed: false };
+    try {
+      const res = await supabase
+        .from("hr_settings")
+        .select("setting_key, setting_value")
+        .in("setting_key", ["general", "recruitment", "payroll", "leaves", "attendance"]);
+      result = { ...res, failed: false };
+      if (res.error) result.error = res.error;
+    } catch (e) {
+      result = { data: null, error: new Error("fetch_failed"), failed: true };
+    }
 
     if (!result.error && result.data) {
       const dbState: HRSettingsState = {
@@ -236,11 +241,16 @@ export default function HRSettings() {
 
     setSaving(true);
 
-    const result = await supabase
-      .from("hr_settings")
-      .upsert([payload], { onConflict: "setting_key" })
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+    let result: any = { error: null, failed: false };
+    try {
+      const res = await supabase
+        .from("hr_settings")
+        .upsert([payload], { onConflict: "setting_key" });
+      result = { ...res, failed: false };
+      if (res.error) result.error = res.error;
+    } catch (e) {
+      result = { error: new Error("fetch_failed"), failed: true };
+    }
 
     writeLocalSettings(settings);
 

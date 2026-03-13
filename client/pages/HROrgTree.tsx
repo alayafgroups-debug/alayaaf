@@ -38,7 +38,7 @@ export default function HROrgTree() {
                   <FileText className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent dir="rtl">
+              <DropdownMenuContent className="text-right">
                 <DropdownMenuItem className="flex gap-2 cursor-pointer">
                   <FileText className="h-4 w-4 text-red-500" />
                   <span>استخراج PDF</span>

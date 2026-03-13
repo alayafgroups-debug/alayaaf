@@ -84,12 +84,17 @@ export default function UsersPermissions() {
 
   async function loadUsers() {
     setLoading(true);
-    const result = await supabase
-      .from("app_users")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ data: null, error: new Error("fetch_failed"), failed: true as const }));
+    let result: any = { error: null, data: null, failed: false };
+    try {
+      const res = await supabase
+        .from("app_users")
+        .select("*")
+        .order("created_at", { ascending: false });
+      result = { ...res, failed: false };
+      if (res.error) result.error = res.error;
+    } catch (e) {
+      result = { data: null, error: new Error("fetch_failed"), failed: true };
+    }
 
     if (!result.error && result.data) {
       setUsers(result.data.map((row) => mapUserRow(row as Record<string, unknown>)));
@@ -203,12 +208,17 @@ export default function UsersPermissions() {
 
     setSaving(true);
     if (mode === "edit" && selected) {
-      const result = await supabase
-        .from("app_users")
-        .update(payload)
-        .eq("id", selected.id)
-        .then((res) => ({ ...res, failed: false as const }))
-        .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+      let result: any = { error: null, failed: false };
+      try {
+        const res = await supabase
+          .from("app_users")
+          .update(payload)
+          .eq("id", selected.id);
+        result = { ...res, failed: false };
+        if (res.error) result.error = res.error;
+      } catch (e) {
+        result = { error: new Error("fetch_failed"), failed: true };
+      }
 
       if (!result.error) {
         setUsers((prev) =>
@@ -225,11 +235,16 @@ export default function UsersPermissions() {
       }
     } else {
       const insertPayload = { id: crypto.randomUUID(), ...payload };
-      const result = await supabase
-        .from("app_users")
-        .insert([insertPayload])
-        .then((res) => ({ ...res, failed: false as const }))
-        .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+      let result: any = { error: null, failed: false };
+      try {
+        const res = await supabase
+          .from("app_users")
+          .insert([insertPayload]);
+        result = { ...res, failed: false };
+        if (res.error) result.error = res.error;
+      } catch (e) {
+        result = { error: new Error("fetch_failed"), failed: true };
+      }
 
       if (!result.error) {
         const newUser: UserRow = {
@@ -255,12 +270,17 @@ export default function UsersPermissions() {
   async function deleteUser(user: UserRow) {
     if (!confirm(`حذف المستخدم ${user.name}؟`)) return;
 
-    const result = await supabase
-      .from("app_users")
-      .delete()
-      .eq("id", user.id)
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+    let result: any = { error: null, failed: false };
+    try {
+      const res = await supabase
+        .from("app_users")
+        .delete()
+        .eq("id", user.id);
+      result = { ...res, failed: false };
+      if (res.error) result.error = res.error;
+    } catch (e) {
+      result = { error: new Error("fetch_failed"), failed: true };
+    }
 
     if (!result.error) {
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
@@ -272,12 +292,17 @@ export default function UsersPermissions() {
 
   async function toggleUserStatus(user: UserRow) {
     const nextStatus = user.status === "نشط" ? "غير نشط" : "نشط";
-    const result = await supabase
-      .from("app_users")
-      .update({ status: nextStatus, updated_at: new Date().toISOString() })
-      .eq("id", user.id)
-      .then((res) => ({ ...res, failed: false as const }))
-      .catch(() => ({ error: new Error("fetch_failed"), failed: true as const }));
+    let result: any = { error: null, failed: false };
+    try {
+      const res = await supabase
+        .from("app_users")
+        .update({ status: nextStatus, updated_at: new Date().toISOString() })
+        .eq("id", user.id);
+      result = { ...res, failed: false };
+      if (res.error) result.error = res.error;
+    } catch (e) {
+      result = { error: new Error("fetch_failed"), failed: true };
+    }
 
     if (!result.error) {
       setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)));

@@ -525,7 +525,7 @@ function MainSidebar({
         setExpandedMenu(item.href);
       }
     });
-  }, [location.pathname]);
+  }, [location.pathname, setExpandedMenu]);
 
   return (
     <aside

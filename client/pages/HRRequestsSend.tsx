@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { ChevronDown, Send, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
 import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
+import { supabase } from "@/lib/supabaseClient";
 
 // ─── Request Types Grid ───────────────────────────────────────────────────────
 const REQUEST_TYPES = [
@@ -55,6 +56,37 @@ export default function HRRequestsSend() {
   const [leaveFormOpen, setLeaveFormOpen] = useState(false);
   const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
+  const [employeeInfo, setEmployeeInfo] = useState({
+    empId: "EMP-001",
+    name: "زين أحمد الحربي",
+    department: "الإدارة العليا",
+    directManager: "الإدارة"
+  });
+
+  useEffect(() => {
+    const loadAdminUser = async () => {
+      try {
+        const { data } = await supabase
+          .from("employees")
+          .select("emp_id, name, department, direct_manager")
+          .order("id")
+          .limit(1)
+          .single();
+
+        if (data) {
+          setEmployeeInfo({
+            empId: data.emp_id || "EMP-001",
+            name: data.name || "زين أحمد الحربي",
+            department: data.department || "الإدارة العليا",
+            directManager: data.direct_manager || "الإدارة"
+          });
+        }
+      } catch (err) {
+        console.warn("Could not load employee info", err);
+      }
+    };
+    loadAdminUser();
+  }, []);
 
   const handleRequestClick = (id: string, label: string) => {
     if (!label) return;
@@ -144,15 +176,15 @@ export default function HRRequestsSend() {
               <div className="px-4 pb-4 space-y-2 text-sm">
                 <div className="flex justify-between border-b border-gray-100 py-1.5">
                   <span className="text-gray-500">الاسم</span>
-                  <span className="font-medium text-gray-800 text-left">0001 - عبدالمجيد شودري</span>
+                  <span className="font-medium text-gray-800 text-left">{employeeInfo.empId} - {employeeInfo.name}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 py-1.5">
                   <span className="text-gray-500">الإدارة</span>
-                  <span className="font-medium text-gray-800">إدارة العلياء</span>
+                  <span className="font-medium text-gray-800">{employeeInfo.department}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-gray-500">المدير المباشر</span>
-                  <span className="font-medium text-gray-800">عبدالمجيد شودري</span>
+                  <span className="font-medium text-gray-800">{employeeInfo.directManager}</span>
                 </div>
               </div>
             </div>

@@ -1,196 +1,162 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, Plus, Eye, Copy, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/hooks/use-toast";
 
-const MOCK_SCHEDULES = [
-  { id: 1, name: "دوام شركة أ", employees: 9, shifts: 1, hours: "09:00:00", type: "جدول عمل ثابت" },
-  { id: 2, name: "دوام النصف", employees: 48, shifts: 1, hours: "09:00:00", type: "جدول عمل ثابت" },
-  { id: 3, name: "أكاديمية وعد", employees: 50, shifts: 1, hours: "09:00:00", type: "جدول عمل ثابت" },
-  { id: 4, name: "شركة العيسى", employees: 9, shifts: 1, hours: "10:00:00", type: "جدول عمل ثابت" },
-  { id: 5, name: "مدارس بلوم", employees: 0, shifts: 1, hours: "09:00:00", type: "جدول عمل ثابت" },
-  { id: 6, name: "دوام وكالة العياف للدعاية والاعلان", employees: 4, shifts: 1, hours: "09:00:00", type: "جدول عمل ثابت" },
-];
+type Schedule = { id: string; name: string; employees: number; shifts: number; hours: string; type: string };
 
 export default function HRAttendanceSchedules() {
+  const [items, setItems] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [scheduleType, setScheduleType] = useState("جدول عمل ثابت");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formShifts, setFormShifts] = useState("1");
+  const [formHours, setFormHours] = useState("09:00:00");
+  const [formType, setFormType] = useState("جدول عمل ثابت");
+  const [saving, setSaving] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from("attendance_schedules").select("*").order("id");
+      if (data) setItems(data.map((r: any) => ({
+        id: String(r.id), name: r.name ?? "", employees: r.employees ?? 0,
+        shifts: r.shifts ?? 1, hours: r.hours ?? "09:00:00", type: r.type ?? "جدول عمل ثابت",
+      })));
+    } catch {} finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormShifts("1"); setFormHours("09:00:00"); setFormType("جدول عمل ثابت"); };
+
+  const startEdit = (item: Schedule) => {
+    setEditingId(item.id); setFormName(item.name); setFormShifts(String(item.shifts));
+    setFormHours(item.hours); setFormType(item.type); setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!formName.trim()) { toast({ title: "خطأ", description: "اسم الجدول مطلوب", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const payload = { name: formName, shifts: Number(formShifts), hours: formHours, type: formType };
+      if (editingId) {
+        await supabase.from("attendance_schedules").update(payload).eq("id", editingId);
+        toast({ title: "تم التعديل" });
+      } else {
+        await supabase.from("attendance_schedules").insert([payload]);
+        toast({ title: "تمت الإضافة" });
+      }
+      resetForm(); loadData();
+    } catch { toast({ title: "خطأ", variant: "destructive" }); } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (item: Schedule) => {
+    if (!confirm(`حذف "${item.name}"؟`)) return;
+    await supabase.from("attendance_schedules").delete().eq("id", item.id);
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    toast({ title: "تم الحذف" });
+  };
+
+  const filtered = items.filter((i) => !search || i.name.includes(search));
 
   return (
     <Layout>
       <div className="p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
-        {/* Attendance Settings Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gray-50 border-b border-gray-100 p-4">
-            <h2 className="text-lg font-bold text-gray-800">إعدادات الحضور</h2>
-          </div>
+        {/* Attendance Settings */}
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="bg-gray-50 border-b p-4"><h2 className="text-lg font-bold text-gray-800">إعدادات الحضور</h2></div>
           <div className="p-6">
             <div className="flex flex-wrap gap-8 items-center text-sm text-gray-700">
-              <div className="flex items-center gap-2">
-                <Checkbox id="hide-unused" />
-                <label htmlFor="hide-unused" className="cursor-pointer">
-                  إخفاء سجلات البصمة غير المستخدمة
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox id="show-chart" />
-                <label htmlFor="show-chart" className="cursor-pointer">
-                  عرض مخطط جدول العمل
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox id="show-exit" />
-                <label htmlFor="show-exit" className="cursor-pointer">
-                  عرض خروج الموظف للبصمة في يوم الدخول
-                </label>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Checkbox id="tolerance" />
-                  <label htmlFor="tolerance" className="cursor-pointer">
-                    هامش التسامح بين نهاية الإذن وبداية الدوام (ثواني)
-                  </label>
-                </div>
-                <Input type="number" defaultValue="60" className="w-20 h-8 text-center" />
-              </div>
+              <div className="flex items-center gap-2"><Checkbox id="hide-unused" /><label htmlFor="hide-unused" className="cursor-pointer">إخفاء سجلات البصمة غير المستخدمة</label></div>
+              <div className="flex items-center gap-2"><Checkbox id="show-chart" /><label htmlFor="show-chart" className="cursor-pointer">عرض مخطط جدول العمل</label></div>
+              <div className="flex items-center gap-2"><Checkbox id="show-exit" /><label htmlFor="show-exit" className="cursor-pointer">عرض خروج الموظف للبصمة في يوم الدخول</label></div>
             </div>
           </div>
         </div>
 
-        {/* Work Schedules Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-800">جداول العمل</h2>
-          </div>
+        {/* Work Schedules */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">جداول العمل</h1>
+          <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[#004e89] hover:bg-[#003865]">
+            <Plus className="h-4 w-4 ml-2" /> إضافة جدول
+          </Button>
+        </div>
 
-          <div className="p-4 space-y-4">
-            <div className="flex justify-start">
-              <Button 
-                onClick={() => setIsAddDialogOpen(true)}
-                className="bg-[#004e89] hover:bg-[#003865] text-white flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                جداول العمل
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="relative w-72">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="بحث"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-3 pr-9 h-10"
-                />
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span>عرض</span>
-                <select className="border-gray-200 rounded-md text-sm p-1.5 focus:ring-[#004e89] focus:border-[#004e89]">
-                  <option>10</option>
-                  <option>25</option>
-                  <option>50</option>
+        {showForm && (
+          <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
+            <h3 className="font-bold text-lg">{editingId ? "تعديل الجدول" : "جدول عمل جديد"}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div><label className="block text-sm font-medium mb-1">اسم الجدول *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">عدد الفترات</label><Input type="number" value={formShifts} onChange={(e) => setFormShifts(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">عدد الساعات</label><Input value={formHours} onChange={(e) => setFormHours(e.target.value)} /></div>
+              <div>
+                <label className="block text-sm font-medium mb-1">نوع الجدول</label>
+                <select value={formType} onChange={(e) => setFormType(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
+                  <option value="جدول عمل ثابت">جدول عمل ثابت</option>
+                  <option value="جدول عمل متغير">جدول عمل متغير</option>
                 </select>
-                <span>من السجلات</span>
               </div>
             </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto border border-gray-100 rounded-lg">
-              <table className="w-full text-sm text-right">
-                <thead className="bg-[#004e89] text-white">
-                  <tr>
-                    <th className="py-3 px-4 font-medium">معرف</th>
-                    <th className="py-3 px-4 font-medium">الاسم</th>
-                    <th className="py-3 px-4 font-medium">عدد الموظفين</th>
-                    <th className="py-3 px-4 font-medium">عدد الفترات</th>
-                    <th className="py-3 px-4 font-medium">عدد الساعات</th>
-                    <th className="py-3 px-4 font-medium">نوع جدول العمل</th>
-                    <th className="py-3 px-4 font-medium text-center">الأمر</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {MOCK_SCHEDULES.map((schedule) => (
-                    <tr key={schedule.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-3 px-4">{schedule.id}</td>
-                      <td className="py-3 px-4 font-medium text-gray-900">{schedule.name}</td>
-                      <td className="py-3 px-4">{schedule.employees}</td>
-                      <td className="py-3 px-4">{schedule.shifts}</td>
-                      <td className="py-3 px-4">{schedule.hours}</td>
-                      <td className="py-3 px-4">{schedule.type}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex justify-center items-center gap-3">
-                          <button className="text-gray-400 hover:text-[#004e89] transition-colors">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button className="text-gray-400 hover:text-blue-500 transition-colors">
-                            <Copy className="h-4 w-4" />
-                          </button>
-                          <button className="text-gray-400 hover:text-red-500 transition-colors">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Footer Pagination */}
-            <div className="flex items-center justify-between text-sm text-gray-500 pt-2">
-              <span>إظهار 1 إلى 6 من أصل 6 مدخل</span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" className="h-8 px-3 text-gray-500 bg-white" disabled>
-                  السابق
-                </Button>
-                <Button variant="default" size="sm" className="h-8 w-8 p-0 bg-[#004e89] hover:bg-[#003865]">
-                  1
-                </Button>
-                <Button variant="outline" size="sm" className="h-8 px-3 text-gray-500 bg-white" disabled>
-                  التالي
-                </Button>
-              </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? "جاري الحفظ..." : "حفظ"}</Button>
+              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Add Schedule Dialog */}
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]" dir="rtl">
-            <DialogHeader>
-              <DialogTitle className="text-right text-lg">نوع جدول العمل *</DialogTitle>
-            </DialogHeader>
-            <div className="py-6">
-              <select 
-                className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#004e89] focus:border-transparent"
-                value={scheduleType}
-                onChange={(e) => setScheduleType(e.target.value)}
-              >
-                <option value="جدول عمل ثابت">جدول عمل ثابت</option>
-                <option value="جدول عمل متغير">جدول عمل متغير</option>
-              </select>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
             </div>
-            <DialogFooter className="sm:justify-start">
-              <Button 
-                onClick={() => setIsAddDialogOpen(false)} 
-                className="bg-[#004e89] hover:bg-[#003865] text-white"
-              >
-                التالي
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-[#004e89] text-white">
+                <tr>
+                  <th className="py-3 px-4 font-medium w-16">#</th>
+                  <th className="py-3 px-4 font-medium">الاسم</th>
+                  <th className="py-3 px-4 font-medium">عدد الموظفين</th>
+                  <th className="py-3 px-4 font-medium">عدد الفترات</th>
+                  <th className="py-3 px-4 font-medium">عدد الساعات</th>
+                  <th className="py-3 px-4 font-medium">نوع جدول العمل</th>
+                  <th className="py-3 px-4 font-medium text-center w-24">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                ) : filtered.map((item, i) => (
+                  <tr key={item.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-4">{i + 1}</td>
+                    <td className="py-3 px-4 font-medium">{item.name}</td>
+                    <td className="py-3 px-4">{item.employees}</td>
+                    <td className="py-3 px-4">{item.shifts}</td>
+                    <td className="py-3 px-4">{item.hours}</td>
+                    <td className="py-3 px-4">{item.type}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-center items-center gap-2">
+                        <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-[#004e89]"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => handleDelete(item)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </Layout>
   );

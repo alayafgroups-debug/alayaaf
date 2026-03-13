@@ -1,114 +1,93 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Printer, FileText, Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/lib/supabaseClient";
 
-const MOCK_CHART = [
-  { id: "0001", name: "عبدالمجيد شودري", months: ["-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"] },
-];
+const MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+
+type ChartRow = { id: string; empId: string; name: string; months: string[] };
 
 export default function HRLeavesChart() {
+  const [items, setItems] = useState<ChartRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [year, setYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const { data: emps } = await supabase.from("employees").select("id, employee_id, name").eq("status", "نشط").order("name");
+        const { data: leaves } = await supabase.from("leave_requests").select("emp_id, start_date, days, status").eq("status", "موافق");
+        if (!emps) { setLoading(false); return; }
+
+        const leaveMap: Record<string, Set<number>> = {};
+        (leaves ?? []).forEach((l: any) => {
+          if (!l.start_date) return;
+          const d = new Date(l.start_date);
+          if (d.getFullYear() !== year) return;
+          const key = l.emp_id;
+          if (!leaveMap[key]) leaveMap[key] = new Set();
+          leaveMap[key].add(d.getMonth());
+        });
+
+        setItems(emps.map((e: any) => {
+          const empLeaveMonths = leaveMap[e.id] ?? new Set();
+          const months = Array.from({ length: 12 }, (_, i) => empLeaveMonths.has(i) ? "إجازة" : "-");
+          return { id: e.id, empId: e.employee_id ?? "", name: e.name ?? "", months };
+        }));
+      } catch {} finally { setLoading(false); }
+    })();
+  }, [year]);
+
+  const filtered = items.filter((i) => !search || i.name.includes(search) || i.empId.includes(search));
 
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          
-          <div className="bg-[#004e89] text-white p-3 flex flex-col xl:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <h2 className="text-lg font-bold whitespace-nowrap">مخطط الإجازات</h2>
-              
-              <div className="flex gap-2 text-black flex-wrap">
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[100px]">
-                  <option>2026</option>
-                  <option>2025</option>
-                </select>
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[100px]">
-                  <option>الفرع</option>
-                </select>
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[120px]">
-                  <option>الإدارة</option>
-                </select>
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[120px]">
-                  <option>القسم</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="إرسال إيميل">
-                  <Send className="h-4 w-4" />
-                </button>
-                <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="سجل">
-                  <FileText className="h-4 w-4" />
-                </button>
-                <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="طباعة">
-                  <Printer className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="text-black">
-                <select className="h-8 w-16 rounded px-2 text-sm bg-white border-none outline-none font-medium">
-                  <option>10</option>
-                  <option>25</option>
-                </select>
-              </div>
-            </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">مخطط الإجازات</h1>
+          <div className="flex items-center gap-3">
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="h-10 border rounded-md px-3 bg-white text-sm">
+              {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
           </div>
+        </div>
 
+        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+            </div>
+            <span className="text-sm text-gray-500">{filtered.length} موظف</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-center whitespace-nowrap">
-              <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
+              <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <th className="py-3 px-2 font-medium min-w-[100px]">
-                    الرقم الوظيفي <Input placeholder="" className="h-6 mt-1" />
-                  </th>
-                  <th className="py-3 px-2 font-medium min-w-[200px]">
-                    الاسم <Input placeholder="" className="h-6 mt-1" />
-                  </th>
-                  <th className="py-3 px-2 font-medium">يناير</th>
-                  <th className="py-3 px-2 font-medium">فبراير</th>
-                  <th className="py-3 px-2 font-medium">مارس</th>
-                  <th className="py-3 px-2 font-medium">أبريل</th>
-                  <th className="py-3 px-2 font-medium">مايو</th>
-                  <th className="py-3 px-2 font-medium">يونيو</th>
-                  <th className="py-3 px-2 font-medium">يوليو</th>
-                  <th className="py-3 px-2 font-medium">أغسطس</th>
-                  <th className="py-3 px-2 font-medium">سبتمبر</th>
-                  <th className="py-3 px-2 font-medium">أكتوبر</th>
-                  <th className="py-3 px-2 font-medium">نوفمبر</th>
-                  <th className="py-3 px-2 font-medium">ديسمبر</th>
-                  <th className="py-3 px-2 font-medium">الإجراءات</th>
+                  <th className="py-3 px-2 font-medium">الرقم الوظيفي</th>
+                  <th className="py-3 px-2 font-medium text-right min-w-[150px]">الاسم</th>
+                  {MONTHS.map((m) => <th key={m} className="py-3 px-2 font-medium">{m}</th>)}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {MOCK_CHART.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-3 px-2">{emp.id}</td>
-                    <td className="py-3 px-2 font-medium text-gray-900 text-right">{emp.name}</td>
-                    {emp.months.map((m, i) => (
-                      <td key={i} className="py-3 px-2">{m}</td>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={14} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={14} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                ) : filtered.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-2">{row.empId}</td>
+                    <td className="py-3 px-2 font-medium text-right">{row.name}</td>
+                    {row.months.map((m, i) => (
+                      <td key={i} className={`py-3 px-2 ${m === "إجازة" ? "bg-amber-50 text-amber-700 font-medium" : "text-gray-400"}`}>{m}</td>
                     ))}
-                    <td className="py-3 px-2">
-                      <button className="text-gray-400 hover:text-[#004e89]">
-                        <span className="font-bold text-lg leading-none">...</span>
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-          
-          <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-500">يعرض 1 إلى 1 من أصل 1 سجل</span>
-            <div className="flex gap-1 opacity-50 pointer-events-none">
-              <Button variant="outline" size="sm" className="h-8 px-3">السابق</Button>
-              <Button variant="outline" size="sm" className="h-8 px-3">التالي</Button>
-            </div>
           </div>
         </div>
       </div>

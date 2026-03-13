@@ -1,211 +1,191 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, Plus, Eye, Copy, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/hooks/use-toast";
 
-const MOCK_TYPES = [
-  { id: 1, name: "إجازة سنوية", duration: "21 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 2, name: "إجازة مرضية", duration: "30 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 3, name: "وفاة زوجة الموظف أو أحد أصوله أو فروعه", duration: "5 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 4, name: "مولود", duration: "3 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 5, name: "حج", duration: "15 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 6, name: "دراسية", duration: "20 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 7, name: "إجازة وضع", duration: "70 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 8, name: "وفاة الزوج", duration: "130 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 9, name: "أخرى", duration: "10 يوم", deduction: "من الراتب الأساسي (الافتراضي)", status: "مفعلة" },
-  { id: 10, name: "زواج", duration: "5 يوم", deduction: "0%", status: "مفعلة" },
-  { id: 11, name: "إجازة إضطرارية", duration: "7 يوم", deduction: "0%", status: "مفعلة" },
-];
+type LeaveType = {
+  id: string;
+  name: string;
+  name_en: string;
+  max_days: number;
+  deduction_percent: number;
+  paid: boolean;
+  affects_balance: boolean;
+  gender: string;
+  status: string;
+};
 
 export default function HRLeavesTypes() {
+  const [items, setItems] = useState<LeaveType[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [formName, setFormName] = useState("");
+  const [formNameEn, setFormNameEn] = useState("");
+  const [formDays, setFormDays] = useState("1");
+  const [formDeduction, setFormDeduction] = useState("0");
+  const [formPaid, setFormPaid] = useState(true);
+  const [formAffects, setFormAffects] = useState(true);
+  const [formGender, setFormGender] = useState("both");
+  const [saving, setSaving] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from("leave_types").select("*").order("id");
+      if (data) setItems(data.map((r: any) => ({
+        id: String(r.id), name: r.name ?? "", name_en: r.name_en ?? "",
+        max_days: r.max_days ?? 0, deduction_percent: r.deduction_percent ?? 0,
+        paid: r.paid ?? true, affects_balance: r.affects_balance ?? true,
+        gender: r.gender ?? "both", status: r.status ?? "مفعلة",
+      })));
+    } catch { } finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const resetForm = () => {
+    setShowForm(false); setEditingId(null);
+    setFormName(""); setFormNameEn(""); setFormDays("1");
+    setFormDeduction("0"); setFormPaid(true); setFormAffects(true); setFormGender("both");
+  };
+
+  const startEdit = (item: LeaveType) => {
+    setEditingId(item.id); setFormName(item.name); setFormNameEn(item.name_en);
+    setFormDays(String(item.max_days)); setFormDeduction(String(item.deduction_percent));
+    setFormPaid(item.paid); setFormAffects(item.affects_balance); setFormGender(item.gender);
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!formName.trim()) { toast({ title: "خطأ", description: "اسم التصنيف مطلوب", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        name: formName, name_en: formNameEn, max_days: Number(formDays),
+        deduction_percent: Number(formDeduction), paid: formPaid,
+        affects_balance: formAffects, gender: formGender,
+      };
+      if (editingId) {
+        await supabase.from("leave_types").update(payload).eq("id", editingId);
+        toast({ title: "تم التعديل بنجاح" });
+      } else {
+        await supabase.from("leave_types").insert([payload]);
+        toast({ title: "تمت الإضافة بنجاح" });
+      }
+      resetForm(); loadData();
+    } catch { toast({ title: "خطأ", variant: "destructive" }); } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (item: LeaveType) => {
+    if (!confirm(`حذف "${item.name}"؟`)) return;
+    await supabase.from("leave_types").delete().eq("id", item.id);
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    toast({ title: "تم الحذف" });
+  };
+
+  const filtered = items.filter((i) => !search || i.name.includes(search) || i.name_en.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Layout>
       <div className="p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-800">تصنيف الإجازات</h2>
-            <Button 
-              onClick={() => setIsAddDialogOpen(true)}
-              className="bg-[#004e89] hover:bg-[#003865] text-white flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              تصنيف جديد
-            </Button>
-          </div>
-          
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="relative w-72">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="بحث"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-3 pr-9 h-10"
-                />
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span>عرض</span>
-                <select className="border-gray-200 rounded-md text-sm p-1.5 focus:ring-[#004e89] focus:border-[#004e89]">
-                  <option>25</option>
-                  <option>50</option>
-                  <option>100</option>
-                </select>
-                <span>من السجلات</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto border border-gray-100 rounded-lg">
-              <table className="w-full text-sm text-right">
-                <thead className="bg-[#004e89] text-white">
-                  <tr>
-                    <th className="py-3 px-4 font-medium w-20">معرف</th>
-                    <th className="py-3 px-4 font-medium min-w-[250px]">اسم التصنيف</th>
-                    <th className="py-3 px-4 font-medium">مدة الإجازة (باليوم)</th>
-                    <th className="py-3 px-4 font-medium">نسبة الخصم من الراتب (%)</th>
-                    <th className="py-3 px-4 font-medium text-center">الحالة</th>
-                    <th className="py-3 px-4 font-medium text-center w-32">الأمر</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {MOCK_TYPES.map((type) => (
-                    <tr key={type.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-3 px-4 text-center">{type.id}</td>
-                      <td className="py-3 px-4 font-medium">{type.name}</td>
-                      <td className="py-3 px-4">{type.duration}</td>
-                      <td className="py-3 px-4">{type.deduction}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded font-medium text-xs">
-                          {type.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex justify-center items-center gap-3">
-                          <button className="text-gray-400 hover:text-[#004e89] transition-colors"><Eye className="h-4 w-4" /></button>
-                          <button className="text-gray-400 hover:text-blue-500 transition-colors"><Copy className="h-4 w-4" /></button>
-                          <button className="text-red-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            <div className="flex items-center justify-between text-sm text-gray-500 pt-2">
-              <span>إظهار 1 إلى 11 من أصل 11 مدخل</span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" className="h-8 px-3 text-gray-500 bg-white" disabled>السابق</Button>
-                <Button variant="default" size="sm" className="h-8 w-8 p-0 bg-[#004e89] hover:bg-[#003865]">1</Button>
-                <Button variant="outline" size="sm" className="h-8 px-3 text-gray-500 bg-white" disabled>التالي</Button>
-              </div>
-            </div>
-          </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">تصنيف الإجازات</h1>
+          <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[#004e89] hover:bg-[#003865]">
+            <Plus className="h-4 w-4 ml-2" /> تصنيف جديد
+          </Button>
         </div>
 
-        {/* Add Leave Type Dialog */}
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden" dir="rtl">
-            <DialogHeader className="p-4 border-b border-gray-100 bg-gray-50/50">
-              <DialogTitle className="text-right text-lg font-bold">تصنيف جديد</DialogTitle>
-            </DialogHeader>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto">
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">الاسم بالعربية <span className="text-red-500">*</span></label>
-                <Input className="h-10" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">الاسم بالإنجليزية <span className="text-red-500">*</span></label>
-                <Input className="h-10" />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">مدة الإجازة (باليوم) <span className="text-red-500">*</span></label>
-                <Input type="number" defaultValue="1" className="h-10" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">إجازة مدفوعة الأجر <span className="text-red-500">*</span></label>
-                <div className="flex gap-6 h-10 items-center">
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paid" className="text-[#004e89]" defaultChecked /><span>نعم</span></label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paid" className="text-[#004e89]" /><span>لا</span></label>
+        {showForm && (
+          <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
+            <h3 className="font-bold text-lg">{editingId ? "تعديل التصنيف" : "تصنيف جديد"}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div><label className="block text-sm font-medium mb-1">الاسم بالعربية *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">الاسم بالإنجليزية</label><Input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">مدة الإجازة (يوم)</label><Input type="number" value={formDays} onChange={(e) => setFormDays(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">نسبة الخصم (%)</label><Input type="number" value={formDeduction} onChange={(e) => setFormDeduction(e.target.value)} /></div>
+              <div>
+                <label className="block text-sm font-medium mb-1">إجازة مدفوعة</label>
+                <div className="flex gap-4 h-10 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={formPaid} onChange={() => setFormPaid(true)} /><span>نعم</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={!formPaid} onChange={() => setFormPaid(false)} /><span>لا</span></label>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">تؤثر على رصيد الإجازات <span className="text-red-500">*</span></label>
-                <div className="flex gap-6 h-10 items-center">
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="affects_balance" className="text-[#004e89]" defaultChecked /><span>نعم</span></label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="affects_balance" className="text-[#004e89]" /><span>لا</span></label>
+              <div>
+                <label className="block text-sm font-medium mb-1">تؤثر على الرصيد</label>
+                <div className="flex gap-4 h-10 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={formAffects} onChange={() => setFormAffects(true)} /><span>نعم</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={!formAffects} onChange={() => setFormAffects(false)} /><span>لا</span></label>
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">كيف تحسب الإجازة</label>
-                <select className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
-                  <option>السنة العقدية</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">تقييد الجنس <span className="text-red-500">*</span></label>
-                <select className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
-                  <option>لكلا الجنسيين</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">الحالة الاجتماعية <span className="text-red-500">*</span></label>
-                <select className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
-                  <option>الكل ...</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">فئة الموظفين <span className="text-red-500">*</span></label>
-                <select className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
-                  <option>الكل</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">تحديد رقم هاتف <span className="text-red-500">*</span></label>
-                <div className="flex gap-6 h-10 items-center">
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="phone_req" className="text-[#004e89]" defaultChecked /><span>نعم</span></label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="phone_req" className="text-[#004e89]" /><span>لا</span></label>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">تحديد موظف بديل <span className="text-red-500">*</span></label>
-                <div className="flex gap-6 h-10 items-center">
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="replacement_req" className="text-[#004e89]" defaultChecked /><span>نعم</span></label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="replacement_req" className="text-[#004e89]" /><span>لا</span></label>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">العلاوات الداخلة في بدل الإجازة</label>
-                <Input className="h-10" />
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">نوع نموذج إرسال الطلب <span className="text-red-500">*</span></label>
-                <select className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
-                  <option>الرجاء اختيار النموذج حسب النوع</option>
+              <div>
+                <label className="block text-sm font-medium mb-1">تقييد الجنس</label>
+                <select value={formGender} onChange={(e) => setFormGender(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
+                  <option value="both">لكلا الجنسين</option>
+                  <option value="male">ذكور فقط</option>
+                  <option value="female">إناث فقط</option>
                 </select>
               </div>
             </div>
-            <DialogFooter className="p-4 border-t border-gray-100 bg-gray-50/50 sm:justify-start">
-              <Button onClick={() => setIsAddDialogOpen(false)} className="bg-[#004e89] hover:bg-[#003865] text-white px-8">
-                حفظ
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? "جاري الحفظ..." : "حفظ"}</Button>
+              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+            </div>
+          </div>
+        )}
 
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+            </div>
+            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-[#004e89] text-white">
+                <tr>
+                  <th className="py-3 px-4 font-medium w-16">#</th>
+                  <th className="py-3 px-4 font-medium">اسم التصنيف</th>
+                  <th className="py-3 px-4 font-medium">مدة الإجازة</th>
+                  <th className="py-3 px-4 font-medium">نسبة الخصم</th>
+                  <th className="py-3 px-4 font-medium text-center">الحالة</th>
+                  <th className="py-3 px-4 font-medium text-center w-24">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                ) : filtered.map((item, i) => (
+                  <tr key={item.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-4">{i + 1}</td>
+                    <td className="py-3 px-4 font-medium">{item.name}</td>
+                    <td className="py-3 px-4">{item.max_days} يوم</td>
+                    <td className="py-3 px-4">{item.deduction_percent}%</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded text-xs font-medium">{item.status}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-center items-center gap-2">
+                        <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-[#004e89]"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => handleDelete(item)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </Layout>
   );

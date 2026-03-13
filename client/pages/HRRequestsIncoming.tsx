@@ -1,110 +1,108 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { ChevronDown, Search, Printer, FileText, Grid, RefreshCw, Filter, ArrowUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Search, CheckCircle, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/hooks/use-toast";
+
+type RequestRow = {
+  id: string; requestDate: string; empId: string; empName: string;
+  moveType: string; requestType: string; status: string; lastUpdate: string;
+};
 
 export default function HRRequestsIncoming() {
-  const [needsProcessing, setNeedsProcessing] = useState(true);
+  const [items, setItems] = useState<RequestRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
-  // Example empty mock data as per screenshot
-  const MOCK: any[] = [];
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false });
+      if (data) setItems(data.map((r: any) => ({
+        id: String(r.id), requestDate: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
+        empId: r.emp_id ?? "", empName: r.emp_name ?? "",
+        moveType: "إجازة", requestType: r.leave_type ?? "-",
+        status: r.status ?? "معلق",
+        lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
+      })));
+    } catch { setItems([]); } finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const handleApprove = async (item: RequestRow) => {
+    await supabase.from("leave_requests").update({ status: "موافق" }).eq("id", item.id);
+    toast({ title: "تمت الموافقة على الطلب" });
+    loadData();
+  };
+
+  const handleReject = async (item: RequestRow) => {
+    await supabase.from("leave_requests").update({ status: "مرفوض" }).eq("id", item.id);
+    toast({ title: "تم رفض الطلب" });
+    loadData();
+  };
+
+  const filtered = items.filter((i) => !search || i.empName.includes(search) || i.empId.includes(search));
 
   return (
     <Layout>
-      <div className="mx-auto h-[calc(100vh-100px)] flex flex-col bg-white border border-gray-200 rounded-lg overflow-hidden" dir="rtl">
-        
-        {/* Top Header Bar */}
-        <div className="bg-[#004e89] text-white flex items-center justify-between px-3 py-2 text-sm">
-          <div className="flex items-center gap-3">
-            <button className="hover:bg-white/10 p-1.5 rounded"><Printer className="w-4 h-4" /></button>
-            <button className="hover:bg-white/10 p-1.5 rounded"><FileText className="w-4 h-4" /></button>
-            <button className="hover:bg-white/10 p-1.5 rounded"><Grid className="w-4 h-4" /></button>
-          </div>
-          
-          <div className="flex items-center gap-3 font-semibold absolute left-1/2 -translate-x-1/2">
-            <div className="flex items-center">
-              <select className="bg-white text-gray-800 text-xs px-2 py-1 rounded-l outline-none border-none h-7">
-                <option>الإدارة</option>
-              </select>
-              <select className="bg-white text-gray-800 text-xs px-2 py-1 rounded-r border-r border-gray-200 outline-none h-7">
-                <option>اليوم</option>
-              </select>
-            </div>
-            <span>الطلبات الواردة</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <select className="bg-white text-gray-800 text-xs px-2 py-1 rounded outline-none w-16 h-7 text-center">
-              <option>500</option>
-            </select>
-          </div>
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">الطلبات الواردة</h1>
         </div>
 
-        {/* Table Header Row */}
-        <div className="flex-1 overflow-auto bg-white">
-          <table className="w-full text-sm text-right">
-            <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-600 font-medium sticky top-0">
-              <tr>
-                <th className="px-3 py-2 border-l border-gray-200 w-[8%] font-medium">رقم الطلب</th>
-                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">تاريخ الطلب</th>
-                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">الرقم الوظيفي</th>
-                <th className="px-3 py-2 border-l border-gray-200 w-[15%] font-medium">إسم الموظف</th>
-                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">نوع الحركة</th>
-                <th className="px-3 py-2 border-l border-gray-200 w-[12%] font-medium">نوع الطلب <ChevronDown className="inline w-3 h-3 float-left mt-0.5"/></th>
-                <th className="px-3 py-2 border-l border-gray-200 w-[10%] font-medium">الحالة <ChevronDown className="inline w-3 h-3 float-left mt-0.5"/></th>
-                <th className="px-3 py-2 border-l border-gray-200 w-[12%] font-medium">اخر تحديث <ChevronDown className="inline w-3 h-3 float-left mt-0.5"/></th>
-                <th className="px-3 py-2 w-[13%] font-medium">الأمر</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Empty state to match screenshot */}
-              {MOCK.length === 0 && (
+        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث بالاسم أو الرقم..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+            </div>
+            <span className="text-sm text-gray-500">{filtered.length} طلب</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <td colSpan={9} className="h-64 bg-white"></td>
+                  <th className="py-3 px-4 font-medium">تاريخ الطلب</th>
+                  <th className="py-3 px-4 font-medium">اسم الموظف</th>
+                  <th className="py-3 px-4 font-medium">نوع الحركة</th>
+                  <th className="py-3 px-4 font-medium">نوع الطلب</th>
+                  <th className="py-3 px-4 font-medium text-center">الحالة</th>
+                  <th className="py-3 px-4 font-medium">آخر تحديث</th>
+                  <th className="py-3 px-4 font-medium text-center w-28">الإجراءات</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer Bar */}
-        <div className="bg-gray-50 border-t border-gray-200 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 bg-white border border-gray-300 rounded text-gray-400 cursor-not-allowed">التالي</button>
-            <button className="px-3 py-1 bg-white border border-gray-300 rounded text-gray-400 cursor-not-allowed">السابق</button>
-            <button className="w-6 h-6 flex items-center justify-center bg-white border border-gray-300 rounded text-gray-500 hover:bg-gray-100">
-              <RefreshCw className="w-3 h-3" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500">عرض 0 إلى 0 من 0</span>
-              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-gray-700">
-                <span>تحتاج إلى معالجة</span>
-                <input 
-                  type="checkbox" 
-                  checked={needsProcessing}
-                  onChange={(e) => setNeedsProcessing(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-[#004e89] focus:ring-[#004e89]"
-                />
-              </label>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <div className="flex items-center border border-gray-300 rounded bg-white overflow-hidden">
-                <button className="p-1 hover:bg-gray-100 border-l border-gray-300"><Grid className="w-4 h-4 text-gray-500"/></button>
-                <div className="px-2 flex items-center gap-2 bg-gray-50 h-full border-l border-gray-300 text-gray-600">
-                  <span>رقم الطلب</span>
-                  <ChevronDown className="w-3 h-3" />
-                </div>
-                <button className="p-1 hover:bg-gray-100 border-l border-gray-300 bg-gray-50"><ArrowUpDown className="w-3 h-3 text-gray-500"/></button>
-                <button className="p-1 hover:bg-gray-100 bg-[#004e89] text-white"><Filter className="w-4 h-4"/></button>
-              </div>
-            </div>
+              </thead>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">لا توجد طلبات واردة</td></tr>
+                ) : filtered.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-4">{row.requestDate}</td>
+                    <td className="py-3 px-4 font-medium">{row.empName}</td>
+                    <td className="py-3 px-4">{row.moveType}</td>
+                    <td className="py-3 px-4">{row.requestType}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.status === "موافق" ? "bg-emerald-100 text-emerald-800" : row.status === "مرفوض" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>{row.status}</span>
+                    </td>
+                    <td className="py-3 px-4">{row.lastUpdate}</td>
+                    <td className="py-3 px-4">
+                      {row.status === "معلق" && (
+                        <div className="flex justify-center gap-2">
+                          <button onClick={() => handleApprove(row)} className="text-emerald-500 hover:text-emerald-700" title="موافقة"><CheckCircle className="h-5 w-5" /></button>
+                          <button onClick={() => handleReject(row)} className="text-red-500 hover:text-red-700" title="رفض"><XCircle className="h-5 w-5" /></button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-
       </div>
     </Layout>
   );

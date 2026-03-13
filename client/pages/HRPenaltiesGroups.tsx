@@ -1,101 +1,127 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, Plus, Trash2, Edit2 } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/hooks/use-toast";
 
-const MOCK_GROUPS = [
-  { id: 1, name: "المجموعة الأولى", desc: "" },
-];
+type PenaltyGroup = { id: string; name: string; description: string };
 
 export default function HRPenaltiesGroups() {
+  const [items, setItems] = useState<PenaltyGroup[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from("penalty_groups").select("*").order("id");
+      if (data) setItems(data.map((r: any) => ({ id: String(r.id), name: r.name ?? "", description: r.description ?? "" })));
+    } catch {} finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormDesc(""); };
+
+  const startEdit = (item: PenaltyGroup) => {
+    setEditingId(item.id); setFormName(item.name); setFormDesc(item.description); setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!formName.trim()) { toast({ title: "خطأ", description: "الاسم مطلوب", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const payload = { name: formName, description: formDesc };
+      if (editingId) {
+        await supabase.from("penalty_groups").update(payload).eq("id", editingId);
+        toast({ title: "تم التعديل" });
+      } else {
+        await supabase.from("penalty_groups").insert([payload]);
+        toast({ title: "تمت الإضافة" });
+      }
+      resetForm(); loadData();
+    } catch { toast({ title: "خطأ", variant: "destructive" }); } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (item: PenaltyGroup) => {
+    if (!confirm(`حذف "${item.name}"؟`)) return;
+    await supabase.from("penalty_groups").delete().eq("id", item.id);
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    toast({ title: "تم الحذف" });
+  };
+
+  const filtered = items.filter((i) => !search || i.name.includes(search));
 
   return (
     <Layout>
       <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir="rtl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-800">مجموعات المخالفات</h2>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">مجموعات المخالفات</h1>
+          <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[#004e89] hover:bg-[#003865]">
+            <Plus className="h-4 w-4 ml-2" /> إضافة مجموعة
+          </Button>
+        </div>
+
+        {showForm && (
+          <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
+            <h3 className="font-bold text-lg">{editingId ? "تعديل" : "إضافة مجموعة جديدة"}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><label className="block text-sm font-medium mb-1">الاسم *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">الوصف</label><Input value={formDesc} onChange={(e) => setFormDesc(e.target.value)} /></div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? "جاري الحفظ..." : "حفظ"}</Button>
+              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+            </div>
           </div>
-          
-          <div className="p-4 space-y-4">
-            <div className="flex justify-start">
-              <Button className="bg-[#004e89] hover:bg-[#003865] text-white flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
+        )}
 
-            <div className="flex items-center justify-between">
-              <div className="relative w-72">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="بحث"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-3 pr-9 h-10"
-                />
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span>عرض</span>
-                <select className="border-gray-200 rounded-md text-sm p-1.5 focus:ring-[#004e89] focus:border-[#004e89]">
-                  <option>10</option>
-                  <option>25</option>
-                  <option>50</option>
-                </select>
-                <span>من السجلات</span>
-              </div>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
             </div>
-
-            <div className="overflow-x-auto border border-gray-100 rounded-lg mt-4">
-              <table className="w-full text-sm text-right">
-                <thead className="bg-[#004e89] text-white">
-                  <tr>
-                    <th className="py-3 px-4 font-medium w-24">معرف</th>
-                    <th className="py-3 px-4 font-medium min-w-[200px]">الاسم</th>
-                    <th className="py-3 px-4 font-medium min-w-[200px]">الوصف</th>
-                    <th className="py-3 px-4 font-medium text-center w-32">الأمر</th>
+            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-[#004e89] text-white">
+                <tr>
+                  <th className="py-3 px-4 font-medium w-16">#</th>
+                  <th className="py-3 px-4 font-medium">الاسم</th>
+                  <th className="py-3 px-4 font-medium">الوصف</th>
+                  <th className="py-3 px-4 font-medium text-center w-24">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                ) : filtered.map((item, i) => (
+                  <tr key={item.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-4">{i + 1}</td>
+                    <td className="py-3 px-4 font-medium">{item.name}</td>
+                    <td className="py-3 px-4">{item.description}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-center items-center gap-2">
+                        <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-blue-500"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => handleDelete(item)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {MOCK_GROUPS.map((group) => (
-                    <tr key={group.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-3 px-4">{group.id}</td>
-                      <td className="py-3 px-4">{group.name}</td>
-                      <td className="py-3 px-4">{group.desc}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex justify-center items-center gap-3">
-                          <button className="text-gray-400 hover:text-blue-500 transition-colors">
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button className="text-red-400 hover:text-red-600 transition-colors">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between text-sm text-gray-500 pt-2">
-              <span>إظهار 1 إلى 1 من أصل 1 مدخل</span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" className="h-8 px-3 text-gray-500 bg-white" disabled>
-                  السابق
-                </Button>
-                <Button variant="default" size="sm" className="h-8 w-8 p-0 bg-[#004e89] hover:bg-[#003865]">
-                  1
-                </Button>
-                <Button variant="outline" size="sm" className="h-8 px-3 text-gray-500 bg-white" disabled>
-                  التالي
-                </Button>
-              </div>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-
         </div>
       </div>
     </Layout>

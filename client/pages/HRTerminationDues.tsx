@@ -1,156 +1,87 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, FileText, Settings, Search, MoreHorizontal } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+
+type Row = { id: string; name: string; clearanceDate: string; paymentDate: string; duesAmount: string; leaveAmount: string; paidAmount: string; remaining: string; status: string };
 
 export default function HRTerminationDues() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [items, setItems] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
-  const mockData = [
-    {
-      id: 1,
-      employeeName: "SABBIR HOSSAIN",
-      clearanceDate: "2026-02-10",
-      paymentDate: "2026-02-15",
-      duesAmount: "6,240.00",
-      annualLeaveAmount: "840.00",
-      paidAmount: "6,240.00",
-      remainingAmount: "0.00",
-      currency: "SAR",
-      status: "موافق عليه"
-    }
-  ];
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const { data } = await supabase.from("hr_terminations").select("*").order("created_at", { ascending: false });
+        if (data) setItems(data.map((r: any) => ({
+          id: String(r.id), name: r.emp_name ?? "",
+          clearanceDate: r.termination_date ?? "-", paymentDate: r.payment_date ?? "-",
+          duesAmount: String(r.total ?? "0.00"), leaveAmount: String(r.leave_value ?? "0.00"),
+          paidAmount: String(r.paid_amount ?? "0.00"),
+          remaining: ((r.total ?? 0) - (r.paid_amount ?? 0)).toFixed(2),
+          status: r.status ?? "معلق",
+        })));
+      } catch { setItems([]); } finally { setLoading(false); }
+    })();
+  }, []);
+
+  const filtered = items.filter((i) => !search || i.name.includes(search));
 
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
-      {/* Header with actions */}
-      <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50">
-            <Printer className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50">
-            <FileText className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50">
-            <Settings className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">تقرير المستحقات</h1>
         </div>
-        <div className="flex gap-4 items-center">
-          <Select defaultValue="all">
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="تقرير المستحقات" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">الكل</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select defaultValue="10">
-            <SelectTrigger className="w-[80px]">
-              <SelectValue placeholder="10" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="25">25</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Filters Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border">
-        <div>
-          <label className="text-sm text-gray-600 mb-1 block">بحث</label>
-          <div className="relative">
-            <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="اسم الموظف..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pr-9"
-            />
+        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث باسم الموظف..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+            </div>
+            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-[#004e89] text-white">
+                <tr>
+                  <th className="py-3 px-4 font-medium">اسم الموظف</th>
+                  <th className="py-3 px-4 font-medium">تاريخ التصفية</th>
+                  <th className="py-3 px-4 font-medium">تاريخ الدفع</th>
+                  <th className="py-3 px-4 font-medium">مبلغ المستحقات</th>
+                  <th className="py-3 px-4 font-medium">رصيد الإجازات</th>
+                  <th className="py-3 px-4 font-medium">المبلغ المدفوع</th>
+                  <th className="py-3 px-4 font-medium">المتبقي</th>
+                  <th className="py-3 px-4 font-medium text-center">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                ) : filtered.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-4 font-medium">{row.name}</td>
+                    <td className="py-3 px-4">{row.clearanceDate}</td>
+                    <td className="py-3 px-4">{row.paymentDate}</td>
+                    <td className="py-3 px-4">{row.duesAmount}</td>
+                    <td className="py-3 px-4">{row.leaveAmount}</td>
+                    <td className="py-3 px-4">{row.paidAmount}</td>
+                    <td className="py-3 px-4">{row.remaining}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${row.status === "موافق عليه" ? "bg-emerald-100 text-emerald-800" : "bg-yellow-100 text-yellow-800"}`}>{row.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-        <div>
-          <label className="text-sm text-gray-600 mb-1 block">الحالة</label>
-          <Select defaultValue="all">
-            <SelectTrigger>
-              <SelectValue placeholder="الكل" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">الكل</SelectItem>
-              <SelectItem value="approved">موافق عليه</SelectItem>
-              <SelectItem value="pending">قيد الانتظار</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-[#004e89] hover:bg-[#004e89]">
-              <TableHead className="text-white text-right font-medium">اسم الموظف</TableHead>
-              <TableHead className="text-white text-right font-medium">تاريخ التصفية</TableHead>
-              <TableHead className="text-white text-right font-medium">تاريخ الدفع</TableHead>
-              <TableHead className="text-white text-right font-medium">مبلغ المستحقات</TableHead>
-              <TableHead className="text-white text-right font-medium">مبلغ رصيد الإجازات السنوية</TableHead>
-              <TableHead className="text-white text-right font-medium">المبلغ المدفوع</TableHead>
-              <TableHead className="text-white text-right font-medium">المبلغ المتبقي</TableHead>
-              <TableHead className="text-white text-right font-medium">عملة</TableHead>
-              <TableHead className="text-white text-center font-medium">الحالة</TableHead>
-              <TableHead className="text-white text-center font-medium w-[80px]">الأمر</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {mockData.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="font-medium">{row.employeeName}</TableCell>
-                <TableCell>{row.clearanceDate}</TableCell>
-                <TableCell>{row.paymentDate}</TableCell>
-                <TableCell>{row.duesAmount}</TableCell>
-                <TableCell>{row.annualLeaveAmount}</TableCell>
-                <TableCell>{row.paidAmount}</TableCell>
-                <TableCell>{row.remainingAmount}</TableCell>
-                <TableCell>{row.currency}</TableCell>
-                <TableCell className="text-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                    {row.status}
-                  </span>
-                </TableCell>
-                <TableCell className="text-center">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {mockData.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={10} className="text-center py-8 text-gray-500">
-                  لا توجد بيانات متاحة في الجدول
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="flex items-center justify-between text-sm text-gray-500">
-        <div>إظهار 1 إلى {mockData.length} من أصل {mockData.length} مدخل</div>
-        <div className="flex gap-1">
-          <Button variant="outline" size="sm" disabled>السابق</Button>
-          <Button variant="outline" size="sm" className="bg-blue-50 text-blue-600 border-blue-200">1</Button>
-          <Button variant="outline" size="sm" disabled>التالي</Button>
-        </div>
-      </div>
-    </div>
     </Layout>
   );
 }

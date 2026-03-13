@@ -1,161 +1,157 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
+import { Search, Plus, Edit, Trash2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, FileText, Search, Plus, Trash2, Edit } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/hooks/use-toast";
+
+type InsuranceItem = {
+  id: string; arabicDescription: string; englishDescription: string;
+  employeeShare: string; companyShare: string; includeAllowances: string; allowances: string;
+};
 
 export default function HRInsuranceList() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [items, setItems] = useState<InsuranceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formAr, setFormAr] = useState("");
+  const [formEn, setFormEn] = useState("");
+  const [formEmpShare, setFormEmpShare] = useState("0");
+  const [formCompShare, setFormCompShare] = useState("0");
+  const [formInclude, setFormInclude] = useState("لا");
+  const [saving, setSaving] = useState(false);
 
-  const mockData = [
-    {
-      id: 1,
-      arabicDescription: "سعودي (غير قابل للخصم)",
-      englishDescription: "سعودي (غير قابل للخصم)",
-      employeeShare: "0.00%",
-      companyShare: "100.00%",
-      includeAllowances: "لا",
-      allowances: ""
-    }
-  ];
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from("insurance_records").select("*").order("id");
+      if (data) setItems(data.map((r: any) => ({
+        id: String(r.id), arabicDescription: r.description_ar ?? "", englishDescription: r.description_en ?? "",
+        employeeShare: r.employee_share ?? "0%", companyShare: r.company_share ?? "0%",
+        includeAllowances: r.include_allowances ? "نعم" : "لا", allowances: r.allowances ?? "",
+      })));
+    } catch {} finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const resetForm = () => { setShowForm(false); setEditingId(null); setFormAr(""); setFormEn(""); setFormEmpShare("0"); setFormCompShare("0"); setFormInclude("لا"); };
+
+  const startEdit = (item: InsuranceItem) => {
+    setEditingId(item.id); setFormAr(item.arabicDescription); setFormEn(item.englishDescription);
+    setFormEmpShare(item.employeeShare.replace("%", "")); setFormCompShare(item.companyShare.replace("%", ""));
+    setFormInclude(item.includeAllowances); setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!formAr.trim()) { toast({ title: "خطأ", description: "الوصف بالعربية مطلوب", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        description_ar: formAr, description_en: formEn,
+        employee_share: formEmpShare + "%", company_share: formCompShare + "%",
+        include_allowances: formInclude === "نعم",
+      };
+      if (editingId) {
+        await supabase.from("insurance_records").update(payload).eq("id", editingId);
+        toast({ title: "تم التعديل" });
+      } else {
+        await supabase.from("insurance_records").insert([payload]);
+        toast({ title: "تمت الإضافة" });
+      }
+      resetForm(); loadData();
+    } catch { toast({ title: "خطأ", variant: "destructive" }); } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (item: InsuranceItem) => {
+    if (!confirm(`حذف "${item.arabicDescription}"؟`)) return;
+    await supabase.from("insurance_records").delete().eq("id", item.id);
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    toast({ title: "تم الحذف" });
+  };
+
+  const filtered = items.filter((i) => !search || i.arabicDescription.includes(search) || i.englishDescription.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
-        {/* Header with actions */}
-        <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
-          <div className="flex gap-2">
-            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50">
-              <Printer className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50">
-              <FileText className="h-4 w-4" />
-            </Button>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button size="icon" className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent dir="rtl">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-semibold mb-4 text-right">إضافة تأمين اجتماعي</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>الوصف بالعربية *</Label>
-                    <Input />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>الوصف بالانجليزية *</Label>
-                    <Input />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>نسبة الموظف % *</Label>
-                    <Input type="number" defaultValue="0" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>نسبة المنشأة % *</Label>
-                    <Input type="number" defaultValue="0" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>شمول البدلات</Label>
-                    <Select defaultValue="no">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="no">لا</SelectItem>
-                        <SelectItem value="yes">نعم</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex justify-end mt-6">
-                    <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">حفظ</Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <div className="flex gap-4 items-center">
-            <div className="font-semibold text-lg text-[#004e89]">
-              قائمة التأمينات الاجتماعية
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">قائمة التأمينات الاجتماعية</h1>
+          <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[#004e89] hover:bg-[#003865]">
+            <Plus className="h-4 w-4 ml-2" /> إضافة تأمين
+          </Button>
+        </div>
+
+        {showForm && (
+          <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
+            <h3 className="font-bold text-lg">{editingId ? "تعديل" : "إضافة تأمين اجتماعي"}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div><label className="block text-sm font-medium mb-1">الوصف بالعربية *</label><Input value={formAr} onChange={(e) => setFormAr(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">الوصف بالإنجليزية</label><Input value={formEn} onChange={(e) => setFormEn(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">نسبة الموظف %</label><Input type="number" value={formEmpShare} onChange={(e) => setFormEmpShare(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">نسبة المنشأة %</label><Input type="number" value={formCompShare} onChange={(e) => setFormCompShare(e.target.value)} /></div>
+              <div>
+                <label className="block text-sm font-medium mb-1">شمول البدلات</label>
+                <select value={formInclude} onChange={(e) => setFormInclude(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
+                  <option value="لا">لا</option>
+                  <option value="نعم">نعم</option>
+                </select>
+              </div>
             </div>
-            <Select defaultValue="10">
-              <SelectTrigger className="w-[80px]">
-                <SelectValue placeholder="10" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? "جاري الحفظ..." : "حفظ"}</Button>
+              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Filters Row */}
-        <div className="bg-white p-4 rounded-lg border shadow-sm flex items-center justify-between">
-           <div className="relative w-1/3">
-             <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
-             <Input
-               placeholder="بحث..."
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-               className="pr-9"
-             />
-           </div>
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-lg border shadow-sm overflow-hidden overflow-x-auto">
-          <Table className="min-w-[1000px]">
-            <TableHeader>
-              <TableRow className="bg-[#004e89] hover:bg-[#004e89]">
-                <TableHead className="text-white text-right font-medium">الوصف بالعربية</TableHead>
-                <TableHead className="text-white text-right font-medium">الوصف بالانجليزية</TableHead>
-                <TableHead className="text-white text-right font-medium">نسبة الموظف</TableHead>
-                <TableHead className="text-white text-right font-medium">نسبة المنشأة</TableHead>
-                <TableHead className="text-white text-right font-medium">شمول البدلات</TableHead>
-                <TableHead className="text-white text-right font-medium">البدلات</TableHead>
-                <TableHead className="text-white text-center font-medium w-[120px]">الإجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockData.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="font-medium">{row.arabicDescription}</TableCell>
-                  <TableCell>{row.englishDescription}</TableCell>
-                  <TableCell>{row.employeeShare}</TableCell>
-                  <TableCell>{row.companyShare}</TableCell>
-                  <TableCell>{row.includeAllowances}</TableCell>
-                  <TableCell>{row.allowances}</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex justify-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex items-center justify-between text-sm text-gray-500">
-          <div>إظهار 1 إلى {mockData.length} من أصل {mockData.length} مدخل</div>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" disabled>السابق</Button>
-            <Button variant="outline" size="sm" className="bg-blue-50 text-blue-600 border-blue-200">1</Button>
-            <Button variant="outline" size="sm" disabled>التالي</Button>
+        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+            </div>
+            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-right min-w-[1000px]">
+              <thead className="bg-[#004e89] text-white">
+                <tr>
+                  <th className="py-3 px-4 font-medium w-12">#</th>
+                  <th className="py-3 px-4 font-medium">الوصف بالعربية</th>
+                  <th className="py-3 px-4 font-medium">الوصف بالإنجليزية</th>
+                  <th className="py-3 px-4 font-medium">نسبة الموظف</th>
+                  <th className="py-3 px-4 font-medium">نسبة المنشأة</th>
+                  <th className="py-3 px-4 font-medium">شمول البدلات</th>
+                  <th className="py-3 px-4 font-medium text-center w-24">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                ) : filtered.map((item, i) => (
+                  <tr key={item.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-4">{i + 1}</td>
+                    <td className="py-3 px-4 font-medium">{item.arabicDescription}</td>
+                    <td className="py-3 px-4">{item.englishDescription}</td>
+                    <td className="py-3 px-4">{item.employeeShare}</td>
+                    <td className="py-3 px-4">{item.companyShare}</td>
+                    <td className="py-3 px-4">{item.includeAllowances}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-center items-center gap-2">
+                        <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-blue-500"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => handleDelete(item)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

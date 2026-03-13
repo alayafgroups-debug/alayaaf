@@ -1,118 +1,89 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, Download, Printer, UserPlus, RefreshCw, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/lib/supabaseClient";
 
-const MOCK_OTHER_BALANCES = [
-  { id: "904", name: "MD TUHIN", type: "إجازة وضع", annualBalance: "70.00", remainingBalance: "70.00", joinDate: "2023-01-14", contractDate: "2026-01-14" },
-];
+type Row = { id: string; empId: string; name: string; type: string; annualBalance: string; remainingBalance: string; joinDate: string; contractDate: string };
 
 export default function HRLeavesOtherBalance() {
+  const [items, setItems] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const { data: emps } = await supabase.from("employees").select("id, employee_id, name, hire_date, gender").eq("status", "نشط").order("name");
+        const { data: types } = await supabase.from("leave_types").select("*").neq("name", "إجازة سنوية");
+        if (!emps || !types) { setLoading(false); return; }
+
+        const rows: Row[] = [];
+        emps.forEach((e: any) => {
+          types.forEach((t: any) => {
+            if (t.gender === "female" && e.gender !== "أنثى") return;
+            if (t.gender === "male" && e.gender !== "ذكر") return;
+            rows.push({
+              id: `${e.id}-${t.id}`, empId: e.employee_id ?? "", name: e.name ?? "",
+              type: t.name ?? "", annualBalance: String(t.max_days ?? 0) + ".00",
+              remainingBalance: String(t.max_days ?? 0) + ".00",
+              joinDate: e.hire_date ?? "-", contractDate: e.hire_date ?? "-",
+            });
+          });
+        });
+        setItems(rows);
+      } catch {} finally { setLoading(false); }
+    })();
+  }, []);
+
+  const filtered = items.filter((i) => !search || i.name.includes(search) || i.empId.includes(search));
+
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          
-          <div className="bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">أرصدة الاجازات الأخرى</h2>
-              
-              <div className="flex gap-2 text-black w-full sm:w-auto flex-wrap">
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[100px]">
-                  <option>وقت العمل</option>
-                </select>
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[100px]">
-                  <option>الفرع</option>
-                </select>
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[100px]">
-                  <option>الكل</option>
-                </select>
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[100px]">
-                  <option>الكل</option>
-                </select>
-                <select className="h-8 rounded px-2 text-sm bg-white border-none outline-none min-w-[120px]">
-                  <option>مكان العمل</option>
-                </select>
-              </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">أرصدة الإجازات الأخرى</h1>
+        </div>
+        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative w-72">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
             </div>
-
-            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-              <h2 className="text-lg font-bold sm:hidden">أرصدة الاجازات الأخرى</h2>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="تحديث الأرصدة">
-                    <UserPlus className="h-4 w-4" />
-                  </button>
-                  <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="سجل">
-                    <FileText className="h-4 w-4" />
-                  </button>
-                  <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="طباعة">
-                    <Printer className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="text-black">
-                  <select className="h-8 w-16 rounded px-2 text-sm bg-white border-none outline-none font-medium">
-                    <option>10</option>
-                    <option>25</option>
-                  </select>
-                </div>
-              </div>
-            </div>
+            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-center whitespace-nowrap">
-              <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
+              <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <th className="py-3 px-2 font-medium min-w-[100px]">
-                    الرقم الوظيفي <Input placeholder="" className="h-6 mt-1" />
-                  </th>
-                  <th className="py-3 px-2 font-medium min-w-[200px]">
-                    الاسم <Input placeholder="" className="h-6 mt-1" />
-                  </th>
-                  <th className="py-3 px-2 font-medium">
-                    نوع الإجازة <select className="h-6 w-full mt-1 border border-gray-200 rounded text-xs"><option></option></select>
-                  </th>
-                  <th className="py-3 px-2 font-medium">الرصيد السنوي</th>
-                  <th className="py-3 px-2 font-medium">الرصيد المتبقي</th>
-                  <th className="py-3 px-2 font-medium">تاريخ التعيين</th>
-                  <th className="py-3 px-2 font-medium">تاريخ تجديد التعاقد السنوي</th>
-                  <th className="py-3 px-2 font-medium">الإجراءات</th>
+                  <th className="py-3 px-3 font-medium">الرقم الوظيفي</th>
+                  <th className="py-3 px-3 font-medium text-right">الاسم</th>
+                  <th className="py-3 px-3 font-medium">نوع الإجازة</th>
+                  <th className="py-3 px-3 font-medium">الرصيد السنوي</th>
+                  <th className="py-3 px-3 font-medium">الرصيد المتبقي</th>
+                  <th className="py-3 px-3 font-medium">تاريخ التعيين</th>
+                  <th className="py-3 px-3 font-medium">تاريخ التعاقد</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {MOCK_OTHER_BALANCES.map((balance) => (
-                  <tr key={balance.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-3 px-2">{balance.id}</td>
-                    <td className="py-3 px-2 font-medium text-gray-900 text-right">{balance.name}</td>
-                    <td className="py-3 px-2">{balance.type}</td>
-                    <td className="py-3 px-2">{balance.annualBalance}</td>
-                    <td className="py-3 px-2">{balance.remainingBalance}</td>
-                    <td className="py-3 px-2">{balance.joinDate}</td>
-                    <td className="py-3 px-2">{balance.contractDate}</td>
-                    <td className="py-3 px-2">
-                      <div className="flex flex-col items-center gap-2">
-                        <button className="text-gray-400 hover:text-[#004e89]">
-                          <RefreshCw className="h-4 w-4" />
-                        </button>
-                        <button className="text-teal-400 hover:text-teal-600">
-                          <RefreshCw className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+              <tbody className="divide-y bg-white">
+                {loading ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                ) : filtered.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50/50">
+                    <td className="py-3 px-3">{row.empId}</td>
+                    <td className="py-3 px-3 font-medium text-right">{row.name}</td>
+                    <td className="py-3 px-3">{row.type}</td>
+                    <td className="py-3 px-3">{row.annualBalance}</td>
+                    <td className="py-3 px-3">{row.remainingBalance}</td>
+                    <td className="py-3 px-3">{row.joinDate}</td>
+                    <td className="py-3 px-3">{row.contractDate}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-          
-          <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-500">يعرض 1 إلى 1 من أصل 1 سجل</span>
-            <div className="flex gap-1 opacity-50 pointer-events-none">
-              <Button variant="outline" size="sm" className="h-8 px-3">السابق</Button>
-              <Button variant="outline" size="sm" className="h-8 px-3">التالي</Button>
-            </div>
           </div>
         </div>
       </div>

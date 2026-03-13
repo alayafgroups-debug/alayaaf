@@ -84,7 +84,17 @@ function mapRow(row: Record<string, unknown>): PurchaseInvoice {
     total: (row.total as string) ?? "0.00",
     paid: (row.paid as string) ?? "0.00",
     remaining: (row.remaining as string) ?? "0.00",
-    items: Array.isArray(row.items) ? (row.items as InvoiceItem[]) : [],
+    items: Array.isArray(row.items)
+      ? (row.items as Record<string, unknown>[]).map((it) => ({
+          id: Number(it.id) || 0,
+          description: String(it.description ?? ""),
+          unit: String(it.unit ?? ""),
+          quantity: Number(it.quantity) || 0,
+          unitPrice: Number(it.unitPrice) || 0,
+          discount: Number(it.discount) || 0,
+          taxPercent: Number(it.taxPercent) || 0,
+        }))
+      : [],
   };
 }
 
@@ -132,22 +142,30 @@ export default function PurchaseInvoices() {
       : [{ id: 1, description: "-", unit: "", quantity: 1, unitPrice: parseCurrency(invoice.total), discount: 0, taxPercent: 0 }];
 
     const rowsHtml = items.map((item) => {
-      const sub = item.quantity * item.unitPrice - item.discount;
-      const tax = (sub * item.taxPercent) / 100;
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unitPrice) || 0;
+      const disc = Number(item.discount) || 0;
+      const taxPct = Number(item.taxPercent) || 0;
+      const sub = qty * price - disc;
+      const tax = (sub * taxPct) / 100;
       return `<tr>
         <td>${item.description || "-"}</td>
         <td>${item.unit || "-"}</td>
-        <td>${item.quantity}</td>
-        <td>${item.unitPrice.toFixed(2)}</td>
-        <td>${item.discount.toFixed(2)}</td>
-        <td>${item.taxPercent}%</td>
+        <td>${qty}</td>
+        <td>${price.toFixed(2)}</td>
+        <td>${disc.toFixed(2)}</td>
+        <td>${taxPct}%</td>
         <td>${(sub + tax).toFixed(2)}</td>
       </tr>`;
     }).join("");
 
     const total = items.reduce((s, item) => {
-      const sub = item.quantity * item.unitPrice - item.discount;
-      const tax = (sub * item.taxPercent) / 100;
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unitPrice) || 0;
+      const disc = Number(item.discount) || 0;
+      const taxPct = Number(item.taxPercent) || 0;
+      const sub = qty * price - disc;
+      const tax = (sub * taxPct) / 100;
       return s + sub + tax;
     }, 0);
 
@@ -386,8 +404,12 @@ function InvoiceDetails({
 
   const totals = items.reduce(
     (acc, item) => {
-      const sub = item.quantity * item.unitPrice - item.discount;
-      const tax = (sub * item.taxPercent) / 100;
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unitPrice) || 0;
+      const disc = Number(item.discount) || 0;
+      const taxPct = Number(item.taxPercent) || 0;
+      const sub = qty * price - disc;
+      const tax = (sub * taxPct) / 100;
       return { subtotal: acc.subtotal + sub, discount: acc.discount + item.discount, tax: acc.tax + tax, total: acc.total + sub + tax };
     },
     { subtotal: 0, discount: 0, tax: 0, total: 0 }
@@ -479,17 +501,21 @@ function InvoiceDetails({
               </thead>
               <tbody>
                 {items.map((item, idx) => {
-                  const sub = item.quantity * item.unitPrice - item.discount;
-                  const tax = (sub * item.taxPercent) / 100;
+                  const qty = Number(item.quantity) || 0;
+                  const price = Number(item.unitPrice) || 0;
+                  const disc = Number(item.discount) || 0;
+                  const taxPct = Number(item.taxPercent) || 0;
+                  const sub = qty * price - disc;
+                  const tax = (sub * taxPct) / 100;
                   return (
                     <tr key={idx}>
                       <td className="px-3 py-2 border border-slate-200">{idx + 1}</td>
                       <td className="px-3 py-2 border border-slate-200">{item.description}</td>
                       <td className="px-3 py-2 border border-slate-200">{item.unit || "-"}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.quantity}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.unitPrice.toFixed(2)}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.discount.toFixed(2)}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.taxPercent}%</td>
+                      <td className="px-3 py-2 border border-slate-200">{qty}</td>
+                      <td className="px-3 py-2 border border-slate-200">{price.toFixed(2)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{disc.toFixed(2)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{taxPct}%</td>
                       <td className="px-3 py-2 border border-slate-200 font-medium">{(sub + tax).toFixed(2)}</td>
                     </tr>
                   );

@@ -188,7 +188,6 @@ const App = () => (
           <Route path="/hr/succession/development-plans" element={<HRSuccessionDevelopmentPlans />} />
           <Route path="/hr/succession/tracking-report" element={<HRSuccessionTrackingReport />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
-          <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />
           <Route path="/hr/reports" element={<HRReports />} />
           <Route path="/hr/settings" element={<HRSettings />} />

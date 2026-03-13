@@ -216,7 +216,6 @@ const hrNavItems: HRNavItem[] = [
       { icon: FileBarChart, label: "تقرير متابعة الخطط التطويرية للتعاقب", href: "/hr/succession/tracking-report" },
     ],
   },
-  { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },
 ];

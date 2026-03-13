@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -236,10 +236,20 @@ const itemColors: Record<string, { icon: string; active: string; glow: string; d
 /* ═══════════════════════════════════════════════════════
    HR Sidebar Component
    ═══════════════════════════════════════════════════════ */
-function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setSidebarOpen: (v: boolean) => void }) {
-  const [expandedHRMenu, setExpandedHRMenu] = useState<string | null>(null);
+function HRSidebar({
+  sidebarOpen,
+  setSidebarOpen,
+  expandedMenu,
+  setExpandedMenu
+}: {
+  sidebarOpen: boolean;
+  setSidebarOpen: (v: boolean) => void;
+  expandedMenu: string | null;
+  setExpandedMenu: (v: string | null) => void;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
+  const navRef = useRef<HTMLElement>(null);
 
   // Auto-expand if we're on a child route, but only on initial mount or when actually navigating to a new parent section
   useEffect(() => {
@@ -250,14 +260,14 @@ function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setS
         const isChildActive = item.children.some(c => location.pathname === c.href);
         if (isChildActive) {
           // If we click inside the already expanded menu, don't re-set it (which might cause re-renders/scroll jumps)
-          if (expandedHRMenu !== item.href) {
-            setExpandedHRMenu(item.href);
+          if (expandedMenu !== item.href) {
+            setExpandedMenu(item.href);
           }
           break;
         }
       }
     }
-  }, [location.pathname]); // Keep depending on pathname to catch navigation events
+  }, [location.pathname, expandedMenu, setExpandedMenu]); // Keep depending on pathname to catch navigation events
 
   return (
     <aside
@@ -325,7 +335,7 @@ function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setS
       <div className="relative z-10 mx-4 mt-2 h-px bg-gradient-to-l from-transparent via-emerald-400/[0.10] to-transparent" />
 
       {/* ── HR Navigation ── */}
-      <nav className="relative z-10 flex flex-col gap-0.5 px-3 py-3 flex-1 overflow-y-auto">
+      <nav ref={navRef} className="relative z-10 flex flex-col gap-0.5 px-3 py-3 flex-1 overflow-y-auto">
         {sidebarOpen && (
           <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300/25">
             أقسام الموارد البشرية
@@ -344,7 +354,7 @@ function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setS
           }
 
           const Icon = item.icon;
-          const isExpanded = expandedHRMenu === item.href;
+          const isExpanded = expandedMenu === item.href;
           const hasChildActive = item.hasChildren && item.children?.some(c => location.pathname === c.href);
           const isItemActive = item.hasChildren
             ? hasChildActive
@@ -355,7 +365,7 @@ function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setS
               <button
                 onClick={() => {
                   if (item.hasChildren) {
-                    setExpandedHRMenu(isExpanded ? null : item.href);
+                    setExpandedMenu(isExpanded ? null : item.href);
                   } else {
                     navigate(item.href);
                   }
@@ -474,8 +484,17 @@ function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setS
 /* ═══════════════════════════════════════════════════════
    Main Sidebar Component
    ═══════════════════════════════════════════════════════ */
-function MainSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setSidebarOpen: (v: boolean) => void }) {
-  const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
+function MainSidebar({
+  sidebarOpen,
+  setSidebarOpen,
+  expandedMenu,
+  setExpandedMenu
+}: {
+  sidebarOpen: boolean;
+  setSidebarOpen: (v: boolean) => void;
+  expandedMenu: string | null;
+  setExpandedMenu: (v: string | null) => void;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -728,6 +747,8 @@ function MainSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; se
    ═══════════════════════════════════════════════════════ */
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandedHRMenu, setExpandedHRMenu] = useState<string | null>(null);
+  const [expandedMainMenu, setExpandedMainMenu] = useState<string | null>(null);
   const location = useLocation();
 
   const isHRSection = location.pathname.startsWith("/hr");
@@ -736,9 +757,19 @@ export default function Layout({ children }: LayoutProps) {
     <div className="flex h-screen overflow-hidden bg-background">
       {/* ── Sidebar — switches between main and HR ── */}
       {isHRSection ? (
-        <HRSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <HRSidebar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          expandedMenu={expandedHRMenu}
+          setExpandedMenu={setExpandedHRMenu}
+        />
       ) : (
-        <MainSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <MainSidebar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          expandedMenu={expandedMainMenu}
+          setExpandedMenu={setExpandedMainMenu}
+        />
       )}
 
       {/* ── Main Content ── */}

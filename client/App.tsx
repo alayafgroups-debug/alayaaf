@@ -81,6 +81,10 @@ import HRFinancialPrivileges from "./pages/HRFinancialPrivileges";
 import HRFinancialLoans from "./pages/HRFinancialLoans";
 import HRFinancialEmployeeCategories from "./pages/HRFinancialEmployeeCategories";
 import HRFinancialAccountSettings from "./pages/HRFinancialAccountSettings";
+import HRSuccessionPositions from "./pages/HRSuccessionPositions";
+import HRSuccessionCandidates from "./pages/HRSuccessionCandidates";
+import HRSuccessionDevelopmentPlans from "./pages/HRSuccessionDevelopmentPlans";
+import HRSuccessionTrackingReport from "./pages/HRSuccessionTrackingReport";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -178,6 +182,11 @@ const App = () => (
           <Route path="/hr/financial-setup/loans" element={<HRFinancialLoans />} />
           <Route path="/hr/financial-setup/employee-categories" element={<HRFinancialEmployeeCategories />} />
           <Route path="/hr/financial-setup/account-settings" element={<HRFinancialAccountSettings />} />
+          <Route path="/hr/succession" element={<Navigate to="/hr/succession/positions" replace />} />
+          <Route path="/hr/succession/positions" element={<HRSuccessionPositions />} />
+          <Route path="/hr/succession/candidates" element={<HRSuccessionCandidates />} />
+          <Route path="/hr/succession/development-plans" element={<HRSuccessionDevelopmentPlans />} />
+          <Route path="/hr/succession/tracking-report" element={<HRSuccessionTrackingReport />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

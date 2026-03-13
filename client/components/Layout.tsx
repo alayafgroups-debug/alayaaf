@@ -36,6 +36,7 @@ import {
   Plus,
   Network,
   Coins,
+  Scale,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -204,6 +205,15 @@ const hrNavItems: HRNavItem[] = [
       { icon: BadgeDollarSign, label: "أنواع السلف", href: "/hr/financial-setup/loans" },
       { icon: Users, label: "فئات الموظفين", href: "/hr/financial-setup/employee-categories" },
       { icon: Settings, label: "إعدادات الحسابات للنظام المحاسبي", href: "/hr/financial-setup/account-settings" },
+    ],
+  },
+  {
+    icon: Scale, label: "التعاقب الوظيفي", href: "/hr/succession", hasChildren: true,
+    children: [
+      { icon: Users, label: "المناصب", href: "/hr/succession/positions" },
+      { icon: Users2, label: "الموظفين المرشحين", href: "/hr/succession/candidates" },
+      { icon: FileText, label: "الخطط التطويرية للتعاقب الوظيفي", href: "/hr/succession/development-plans" },
+      { icon: FileBarChart, label: "تقرير متابعة الخطط التطويرية للتعاقب", href: "/hr/succession/tracking-report" },
     ],
   },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },

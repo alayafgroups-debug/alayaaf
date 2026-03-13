@@ -34,6 +34,7 @@ import {
   MailCheck,
   Handshake,
   Plus,
+  Network,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -179,6 +180,17 @@ const hrNavItems: HRNavItem[] = [
       { icon: FileText, label: "قائمة سلسلة الموافقات", href: "/hr/approvals/list" },
       { icon: Plus, label: "إضافة سلسلة موافقات", href: "/hr/approvals/add" },
       { icon: ShieldCheck, label: "سياسات الموافقات والتوقيع الالكتروني", href: "/hr/approvals/policies" },
+    ],
+  },
+  {
+    icon: Network, label: "الهيكل التنظيمي", href: "/hr/organization", hasChildren: true,
+    children: [
+      { icon: Network, label: "شجرة الهيكل التنظيمي", href: "/hr/organization/tree" },
+      { icon: Users2, label: "الفروع", href: "/hr/organization/branches" },
+      { icon: LayoutDashboard, label: "الإدارات", href: "/hr/organization/departments" },
+      { icon: LayoutDashboard, label: "الأقسام", href: "/hr/organization/sections" },
+      { icon: LayoutDashboard, label: "الوحدات", href: "/hr/organization/units" },
+      { icon: LayoutDashboard, label: "الشعب", href: "/hr/organization/subunits" },
     ],
   },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },

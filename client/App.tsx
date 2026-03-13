@@ -68,6 +68,12 @@ import HRInsuranceMedical from "./pages/HRInsuranceMedical";
 import HRApprovalsList from "./pages/HRApprovalsList";
 import HRApprovalsAdd from "./pages/HRApprovalsAdd";
 import HRApprovalsPolicies from "./pages/HRApprovalsPolicies";
+import HROrgTree from "./pages/HROrgTree";
+import HROrgBranches from "./pages/HROrgBranches";
+import HROrgDepartments from "./pages/HROrgDepartments";
+import HROrgSections from "./pages/HROrgSections";
+import HROrgUnits from "./pages/HROrgUnits";
+import HROrgSubunits from "./pages/HROrgSubunits";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -150,6 +156,13 @@ const App = () => (
           <Route path="/hr/approvals/list" element={<HRApprovalsList />} />
           <Route path="/hr/approvals/add" element={<HRApprovalsAdd />} />
           <Route path="/hr/approvals/policies" element={<HRApprovalsPolicies />} />
+          <Route path="/hr/organization" element={<Navigate to="/hr/organization/tree" replace />} />
+          <Route path="/hr/organization/tree" element={<HROrgTree />} />
+          <Route path="/hr/organization/branches" element={<HROrgBranches />} />
+          <Route path="/hr/organization/departments" element={<HROrgDepartments />} />
+          <Route path="/hr/organization/sections" element={<HROrgSections />} />
+          <Route path="/hr/organization/units" element={<HROrgUnits />} />
+          <Route path="/hr/organization/subunits" element={<HROrgSubunits />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

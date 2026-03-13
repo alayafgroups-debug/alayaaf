@@ -241,18 +241,23 @@ function HRSidebar({ sidebarOpen, setSidebarOpen }: { sidebarOpen: boolean; setS
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Auto-expand if we're on a child route
+  // Auto-expand if we're on a child route, but only on initial mount or when actually navigating to a new parent section
   useEffect(() => {
+    // Only auto-expand if there's no menu expanded currently OR
+    // we navigated to a completely different main section
     for (const item of hrNavItems) {
       if (item.hasChildren && item.children) {
         const isChildActive = item.children.some(c => location.pathname === c.href);
         if (isChildActive) {
-          setExpandedHRMenu(item.href);
+          // If we click inside the already expanded menu, don't re-set it (which might cause re-renders/scroll jumps)
+          if (expandedHRMenu !== item.href) {
+            setExpandedHRMenu(item.href);
+          }
           break;
         }
       }
     }
-  }, [location.pathname]);
+  }, [location.pathname]); // Keep depending on pathname to catch navigation events
 
   return (
     <aside

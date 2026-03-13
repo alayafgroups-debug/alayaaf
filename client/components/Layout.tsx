@@ -278,10 +278,10 @@ function HRSidebar({
     }
   };
 
+  const lastAutoExpandedPath = useRef<string | null>(null);
+
   // Auto-expand if we're on a child route, but only on initial mount or when actually navigating to a new parent section
   useEffect(() => {
-    // Only auto-expand if there's no menu expanded currently OR
-    // we navigated to a completely different main section
     let activeParentHref: string | null = null;
 
     for (const item of hrNavItems) {
@@ -296,12 +296,12 @@ function HRSidebar({
       }
     }
 
-    // Only update if it's a DIFFERENT parent menu
-    // This prevents re-renders when clicking child items of the currently expanded menu
-    if (activeParentHref && activeParentHref !== expandedMenu) {
+    // Only auto-expand when navigating to a new path or on initial load
+    if (activeParentHref && lastAutoExpandedPath.current !== location.pathname) {
+      lastAutoExpandedPath.current = location.pathname;
       setExpandedMenu(activeParentHref);
     }
-  }, [location.pathname, expandedMenu, setExpandedMenu]); // Keep depending on pathname to catch navigation events
+  }, [location.pathname, setExpandedMenu]);
 
   return (
     <aside
@@ -567,6 +567,8 @@ function MainSidebar({
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
 
+  const lastAutoExpandedPath = useRef<string | null>(null);
+
   useEffect(() => {
     let activeParentHref: string | null = null;
 
@@ -580,10 +582,11 @@ function MainSidebar({
       }
     });
 
-    if (activeParentHref && activeParentHref !== expandedMenu) {
+    if (activeParentHref && lastAutoExpandedPath.current !== location.pathname) {
+      lastAutoExpandedPath.current = location.pathname;
       setExpandedMenu(activeParentHref);
     }
-  }, [location.pathname, expandedMenu, setExpandedMenu]);
+  }, [location.pathname, setExpandedMenu]);
 
   return (
     <aside

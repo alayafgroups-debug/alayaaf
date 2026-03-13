@@ -65,6 +65,9 @@ import HRInsuranceSocial from "./pages/HRInsuranceSocial";
 import HRInsuranceOvertime from "./pages/HRInsuranceOvertime";
 import HRInsuranceList from "./pages/HRInsuranceList";
 import HRInsuranceMedical from "./pages/HRInsuranceMedical";
+import HRApprovalsList from "./pages/HRApprovalsList";
+import HRApprovalsAdd from "./pages/HRApprovalsAdd";
+import HRApprovalsPolicies from "./pages/HRApprovalsPolicies";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -143,6 +146,10 @@ const App = () => (
           <Route path="/hr/insurance/overtime" element={<HRInsuranceOvertime />} />
           <Route path="/hr/insurance/list" element={<HRInsuranceList />} />
           <Route path="/hr/insurance/medical" element={<HRInsuranceMedical />} />
+          <Route path="/hr/approvals" element={<Navigate to="/hr/approvals/list" replace />} />
+          <Route path="/hr/approvals/list" element={<HRApprovalsList />} />
+          <Route path="/hr/approvals/add" element={<HRApprovalsAdd />} />
+          <Route path="/hr/approvals/policies" element={<HRApprovalsPolicies />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

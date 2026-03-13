@@ -1,0 +1,127 @@
+import { useState } from "react";
+import Layout from "@/components/Layout";
+import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+
+export default function HRApprovalsPolicies() {
+  const requestTypes = [
+    ["الإجازات", "السلف", "صرف"],
+    ["نقل", "دورة تدريبية", "عمل إضافي"],
+    ["صيانة", "استئذان", "انتداب"],
+    ["التعريف بالراتب", "تصفية مستحقات", "أخرى"],
+    ["صرف رواتب الموظفين", "وظيفة شاغرة", "إقالة موظف"],
+    ["إعادة تقييم", "استقالة", "صرف إمتياز مالي"],
+    ["إخلاء طرف", "مهمة عمل", "صرف عمولة"],
+    ["اعتماد مبيعات مندوب منطقة", "صرف عمولات المندوبين", "صرف عمولة مشرف"],
+    ["تجديد عهدة مالية", "إغلاق عهدة مالية", "إنهاء خدمة موظف"],
+    ["اعتماد خطة تدريبية", "صرف مستحقات إدارة", "صرف المستحقات"],
+    ["جوائز", "", ""],
+    ["مباشرة العمل", "", ""],
+    ["الموافقة على تقييم", "", ""],
+    ["اعتماد مخالفة", "", ""],
+    ["تعديل راتب", "", ""],
+    ["عهدة مالية", "", ""],
+    ["مخالصة ذمة موظف", "", ""]
+  ];
+
+  // Flatten for easier mapping
+  const flatRequestTypes = [
+    "الإجازات", "نقل", "صيانة", "التعريف بالراتب", "صرف رواتب الموظفين", "إعادة تقييم", "إخلاء طرف", "اعتماد مبيعات مندوب منطقة", "تجديد عهدة مالية", "اعتماد خطة تدريبية", "جوائز",
+    "السلف", "دورة تدريبية", "استئذان", "تصفية مستحقات", "وظيفة شاغرة", "استقالة", "مهمة عمل", "صرف عمولات المندوبين", "إغلاق عهدة مالية", "صرف مستحقات إدارة",
+    "صرف", "عمل إضافي", "انتداب", "أخرى", "إقالة موظف", "صرف إمتياز مالي", "صرف عمولة", "صرف عمولة مشرف", "إنهاء خدمة موظف", "صرف المستحقات",
+    "شراء", "مباشرة العمل", "الموافقة على تقييم", "اعتماد مخالفة", "تعديل راتب", "عهدة مالية", "مخالصة ذمة موظف"
+  ];
+
+  return (
+    <Layout>
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+        <div className="bg-white rounded-lg border shadow-sm p-6">
+          <div className="text-right font-semibold text-lg text-gray-800 border-b pb-4 mb-6">
+            سياسات الموافقات والتوقيع الالكتروني
+          </div>
+
+          <div className="space-y-8">
+            {/* Electronic Signature Section */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">تفعيل التوقيع الالكتروني في معالجة الطلبات</Label>
+              <RadioGroup defaultValue="yes" className="flex gap-6 mt-2">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <RadioGroupItem value="yes" id="e_sig_yes" />
+                  <Label htmlFor="e_sig_yes" className="font-normal cursor-pointer">نعم</Label>
+                </div>
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <RadioGroupItem value="no" id="e_sig_no" />
+                  <Label htmlFor="e_sig_no" className="font-normal cursor-pointer">لا</Label>
+                </div>
+              </RadioGroup>
+              <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-600 mt-2">
+                في حال تفعيل التوقيع الالكتروني على معالجة الطلبات لن يسمح باستكمال الموافقة على الطلب في حال كان المستخدم لم يقوم برفع توقيعه الالكتروني
+              </div>
+            </div>
+
+            {/* Related Requests Selection */}
+            <div className="space-y-4">
+              <Label className="text-sm font-bold text-gray-800 border-b pb-2 block">الطلبات المرتبطة</Label>
+              
+              <div className="flex items-center space-x-2 space-x-reverse mb-4">
+                <Checkbox id="select_all" />
+                <Label htmlFor="select_all" className="font-medium cursor-pointer">اختيار الكل</Label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-y-3 gap-x-8">
+                {flatRequestTypes.map((type, index) => (
+                  <div key={index} className="flex items-center space-x-2 space-x-reverse">
+                    <Checkbox id={`type_${index}`} defaultChecked />
+                    <Label htmlFor={`type_${index}`} className="font-normal cursor-pointer text-sm">{type}</Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Auto Delegation Section */}
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="text-sm font-medium">تفعيل التفويض التلقائي للموظف البديل لمعالجة الطلبات</Label>
+              <RadioGroup defaultValue="no" className="flex gap-6 mt-2">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <RadioGroupItem value="yes" id="auto_del_yes" />
+                  <Label htmlFor="auto_del_yes" className="font-normal cursor-pointer">نعم</Label>
+                </div>
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <RadioGroupItem value="no" id="auto_del_no" />
+                  <Label htmlFor="auto_del_no" className="font-normal cursor-pointer">لا</Label>
+                </div>
+              </RadioGroup>
+              <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-600 mt-2">
+                تفويض تلقائي للموظف البديل لمعالجة الطلبات في حال كان الموظف المسؤول في إجازة معتمدة يتم تفويض الموظف البديل لمعالجة الطلبات في فترة إجازة الموظف
+              </div>
+            </div>
+
+            {/* Auto Bypass Section */}
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="text-sm font-medium">تفعيل تجاوز معالجة الطلب التلقائي على الطلب</Label>
+              <RadioGroup defaultValue="no" className="flex gap-6 mt-2">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <RadioGroupItem value="yes" id="bypass_yes" />
+                  <Label htmlFor="bypass_yes" className="font-normal cursor-pointer">نعم</Label>
+                </div>
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <RadioGroupItem value="no" id="bypass_no" />
+                  <Label htmlFor="bypass_no" className="font-normal cursor-pointer">لا</Label>
+                </div>
+              </RadioGroup>
+              <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-600 mt-2">
+                تفعيل تجاوز الموافقة التلقائي على الطلبات سيتم نقل الطلب المعلق من شخص في سلسلة الاعتماد للشخص التالي إذا تجاوز المهلة المحددة للموافقة أو الرفض
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-6">
+              <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">حفظ</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}

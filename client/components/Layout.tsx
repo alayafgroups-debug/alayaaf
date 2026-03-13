@@ -33,6 +33,7 @@ import {
   Inbox,
   MailCheck,
   Handshake,
+  Plus,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -170,6 +171,14 @@ const hrNavItems: HRNavItem[] = [
       { icon: Clock, label: "التأمينات للساعات الإضافية", href: "/hr/insurance/overtime" },
       { icon: FileText, label: "قائمة التأمينات الاجتماعية", href: "/hr/insurance/list" },
       { icon: Receipt, label: "التأمين الطبي", href: "/hr/insurance/medical" },
+    ],
+  },
+  {
+    icon: Handshake, label: "الموافقات", href: "/hr/approvals", hasChildren: true,
+    children: [
+      { icon: FileText, label: "قائمة سلسلة الموافقات", href: "/hr/approvals/list" },
+      { icon: Plus, label: "إضافة سلسلة موافقات", href: "/hr/approvals/add" },
+      { icon: ShieldCheck, label: "سياسات الموافقات والتوقيع الالكتروني", href: "/hr/approvals/policies" },
     ],
   },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },

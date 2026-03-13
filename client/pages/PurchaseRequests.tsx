@@ -54,11 +54,11 @@ const approvalColors: Record<string, string> = {
   "بانتظار": "bg-amber-500 text-white",
 };
 
-const mockRequests: PurchaseRequestRow[] = [];
+const initialRequests: PurchaseRequestRow[] = [];
 
 export default function PurchaseRequests() {
   const [view, setView] = useState<"list" | "create">("list");
-  const [requests, setRequests] = useState<PurchaseRequestRow[]>(mockRequests);
+  const [requests, setRequests] = useState<PurchaseRequestRow[]>(initialRequests);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {

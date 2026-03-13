@@ -51,11 +51,11 @@ const statusColors: Record<string, string> = {
   مغلق: "bg-green-600 text-white",
 };
 
-const mockQuotations: QuotationRow[] = [];
+const initialQuotations: QuotationRow[] = [];
 
 export default function Quotations() {
   const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
-  const [quotations, setQuotations] = useState<QuotationRow[]>(mockQuotations);
+  const [quotations, setQuotations] = useState<QuotationRow[]>(initialQuotations);
   const [selectedQuotation, setSelectedQuotation] = useState<QuotationRow | null>(null);
 
   useEffect(() => {

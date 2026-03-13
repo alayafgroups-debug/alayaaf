@@ -52,13 +52,13 @@ const statusColors: Record<string, string> = {
   delivered: "bg-slate-600 text-white",
 };
 
-const mockOrders: SalesOrder[] = [];
+const initialOrders: SalesOrder[] = [];
 
 const parseCurrency = (value: string) => Number(value.replace(/[^0-9.]/g, "")) || 0;
 
 export default function SalesOrders() {
   const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
-  const [orders, setOrders] = useState<SalesOrder[]>(mockOrders);
+  const [orders, setOrders] = useState<SalesOrder[]>(initialOrders);
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
 
   useEffect(() => {

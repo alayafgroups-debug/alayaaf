@@ -37,7 +37,7 @@ const statusColors: Record<string, string> = {
 const parseCurrency = (value: string) =>
   Number(value.replace(/[^0-9.]/g, "")) || 0;
 
-const mockInvoices: Invoice[] = [];
+const initialInvoices: Invoice[] = [];
 
 type Invoice = {
   id: string;
@@ -53,7 +53,7 @@ type Invoice = {
 
 export default function SalesInvoices() {
   const [view, setView] = useState<"list" | "create" | "details" | "edit" | "payment">("list");
-  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
+  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {

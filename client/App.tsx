@@ -84,6 +84,8 @@ import HRSuccessionPositions from "./pages/HRSuccessionPositions";
 import HRSuccessionCandidates from "./pages/HRSuccessionCandidates";
 import HRSuccessionDevelopmentPlans from "./pages/HRSuccessionDevelopmentPlans";
 import HRSuccessionTrackingReport from "./pages/HRSuccessionTrackingReport";
+import HRPermissionsRoles from "./pages/HRPermissionsRoles";
+import HRPermissionsAddRole from "./pages/HRPermissionsAddRole";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -186,6 +188,9 @@ const App = () => (
           <Route path="/hr/succession/candidates" element={<HRSuccessionCandidates />} />
           <Route path="/hr/succession/development-plans" element={<HRSuccessionDevelopmentPlans />} />
           <Route path="/hr/succession/tracking-report" element={<HRSuccessionTrackingReport />} />
+          <Route path="/hr/permissions" element={<Navigate to="/hr/permissions/roles" replace />} />
+          <Route path="/hr/permissions/roles" element={<HRPermissionsRoles />} />
+          <Route path="/hr/permissions/add-role" element={<HRPermissionsAddRole />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />
           <Route path="/hr/reports" element={<HRReports />} />

@@ -218,6 +218,13 @@ const hrNavItems: HRNavItem[] = [
   },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },
+  {
+    icon: ShieldCheck, label: "صلاحيات الموظفين", href: "/hr/permissions", hasChildren: true,
+    children: [
+      { icon: ShieldCheck, label: "قائمة أدوار المستخدمين", href: "/hr/permissions/roles" },
+      { icon: Plus, label: "إضافة دور جديد", href: "/hr/permissions/add-role" },
+    ],
+  },
 ];
 
 /* ── Per-item accent colors for active state ── */

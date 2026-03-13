@@ -233,6 +233,12 @@ const itemColors: Record<string, { icon: string; active: string; glow: string; d
   "/settings":  { icon: "from-slate-400 to-gray-600",    active: "bg-slate-500/15 border-slate-500/25",  glow: "shadow-slate-500/20",   dot: "bg-slate-400",    text: "text-slate-300",    subBg: "bg-slate-500/[0.06]",    border: "border-slate-400/20" },
 };
 
+// Store sidebar scroll positions globally so they survive re-renders
+const sidebarScrollPositions: Record<string, number> = {
+  hr: 0,
+  main: 0
+};
+
 /* ═══════════════════════════════════════════════════════
    HR Sidebar Component
    ═══════════════════════════════════════════════════════ */
@@ -251,21 +257,42 @@ function HRSidebar({
   const navigate = useNavigate();
   const navRef = useRef<HTMLElement>(null);
 
+  // Restore scroll position on mount
+  useEffect(() => {
+    if (navRef.current) {
+      navRef.current.scrollTop = sidebarScrollPositions.hr;
+    }
+  }, []);
+
+  // Save scroll position when navigating or scrolling
+  const handleScroll = () => {
+    if (navRef.current) {
+      sidebarScrollPositions.hr = navRef.current.scrollTop;
+    }
+  };
+
   // Auto-expand if we're on a child route, but only on initial mount or when actually navigating to a new parent section
   useEffect(() => {
     // Only auto-expand if there's no menu expanded currently OR
     // we navigated to a completely different main section
+    let activeParentHref: string | null = null;
+
     for (const item of hrNavItems) {
       if (item.hasChildren && item.children) {
         const isChildActive = item.children.some(c => location.pathname === c.href);
         if (isChildActive) {
-          // If we click inside the already expanded menu, don't re-set it (which might cause re-renders/scroll jumps)
-          if (expandedMenu !== item.href) {
-            setExpandedMenu(item.href);
-          }
+          activeParentHref = item.href;
           break;
         }
+      } else if (location.pathname === item.href) {
+        activeParentHref = item.href;
       }
+    }
+
+    // Only update if it's a DIFFERENT parent menu
+    // This prevents re-renders when clicking child items of the currently expanded menu
+    if (activeParentHref && activeParentHref !== expandedMenu) {
+      setExpandedMenu(activeParentHref);
     }
   }, [location.pathname, expandedMenu, setExpandedMenu]); // Keep depending on pathname to catch navigation events
 
@@ -335,7 +362,11 @@ function HRSidebar({
       <div className="relative z-10 mx-4 mt-2 h-px bg-gradient-to-l from-transparent via-emerald-400/[0.10] to-transparent" />
 
       {/* ── HR Navigation ── */}
-      <nav ref={navRef} className="relative z-10 flex flex-col gap-0.5 px-3 py-3 flex-1 overflow-y-auto">
+      <nav
+        ref={navRef}
+        onScroll={handleScroll}
+        className="relative z-10 flex flex-col gap-0.5 px-3 py-3 flex-1 overflow-y-auto"
+      >
         {sidebarOpen && (
           <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300/25">
             أقسام الموارد البشرية
@@ -497,6 +528,21 @@ function MainSidebar({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const navRef = useRef<HTMLElement>(null);
+
+  // Restore scroll position on mount
+  useEffect(() => {
+    if (navRef.current) {
+      navRef.current.scrollTop = sidebarScrollPositions.main;
+    }
+  }, []);
+
+  // Save scroll position when navigating or scrolling
+  const handleScroll = () => {
+    if (navRef.current) {
+      sidebarScrollPositions.main = navRef.current.scrollTop;
+    }
+  };
 
   const isActive = (path: string) =>
     location.pathname === path ||
@@ -515,17 +561,22 @@ function MainSidebar({
   ];
 
   useEffect(() => {
-    const currentPath = location.pathname;
+    let activeParentHref: string | null = null;
+
     navItems.forEach((item) => {
       if (
-        currentPath.startsWith(item.href) &&
+        location.pathname.startsWith(item.href) &&
         item.href !== "/" &&
         item.hasSubmenu
       ) {
-        setExpandedMenu(item.href);
+        activeParentHref = item.href;
       }
     });
-  }, [location.pathname, setExpandedMenu]);
+
+    if (activeParentHref && activeParentHref !== expandedMenu) {
+      setExpandedMenu(activeParentHref);
+    }
+  }, [location.pathname, expandedMenu, setExpandedMenu]);
 
   return (
     <aside
@@ -574,7 +625,11 @@ function MainSidebar({
       <div className="relative z-10 mx-4 h-px bg-gradient-to-l from-transparent via-white/[0.08] to-transparent" />
 
       {/* ── Navigation ── */}
-      <nav className="relative z-10 flex flex-col gap-1 px-3 py-4 flex-1 overflow-y-auto">
+      <nav
+        ref={navRef}
+        onScroll={handleScroll}
+        className="relative z-10 flex flex-col gap-1 px-3 py-4 flex-1 overflow-y-auto"
+      >
         {sidebarOpen && (
           <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white/25">
             القائمة الرئيسية

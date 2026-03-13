@@ -35,6 +35,7 @@ import {
   Handshake,
   Plus,
   Network,
+  Coins,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -191,6 +192,18 @@ const hrNavItems: HRNavItem[] = [
       { icon: LayoutDashboard, label: "الأقسام", href: "/hr/organization/sections" },
       { icon: LayoutDashboard, label: "الوحدات", href: "/hr/organization/units" },
       { icon: LayoutDashboard, label: "الشعب", href: "/hr/organization/subunits" },
+    ],
+  },
+  {
+    icon: Coins, label: "تهيئة المعلومات المالية", href: "/hr/financial-setup", hasChildren: true,
+    children: [
+      { icon: Coins, label: "أنواع البدلات", href: "/hr/financial-setup/allowances" },
+      { icon: Clock, label: "أنواع الساعات الإضافية", href: "/hr/financial-setup/overtime" },
+      { icon: Receipt, label: "أنواع الاقتطاعات المالية", href: "/hr/financial-setup/deductions" },
+      { icon: Award, label: "أنواع الامتيازات المالية", href: "/hr/financial-setup/privileges" },
+      { icon: BadgeDollarSign, label: "أنواع السلف", href: "/hr/financial-setup/loans" },
+      { icon: Users, label: "فئات الموظفين", href: "/hr/financial-setup/employee-categories" },
+      { icon: Settings, label: "إعدادات الحسابات للنظام المحاسبي", href: "/hr/financial-setup/account-settings" },
     ],
   },
   { icon: BadgeDollarSign, label: "السلف", href: "/hr/advances" },

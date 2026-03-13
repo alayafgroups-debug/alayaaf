@@ -74,6 +74,13 @@ import HROrgDepartments from "./pages/HROrgDepartments";
 import HROrgSections from "./pages/HROrgSections";
 import HROrgUnits from "./pages/HROrgUnits";
 import HROrgSubunits from "./pages/HROrgSubunits";
+import HRFinancialAllowances from "./pages/HRFinancialAllowances";
+import HRFinancialOvertime from "./pages/HRFinancialOvertime";
+import HRFinancialDeductions from "./pages/HRFinancialDeductions";
+import HRFinancialPrivileges from "./pages/HRFinancialPrivileges";
+import HRFinancialLoans from "./pages/HRFinancialLoans";
+import HRFinancialEmployeeCategories from "./pages/HRFinancialEmployeeCategories";
+import HRFinancialAccountSettings from "./pages/HRFinancialAccountSettings";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
@@ -163,6 +170,14 @@ const App = () => (
           <Route path="/hr/organization/sections" element={<HROrgSections />} />
           <Route path="/hr/organization/units" element={<HROrgUnits />} />
           <Route path="/hr/organization/subunits" element={<HROrgSubunits />} />
+          <Route path="/hr/financial-setup" element={<Navigate to="/hr/financial-setup/allowances" replace />} />
+          <Route path="/hr/financial-setup/allowances" element={<HRFinancialAllowances />} />
+          <Route path="/hr/financial-setup/overtime" element={<HRFinancialOvertime />} />
+          <Route path="/hr/financial-setup/deductions" element={<HRFinancialDeductions />} />
+          <Route path="/hr/financial-setup/privileges" element={<HRFinancialPrivileges />} />
+          <Route path="/hr/financial-setup/loans" element={<HRFinancialLoans />} />
+          <Route path="/hr/financial-setup/employee-categories" element={<HRFinancialEmployeeCategories />} />
+          <Route path="/hr/financial-setup/account-settings" element={<HRFinancialAccountSettings />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/advances" element={<HRAdvances />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

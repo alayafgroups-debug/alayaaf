@@ -1,18 +1,17 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
 import {
   Plus,
-  Search,
-  X,
   Trash2,
   ArrowLeftRight,
   Edit,
   Eye,
   FileSpreadsheet,
   Save,
-  FileText,
   Download,
+  Loader2,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -23,360 +22,283 @@ import {
   FilterActions,
   DataTable,
   ActionBtn,
-  FormHeaderBar,
-  FormCard,
-  SectionHeader,
-  AddItemBtn,
-  TotalsSummary,
-  PrimaryBtn,
-  SecondaryBtn,
 } from "@/components/SalesPageUI";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+
+type QuotationItem = {
+  id: number;
+  itemLabel: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  taxPercent: number;
+};
+
+type Totals = {
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+};
 
 type QuotationRow = {
   id: string;
   date: string;
   validity: string;
   customer: string;
+  customerVat: string;
+  customerAddress: string;
+  referenceNo: string;
+  projectName: string;
+  notes: string;
   total: string;
   status: string;
   statusColor: string;
-  subStatus?: string;
-  subStatusColor?: string;
+  items: QuotationItem[];
 };
 
 const statusColors: Record<string, string> = {
   مفتوح: "bg-cyan-500 text-white",
+  مرسل: "bg-indigo-600 text-white",
   مغلق: "bg-green-600 text-white",
 };
 
-const initialQuotations: QuotationRow[] = [];
+const COMPANY_LOGO_URL =
+  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2F170c644ba9324aa19b4716bb738402ab?format=webp&width=800&height=1200";
+
+const COMPANY_INFO = {
+  nameAr: "شركة إدارة العياف للمقاولات",
+  nameEn: "Al-ayaf Management company",
+  commercialNo: "7049437580",
+  vatNo: "314067317200003",
+  city: "جدة",
+  bankName: "بنك العربي الوطني",
+  beneficiary: "شركة إدارة العياف للمقاولات",
+  accountNo: "0108095783340017",
+  iban: "SA8930400108095783340017",
+};
+
+const toNum = (v: unknown) => Number(v) || 0;
+
+const INPUT_CLASS = "w-full h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20";
+
+const formatMoney = (v: number) =>
+  v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const parseCurrency = (value: unknown) => {
+  const raw = String(value ?? "").replace(/[^0-9.-]/g, "");
+  return Number(raw) || 0;
+};
+
+function calculateTotals(items: QuotationItem[]): Totals {
+  return items.reduce(
+    (acc, item) => {
+      const lineSubtotal = toNum(item.quantity) * toNum(item.unitPrice) - toNum(item.discount);
+      const lineTax = (lineSubtotal * toNum(item.taxPercent)) / 100;
+      return {
+        subtotal: acc.subtotal + lineSubtotal,
+        discount: acc.discount + toNum(item.discount),
+        tax: acc.tax + lineTax,
+        total: acc.total + lineSubtotal + lineTax,
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 }
+  );
+}
+
+function createDefaultItem(id = 1): QuotationItem {
+  return {
+    id,
+    itemLabel: "توريد عمالة",
+    description: "",
+    quantity: 1,
+    unitPrice: 0,
+    discount: 0,
+    taxPercent: 15,
+  };
+}
+
+function mapRow(row: Record<string, unknown>): QuotationRow {
+  const status = String(row.status ?? "مفتوح");
+  const itemsRaw = Array.isArray(row.items) ? (row.items as Record<string, unknown>[]) : [];
+
+  const items =
+    itemsRaw.length > 0
+      ? itemsRaw.map((it, idx) => ({
+          id: Number(it.id) || idx + 1,
+          itemLabel: String(it.itemLabel ?? "توريد عمالة"),
+          description: String(it.description ?? ""),
+          quantity: toNum(it.quantity),
+          unitPrice: toNum(it.unitPrice),
+          discount: toNum(it.discount),
+          taxPercent: toNum(it.taxPercent),
+        }))
+      : [createDefaultItem(1)];
+
+  return {
+    id: String(row.id ?? ""),
+    date: String(row.issue_date ?? row.date ?? ""),
+    validity: String(row.valid_until ?? row.validity ?? ""),
+    customer: String(row.customer ?? ""),
+    customerVat: String(row.customer_vat ?? ""),
+    customerAddress: String(row.customer_address ?? ""),
+    referenceNo: String(row.reference_no ?? ""),
+    projectName: String(row.project_name ?? ""),
+    notes: String(row.notes ?? ""),
+    total: formatMoney(parseCurrency(row.grand_total ?? row.total)),
+    status,
+    statusColor: statusColors[status] ?? "bg-cyan-500 text-white",
+    items,
+  };
+}
 
 export default function Quotations() {
   const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
-  const [quotations, setQuotations] = useState<QuotationRow[]>(initialQuotations);
+  const [quotations, setQuotations] = useState<QuotationRow[]>([]);
   const [selectedQuotation, setSelectedQuotation] = useState<QuotationRow | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const loadQuotations = async () => {
       const { data, error } = await supabase
         .from("sales_quotations")
         .select("*")
-        .order("date", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (!error && data) {
-        setQuotations(
-          data.map((row) => ({
-            id: row.id ?? "",
-            date: row.date ?? "",
-            validity: row.validity ?? row.valid_until ?? "",
-            customer: row.customer ?? "",
-            total: row.total ?? "",
-            status: row.status ?? "مفتوح",
-            statusColor:
-              statusColors[row.status ?? "مفتوح"] ??
-              "bg-cyan-500 text-white",
-            subStatus: row.sub_status ?? row.subStatus,
-            subStatusColor: row.sub_status_color ?? row.subStatusColor,
-          }))
-        );
+        setQuotations(data.map((row) => mapRow(row as Record<string, unknown>)));
       }
     };
 
     loadQuotations();
-  }, []);
+  }, [refreshKey]);
 
-  const handleSaved = (quotation: QuotationRow) => {
-    setQuotations((prev) => [quotation, ...prev]);
-  };
-
-  const handleUpdated = (quotation: QuotationRow) => {
-    setQuotations((prev) =>
-      prev.map((row) => (row.id === quotation.id ? quotation : row))
-    );
-  };
+  const refresh = () => setRefreshKey((k) => k + 1);
 
   const handleDelete = async (quotationId: string) => {
-    const { error } = await supabase
-      .from("sales_quotations")
-      .delete()
-      .eq("id", quotationId);
+    if (!confirm("هل تريد حذف عرض السعر؟")) return;
+
+    const { error } = await supabase.from("sales_quotations").delete().eq("id", quotationId);
 
     if (!error) {
       setQuotations((prev) => prev.filter((row) => row.id !== quotationId));
       toast({ title: "تم حذف عرض السعر", description: `العرض: ${quotationId}` });
     } else {
-      toast({ title: "تعذر حذف عرض السعر", description: "يرجى المحاولة لاحقاً" });
+      toast({ title: "تعذر حذف عرض السعر", description: error.message });
     }
   };
 
   const handleDownloadPdf = (quotation: QuotationRow) => {
     const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      return;
-    }
+    if (!printWindow) return;
 
-    const escapeHtml = (value: string) =>
-      value
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-
-    const parseCurrency = (value: string) => Number(value.replace(/[^0-9.]/g, "")) || 0;
-
-    const storedItems = localStorage.getItem(`sales-quotation-items-${quotation.id}`);
-    const parsedItems = storedItems
-      ? (JSON.parse(storedItems) as Array<{
-          id: number;
-          description: string;
-          unit: string;
-          quantity: number;
-          price: number;
-          discount: number;
-          taxPercent: number;
-        }>)
-      : [];
-
-    const fallbackTotal = parseCurrency(quotation.total);
-    const items =
-      parsedItems.length > 0
-        ? parsedItems
-        : [
-            {
-              id: 1,
-              description: "-",
-              unit: "-",
-              quantity: 1,
-              price: fallbackTotal,
-              discount: 0,
-              taxPercent: 0,
-            },
-          ];
-
-    const calculated = items.map((item) => {
-      const lineSubtotal = item.quantity * item.price - item.discount;
-      const tax = (lineSubtotal * item.taxPercent) / 100;
-      const lineTotal = lineSubtotal + tax;
-      return {
-        ...item,
-        lineSubtotal,
-        tax,
-        lineTotal,
-      };
-    });
-
-    const totals = calculated.reduce(
-      (acc, item) => ({
-        subtotal: acc.subtotal + item.lineSubtotal,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + item.tax,
-        total: acc.total + item.lineTotal,
-      }),
-      { subtotal: 0, discount: 0, tax: 0, total: 0 }
-    );
-
-    const rowsHtml = calculated
-      .map(
-        (item) => `
+    const totals = calculateTotals(quotation.items);
+    const rowsHtml = quotation.items
+      .map((item) => {
+        const subtotal = item.quantity * item.unitPrice - item.discount;
+        const taxVal = (subtotal * item.taxPercent) / 100;
+        const lineTotal = subtotal + taxVal;
+        return `
           <tr>
-            <td>${item.id}</td>
-            <td>${escapeHtml(item.description || "-")}</td>
-            <td>${escapeHtml(item.unit || "-")}</td>
+            <td>${item.itemLabel || "-"}</td>
+            <td>${item.description || "-"}</td>
+            <td>${item.unitPrice.toFixed(2)}</td>
             <td>${item.quantity}</td>
-            <td>${item.price.toFixed(2)}</td>
             <td>${item.discount.toFixed(2)}</td>
+            <td>${subtotal.toFixed(2)}</td>
             <td>${item.taxPercent}%</td>
-            <td>${item.lineTotal.toFixed(2)}</td>
+            <td>${taxVal.toFixed(2)}</td>
+            <td>${lineTotal.toFixed(2)}</td>
           </tr>
-        `
-      )
+        `;
+      })
       .join("");
 
     printWindow.document.write(`
       <html dir="rtl" lang="ar">
         <head>
-          <title>عرض سعر ${quotation.id}</title>
           <meta charset="utf-8" />
+          <title>عرض سعر ${quotation.id}</title>
           <style>
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              padding: 24px;
-              font-family: 'Cairo', Arial, sans-serif;
-              color: #0f172a;
-              background: #f8fafc;
-            }
-            .page {
-              width: 210mm;
-              min-height: 297mm;
-              margin: 0 auto;
-              background: white;
-              border: 1px solid #e2e8f0;
-              padding: 22px;
-            }
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-bottom: 1px solid #e2e8f0;
-              padding-bottom: 12px;
-              margin-bottom: 18px;
-            }
-            .title {
-              font-size: 30px;
-              font-weight: 700;
-              margin: 0;
-            }
-            .sub-title {
-              margin: 4px 0 0;
-              color: #64748b;
-              font-size: 14px;
-            }
-            .badge {
-              display: inline-block;
-              padding: 4px 10px;
-              border-radius: 999px;
-              background: #e0f2fe;
-              color: #0369a1;
-              font-size: 12px;
-              font-weight: 700;
-            }
-            .meta {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 12px;
-              margin-bottom: 18px;
-            }
-            .meta-card {
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              padding: 10px 12px;
-            }
-            .label {
-              color: #64748b;
-              font-size: 12px;
-              margin-bottom: 4px;
-            }
-            .value {
-              font-size: 16px;
-              font-weight: 700;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 10px;
-            }
-            th, td {
-              border: 1px solid #e2e8f0;
-              padding: 8px;
-              text-align: right;
-              font-size: 13px;
-              vertical-align: top;
-            }
-            th {
-              background: #f1f5f9;
-              font-weight: 700;
-            }
-            .totals {
-              width: 320px;
-              margin-inline-start: auto;
-              margin-top: 18px;
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              padding: 12px;
-            }
-            .total-row {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 7px;
-              font-size: 13px;
-            }
-            .total-final {
-              border-top: 1px solid #e2e8f0;
-              margin-top: 8px;
-              padding-top: 10px;
-              font-size: 16px;
-              font-weight: 700;
-              color: #1d4ed8;
-            }
-            @media print {
-              body { background: white; padding: 0; }
-              .page { border: 0; width: 100%; min-height: auto; padding: 0; }
-            }
+            *{box-sizing:border-box} body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111827}
+            .sheet{max-width:1200px;margin:0 auto}
+            .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+            .logo{width:140px;height:100px;object-fit:contain}
+            .title{font-size:32px;font-weight:700;margin:0}
+            .meta{font-size:15px;line-height:1.7}
+            .customer{margin:14px 0 12px;font-size:22px;text-align:center;line-height:1.7}
+            table{width:100%;border-collapse:collapse;font-size:18px}
+            th,td{border:1px solid #e5e7eb;padding:8px;text-align:center}
+            th{background:#e5e7eb;font-weight:700}
+            .totals{width:420px;margin-top:12px;font-size:30px}
+            .totals div{display:flex;justify-content:space-between;border-bottom:1px solid #d1d5db;padding:6px 0}
+            .bank{margin-top:30px;font-size:18px;line-height:1.9}
           </style>
         </head>
         <body>
-          <div class="page">
-            <div class="header">
+          <div class="sheet">
+            <div class="top">
               <div>
-                <h1 class="title">تفاصيل عرض السعر</h1>
-                <p class="sub-title">Quotation Details</p>
+                <h1 class="title">عرض سعر</h1>
+                <div class="meta">الرقم ${quotation.id}<br/>التاريخ ${quotation.date || "-"}</div>
               </div>
-              <div class="badge">${escapeHtml(quotation.status)}</div>
+              <div class="meta" style="text-align:center">
+                <div style="font-size:28px;font-weight:700">${COMPANY_INFO.nameAr}</div>
+                السجل التجاري: ${COMPANY_INFO.commercialNo}<br/>
+                الرقم الضريبي: ${COMPANY_INFO.vatNo}<br/>
+                ${COMPANY_INFO.city}
+              </div>
+              <div style="text-align:left">
+                <img src="${COMPANY_LOGO_URL}" class="logo"/>
+                <div class="meta">${COMPANY_INFO.nameEn}</div>
+              </div>
             </div>
 
-            <div class="meta">
-              <div class="meta-card">
-                <div class="label">رقم العرض</div>
-                <div class="value">${escapeHtml(quotation.id)}</div>
-              </div>
-              <div class="meta-card">
-                <div class="label">العميل</div>
-                <div class="value">${escapeHtml(quotation.customer || "-")}</div>
-              </div>
-              <div class="meta-card">
-                <div class="label">تاريخ العرض</div>
-                <div class="value">${escapeHtml(quotation.date)}</div>
-              </div>
-              <div class="meta-card">
-                <div class="label">تاريخ الصلاحية</div>
-                <div class="value">${escapeHtml(quotation.validity)}</div>
-              </div>
+            <div class="customer">
+              العميل: ${quotation.customer || "-"}<br/>
+              الرقم الضريبي: ${quotation.customerVat || "-"}<br/>
+              العنوان: ${quotation.customerAddress || "-"}
             </div>
 
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>وصف البند</th>
-                  <th>الوحدة</th>
-                  <th>الكمية</th>
+                  <th>البند</th>
+                  <th>الوصف</th>
                   <th>السعر</th>
+                  <th>الكمية</th>
                   <th>الخصم</th>
-                  <th>الضريبة</th>
-                  <th>الإجمالي</th>
+                  <th>المجموع بدون الضريبة</th>
+                  <th>نسبة الضريبة</th>
+                  <th>قيمة الضريبة</th>
+                  <th>المجموع</th>
                 </tr>
               </thead>
-              <tbody>
-                ${rowsHtml}
-              </tbody>
+              <tbody>${rowsHtml}</tbody>
             </table>
 
             <div class="totals">
-              <div class="total-row">
-                <span>المجموع الفرعي</span>
-                <span>${totals.subtotal.toFixed(2)} ريال</span>
-              </div>
-              <div class="total-row">
-                <span>الخصم</span>
-                <span>${totals.discount.toFixed(2)} ريال</span>
-              </div>
-              <div class="total-row">
-                <span>الضريبة</span>
-                <span>${totals.tax.toFixed(2)} ريال</span>
-              </div>
-              <div class="total-row total-final">
-                <span>الإجمالي</span>
-                <span>${totals.total.toFixed(2)} ريال</span>
-              </div>
+              <div><span>${totals.subtotal.toFixed(2)}</span><span>الإجمالي قبل الضريبة</span></div>
+              <div><span>${totals.tax.toFixed(2)}</span><span>القيمة المضافة %15</span></div>
+              <div><span>${totals.total.toFixed(2)}</span><span>الإجمالي (﷼)</span></div>
+              <div><span>${totals.total.toFixed(2)}</span><span>المستحق (﷼)</span></div>
+            </div>
+
+            <div class="bank">
+              <strong>ملاحظات</strong><br/>
+              <strong>البيانات البنكية</strong><br/>
+              *اسم البنك: ${COMPANY_INFO.bankName}<br/>
+              *اسم المستفيد: ${COMPANY_INFO.beneficiary}<br/>
+              *رقم الحساب: ${COMPANY_INFO.accountNo}<br/>
+              *رقم الايبان: ${COMPANY_INFO.iban}
             </div>
           </div>
         </body>
       </html>
     `);
+
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
@@ -387,6 +309,7 @@ export default function Quotations() {
       <div className="mx-auto max-w-7xl">
         {view === "list" && (
           <QuotationsList
+            quotations={quotations}
             onCreateClick={() => setView("create")}
             onView={(quotation) => {
               setSelectedQuotation(quotation);
@@ -398,23 +321,41 @@ export default function Quotations() {
             }}
             onDelete={handleDelete}
             onDownloadPdf={handleDownloadPdf}
-            quotations={quotations}
           />
         )}
+
         {view === "create" && (
-          <QuotationForm onBack={() => setView("list")} onSaved={handleSaved} />
+          <QuotationEditor
+            mode="create"
+            onBack={() => setView("list")}
+            onSaved={(newRow) => {
+              setQuotations((prev) => [newRow, ...prev]);
+              setView("list");
+              refresh();
+            }}
+          />
         )}
+
         {view === "details" && selectedQuotation && (
           <QuotationDetails
             quotation={selectedQuotation}
             onBack={() => setView("list")}
+            onEdit={() => setView("edit")}
+            onDownloadPdf={handleDownloadPdf}
           />
         )}
+
         {view === "edit" && selectedQuotation && (
-          <QuotationEdit
-            quotation={selectedQuotation}
-            onBack={() => setView("list")}
-            onUpdated={handleUpdated}
+          <QuotationEditor
+            mode="edit"
+            initialData={selectedQuotation}
+            onBack={() => setView("details")}
+            onSaved={(updatedRow) => {
+              setQuotations((prev) => prev.map((q) => (q.id === updatedRow.id ? updatedRow : q)));
+              setSelectedQuotation(updatedRow);
+              setView("details");
+              refresh();
+            }}
           />
         )}
       </div>
@@ -423,24 +364,22 @@ export default function Quotations() {
 }
 
 function QuotationsList({
+  quotations,
   onCreateClick,
   onView,
   onEdit,
   onDelete,
   onDownloadPdf,
-  quotations,
 }: {
+  quotations: QuotationRow[];
   onCreateClick: () => void;
   onView: (quotation: QuotationRow) => void;
   onEdit: (quotation: QuotationRow) => void;
   onDelete: (quotationId: string) => void;
   onDownloadPdf: (quotation: QuotationRow) => void;
-  quotations: QuotationRow[];
 }) {
-
   return (
     <div className="space-y-6">
-      {/* Header */}
       <PageHeader
         icon={FileSpreadsheet}
         title="عروض الأسعار"
@@ -450,70 +389,35 @@ function QuotationsList({
         gradient="from-blue-600 to-indigo-700"
       />
 
-      {/* Filters */}
       <FilterBar>
-        <FilterInput label="البحث" placeholder="رقم العرض، المرجع، اسم العميل..." colSpan={2} />
+        <FilterInput label="البحث" placeholder="رقم العرض، العميل..." colSpan={2} />
         <FilterSelect label="العميل" options={["الكل"]} />
-        <FilterSelect label="الحالة" options={["الكل", "مفتوح", "مغلق"]} />
+        <FilterSelect label="الحالة" options={["الكل", "مفتوح", "مرسل", "مغلق"]} />
         <FilterActions />
       </FilterBar>
 
-      {/* Table */}
       <DataTable
         headers={["الإجراءات", "الحالة", "الإجمالي", "العميل", "تاريخ الصلاحية", "تاريخ العرض", "رقم العرض"]}
         gradient="from-[#1e293b] to-[#334155]"
       >
-        {quotations.map((quo, i) => (
-          <tr
-            key={quo.id}
-            className={cn("hover:bg-muted/30 transition-colors", i % 2 !== 0 && "bg-muted/10")}
-          >
+        {quotations.map((row, idx) => (
+          <tr key={row.id} className={cn("hover:bg-muted/30", idx % 2 !== 0 && "bg-muted/10")}>
             <td className="px-5 py-3.5 align-middle">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(quo)} />
-                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(quo)} />
-                <ActionBtn icon={ArrowLeftRight} label="تحويل" color="amber" />
-                <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(quo)} />
-                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(quo.id)} />
+                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(row)} />
+                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(row)} />
+                <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(row)} />
+                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(row.id)} />
               </div>
             </td>
-            <td className="px-5 py-3.5 align-middle text-right space-y-1">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
-                  quo.status === "مفتوح"
-                    ? "bg-sky-50 text-sky-700 border-sky-200"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                )}
-              >
-                {quo.status}
-              </span>
-              {quo.subStatus && (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap block mt-1",
-                    quo.subStatusColor
-                  )}
-                >
-                  {quo.subStatus}
-                </span>
-              )}
+            <td className="px-5 py-3.5 text-right">
+              <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold", row.statusColor)}>{row.status}</span>
             </td>
-            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap font-bold text-primary">
-              {quo.total}
-            </td>
-            <td className="px-5 py-3.5 align-middle text-right text-foreground font-medium">
-              {quo.customer}
-            </td>
-            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
-              {quo.validity}
-            </td>
-            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
-              {quo.date}
-            </td>
-            <td className="px-5 py-3.5 align-middle text-right font-bold text-primary hover:underline cursor-pointer">
-              {quo.id}
-            </td>
+            <td className="px-5 py-3.5 font-bold text-primary whitespace-nowrap">{row.total} ريال</td>
+            <td className="px-5 py-3.5">{row.customer || "-"}</td>
+            <td className="px-5 py-3.5 text-muted-foreground">{row.validity || "-"}</td>
+            <td className="px-5 py-3.5 text-muted-foreground">{row.date || "-"}</td>
+            <td className="px-5 py-3.5 font-bold text-primary">{row.id}</td>
           </tr>
         ))}
       </DataTable>
@@ -521,986 +425,398 @@ function QuotationsList({
   );
 }
 
-function QuotationDetails({
-  quotation,
+function QuotationEditor({
+  mode,
+  initialData,
   onBack,
+  onSaved,
 }: {
-  quotation: QuotationRow;
+  mode: "create" | "edit";
+  initialData?: QuotationRow;
   onBack: () => void;
+  onSaved: (quotation: QuotationRow) => void;
 }) {
-  const [lineItems, setLineItems] = useState<
-    Array<{
-      id: number;
-      description: string;
-      unit: string;
-      quantity: number;
-      price: number;
-      discount: number;
-      taxPercent: number;
-      lineTotal: number;
-    }>
-  >([]);
+  const [quotationId, setQuotationId] = useState(initialData?.id ?? "");
+  const [date, setDate] = useState(initialData?.date ?? "");
+  const [validity, setValidity] = useState(initialData?.validity ?? "");
+  const [customer, setCustomer] = useState(initialData?.customer ?? "");
+  const [customerVat, setCustomerVat] = useState(initialData?.customerVat ?? "");
+  const [customerAddress, setCustomerAddress] = useState(initialData?.customerAddress ?? "");
+  const [referenceNo, setReferenceNo] = useState(initialData?.referenceNo ?? "");
+  const [projectName, setProjectName] = useState(initialData?.projectName ?? "");
+  const [notes, setNotes] = useState(initialData?.notes ?? "");
+  const [status, setStatus] = useState(initialData?.status ?? "مفتوح");
+  const [items, setItems] = useState<QuotationItem[]>(initialData?.items?.length ? initialData.items : [createDefaultItem(1)]);
+  const [customers, setCustomers] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(
-      `sales-quotation-items-${quotation.id}`
-    );
-    if (stored) {
-      const parsed = JSON.parse(stored) as Array<{
-        id: number;
-        description: string;
-        unit: string;
-        quantity: number;
-        price: number;
-        discount: number;
-        taxPercent: number;
-      }>;
+    const loadDefaults = async () => {
+      const today = new Date();
+      const afterMonth = new Date(today);
+      afterMonth.setDate(today.getDate() + 30);
 
-      const mapped = parsed.map((item) => {
-        const lineSubtotal = item.quantity * item.price - item.discount;
-        const tax = (lineSubtotal * item.taxPercent) / 100;
-        return {
-          ...item,
-          lineTotal: lineSubtotal + tax,
-        };
-      });
-      setLineItems(mapped);
-    }
-  }, [quotation.id]);
+      if (!initialData) {
+        setDate(today.toISOString().split("T")[0]);
+        setValidity(afterMonth.toISOString().split("T")[0]);
 
-  const totals = lineItems.reduce(
-    (acc, item) => {
-      const lineSubtotal = item.quantity * item.price - item.discount;
-      const tax = (lineSubtotal * item.taxPercent) / 100;
-      return {
-        subtotal: acc.subtotal + lineSubtotal,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + lineSubtotal + tax,
-      };
-    },
-    { subtotal: 0, discount: 0, tax: 0, total: 0 }
-  );
+        const { data } = await supabase
+          .from("sales_quotations")
+          .select("id")
+          .like("id", "QUO-%")
+          .order("id", { ascending: false })
+          .limit(1);
 
-  return (
-    <div className="space-y-6 pb-12">
-      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
-        <button
-          onClick={onBack}
-          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
-        >
-          العودة للقائمة
-          <ArrowLeftRight className="h-4 w-4" />
-        </button>
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-extrabold text-foreground">تفاصيل عرض السعر</h1>
-          <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-        </div>
-      </div>
+        const latestId = data?.[0]?.id ?? "QUO-000099";
+        const latestNumber = Number(String(latestId).split("-")[1] ?? "99");
+        setQuotationId(`QUO-${String(latestNumber + 1).padStart(6, "0")}`);
+      }
 
-      <div className="p-4 space-y-6">
-        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
-            <h2 className="text-sm font-bold text-foreground">بيانات العرض</h2>
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">رقم العرض</label>
-              <div className="text-base text-sm font-bold text-foreground text-right">
-                {quotation.id}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">العميل</label>
-              <div className="text-base text-sm font-bold text-foreground text-right">
-                {quotation.customer}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ العرض</label>
-              <div className="text-base text-sm font-bold text-foreground text-right">
-                {quotation.date}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ الصلاحية</label>
-              <div className="text-base text-sm font-bold text-foreground text-right">
-                {quotation.validity}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">الإجمالي</label>
-              <div className="text-base text-sm font-bold text-foreground text-right">
-                {quotation.total}
-              </div>
-            </div>
-          </div>
-        </div>
+      const { data: customerRows } = await supabase.from("customers").select("name").order("name");
+      const names = (customerRows ?? []).map((r) => String(r.name ?? "")).filter(Boolean);
+      setCustomers(names);
+    };
 
-        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
-            <h2 className="text-sm font-bold text-foreground">بنود العرض</h2>
-          </div>
-          <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right">
-              <thead className="bg-slate-100 text-slate-700">
-                <tr>
-                  <th className="px-3 py-2 border border-slate-200">#</th>
-                  <th className="px-3 py-2 border border-slate-200">الوصف</th>
-                  <th className="px-3 py-2 border border-slate-200">الوحدة</th>
-                  <th className="px-3 py-2 border border-slate-200">الكمية</th>
-                  <th className="px-3 py-2 border border-slate-200">السعر</th>
-                  <th className="px-3 py-2 border border-slate-200">الخصم</th>
-                  <th className="px-3 py-2 border border-slate-200">الضريبة</th>
-                  <th className="px-3 py-2 border border-slate-200">الإجمالي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lineItems.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-3 py-2 border border-slate-200">{item.id}</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.description}</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.unit}</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.quantity}</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.price.toFixed(2)}</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.discount.toFixed(2)}</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.taxPercent}%</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.lineTotal.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    loadDefaults();
+  }, [initialData]);
 
-            <div className="border-t border-slate-200 pt-4 flex justify-end mt-6">
-              <div className="w-64 space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.subtotal.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">المجموع الفرعي</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.discount.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">الخصم</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.tax.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">الضريبة</span>
-                </div>
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
-                  <span className="font-bold text-blue-600">
-                    {totals.total.toFixed(2)} ريال
-                  </span>
-                  <span className="font-bold text-slate-800">الإجمالي</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+  const totals = useMemo(() => calculateTotals(items), [items]);
 
-function QuotationEdit({
-  quotation,
-  onBack,
-  onUpdated,
-}: {
-  quotation: QuotationRow;
-  onBack: () => void;
-  onUpdated: (quotation: QuotationRow) => void;
-}) {
-  const [reference, setReference] = useState("");
-  const [validity, setValidity] = useState(quotation.validity);
-  const [date, setDate] = useState(quotation.date);
-  const [customer, setCustomer] = useState(quotation.customer);
-  const [notes, setNotes] = useState("");
-  const [items, setItems] = useState(
-    () =>
-      JSON.parse(
-        localStorage.getItem(`sales-quotation-items-${quotation.id}`) || "null"
-      ) || [
-        {
-          id: 1,
-          description: "",
-          unit: "",
-          quantity: 1,
-          price: 0,
-          discount: 0,
-          taxPercent: 15,
-        },
-      ]
-  );
-
-  const handleAddItem = () => {
-    setItems((prev: typeof items) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        description: "",
-        unit: "",
-        quantity: 1,
-        price: 0,
-        discount: 0,
-        taxPercent: 15,
-      },
-    ]);
+  const updateItem = (id: number, changes: Partial<QuotationItem>) => {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...changes } : it)));
   };
 
-  const updateItem = (id: number, changes: Partial<(typeof items)[number]>) => {
-    setItems((prev: typeof items) =>
-      prev.map((item: (typeof items)[number]) =>
-        item.id === id ? { ...item, ...changes } : item
-      )
-    );
+  const addItem = () => {
+    setItems((prev) => [...prev, createDefaultItem(Date.now())]);
   };
 
   const removeItem = (id: number) => {
-    setItems((prev: typeof items) => prev.filter((item) => item.id !== id));
+    setItems((prev) => (prev.length === 1 ? prev : prev.filter((it) => it.id !== id)));
   };
 
-  const totals = items.reduce(
-    (acc: { subtotal: number; discount: number; tax: number; total: number }, item: (typeof items)[number]) => {
-      const lineSubtotal = item.quantity * item.price - item.discount;
-      const tax = (lineSubtotal * item.taxPercent) / 100;
-      const lineTotal = lineSubtotal + tax;
-      return {
-        subtotal: acc.subtotal + lineSubtotal,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + lineTotal,
-      };
-    },
-    { subtotal: 0, discount: 0, tax: 0, total: 0 }
-  );
+  const handleSave = async (nextStatus: string) => {
+    if (!quotationId || !customer || !date) {
+      toast({ title: "بيانات ناقصة", description: "يرجى إدخال رقم العرض والعميل والتاريخ" });
+      return;
+    }
 
-  const handleSave = async () => {
+    setSaving(true);
+
     const payload = {
+      id: quotationId,
       date,
       validity,
+      issue_date: date,
+      valid_until: validity || null,
       customer,
-      total: `ريال ${totals.total.toFixed(2)}`,
-      status: quotation.status,
+      customer_vat: customerVat || null,
+      customer_address: customerAddress || null,
+      reference_no: referenceNo || null,
+      project_name: projectName || null,
+      notes: notes || null,
+      status: nextStatus,
+      subtotal: totals.subtotal,
+      discount_total: totals.discount,
+      tax_total: totals.tax,
+      grand_total: totals.total,
+      total: totals.total.toFixed(2),
+      items,
     };
 
-    const { data, error } = await supabase
-      .from("sales_quotations")
-      .update(payload)
-      .eq("id", quotation.id)
-      .select()
-      .single();
+    const query = mode === "create"
+      ? supabase.from("sales_quotations").insert([payload]).select().single()
+      : supabase.from("sales_quotations").update(payload).eq("id", quotationId).select().single();
 
-    if (!error && data) {
-      localStorage.setItem(
-        `sales-quotation-items-${quotation.id}`,
-        JSON.stringify(items)
-      );
-      onUpdated({
-        id: data.id ?? quotation.id,
-        date: data.date ?? date,
-        validity: data.validity ?? validity,
-        customer: data.customer ?? customer,
-        total: data.total ?? payload.total,
-        status: data.status ?? quotation.status,
-        statusColor: statusColors[data.status ?? quotation.status] ?? "bg-cyan-500 text-white",
-      });
-      toast({ title: "تم تحديث عرض السعر", description: `العرض: ${quotation.id}` });
-      onBack();
-    } else {
-      toast({ title: "تعذر تحديث عرض السعر", description: "يرجى المحاولة لاحقاً" });
+    const { data, error } = await query;
+    setSaving(false);
+
+    if (error || !data) {
+      toast({ title: "تعذر حفظ عرض السعر", description: error?.message ?? "حدث خطأ غير متوقع" });
+      return;
     }
+
+    const mapped = mapRow(data as Record<string, unknown>);
+    onSaved(mapped);
+    toast({ title: mode === "create" ? "تم حفظ عرض السعر" : "تم تحديث عرض السعر", description: `العرض: ${mapped.id}` });
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
-        <button
-          onClick={onBack}
-          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
-        >
-          العودة للقائمة
-          <ArrowLeftRight className="h-4 w-4" />
+    <div className="space-y-5" dir="rtl">
+      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-white px-4 py-3">
+        <button onClick={onBack} className="px-4 py-2 rounded-lg border border-border text-sm font-semibold flex items-center gap-2">
+          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
         </button>
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-extrabold text-foreground">تعديل عرض السعر</h1>
-          <Edit className="h-5 w-5 text-emerald-600" />
+        <h1 className="text-lg font-bold">{mode === "create" ? "عرض سعر" : "تعديل عرض سعر"}</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleSave("مفتوح")}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} حفظ
+          </button>
+          <button
+            onClick={() => handleSave("مرسل")}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-60"
+          >
+            <Send className="h-4 w-4" /> حفظ ثم إرسال
+          </button>
         </div>
-        <button
-          onClick={handleSave}
-          className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:shadow-lg transition-all"
-        >
-          حفظ التعديلات
-        </button>
       </div>
 
-      <div className="p-4 space-y-6">
-        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
-            <h2 className="text-sm font-bold text-foreground">معلومات العرض</h2>
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ العرض</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">تاريخ الصلاحية</label>
-              <input
-                type="date"
-                value={validity}
-                onChange={(event) => setValidity(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">العميل</label>
-              <input
-                type="text"
-                value={customer}
-                onChange={(event) => setCustomer(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <QuotePreview
+          quotation={{
+            id: quotationId,
+            date,
+            validity,
+            customer,
+            customerVat,
+            customerAddress,
+            referenceNo,
+            projectName,
+            notes,
+            total: totals.total.toFixed(2),
+            status,
+            statusColor: statusColors[status] ?? "bg-cyan-500 text-white",
+            items,
+          }}
+        />
 
-        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-between">
-            <button
-              onClick={handleAddItem}
-              className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Plus className="h-4 w-4" />
-              إضافة بند
-            </button>
-            <h2 className="text-sm font-bold text-foreground">بنود العرض</h2>
+        <div className="rounded-xl border border-border/60 bg-white p-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="رقم عرض السعر">
+              <input value={quotationId} onChange={(e) => setQuotationId(e.target.value)} className={INPUT_CLASS} />
+            </Field>
+            <Field label="العميل">
+              <div className="space-y-2">
+                <select value={customer} onChange={(e) => setCustomer(e.target.value)} className={INPUT_CLASS}>
+                  <option value="">اختر العميل</option>
+                  {customers.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="أو اكتب اسم عميل جديد" className={INPUT_CLASS} />
+              </div>
+            </Field>
+            <Field label="التاريخ">
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={INPUT_CLASS} />
+            </Field>
+            <Field label="تاريخ الصلاحية">
+              <input type="date" value={validity} onChange={(e) => setValidity(e.target.value)} className={INPUT_CLASS} />
+            </Field>
+            <Field label="الرقم الضريبي للعميل">
+              <input value={customerVat} onChange={(e) => setCustomerVat(e.target.value)} className={INPUT_CLASS} />
+            </Field>
+            <Field label="رقم المرجع">
+              <input value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} className={INPUT_CLASS} />
+            </Field>
+            <Field label="العنوان" className="md:col-span-2">
+              <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className={INPUT_CLASS} />
+            </Field>
+            <Field label="المشروع" className="md:col-span-2">
+              <input value={projectName} onChange={(e) => setProjectName(e.target.value)} className={INPUT_CLASS} />
+            </Field>
           </div>
-          <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right mb-4">
-              <thead>
-                <tr className="text-slate-600 border-b border-slate-200">
-                  <th className="pb-2 font-medium w-16 text-center"></th>
-                  <th className="pb-2 font-medium w-32">الإجمالي</th>
-                  <th className="pb-2 font-medium w-32">الضريبة</th>
-                  <th className="pb-2 font-medium w-24">خصم</th>
-                  <th className="pb-2 font-medium w-32">السعر *</th>
-                  <th className="pb-2 font-medium w-24">الكمية *</th>
-                  <th className="pb-2 font-medium w-32">الوحدة</th>
-                  <th className="pb-2 font-medium w-[320px]">وصف البند *</th>
+
+          <div className="rounded-xl border border-slate-200 overflow-x-auto">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="px-2 py-2 border">الإجراءات</th>
+                  <th className="px-2 py-2 border">البند</th>
+                  <th className="px-2 py-2 border">الوصف</th>
+                  <th className="px-2 py-2 border">السعر</th>
+                  <th className="px-2 py-2 border">الكمية</th>
+                  <th className="px-2 py-2 border">الخصم</th>
+                  <th className="px-2 py-2 border">الضريبة %</th>
+                  <th className="px-2 py-2 border">المجموع</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item: (typeof items)[number]) => {
-                  const lineSubtotal = item.quantity * item.price - item.discount;
-                  const lineTax = (lineSubtotal * item.taxPercent) / 100;
-                  const lineTotal = lineSubtotal + lineTax;
+                {items.map((item) => {
+                  const subtotal = item.quantity * item.unitPrice - item.discount;
+                  const taxVal = (subtotal * item.taxPercent) / 100;
+                  const lineTotal = subtotal + taxVal;
 
                   return (
                     <tr key={item.id}>
-                      <td className="pt-4 align-top">
-                        <div className="flex items-center justify-center gap-1 h-10">
-                          <button
-                            onClick={() => removeItem(item.id)}
-                            className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      <td className="border px-2 py-2">
+                        <button onClick={() => removeItem(item.id)} className="w-7 h-7 rounded bg-red-500 text-white flex items-center justify-center">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </td>
-                      <td className="pt-4 px-1 align-top">
-                        <input
-                          type="text"
-                          value={lineTotal.toFixed(2)}
-                          disabled
-                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
-                        />
-                      </td>
-                      <td className="pt-4 px-1 align-top">
-                        <input
-                          type="number"
-                          value={item.taxPercent}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              taxPercent: Number(event.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                        />
-                      </td>
-                      <td className="pt-4 px-1 align-top">
-                        <input
-                          type="number"
-                          value={item.discount}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              discount: Number(event.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                        />
-                      </td>
-                      <td className="pt-4 px-1 align-top">
-                        <input
-                          type="number"
-                          value={item.price}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              price: Number(event.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                        />
-                      </td>
-                      <td className="pt-4 px-1 align-top">
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              quantity: Number(event.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                        />
-                      </td>
-                      <td className="pt-4 px-1 align-top">
-                        <input
-                          type="text"
-                          placeholder="اكتب الوحدة..."
-                          value={item.unit}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              unit: event.target.value,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                        />
-                      </td>
-                      <td className="pt-4 pl-1 align-top min-w-[320px]">
-                        <textarea
-                          rows={3}
-                          placeholder="اكتب وصف البند..."
-                          value={item.description}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              description: event.target.value,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
-                        />
-                      </td>
+                      <td className="border px-2 py-2"><input value={item.itemLabel} onChange={(e) => updateItem(item.id, { itemLabel: e.target.value })} className={`${INPUT_CLASS} h-9`} /></td>
+                      <td className="border px-2 py-2 min-w-[220px]"><input value={item.description} onChange={(e) => updateItem(item.id, { description: e.target.value })} className={`${INPUT_CLASS} h-9`} /></td>
+                      <td className="border px-2 py-2"><input type="number" value={item.unitPrice} onChange={(e) => updateItem(item.id, { unitPrice: toNum(e.target.value) })} className={`${INPUT_CLASS} h-9`} /></td>
+                      <td className="border px-2 py-2"><input type="number" value={item.quantity} onChange={(e) => updateItem(item.id, { quantity: toNum(e.target.value) })} className={`${INPUT_CLASS} h-9`} /></td>
+                      <td className="border px-2 py-2"><input type="number" value={item.discount} onChange={(e) => updateItem(item.id, { discount: toNum(e.target.value) })} className={`${INPUT_CLASS} h-9`} /></td>
+                      <td className="border px-2 py-2"><input type="number" value={item.taxPercent} onChange={(e) => updateItem(item.id, { taxPercent: toNum(e.target.value) })} className={`${INPUT_CLASS} h-9`} /></td>
+                      <td className="border px-2 py-2 font-semibold whitespace-nowrap">{formatMoney(lineTotal)}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-
-            <div className="border-t border-slate-200 pt-4 flex justify-end">
-              <div className="w-64 space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.subtotal.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">المجموع الفرعي</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.discount.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">الخصم</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.tax.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">الضريبة</span>
-                </div>
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
-                  <span className="font-bold text-emerald-600">
-                    {totals.total.toFixed(2)} ريال
-                  </span>
-                  <span className="font-bold text-slate-800">الإجمالي</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QuotationForm({
-  onBack,
-  onSaved,
-}: {
-  onBack: () => void;
-  onSaved: (quotation: QuotationRow) => void;
-}) {
-  const [quotationNumber, setQuotationNumber] = useState("");
-  const [reference, setReference] = useState("");
-  const [validity, setValidity] = useState("");
-  const [date, setDate] = useState("");
-  const [customer, setCustomer] = useState("");
-  const customerOptions = ["فندي بن سالم", "فندي كوزوبد", "شركة لاكجري العياف"];
-  const [notes, setNotes] = useState("");
-  const [items, setItems] = useState([
-    {
-      id: 1,
-      description: "",
-      unit: "",
-      quantity: 1,
-      price: 0,
-      discount: 0,
-      taxPercent: 15,
-    },
-  ]);
-
-  useEffect(() => {
-    const loadDefaults = async () => {
-      const today = new Date();
-      const nextMonth = new Date();
-      nextMonth.setDate(today.getDate() + 30);
-
-      setDate(today.toISOString().split("T")[0]);
-      setValidity(nextMonth.toISOString().split("T")[0]);
-
-      const { data } = await supabase
-        .from("sales_quotations")
-        .select("id")
-        .like("id", "QUO-%")
-        .order("id", { ascending: false })
-        .limit(1);
-
-      const latestId = data?.[0]?.id ?? "QUO-000099";
-      const latestNumber = Number(String(latestId).split("-")[1] ?? "99");
-      const nextNumber = `QUO-${String(latestNumber + 1).padStart(6, "0")}`;
-      setQuotationNumber(nextNumber);
-    };
-
-    void loadDefaults();
-  }, []);
-
-  const handleAddItem = () => {
-    setItems((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        description: "",
-        unit: "",
-        quantity: 1,
-        price: 0,
-        discount: 0,
-        taxPercent: 15,
-      },
-    ]);
-  };
-
-  const updateItem = (id: number, changes: Partial<(typeof items)[number]>) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...changes } : item))
-    );
-  };
-
-  const removeItem = (id: number) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const totals = items.reduce(
-    (acc, item) => {
-      const lineSubtotal = item.quantity * item.price - item.discount;
-      const tax = (lineSubtotal * item.taxPercent) / 100;
-      const lineTotal = lineSubtotal + tax;
-      return {
-        subtotal: acc.subtotal + lineSubtotal,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + lineTotal,
-      };
-    },
-    { subtotal: 0, discount: 0, tax: 0, total: 0 }
-  );
-
-  const handleSave = async () => {
-    const quotationId = quotationNumber || `QUO-${Date.now()}`;
-    const payload = {
-      id: quotationId,
-      date,
-      validity,
-      customer,
-      total: `ريال ${totals.total.toFixed(2)}`,
-      status: "مفتوح",
-    };
-
-    const { data, error } = await supabase
-      .from("sales_quotations")
-      .insert(payload)
-      .select()
-      .single();
-
-    if (!error && data) {
-      localStorage.setItem(
-        `sales-quotation-items-${data.id ?? quotationId}`,
-        JSON.stringify(items)
-      );
-      onSaved({
-        id: data.id ?? quotationId,
-        date: data.date ?? date,
-        validity: data.validity ?? validity,
-        customer: data.customer ?? customer,
-        total: data.total ?? payload.total,
-        status: data.status ?? "مفتوح",
-        statusColor: statusColors[data.status ?? "مفتوح"] ?? "bg-cyan-500 text-white",
-      });
-      toast({ title: "تم حفظ عرض السعر", description: `العرض: ${data.id ?? quotationId}` });
-      onBack();
-    } else {
-      toast({ title: "تعذر حفظ عرض السعر", description: "يرجى المحاولة لاحقاً" });
-    }
-  };
-
-  return (
-    <div className="space-y-6 pb-12">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white border border-border/50 shadow-sm px-4 py-3 animate-fade-in-up">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBack}
-            className="rounded-lg border border-border/70 bg-white px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/30"
-          >
-            إلغاء
-          </button>
-          <button
-            onClick={handleSave}
-            className="rounded-lg bg-[#51314f] px-4 py-2 text-sm font-bold text-white"
-          >
-            حفظ
-          </button>
-          <button
-            onClick={handleSave}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white"
-          >
-            حفظ ثم إرسال
-          </button>
-        </div>
-
-        <h1 className="text-lg font-extrabold text-foreground">إنشاء عرض سعر</h1>
-
-        <button
-          onClick={onBack}
-          className="rounded-lg border border-border/70 bg-white px-4 py-2 text-sm font-semibold text-muted-foreground"
-        >
-          العودة للقائمة
-        </button>
-      </div>
-
-      <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
-            <div className="h-16 w-16 rounded-lg bg-slate-700 text-white text-[11px] font-bold flex items-center justify-center text-center">
-              شركة لاكجري العياف
-            </div>
-            <div>
-              <p className="text-base font-bold text-foreground">شركة لاكجري العياف</p>
-              <p className="text-xs text-muted-foreground mt-1">الشارع رقم 20</p>
-              <p className="text-xs text-muted-foreground">المملكة العربية السعودية</p>
-              <p className="text-xs text-muted-foreground">315597905300003 : الرقم الضريبي</p>
-            </div>
           </div>
 
-          <div className="lg:col-span-2 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[12px] font-semibold text-muted-foreground text-right block">رقم عرض السعر</label>
-                <input
-                  type="text"
-                  value={quotationNumber}
-                  readOnly
-                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-muted/30"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[12px] font-semibold text-muted-foreground text-right block">العميل</label>
-                <select
-                  value={customer}
-                  onChange={(event) => setCustomer(event.target.value)}
-                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
-                >
-                  <option value="">اختر العميل</option>
-                  {customerOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[12px] font-semibold text-muted-foreground text-right block">تاريخ العرض</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[12px] font-semibold text-muted-foreground text-right block">تاريخ الصلاحية</label>
-                <input
-                  type="date"
-                  value={validity}
-                  onChange={(event) => setValidity(event.target.value)}
-                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[12px] font-semibold text-muted-foreground text-right block">أمر الشراء</label>
-                <input
-                  type="text"
-                  value={reference}
-                  onChange={(event) => setReference(event.target.value)}
-                  placeholder="اختياري"
-                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[12px] font-semibold text-muted-foreground text-right block">المشروع</label>
-                <input
-                  type="text"
-                  placeholder="اختياري"
-                  className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">المرجع</label>
-              <textarea
-                rows={2}
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="وصف العرض، تعليمات، مرجع داخلي..."
-                className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right resize-none"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Items */}
-        <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-between">
-            <button
-              onClick={handleAddItem}
-              className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Plus className="h-4 w-4" />
-              إضافة بند
+          <div className="flex justify-between items-center">
+            <button onClick={addItem} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold flex items-center gap-1.5">
+              <Plus className="h-4 w-4" /> إضافة بند
             </button>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-foreground">بنود العرض</h2>
-              <svg
-                className="h-5 w-5 text-slate-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 10h16M4 14h16M4 18h16"
-                />
-              </svg>
+            <div className="text-sm space-y-1 text-right">
+              <p>الإجمالي قبل الضريبة: <strong>{formatMoney(totals.subtotal)}</strong></p>
+              <p>الضريبة: <strong>{formatMoney(totals.tax)}</strong></p>
+              <p className="text-base">الإجمالي: <strong>{formatMoney(totals.total)}</strong></p>
             </div>
           </div>
-          <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right mb-4">
-              <thead>
-                <tr className="text-slate-600 border-b border-slate-200">
-                  <th className="pb-2 font-medium w-32">الإجمالي</th>
-                  <th className="pb-2 font-medium w-48">نوع الضريبة</th>
-                  <th className="pb-2 font-medium w-24">خصم</th>
-                  <th className="pb-2 font-medium w-32">السعر *</th>
-                  <th className="pb-2 font-medium w-24">الكمية *</th>
-                  <th className="pb-2 font-medium w-32">الوحدة</th>
-                  <th className="pb-2 font-medium w-[320px]">وصف البند *</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="pt-4 align-top">
-                      <div className="flex items-center justify-end gap-2 h-10">
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="pt-4 px-1 align-top">
-                      <select
-                        value={item.taxPercent}
-                        onChange={(event) =>
-                          updateItem(item.id, {
-                            taxPercent: Number(event.target.value) || 0,
-                          })
-                        }
-                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                      >
-                        <option value={15}>ضريبة 15% (15.0000%)</option>
-                        <option value={0}>معفاة (0%)</option>
-                      </select>
-                    </td>
-                    <td className="pt-4 px-1 align-top">
-                      <input
-                        type="number"
-                        value={item.discount}
-                        onChange={(event) =>
-                          updateItem(item.id, {
-                            discount: Number(event.target.value) || 0,
-                          })
-                        }
-                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                      />
-                    </td>
-                    <td className="pt-4 px-1 align-top">
-                      <input
-                        type="number"
-                        value={item.price}
-                        onChange={(event) =>
-                          updateItem(item.id, {
-                            price: Number(event.target.value) || 0,
-                          })
-                        }
-                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                      />
-                    </td>
-                    <td className="pt-4 px-1 align-top">
-                      <input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(event) =>
-                          updateItem(item.id, {
-                            quantity: Number(event.target.value) || 0,
-                          })
-                        }
-                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                      />
-                    </td>
-                    <td className="pt-4 px-1 align-top">
-                      <input
-                        type="text"
-                        placeholder="اكتب الوحدة..."
-                        value={item.unit}
-                        onChange={(event) =>
-                          updateItem(item.id, {
-                            unit: event.target.value,
-                          })
-                        }
-                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                      />
-                    </td>
-                    <td className="pt-4 pl-1 align-top min-w-[320px]">
-                      <textarea
-                        rows={3}
-                        placeholder="اكتب وصف البند..."
-                        value={item.description}
-                        onChange={(event) =>
-                          updateItem(item.id, {
-                            description: event.target.value,
-                          })
-                        }
-                        className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            
-            {/* Totals */}
-            <div className="border-t border-slate-200 pt-4 flex justify-end">
-              <div className="w-64 space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.subtotal.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">المجموع الفرعي</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.discount.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">الخصم</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-sm font-bold text-foreground">
-                    {totals.tax.toFixed(2)} ريال
-                  </span>
-                  <span className="text-slate-600">الضريبة</span>
-                </div>
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
-                  <span className="font-bold text-blue-600">
-                    {totals.total.toFixed(2)} ريال
-                  </span>
-                  <span className="font-bold text-slate-800">الإجمالي</span>
-                </div>
-              </div>
-            </div>
-          </div>
+
+          <Field label="ملاحظات">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${INPUT_CLASS} h-auto py-2 min-h-[88px]`} />
+          </Field>
         </div>
       </div>
     </div>
   );
 }
 
-function ChevronDown({ className }: { className?: string }) {
+function QuotationDetails({
+  quotation,
+  onBack,
+  onEdit,
+  onDownloadPdf,
+}: {
+  quotation: QuotationRow;
+  onBack: () => void;
+  onEdit: () => void;
+  onDownloadPdf: (quotation: QuotationRow) => void;
+}) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
+    <div className="space-y-4" dir="rtl">
+      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-white px-4 py-3">
+        <button onClick={onBack} className="px-4 py-2 rounded-lg border border-border text-sm font-semibold flex items-center gap-2">
+          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
+        </button>
+        <h1 className="text-lg font-bold">تفاصيل عرض السعر</h1>
+        <div className="flex gap-2">
+          <button onClick={() => onDownloadPdf(quotation)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-semibold flex items-center gap-1.5">
+            <Download className="h-4 w-4" /> PDF
+          </button>
+          <button onClick={onEdit} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold flex items-center gap-1.5">
+            <Edit className="h-4 w-4" /> تعديل
+          </button>
+        </div>
+      </div>
+
+      <QuotePreview quotation={quotation} />
+    </div>
   );
 }
 
-function ShoppingCart({ className }: { className?: string }) {
+function QuotePreview({ quotation }: { quotation: QuotationRow }) {
+  const totals = calculateTotals(quotation.items);
+
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <circle cx="8" cy="21" r="1" />
-      <circle cx="19" cy="21" r="1" />
-      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
-    </svg>
+    <div className="rounded-xl border border-slate-300 bg-white p-4 overflow-x-auto" dir="rtl">
+      <div className="min-w-[760px] space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-3xl font-bold">عرض سعر</h2>
+            <p className="text-sm mt-1">الرقم {quotation.id || "-"}</p>
+            <p className="text-sm">التاريخ {quotation.date || "-"}</p>
+          </div>
+
+          <div className="text-center text-sm leading-7">
+            <h3 className="text-2xl font-bold">{COMPANY_INFO.nameAr}</h3>
+            <p>السجل التجاري: {COMPANY_INFO.commercialNo}</p>
+            <p>الرقم الضريبي: {COMPANY_INFO.vatNo}</p>
+            <p>{COMPANY_INFO.city}</p>
+          </div>
+
+          <div className="text-left">
+            <img src={COMPANY_LOGO_URL} alt="Company Logo" className="w-28 h-20 object-contain" />
+            <p className="text-xs mt-1">{COMPANY_INFO.nameEn}</p>
+          </div>
+        </div>
+
+        <div className="text-center text-xl leading-9">
+          <p>العميل: {quotation.customer || "-"}</p>
+          <p>الرقم الضريبي: {quotation.customerVat || "-"}</p>
+          <p>العنوان: {quotation.customerAddress || "-"}</p>
+        </div>
+
+        <table className="w-full border-collapse text-lg">
+          <thead>
+            <tr className="bg-slate-200">
+              <th className="border border-slate-300 px-2 py-2">البند</th>
+              <th className="border border-slate-300 px-2 py-2">الوصف</th>
+              <th className="border border-slate-300 px-2 py-2">السعر</th>
+              <th className="border border-slate-300 px-2 py-2">الكمية</th>
+              <th className="border border-slate-300 px-2 py-2">الخصم</th>
+              <th className="border border-slate-300 px-2 py-2">المجموع بدون الضريبة</th>
+              <th className="border border-slate-300 px-2 py-2">نسبة الضريبة</th>
+              <th className="border border-slate-300 px-2 py-2">قيمة الضريبة</th>
+              <th className="border border-slate-300 px-2 py-2">المجموع</th>
+            </tr>
+          </thead>
+          <tbody>
+            {quotation.items.map((item) => {
+              const lineSubtotal = item.quantity * item.unitPrice - item.discount;
+              const lineTax = (lineSubtotal * item.taxPercent) / 100;
+              const lineTotal = lineSubtotal + lineTax;
+
+              return (
+                <tr key={item.id}>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{item.itemLabel || "-"}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{item.description || "-"}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(item.unitPrice)}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{item.quantity}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(item.discount)}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(lineSubtotal)}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{item.taxPercent}%</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(lineTax)}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center font-semibold">{formatMoney(lineTotal)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        <div className="max-w-md mr-auto text-2xl leading-10 border-t border-slate-300 pt-2">
+          <div className="flex justify-between"><span>{formatMoney(totals.subtotal)}</span><span>الإجمالي قبل الضريبة</span></div>
+          <div className="flex justify-between"><span>{formatMoney(totals.tax)}</span><span>القيمة المضافة %15</span></div>
+          <div className="flex justify-between font-bold"><span>{formatMoney(totals.total)}</span><span>الإجمالي (﷼)</span></div>
+          <div className="flex justify-between font-bold"><span>{formatMoney(totals.total)}</span><span>المستحق (﷼)</span></div>
+        </div>
+
+        <div className="pt-3 text-lg leading-8">
+          <h4 className="font-bold">ملاحظات</h4>
+          <p>{quotation.notes || "-"}</p>
+          <h4 className="font-bold mt-2">البيانات البنكية</h4>
+          <p>*اسم البنك : {COMPANY_INFO.bankName}</p>
+          <p>*اسم المستفيد : {COMPANY_INFO.beneficiary}</p>
+          <p>*رقم الحساب : {COMPANY_INFO.accountNo}</p>
+          <p>*رقم الايبان : {COMPANY_INFO.iban}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("space-y-1", className)}>
+      <label className="text-xs text-slate-500 font-semibold">{label}</label>
+      {children}
+    </div>
   );
 }

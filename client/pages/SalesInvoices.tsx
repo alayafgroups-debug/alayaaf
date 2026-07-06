@@ -109,59 +109,213 @@ export default function SalesInvoices() {
 
   const handleDownloadPdf = (invoice: Invoice) => {
     const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      return;
-    }
+    if (!printWindow) return;
+
+    const escapeHtml = (value: string) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const stored = localStorage.getItem(`sales-invoice-items-${invoice.id}`);
+    const parsedItems = stored
+      ? (JSON.parse(stored) as Array<{
+          id: number;
+          description: string;
+          quantity: number;
+          unitPrice: number;
+          discount: number;
+          taxPercent: number;
+        }>)
+      : [];
+
+    const fallbackTotal = parseCurrency(invoice.total);
+    const lineItems =
+      parsedItems.length > 0
+        ? parsedItems
+        : [
+            {
+              id: 1,
+              description: "-",
+              quantity: 1,
+              unitPrice: fallbackTotal / 1.15,
+              discount: 0,
+              taxPercent: 15,
+            },
+          ];
+
+    const rows = lineItems.map((item, idx) => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unitPrice) || 0;
+      const discount = Number(item.discount) || 0;
+      const taxPercent = Number(item.taxPercent) || 0;
+      const taxable = qty * price - discount;
+      const vat = (taxable * taxPercent) / 100;
+      const total = taxable + vat;
+      return {
+        idx: idx + 1,
+        description: item.description || "-",
+        qty,
+        price,
+        taxable,
+        vat,
+        taxPercent,
+        total,
+      };
+    });
+
+    const totals = rows.reduce(
+      (acc, row) => {
+        acc.taxable += row.taxable;
+        acc.vat += row.vat;
+        acc.total += row.total;
+        return acc;
+      },
+      { taxable: 0, vat: 0, total: 0 }
+    );
+
+    const rowsHtml = rows
+      .map(
+        (row) => `
+          <tr>
+            <td>${row.idx}</td>
+            <td>${escapeHtml(row.description)}</td>
+            <td>${row.qty}</td>
+            <td>${row.price.toFixed(2)}</td>
+            <td>${row.taxable.toFixed(2)}</td>
+            <td>${row.vat.toFixed(2)}<div class="vat-rate">${row.taxPercent}%</div></td>
+            <td>${row.total.toFixed(2)}</td>
+          </tr>
+        `
+      )
+      .join("");
 
     printWindow.document.write(`
-      <html dir="rtl">
+      <html dir="rtl" lang="ar">
         <head>
-          <title>فاتورة ${invoice.id}</title>
+          <meta charset="utf-8" />
+          <title>فاتورة ${escapeHtml(invoice.id)}</title>
           <style>
-            body { font-family: 'Cairo', Arial, sans-serif; padding: 24px; }
-            h1 { color: #1f2937; }
-            .section { margin-top: 16px; }
-            .label { color: #6b7280; font-size: 14px; }
-            .value { font-size: 16px; font-weight: 600; }
+            @page { size: A4; margin: 10mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; font-family: Arial, sans-serif; color: #111827; }
+            .sheet { width: 190mm; margin: 0 auto; background: #fff; }
+            .head { border: 1px solid #d1d5db; padding: 10px 12px; }
+            .company-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+            .company-ar, .company-en { font-size: 11px; line-height: 1.5; }
+            .company-ar { text-align: right; }
+            .company-en { text-align: left; }
+            .logo-box { width: 120px; height: 58px; border: 1px solid #9ca3af; background: #1f2937; color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; text-align: center; margin: 0 auto; }
+            .title { text-align: center; font-size: 24px; font-weight: 700; margin: 8px 0 10px; }
+            .meta { border: 1px solid #d1d5db; font-size: 12px; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; }
+            .meta-cell { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+            .meta-grid .meta-cell:nth-child(odd) { border-left: 1px solid #e5e7eb; }
+            .meta-cell .row { display: flex; justify-content: space-between; gap: 8px; }
+            .meta-cell .label { color: #4b5563; }
+            .meta-cell .value { font-weight: 700; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+            th, td { border: 1px solid #d1d5db; padding: 7px 6px; text-align: center; vertical-align: middle; }
+            th { background: #f3f4f6; font-weight: 700; }
+            .vat-rate { font-size: 10px; color: #6b7280; margin-top: 2px; }
+            .bottom { display: grid; grid-template-columns: 1fr 300px; gap: 14px; margin-top: 12px; align-items: start; }
+            .qr-note { display: flex; align-items: center; gap: 10px; }
+            .qr-box { width: 96px; height: 96px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; }
+            .qr-text { font-size: 10px; color: #6b7280; line-height: 1.5; }
+            .notes { margin-top: 8px; font-size: 11px; line-height: 1.6; }
+            .totals { font-size: 13px; border-top: 1px solid #d1d5db; padding-top: 6px; }
+            .totals .row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+            .totals .final { font-weight: 700; font-size: 14px; }
+            .bank { margin-top: 10px; border-top: 1px solid #d1d5db; padding-top: 8px; font-size: 11px; line-height: 1.7; }
           </style>
         </head>
         <body>
-          <h1>تفاصيل الفاتورة</h1>
-          <div class="section">
-            <div class="label">رقم الفاتورة</div>
-            <div class="value">${invoice.id}</div>
-          </div>
-          <div class="section">
-            <div class="label">العميل</div>
-            <div class="value">${invoice.customer}</div>
-          </div>
-          <div class="section">
-            <div class="label">تاريخ الفاتورة</div>
-            <div class="value">${invoice.date}</div>
-          </div>
-          <div class="section">
-            <div class="label">تاريخ الاستحقاق</div>
-            <div class="value">${invoice.dueDate}</div>
-          </div>
-          <div class="section">
-            <div class="label">الإجمالي</div>
-            <div class="value">${invoice.total}</div>
-          </div>
-          <div class="section">
-            <div class="label">المدفوع</div>
-            <div class="value">${invoice.paid}</div>
-          </div>
-          <div class="section">
-            <div class="label">المتبقي</div>
-            <div class="value">${invoice.remaining}</div>
-          </div>
-          <div class="section">
-            <div class="label">الحالة</div>
-            <div class="value">${invoice.status}</div>
+          <div class="sheet">
+            <div class="head">
+              <div class="company-row">
+                <div class="company-ar">
+                  <strong>شركة لاكجري العياف</strong><br />
+                  8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة، المملكة العربية السعودية 24351<br />
+                  رقم التسجيل الضريبي 314559705300003<br />
+                  رقم السجل التجاري 7053358979
+                </div>
+                <div class="logo-box">شعار<br/>شركة لاكجري العياف</div>
+                <div class="company-en">
+                  <strong>Luxury Al Ayaf company</strong><br />
+                  8529, Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca, 24351, Kingdom of Saudi Arabia<br />
+                  VAT number 314559705300003<br />
+                  CR Number 7053358979
+                </div>
+              </div>
+
+              <div class="title">فاتورة ضريبية Tax Invoice</div>
+
+              <div class="meta">
+                <div class="meta-grid">
+                  <div class="meta-cell">
+                    <div class="row"><span class="label">العميل</span><span class="value">${escapeHtml(invoice.customer)}</span></div>
+                    <div class="row"><span class="label">العنوان</span><span class="value">المملكة العربية السعودية</span></div>
+                    <div class="row"><span class="label">الهاتف</span><span class="value">0507089850</span></div>
+                    <div class="row"><span class="label">رقم التسجيل الضريبي</span><span class="value">312731286200003</span></div>
+                  </div>
+                  <div class="meta-cell">
+                    <div class="row"><span class="label">رقم الفاتورة</span><span class="value">${escapeHtml(invoice.id)}</span></div>
+                    <div class="row"><span class="label">التاريخ</span><span class="value">${escapeHtml(invoice.date)}</span></div>
+                    <div class="row"><span class="label">تاريخ الاستحقاق</span><span class="value">${escapeHtml(invoice.dueDate)}</span></div>
+                    <div class="row"><span class="label">الحالة</span><span class="value">${escapeHtml(invoice.status)}</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>الوصف<br/>Description</th>
+                    <th>الكمية<br/>Qty</th>
+                    <th>السعر<br/>Price</th>
+                    <th>المبلغ الخاضع للضريبة<br/>Taxable amount</th>
+                    <th>المبلغ المضافة<br/>VAT amount</th>
+                    <th>المجموع<br/>Line amount</th>
+                  </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+
+              <div class="bottom">
+                <div>
+                  <div class="qr-note">
+                    <div class="qr-box">QR</div>
+                    <div class="qr-text">تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية</div>
+                  </div>
+                  <div class="notes">
+                    <strong>ملاحظات</strong><br/>
+                    بيانات الحساب البنكي:<br/>
+                    اسم المستفيد: شركة لاكجري العياف<br/>
+                    رقم الحساب: 1575917249940<br/>
+                    رقم الايبان: SA3520000001575917249940<br/>
+                    بنك الرياض
+                  </div>
+                </div>
+                <div class="totals">
+                  <div class="row"><span>المجموع الفرعي Subtotal</span><strong>${totals.taxable.toFixed(2)} ﷼</strong></div>
+                  <div class="row"><span>إجمالي ضريبة القيمة المضافة Total VAT</span><strong>${totals.vat.toFixed(2)} ﷼</strong></div>
+                  <div class="row final"><span>المجموع شامل القيمة المضافة Total</span><strong>${totals.total.toFixed(2)} ﷼</strong></div>
+                </div>
+              </div>
+
+              <div class="bank">
+                المدفوع: ${escapeHtml(invoice.paid)}<br/>
+                المتبقي: ${escapeHtml(invoice.remaining)}
+              </div>
+            </div>
           </div>
         </body>
       </html>
     `);
+
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();

@@ -66,7 +66,10 @@ const statusColors: Record<string, string> = {
 };
 
 const COMPANY_LOGO_URL =
-  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2F170c644ba9324aa19b4716bb738402ab?format=webp&width=800&height=1200";
+  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200";
+
+const COMPANY_BARCODE_URL =
+  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2F2f0ac7e4a5824676b83f27699b1d8a92?format=webp&width=800&height=1200";
 
 const COMPANY_INFO = {
   nameAr: "شركة إدارة العياف للمقاولات",
@@ -234,7 +237,7 @@ export default function Quotations() {
             th{background:#e5e7eb;font-weight:700}
             .totals{width:420px;margin-top:12px;font-size:30px}
             .totals div{display:flex;justify-content:space-between;border-bottom:1px solid #d1d5db;padding:6px 0}
-            .bank{margin-top:30px;font-size:18px;line-height:1.9}
+            .bank{margin-top:30px;font-size:18px;line-height:1.9;display:flex;gap:24px;align-items:flex-start;justify-content:space-between}.barcode{width:180px;height:180px;object-fit:contain;border:1px solid #e5e7eb;padding:4px}
           </style>
         </head>
         <body>
@@ -287,12 +290,15 @@ export default function Quotations() {
             </div>
 
             <div class="bank">
-              <strong>ملاحظات</strong><br/>
-              <strong>البيانات البنكية</strong><br/>
-              *اسم البنك: ${COMPANY_INFO.bankName}<br/>
-              *اسم المستفيد: ${COMPANY_INFO.beneficiary}<br/>
-              *رقم الحساب: ${COMPANY_INFO.accountNo}<br/>
-              *رقم الايبان: ${COMPANY_INFO.iban}
+              <div>
+                <strong>ملاحظة</strong><br/>
+                <strong>البيانات البنكية</strong><br/>
+                *اسم البنك: ${COMPANY_INFO.bankName}<br/>
+                *اسم المستفيد: ${COMPANY_INFO.beneficiary}<br/>
+                *رقم الحساب: ${COMPANY_INFO.accountNo}<br/>
+                *رقم الايبان: ${COMPANY_INFO.iban}
+              </div>
+              <img src="${COMPANY_BARCODE_URL}" class="barcode" alt="barcode" />
             </div>
           </div>
         </body>
@@ -790,14 +796,17 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
           <div className="flex justify-between font-bold"><span>{formatMoney(totals.total)}</span><span>المستحق (﷼)</span></div>
         </div>
 
-        <div className="pt-3 text-lg leading-8">
-          <h4 className="font-bold">ملاحظات</h4>
-          <p>{quotation.notes || "-"}</p>
-          <h4 className="font-bold mt-2">البيانات البنكية</h4>
-          <p>*اسم البنك : {COMPANY_INFO.bankName}</p>
-          <p>*اسم المستفيد : {COMPANY_INFO.beneficiary}</p>
-          <p>*رقم الحساب : {COMPANY_INFO.accountNo}</p>
-          <p>*رقم الايبان : {COMPANY_INFO.iban}</p>
+        <div className="pt-3 text-lg leading-8 flex items-start justify-between gap-6">
+          <div>
+            <h4 className="font-bold">ملاحظة</h4>
+            <p>{quotation.notes || "-"}</p>
+            <h4 className="font-bold mt-2">البيانات البنكية</h4>
+            <p>*اسم البنك : {COMPANY_INFO.bankName}</p>
+            <p>*اسم المستفيد : {COMPANY_INFO.beneficiary}</p>
+            <p>*رقم الحساب : {COMPANY_INFO.accountNo}</p>
+            <p>*رقم الايبان : {COMPANY_INFO.iban}</p>
+          </div>
+          <img src={COMPANY_BARCODE_URL} alt="barcode" className="w-40 h-40 object-contain border border-slate-200 p-1" />
         </div>
       </div>
     </div>

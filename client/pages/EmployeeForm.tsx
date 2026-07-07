@@ -434,16 +434,16 @@ export default function EmployeeForm({
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
-            className="flex items-center gap-1 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-5 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            التالي <ChevronLeft className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" /> السابق
           </button>
           <button
             onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
             disabled={step === STEPS.length - 1}
-            className="flex items-center gap-1 px-5 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ChevronRight className="h-4 w-4" /> السابق
+            التالي <ChevronLeft className="h-4 w-4" />
           </button>
         </div>
       </div>

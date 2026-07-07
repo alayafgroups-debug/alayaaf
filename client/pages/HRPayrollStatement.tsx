@@ -196,13 +196,66 @@ export default function HRPayrollStatement() {
     }
   };
 
-  const resetFilters = () => {
-    setSearch("");
-    setBranchFilter("الكل");
-    setDepartmentFilter("الكل");
-    setLocationFilter("الكل");
-    setTypeFilter("الكل");
-    setStatusFilter("نشط");
+  const handleSummaryReport = () => {
+    if (filtered.length === 0) {
+      toast({ title: "لا توجد بيانات", description: "لا يوجد موظفون مطابقون للفلاتر" });
+      return;
+    }
+
+    const totalBase = filtered.reduce((sum, e) => sum + e.baseSalary, 0);
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const rows = filtered
+      .map(
+        (e, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${e.name}</td>
+            <td>${e.jobTitle || "-"}</td>
+            <td>${e.department || "-"}</td>
+            <td>${e.branch || "-"}</td>
+            <td>${e.employeeType || "-"}</td>
+            <td>${e.baseSalary.toFixed(2)}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    printWindow.document.write(`
+      <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="utf-8" />
+          <title>تقرير شامل (ملخص)</title>
+          <style>
+            body{font-family:Arial,sans-serif;padding:20px;color:#0f172a}
+            h1{margin:0 0 8px;font-size:20px}
+            p{margin:0 0 14px;color:#475569;font-size:13px}
+            table{width:100%;border-collapse:collapse;font-size:12px}
+            th,td{border:1px solid #cbd5e1;padding:6px;text-align:center}
+            th{background:#f1f5f9}
+            .sum{margin-top:12px;font-weight:700}
+          </style>
+        </head>
+        <body>
+          <h1>تقرير شامل (ملخص)</h1>
+          <p>الفترة: ${period} | عدد الموظفين: ${filtered.length}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>الاسم</th><th>المسمى الوظيفي</th><th>الإدارة</th><th>الفرع</th><th>نوع الموظف</th><th>الراتب الأساسي</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="sum">إجمالي الرواتب الأساسية: ${totalBase.toFixed(2)} ر.س</div>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
 
   return (
@@ -245,9 +298,11 @@ export default function HRPayrollStatement() {
             </div>
 
             <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={resetFilters}>تصفير الفلاتر</Button>
+              <Button variant="outline" onClick={handleSummaryReport}>
+                تقرير شامل (ملخص)
+              </Button>
               <Button onClick={handleGenerate} disabled={generating || selected.size === 0} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                {generating ? "جاري الإنشاء..." : `إنشاء مسير (${selected.size} موظف)`}
+                {generating ? "جاري المعالجة..." : "اختيار الموظفين (تفصيلي)"}
               </Button>
             </div>
           </div>

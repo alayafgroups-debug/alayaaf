@@ -20,17 +20,32 @@ export default function HRRequestsIncoming() {
     setLoading(true);
     try {
       const { data } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false });
-      if (data) setItems(data.map((r: any) => ({
-        id: String(r.id), requestDate: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
-        empId: r.emp_id ?? "", empName: r.emp_name ?? "",
-        moveType: "إجازة", requestType: r.leave_type ?? "-",
-        status: r.status ?? "معلق",
-        lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
-      })));
+      if (data) setItems(data.map((r: any) => {
+        const rawStatus = String(r.status ?? "").trim();
+        const status = ["معلق", "معلقة", "pending"].includes(rawStatus)
+          ? "معلق"
+          : ["موافق", "معتمدة", "approved"].includes(rawStatus)
+          ? "موافق"
+          : ["مرفوض", "مرفوضة", "rejected"].includes(rawStatus)
+          ? "مرفوض"
+          : (rawStatus || "معلق");
+
+        return {
+          id: String(r.id), requestDate: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
+          empId: r.emp_id ?? "", empName: r.emp_name ?? "",
+          moveType: "إجازة", requestType: r.leave_type ?? "-",
+          status,
+          lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
+        };
+      }));
     } catch { setItems([]); } finally { setLoading(false); }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+    const timer = setInterval(loadData, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleApprove = async (item: RequestRow) => {
     await supabase.from("leave_requests").update({ status: "موافق" }).eq("id", item.id);

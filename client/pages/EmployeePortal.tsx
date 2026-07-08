@@ -36,6 +36,14 @@ interface UserSession {
   permissions: Record<string, boolean>;
 }
 
+interface EmployeeRequest {
+  id: string;
+  type: string;
+  status: string;
+  createdAt: string;
+  reason: string;
+}
+
 type AppPage = "home" | "requests" | "send-request" | "more";
 
 const REQUEST_TYPES = [
@@ -92,9 +100,11 @@ export default function EmployeePortal() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState<AppPage>("home");
-  const [notificationCount, setNotificationCount] = useState(12);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [requestsTab, setRequestsTab] = useState<"received" | "draft" | "sent" | "attached">("received");
   const [searchQuery, setSearchQuery] = useState("");
+  const [employeeRequests, setEmployeeRequests] = useState<EmployeeRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
 
   // Face verification camera state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -239,9 +249,71 @@ export default function EmployeePortal() {
     navigate("/employee/login");
   };
 
-  const handleSendRequest = (type: typeof REQUEST_TYPES[0]) => {
-    toast.success(`تم تقديم طلب ${type.name}`);
-    setCurrentPage("requests");
+  const normalizeStatus = (status?: string) => {
+    const s = String(status ?? "").trim();
+    if (["معلق", "معلقة", "pending"].includes(s)) return "معلق";
+    if (["موافق", "معتمدة", "approved"].includes(s)) return "موافق";
+    if (["مرفوض", "مرفوضة", "rejected"].includes(s)) return "مرفوض";
+    return s || "معلق";
+  };
+
+  const loadEmployeeRequests = async (empId: string) => {
+    setRequestsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("leave_requests")
+        .select("id, leave_type, status, created_at, reason")
+        .eq("emp_id", empId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const mapped: EmployeeRequest[] = (data ?? []).map((r: any) => ({
+        id: String(r.id),
+        type: String(r.leave_type ?? "طلب"),
+        status: normalizeStatus(r.status),
+        createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
+        reason: String(r.reason ?? "-")
+      }));
+
+      setEmployeeRequests(mapped);
+      setNotificationCount(mapped.filter((r) => r.status === "معلق").length);
+    } catch {
+      setEmployeeRequests([]);
+      setNotificationCount(0);
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
+
+  const handleSendRequest = async (type: typeof REQUEST_TYPES[0]) => {
+    if (!user) return;
+
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+
+    try {
+      const { error } = await supabase.from("leave_requests").insert([
+        {
+          emp_id: user.empId,
+          emp_name: user.name,
+          leave_type: type.name,
+          start_date: today,
+          end_date: today,
+          status: "معلق",
+          reason: `طلب ${type.name} من بوابة الموظف`,
+          notes: "تم الإرسال من لوحة الموظف"
+        },
+      ]);
+
+      if (error) throw error;
+
+      toast.success(`تم إرسال طلب ${type.name} بنجاح`);
+      await loadEmployeeRequests(user.empId);
+      setCurrentPage("requests");
+    } catch {
+      toast.error("تعذر إرسال الطلب، تحقق من إعدادات قاعدة البيانات");
+    }
   };
 
   const handleMoreOption = (option: typeof MORE_OPTIONS[0]) => {
@@ -251,6 +323,32 @@ export default function EmployeePortal() {
       toast.info(`سيتم فتح ${option.name}`);
     }
   };
+
+  useEffect(() => {
+    if (user?.empId) {
+      loadEmployeeRequests(user.empId);
+    }
+  }, [user?.empId]);
+
+  useEffect(() => {
+    if (!user?.empId || currentPage !== "requests") return;
+
+    loadEmployeeRequests(user.empId);
+    const timer = setInterval(() => {
+      loadEmployeeRequests(user.empId);
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, [currentPage, user?.empId]);
+
+  const filteredRequests = employeeRequests.filter((r) => {
+    const matchesSearch = !searchQuery || r.type.includes(searchQuery) || r.reason.includes(searchQuery);
+
+    if (requestsTab === "draft") return matchesSearch && r.status === "معلق";
+    if (requestsTab === "sent") return matchesSearch && r.status === "موافق";
+    if (requestsTab === "attached") return matchesSearch && r.status === "مرفوض";
+    return matchesSearch;
+  });
 
   if (loading) {
     return (
@@ -457,10 +555,35 @@ export default function EmployeePortal() {
                 </div>
               </div>
 
-              {/* Empty State */}
-              <div className="flex flex-col items-center justify-center py-12 px-4">
-                <AlertCircle className="h-16 w-16 text-gray-400 mb-4" />
-                <p className="text-gray-600 font-semibold mb-2">لا توجد بيانات</p>
+              {/* Requests List */}
+              <div className="px-4 pb-4 space-y-3">
+                {requestsLoading ? (
+                  <div className="bg-white rounded-lg p-6 text-center text-gray-500">جاري تحميل الطلبات...</div>
+                ) : filteredRequests.length === 0 ? (
+                  <div className="bg-white rounded-lg p-6 text-center">
+                    <AlertCircle className="h-10 w-10 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-600 font-medium">لا توجد طلبات</p>
+                  </div>
+                ) : (
+                  filteredRequests.map((req) => (
+                    <div key={req.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-semibold text-gray-900">{req.type}</p>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          req.status === "موافق"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : req.status === "مرفوض"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-yellow-100 text-yellow-800"
+                        }`}>
+                          {req.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mb-1">تاريخ الإرسال: {req.createdAt}</p>
+                      <p className="text-sm text-gray-600">{req.reason}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -790,17 +913,56 @@ export default function EmployeePortal() {
                 </div>
               </div>
 
-              {/* Empty State */}
-              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-                <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 font-semibold mb-6">لا توجد طلبات</p>
-                <Button
-                  onClick={() => setCurrentPage("send-request")}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4 ml-2" />
-                  إرسال طلب جديد
-                </Button>
+              {/* Requests List */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                {requestsLoading ? (
+                  <div className="text-center py-8 text-gray-500">جاري تحميل الطلبات...</div>
+                ) : filteredRequests.length === 0 ? (
+                  <div className="text-center py-8">
+                    <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 font-semibold mb-6">لا توجد طلبات</p>
+                    <Button
+                      onClick={() => setCurrentPage("send-request")}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Plus className="h-4 w-4 ml-2" />
+                      إرسال طلب جديد
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-right">
+                      <thead className="bg-[#004e89] text-white">
+                        <tr>
+                          <th className="py-3 px-4">نوع الطلب</th>
+                          <th className="py-3 px-4">السبب</th>
+                          <th className="py-3 px-4">تاريخ الإرسال</th>
+                          <th className="py-3 px-4 text-center">الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRequests.map((req) => (
+                          <tr key={req.id} className="border-b hover:bg-gray-50">
+                            <td className="py-3 px-4 font-medium">{req.type}</td>
+                            <td className="py-3 px-4 text-gray-600">{req.reason}</td>
+                            <td className="py-3 px-4">{req.createdAt}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                req.status === "موافق"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : req.status === "مرفوض"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}>
+                                {req.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </>
           )}

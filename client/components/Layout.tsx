@@ -118,6 +118,7 @@ const hrNavItems: HRNavItem[] = [
     icon: Clock, label: "حساب الدوام", href: "/hr/attendance", hasChildren: true,
     children: [
       { icon: Clock, label: "حساب الدوام", href: "/hr/attendance/calculate" },
+      { icon: FileText, label: "تقرير الحضور والانصراف", href: "/hr/attendance/report" },
       { icon: Settings, label: "إعداد فترات الدوام", href: "/hr/attendance/schedules" },
     ],
   },

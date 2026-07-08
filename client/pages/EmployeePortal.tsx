@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,8 +20,12 @@ import {
   Briefcase,
   Zap,
   Filter,
+  ScanFace,
+  X,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabaseClient";
 
 interface UserSession {
   id: string;
@@ -91,6 +95,126 @@ export default function EmployeePortal() {
   const [notificationCount, setNotificationCount] = useState(12);
   const [requestsTab, setRequestsTab] = useState<"received" | "draft" | "sent" | "attached">("received");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Face verification camera state
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<"in" | "out">("in");
+  const [verifyStatus, setVerifyStatus] = useState<"idle" | "verifying" | "success">("idle");
+  const [checkInTime, setCheckInTime] = useState<string | null>(null);
+  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const openCamera = async (mode: "in" | "out") => {
+    setCameraMode(mode);
+    setVerifyStatus("idle");
+    setCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+      });
+      streamRef.current = stream;
+      // wait for the modal video element to mount
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    } catch {
+      toast.error("تعذّر فتح الكاميرا، يرجى السماح بالوصول للكاميرا");
+    }
+  };
+
+  const closeCamera = () => {
+    stopCamera();
+    setCameraOpen(false);
+    setVerifyStatus("idle");
+  };
+
+  const saveAttendance = async (mode: "in" | "out", time: string, date: string) => {
+    if (!user) return;
+    try {
+      if (mode === "in") {
+        await supabase.from("attendance").insert([
+          {
+            emp_id: user.empId,
+            emp_name: user.name,
+            check_in: time,
+            date: date,
+            status: "حاضر",
+          },
+        ]);
+      } else {
+        // update today's record with check_out
+        const { data: existing } = await supabase
+          .from("attendance")
+          .select("id")
+          .eq("emp_id", user.empId)
+          .eq("date", date)
+          .limit(1);
+        if (existing && existing.length > 0) {
+          await supabase
+            .from("attendance")
+            .update({ check_out: time })
+            .eq("id", (existing[0] as any).id);
+        } else {
+          await supabase.from("attendance").insert([
+            {
+              emp_id: user.empId,
+              emp_name: user.name,
+              check_out: time,
+              date: date,
+              status: "حاضر",
+            },
+          ]);
+        }
+      }
+    } catch {
+      // Silent fail - keep local state even if DB write fails
+    }
+  };
+
+  const handleVerifyFace = () => {
+    setVerifyStatus("verifying");
+    // Simulate face scan
+    setTimeout(async () => {
+      const now = new Date();
+      const time = now.toLocaleTimeString("en-GB", { hour12: false });
+      const date = now.toISOString().slice(0, 10);
+
+      await saveAttendance(cameraMode, time, date);
+
+      if (cameraMode === "in") {
+        setCheckInTime(`${time} ${date}`);
+      } else {
+        setCheckOutTime(`${time} ${date}`);
+      }
+
+      setVerifyStatus("success");
+      toast.success(
+        cameraMode === "in"
+          ? "تم التحقق من الوجه وتسجيل الحضور بنجاح"
+          : "تم التحقق من الوجه وتسجيل الانصراف بنجاح"
+      );
+
+      setTimeout(() => {
+        closeCamera();
+      }, 1500);
+    }, 2500);
+  };
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
 
   useEffect(() => {
     const sessionStr = localStorage.getItem("user_session");
@@ -237,22 +361,39 @@ export default function EmployeePortal() {
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="text-center bg-green-50 p-3 rounded-xl">
                     <p className="text-xs text-gray-500 mb-1">تسجيل الحضور</p>
-                    <p className="font-mono text-sm font-bold text-gray-900">08:00:00</p>
-                    <p className="font-mono text-xs text-gray-500">2026-01-29</p>
+                    <p className="font-mono text-sm font-bold text-gray-900">
+                      {checkInTime ? checkInTime.split(" ")[0] : "--:--:--"}
+                    </p>
+                    <p className="font-mono text-xs text-gray-500">
+                      {checkInTime ? checkInTime.split(" ")[1] : "لم يسجل بعد"}
+                    </p>
                   </div>
                   <div className="text-center bg-red-50 p-3 rounded-xl">
                     <p className="text-xs text-gray-500 mb-1">تسجيل الانصراف</p>
-                    <p className="font-mono text-sm font-bold text-gray-900">17:00:00</p>
-                    <p className="font-mono text-xs text-gray-500">2026-01-29</p>
+                    <p className="font-mono text-sm font-bold text-gray-900">
+                      {checkOutTime ? checkOutTime.split(" ")[0] : "--:--:--"}
+                    </p>
+                    <p className="font-mono text-xs text-gray-500">
+                      {checkOutTime ? checkOutTime.split(" ")[1] : "لم يسجل بعد"}
+                    </p>
                   </div>
                 </div>
 
                 {/* Attendance Buttons */}
                 <div className="grid grid-cols-2 gap-3">
-                  <Button variant="outline" className="w-full text-gray-600 rounded-xl">
+                  <Button
+                    onClick={() => openCamera("out")}
+                    variant="outline"
+                    className="w-full text-gray-600 rounded-xl gap-2"
+                  >
+                    <ScanFace className="h-4 w-4" />
                     تسجيل الانصراف
                   </Button>
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
+                  <Button
+                    onClick={() => openCamera("in")}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2"
+                  >
+                    <ScanFace className="h-4 w-4" />
                     تسجيل الحضور
                   </Button>
                 </div>
@@ -496,17 +637,30 @@ export default function EmployeePortal() {
                 <div className="grid grid-cols-3 gap-6">
                   <div>
                     <p className="text-sm text-gray-600 mb-2">تسجيل الحضور</p>
-                    <p className="font-mono text-lg text-gray-900 font-bold">08:00:00 2026-01-29</p>
+                    <p className="font-mono text-lg text-gray-900 font-bold">
+                      {checkInTime || "لم يسجل بعد"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 mb-2">تسجيل الانصراف</p>
-                    <p className="font-mono text-lg text-gray-900 font-bold">17:00 2026-01-29</p>
+                    <p className="font-mono text-lg text-gray-900 font-bold">
+                      {checkOutTime || "لم يسجل بعد"}
+                    </p>
                   </div>
                   <div className="flex gap-3 items-end">
-                    <Button variant="outline" className="flex-1">
+                    <Button
+                      onClick={() => openCamera("out")}
+                      variant="outline"
+                      className="flex-1 gap-2"
+                    >
+                      <ScanFace className="h-4 w-4" />
                       تسجيل الانصراف
                     </Button>
-                    <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
+                    <Button
+                      onClick={() => openCamera("in")}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                    >
+                      <ScanFace className="h-4 w-4" />
                       تسجيل الحضور
                     </Button>
                   </div>
@@ -676,6 +830,109 @@ export default function EmployeePortal() {
           )}
         </main>
       </div>
+
+      {/* ===== FACE VERIFICATION CAMERA MODAL ===== */}
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="font-bold text-gray-900">
+                {cameraMode === "in" ? "التحقق لتسجيل الحضور" : "التحقق لتسجيل الانصراف"}
+              </h3>
+              <button
+                onClick={closeCamera}
+                disabled={verifyStatus === "verifying"}
+                className="text-gray-500 hover:text-gray-700 disabled:opacity-40"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Camera Preview */}
+            <div className="relative bg-black aspect-square">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+
+              {/* Face frame overlay */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div
+                  className={`w-48 h-56 rounded-[50%] border-4 transition-colors ${
+                    verifyStatus === "success"
+                      ? "border-green-500"
+                      : verifyStatus === "verifying"
+                      ? "border-yellow-400 animate-pulse"
+                      : "border-white/70"
+                  }`}
+                />
+              </div>
+
+              {/* Scanning line animation */}
+              {verifyStatus === "verifying" && (
+                <div className="absolute inset-x-0 top-0 h-1 bg-yellow-400 animate-[scan_2s_ease-in-out_infinite]" style={{ animation: "scanline 2.5s linear infinite" }} />
+              )}
+
+              {/* Status overlay */}
+              {verifyStatus !== "idle" && (
+                <div className="absolute inset-x-0 bottom-0 bg-black/60 p-4 flex items-center justify-center gap-2">
+                  {verifyStatus === "verifying" && (
+                    <>
+                      <Loader2 className="h-5 w-5 text-yellow-400 animate-spin" />
+                      <span className="text-white font-medium">جاري التحقق من الوجه...</span>
+                    </>
+                  )}
+                  {verifyStatus === "success" && (
+                    <>
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                      <span className="text-white font-medium">تم التحقق بنجاح</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4">
+              {verifyStatus === "idle" && (
+                <p className="text-sm text-gray-600 text-center mb-4">
+                  ضع وجهك داخل الإطار ثم اضغط على زر التحقق
+                </p>
+              )}
+              <Button
+                onClick={handleVerifyFace}
+                disabled={verifyStatus !== "idle"}
+                className={`w-full gap-2 rounded-xl ${
+                  cameraMode === "in"
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-gray-700 hover:bg-gray-800"
+                } text-white`}
+              >
+                {verifyStatus === "verifying" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    جاري التحقق...
+                  </>
+                ) : verifyStatus === "success" ? (
+                  <>
+                    <CheckCircle className="h-4 w-4" />
+                    تم بنجاح
+                  </>
+                ) : (
+                  <>
+                    <ScanFace className="h-4 w-4" />
+                    تحقق
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

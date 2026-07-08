@@ -30,8 +30,18 @@ export default function HRPermissionsRoles() {
           .from("user_roles")
           .select("*")
           .order("created_at", { ascending: false });
-        if (!error && data) {
-          setRoles(data.map((r) => ({
+
+        if (error) {
+          console.error("Error loading roles:", error);
+          // Check if it's a missing table error
+          if (error.code === "42P01" || error.message?.includes("does not exist")) {
+            toast.error("جدول الأدوار غير موجود. يرجى مراجعة إعدادات قاعدة البيانات");
+          } else {
+            toast.error("خطأ في تحميل الأدوار");
+          }
+          setRoles([]);
+        } else if (data) {
+          setRoles(data.map((r: any) => ({
             id: String(r.id ?? ""),
             nameAr: String(r.name_ar ?? ""),
             nameEn: String(r.name_en ?? ""),
@@ -40,7 +50,13 @@ export default function HRPermissionsRoles() {
             updateDate: r.updated_at ? new Date(r.updated_at).toLocaleString("ar-SA") : "",
           })));
         }
-      } catch { /* no-op */ } finally { setLoading(false); }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        toast.error("حدث خطأ في تحميل البيانات");
+        setRoles([]);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, []);

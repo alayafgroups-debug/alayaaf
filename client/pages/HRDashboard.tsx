@@ -32,48 +32,58 @@ export default function HRDashboard() {
     const load = async () => {
       try {
         // Load employees
-        const { data, error } = await supabase
+        const { data, error: empError } = await supabase
           .from("employees")
           .select("name, nationality, total_salary, status, department");
 
-        const mapped: EmpRow[] = (data || []).map((r) => ({
-          name: String(r.name ?? ""),
-          nationality: String(r.nationality ?? ""),
-          totalSalary: Number(r.total_salary ?? 0),
-          status: String(r.status ?? "نشط"),
-          department: String(r.department ?? ""),
-        }));
+        if (empError) {
+          console.error("Employees fetch error:", empError);
+          setStats({ total: 0, active: 0, saudi: 0, totalSalary: 0 });
+        } else if (data) {
+          const mapped: EmpRow[] = data.map((r: any) => ({
+            name: String(r.name ?? ""),
+            nationality: String(r.nationality ?? ""),
+            totalSalary: Number(r.total_salary ?? 0),
+            status: String(r.status ?? "نشط"),
+            department: String(r.department ?? ""),
+          }));
 
-        setEmpData(mapped);
-        setStats({
-          total: mapped.length,
-          active: mapped.filter((e) => e.status === "نشط").length,
-          saudi: mapped.filter((e) => e.nationality === "المملكة العربية السعودية").length,
-          totalSalary: mapped.reduce((s, e) => s + e.totalSalary, 0),
-        });
+          setEmpData(mapped);
+          setStats({
+            total: mapped.length,
+            active: mapped.filter((e) => e.status === "نشط").length,
+            saudi: mapped.filter((e) => e.nationality === "المملكة العربية السعودية").length,
+            totalSalary: mapped.reduce((s, e) => s + e.totalSalary, 0),
+          });
+        }
 
         // Load today's attendance alerts
         const today = new Date().toISOString().split("T")[0];
-        const { data: attData } = await supabase
+        const { data: attData, error: attError } = await supabase
           .from("attendance")
           .select("emp_name, check_in, status, late_minutes")
           .eq("date", today);
 
-        const absentToday = (attData || []).filter((a) => a.status === "غائب").length;
-        const lateToday = (attData || []).filter((a) => (a.late_minutes ?? 0) > 0).length;
-        setAttendanceAlert({ absentToday, lateToday });
-        setRecentAttendance((attData || []).slice(0, 5).map((a) => ({
-          emp_name: String(a.emp_name ?? ""),
-          check_in: String(a.check_in ?? "-"),
-          status: String(a.status ?? ""),
-        })));
+        if (!attError && attData) {
+          const absentToday = (attData || []).filter((a: any) => a.status === "غائب").length;
+          const lateToday = (attData || []).filter((a: any) => (a.late_minutes ?? 0) > 0).length;
+          setAttendanceAlert({ absentToday, lateToday });
+          setRecentAttendance((attData || []).slice(0, 5).map((a: any) => ({
+            emp_name: String(a.emp_name ?? ""),
+            check_in: String(a.check_in ?? "-"),
+            status: String(a.status ?? ""),
+          })));
+        }
 
         // Load pending leave requests
-        const { data: leaveData } = await supabase
+        const { data: leaveData, error: leaveError } = await supabase
           .from("leave_requests")
           .select("id")
           .eq("status", "معلقة");
-        setLeaveAlert({ pendingLeaves: leaveData?.length ?? 0 });
+
+        if (!leaveError && leaveData) {
+          setLeaveAlert({ pendingLeaves: leaveData?.length ?? 0 });
+        }
 
       } catch (err) {
         console.error("Error loading HR dashboard:", err);

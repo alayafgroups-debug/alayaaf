@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import { Search, RefreshCw, Download, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,7 +21,7 @@ export default function HRAttendanceCalculate() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: emps } = await supabase.from("employees").select("id, employee_id, name").eq("status", "نشط").order("name");
+      const { data: emps } = await supabase.from("employees").select("id, emp_id, name").eq("status", "نشط").order("name");
       if (!emps) { setLoading(false); return; }
 
       const [year, mon] = month.split("-").map(Number);
@@ -30,14 +30,14 @@ export default function HRAttendanceCalculate() {
       const startDate = `${year}-${String(mon).padStart(2, "0")}-01`;
       const endDate = `${year}-${String(mon).padStart(2, "0")}-${daysInMonth}`;
 
-      const { data: attRecords } = await supabase.from("attendance").select("emp_id, date, status")
+      const { data: attRecords } = await supabase.from("attendance").select("employee_id, date, status")
         .gte("date", startDate).lte("date", endDate);
 
       const attMap: Record<string, Record<number, string>> = {};
       (attRecords ?? []).forEach((r: any) => {
-        if (!attMap[r.emp_id]) attMap[r.emp_id] = {};
+        if (!attMap[r.employee_id]) attMap[r.employee_id] = {};
         const d = new Date(r.date).getDate();
-        attMap[r.emp_id][d] = r.status;
+        attMap[r.employee_id][d] = r.status;
       });
 
       setData(emps.map((e: any) => {
@@ -68,8 +68,10 @@ export default function HRAttendanceCalculate() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-[#004e89]">حساب الدوام</h1>
           <div className="flex items-center gap-3">
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />
-            <Button variant="outline" size="icon" onClick={loadData}><RefreshCw className="h-4 w-4" /></Button>
+            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44 text-right" />
+            <Button variant="outline" size="icon" onClick={loadData} title="تحديث"><RefreshCw className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" title="طباعة"><Printer className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" title="تحميل"><Download className="h-4 w-4" /></Button>
           </div>
         </div>
 
@@ -83,34 +85,38 @@ export default function HRAttendanceCalculate() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-center">
-              <thead className="bg-[#004e89] text-white">
+            <table className="w-full text-xs text-center">
+              <thead className="bg-blue-700 text-white font-bold">
                 <tr>
-                  <th className="py-3 px-4 text-right whitespace-nowrap min-w-[200px] sticky right-0 bg-[#004e89] z-10">الموظف</th>
+                  <th className="py-2 px-3 text-right whitespace-nowrap min-w-[180px] sticky right-0 bg-blue-700 z-10">الموظف</th>
                   {days.map((day) => (
-                    <th key={day} className="py-3 px-1 min-w-[36px]">{day}</th>
+                    <th key={day} className="py-2 px-0.5 min-w-[32px] font-bold">{day}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody>
                 {loading ? (
                   <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
-                ) : filtered.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-gray-50/50">
-                    <td className="py-2 px-4 text-right sticky right-0 bg-white z-10 flex items-center justify-end gap-3 border-l">
-                      <span className="font-medium text-gray-700">{emp.name}</span>
-                      <Avatar className="h-8 w-8">
+                ) : filtered.map((emp, idx) => (
+                  <tr key={emp.id} className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-blue-50`}>
+                    <td className="py-1.5 px-3 text-right sticky right-0 bg-inherit z-10 flex items-center justify-end gap-2 border-l border-gray-200">
+                      <span className="font-medium text-gray-800 text-xs">{emp.name}</span>
+                      <Avatar className="h-6 w-6 flex-shrink-0">
                         <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${emp.name}&backgroundColor=004e89`} />
-                        <AvatarFallback>{emp.name[0]}</AvatarFallback>
+                        <AvatarFallback className="text-xs">{emp.name[0]}</AvatarFallback>
                       </Avatar>
                     </td>
                     {emp.attendance.map((record) => (
-                      <td key={record.day} className={`py-2 px-1 ${record.status === "weekend" ? "bg-green-50/50" : ""}`}>
-                        {record.status === "present" && <div className="flex justify-center"><CheckCircle2 className="h-5 w-5 text-teal-500/80" /></div>}
-                        {record.status === "absent" && <div className="flex justify-center"><XCircle className="h-5 w-5 text-red-400/80" /></div>}
-                        {record.status === "weekend" && <div className="flex justify-center"><div className="h-2 w-2 rounded-full bg-green-200" /></div>}
+                      <td key={record.day} className={`py-1.5 px-0.5 border-gray-200 border-b text-lg font-bold ${
+                        record.status === "weekend" ? "bg-green-100" :
+                        record.status === "present" ? "bg-white" :
+                        "bg-white"
+                      }`}>
+                        {record.status === "present" && <div className="flex justify-center text-green-600">✓</div>}
+                        {record.status === "absent" && <div className="flex justify-center text-red-500">○</div>}
+                        {record.status === "weekend" && <div className="flex justify-center text-green-600">✓</div>}
                       </td>
                     ))}
                   </tr>

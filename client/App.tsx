@@ -38,6 +38,7 @@ import HRAttendanceReport from "./pages/HRAttendanceReport";
 import HRAttendanceMonthlyReport from "./pages/HRAttendanceMonthlyReport";
 import HRAttendanceSchedules from "./pages/HRAttendanceSchedules";
 import Login from "./pages/Login";
+import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import AdminEmployeeRegistration from "./pages/AdminEmployeeRegistration";
 import HRPayrollStatement from "./pages/HRPayrollStatement";
@@ -110,6 +111,7 @@ const App = () => (
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
+          <Route path="/employee/login" element={<EmployeeLogin />} />
 
           {/* Employee Routes */}
           <Route path="/employee/dashboard" element={<EmployeeDashboard />} />

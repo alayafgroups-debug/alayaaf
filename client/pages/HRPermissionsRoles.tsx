@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { FileText, Printer, ShieldCheck, Plus, Trash2, Edit } from "lucide-react";
+import { FileText, Printer, ShieldCheck, Plus, Trash2, Edit, Search, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 type RoleRow = {
   id: string;
@@ -17,8 +17,10 @@ type RoleRow = {
 };
 
 export default function HRPermissionsRoles() {
+  const navigate = useNavigate();
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -45,25 +47,63 @@ export default function HRPermissionsRoles() {
 
   const handleDelete = async (role: RoleRow) => {
     if (!confirm(`حذف الدور "${role.nameAr}"؟`)) return;
-    await supabase.from("user_roles").delete().eq("id", role.id);
-    setRoles((prev) => prev.filter((r) => r.id !== role.id));
-    toast({ title: "تم الحذف" });
+    try {
+      await supabase.from("user_roles").delete().eq("id", role.id);
+      setRoles((prev) => prev.filter((r) => r.id !== role.id));
+      toast.success("تم الحذف بنجاح");
+    } catch (err) {
+      toast.error("خطأ في حذف الدور");
+    }
   };
+
+  const filteredRoles = roles.filter((r) =>
+    r.nameAr.includes(search) || r.nameEn.includes(search)
+  );
 
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-[#004e89]">إدارة الأدوار والصلاحيات</h1>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+              size="icon"
+              title="تحديث"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Link
+              to="/hr/permissions/add-role"
+              className="inline-flex items-center gap-1 px-4 py-2 bg-[#004e89] text-white rounded-lg text-sm font-medium hover:bg-[#003865] transition"
+            >
+              <Plus className="h-4 w-4" /> إضافة دور جديد
+            </Link>
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="bg-white rounded-xl shadow-sm border p-4">
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="بحث عن دور..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pr-9"
+            />
+          </div>
+        </div>
+
+        {/* Roles Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-[#004e89] text-white p-3 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-bold">قائمة أدوار المستخدمين</h2>
-            <div className="flex items-center gap-3">
-              <Link to="/hr/permissions/add-role" className="flex items-center gap-1 px-3 py-1.5 bg-white text-[#004e89] rounded-lg text-sm font-medium hover:bg-gray-100 transition">
-                <Plus className="h-4 w-4" /> إضافة دور جديد
-              </Link>
-              <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="طباعة">
-                <Printer className="h-4 w-4" />
-              </button>
-            </div>
+            <h2 className="text-lg font-bold">قائمة الأدوار</h2>
+            <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="طباعة">
+              <Printer className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -82,10 +122,10 @@ export default function HRPermissionsRoles() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
                   <tr><td colSpan={7} className="py-8 text-center text-gray-400">جاري التحميل...</td></tr>
-                ) : roles.length === 0 ? (
+                ) : filteredRoles.length === 0 ? (
                   <tr><td colSpan={7} className="py-8 text-center text-gray-400">لا توجد أدوار</td></tr>
                 ) : (
-                  roles.map((role) => (
+                  filteredRoles.map((role) => (
                     <tr key={role.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="py-3 px-3 font-mono text-gray-500">{role.id.slice(0, 8)}</td>
                       <td className="py-3 px-3 font-medium">{role.nameAr}</td>
@@ -109,7 +149,9 @@ export default function HRPermissionsRoles() {
           </div>
 
           <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-500">يعرض {roles.length} سجل</span>
+            <span className="text-gray-500">
+              يعرض <span className="font-bold text-gray-800">{filteredRoles.length}</span> من <span className="font-bold text-gray-800">{roles.length}</span> أدوار
+            </span>
           </div>
         </div>
       </div>

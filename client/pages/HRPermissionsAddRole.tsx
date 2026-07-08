@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+import { ChevronRight, ChevronLeft, Save, X } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const PERMISSION_TABS = [
   "قائمة الموظفين",
@@ -27,14 +30,80 @@ const PERMISSION_TABS = [
 ];
 
 export default function HRPermissionsAddRole() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("قائمة الموظفين");
+  const [loading, setLoading] = useState(false);
+
+  // Form state
+  const [nameAr, setNameAr] = useState("");
+  const [nameEn, setNameEn] = useState("");
+  const [status, setStatus] = useState("فعال");
+
+  // Permissions state
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+
+  const handleSave = async () => {
+    if (!nameAr.trim() || !nameEn.trim()) {
+      toast.error("يجب ملء جميع الحقول المطلوبة");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .insert([
+          {
+            name_ar: nameAr,
+            name_en: nameEn,
+            status: status,
+            permissions: permissions,
+          },
+        ])
+        .select();
+
+      if (error) {
+        toast.error("خطأ في حفظ الدور");
+        return;
+      }
+
+      toast.success("تم حفظ الدور بنجاح");
+      navigate("/hr/permissions/roles");
+    } catch (err) {
+      toast.error("حدث خطأ ما");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePermissionChange = (key: string, value: boolean) => {
+    setPermissions((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
 
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
         <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
           <h2 className="text-xl font-bold text-[#004e89]">إضافة دور جديد</h2>
-          <Button className="bg-[#004e89] hover:bg-[#003865] px-8">حفظ</Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => navigate("/hr/permissions/roles")}
+              variant="outline"
+              className="px-6"
+            >
+              <X className="h-4 w-4 ml-1" /> إلغاء
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={loading}
+              className="bg-[#004e89] hover:bg-[#003865] px-8"
+            >
+              <Save className="h-4 w-4 ml-1" /> {loading ? "جاري الحفظ..." : "حفظ"}
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-6 space-y-8">
@@ -42,17 +111,31 @@ export default function HRPermissionsAddRole() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">الاسم بالعربية <span className="text-red-500">*</span></Label>
-              <Input className="h-10 border-gray-300" />
+              <Input
+                value={nameAr}
+                onChange={(e) => setNameAr(e.target.value)}
+                placeholder="مثال: مدير الموارد البشرية"
+                className="h-10 border-gray-300"
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">الاسم بالانجليزية <span className="text-red-500">*</span></Label>
-              <Input className="h-10 border-gray-300" />
+              <Input
+                value={nameEn}
+                onChange={(e) => setNameEn(e.target.value)}
+                placeholder="e.g. HR Manager"
+                className="h-10 border-gray-300"
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">حالة الدور <span className="text-red-500">*</span></Label>
-              <select className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
-                <option>فعال</option>
-                <option>غير فعال</option>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="فعال">فعال</option>
+                <option value="غير فعال">غير فعال</option>
               </select>
             </div>
           </div>
@@ -136,7 +219,11 @@ export default function HRPermissionsAddRole() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3">
                     <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                       <Label className="text-sm cursor-pointer" htmlFor="c1">إضافة موظف جديد</Label>
-                      <Checkbox id="c1" />
+                      <Checkbox
+                        id="c1"
+                        checked={permissions["add_employee"] || false}
+                        onCheckedChange={(val) => handlePermissionChange("add_employee", val as boolean)}
+                      />
                     </div>
                     <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                       <Label className="text-sm cursor-pointer" htmlFor="c2">تعديل بيانات موظف</Label>

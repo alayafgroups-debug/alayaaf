@@ -40,6 +40,7 @@ import HRAttendanceSchedules from "./pages/HRAttendanceSchedules";
 import Login from "./pages/Login";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
+import EmployeePortal from "./pages/EmployeePortal";
 import EmployeeApp from "./pages/EmployeeApp";
 import AdminEmployeeRegistration from "./pages/AdminEmployeeRegistration";
 import SetupDatabase from "./pages/SetupDatabase";
@@ -119,9 +120,9 @@ const App = () => (
           <Route path="/employee/login" element={<EmployeeLogin />} />
 
           {/* Employee Routes */}
-          <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
-          <Route path="/employee/app" element={<EmployeeApp />} />
-          <Route path="/hr/employee-dashboard" element={<EmployeeDashboard />} />
+          <Route path="/employee/dashboard" element={<EmployeePortal />} />
+          <Route path="/employee/app" element={<EmployeePortal />} />
+          <Route path="/hr/employee-dashboard" element={<EmployeePortal />} />
 
           {/* Admin - Employee Registration */}
           <Route path="/admin/register-employee" element={<AdminEmployeeRegistration />} />

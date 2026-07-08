@@ -76,7 +76,7 @@ export default function EmployeeLogin() {
 
         toast.success("مرحباً زين أحمد الحربي");
         setTimeout(() => {
-          navigate("/employee/app");
+          navigate("/employee/dashboard");
         }, 500);
         return;
       }
@@ -121,9 +121,9 @@ export default function EmployeeLogin() {
 
       toast.success(`مرحباً ${empData.name}`);
 
-      // Redirect to employee app
+      // Redirect to employee dashboard
       setTimeout(() => {
-        navigate("/employee/app");
+        navigate("/employee/dashboard");
       }, 500);
     } catch (err) {
       console.error("Login error:", err);

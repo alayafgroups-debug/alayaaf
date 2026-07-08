@@ -1,0 +1,643 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import {
+  Bell,
+  Settings,
+  User,
+  Clock,
+  DollarSign,
+  FileText,
+  Plus,
+  Search,
+  ChevronLeft,
+  MapPin,
+  CheckCircle,
+  AlertCircle,
+  LogOut,
+  MoreHorizontal,
+  Home,
+  Briefcase,
+  Zap,
+  Eye,
+  Download,
+  Share2,
+  Trash2,
+  Filter,
+} from "lucide-react";
+import { toast } from "sonner";
+
+interface UserSession {
+  id: string;
+  email: string;
+  empId: string;
+  name: string;
+  role: string;
+  permissions: Record<string, boolean>;
+}
+
+type AppPage = "home" | "requests" | "send-request" | "more";
+
+const REQUEST_TYPES = [
+  { id: 1, name: "صرف", icon: "📄", color: "bg-blue-100" },
+  { id: 2, name: "السلف", icon: "💰", color: "bg-green-100" },
+  { id: 3, name: "الإجازات", icon: "⛱️", color: "bg-purple-100" },
+  { id: 4, name: "عودة", icon: "🏠", color: "bg-orange-100" },
+  { id: 5, name: "نقل", icon: "➡️", color: "bg-blue-100" },
+  { id: 6, name: "دورة تدريبية", icon: "📚", color: "bg-yellow-100" },
+  { id: 7, name: "حيانة", icon: "⚙️", color: "bg-gray-100" },
+  { id: 8, name: "شراء", icon: "💳", color: "bg-green-100" },
+  { id: 9, name: "عمل إضافي", icon: "➕", color: "bg-red-100" },
+  { id: 10, name: "مباشرة العمل", icon: "👔", color: "bg-blue-100" },
+  { id: 11, name: "التدابل", icon: "🔄", color: "bg-purple-100" },
+  { id: 12, name: "استئذان", icon: "⏰", color: "bg-orange-100" },
+  { id: 13, name: "حقيبة العمل", icon: "💼", color: "bg-gray-100" },
+  { id: 14, name: "مستند", icon: "📋", color: "bg-green-100" },
+  { id: 15, name: "أخرى", icon: "📌", color: "bg-yellow-100" },
+];
+
+const MORE_OPTIONS = [
+  { id: 1, name: "الملف الشخصي", desc: "المعلومات الشخصية، تعديل البيانات الشخصية", icon: "👤" },
+  { id: 2, name: "تقييم الأداء", desc: "تقييماتي لزملائي الخزين، إرشيف التقييم", icon: "⭐" },
+  { id: 3, name: "قائمة الموظفين", desc: "فعال، غير فعال، متعاون", icon: "👥" },
+  { id: 4, name: "فريق العمل", desc: "إضافة فريق العمل", icon: "👨‍💼" },
+  { id: 5, name: "الحضور", desc: "أيام الحضور، أيام الغياب، ساعات الحضور", icon: "📍" },
+  { id: 6, name: "دوامي", desc: "أيام الحضور، ساعات الحضور", icon: "📅" },
+  { id: 7, name: "تقاريري", desc: "الإجازات، السلف، الاستئذان، الساعات الإضافية", icon: "📊" },
+  { id: 8, name: "التقارير", desc: "تقارير الموظفين", icon: "📈" },
+  { id: 9, name: "حساب الراتب", desc: "كشف الرواتب، إرشيف الرواتب، البيانات الما...", icon: "💳" },
+  { id: 10, name: "الشكاوي", desc: "إضافة شكاوي، إعدادات الشكاوي", icon: "⚠️" },
+  { id: 11, name: "التعاميم", desc: "إضافة تعميم، تعديل تعميم", icon: "📢" },
+  { id: 12, name: "المساعلات والإنذارات", desc: "إرشيف الإنذارات، الجزاءات", icon: "📋" },
+  { id: 13, name: "عموالت الموظفين", desc: "بيعات المندوبين، بيعات المشرفين، عمو...", icon: "💰" },
+  { id: 14, name: "الإعلانات", desc: "إضافة إعلان، تعديل إعلان، نشر الإعلان", icon: "📣" },
+  { id: 15, name: "قسيمة الراتب", desc: "قسيمة الراتب، إجمالي البدلات، إجمالي ...", icon: "🧾" },
+  { id: 16, name: "التواصل مع الإدارة", desc: "المقترحات والشكاوي", icon: "💬" },
+  { id: 17, name: "الإعدادات", desc: "اللغة، الوضع الليلي", icon: "⚙️" },
+  { id: 18, name: "من نحن", desc: "عن الشركة، مقرات الشركة، الفروع والوكلاء", icon: "ℹ️" },
+  { id: 19, name: "سياسة الخصوصية", desc: "الأذونات", icon: "🔒" },
+  { id: 20, name: "تسجيل الخروج", desc: "", icon: "🚪", logout: true },
+];
+
+export default function EmployeePortal() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<UserSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState<AppPage>("home");
+  const [notificationCount, setNotificationCount] = useState(12);
+  const [requestsTab, setRequestsTab] = useState<"received" | "draft" | "sent" | "attached">("received");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const sessionStr = localStorage.getItem("user_session");
+    if (!sessionStr) {
+      navigate("/employee/login");
+      return;
+    }
+
+    try {
+      const session: UserSession = JSON.parse(sessionStr);
+      setUser(session);
+    } catch {
+      navigate("/employee/login");
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("user_session");
+    toast.success("تم تسجيل الخروج بنجاح");
+    navigate("/employee/login");
+  };
+
+  const handleSendRequest = (type: typeof REQUEST_TYPES[0]) => {
+    toast.success(`تم تقديم طلب ${type.name}`);
+    setCurrentPage("requests");
+  };
+
+  const handleMoreOption = (option: typeof MORE_OPTIONS[0]) => {
+    if (option.logout) {
+      handleLogout();
+    } else {
+      toast.info(`سيتم فتح ${option.name}`);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div dir="rtl" className="min-h-screen bg-gray-50">
+      {/* ===== MOBILE VIEW ===== */}
+      <div className="md:hidden">
+        {/* Header */}
+        <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Bell className="h-6 w-6 text-gray-700 cursor-pointer" />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {notificationCount}
+                  </span>
+                )}
+              </div>
+              <Settings className="h-6 w-6 text-gray-700 cursor-pointer" />
+            </div>
+            <h1 className="text-center text-lg font-semibold text-gray-800">{user.name}</h1>
+            <div className="text-right">
+              <p className="text-xs text-gray-600">{user.role}</p>
+              <User className="h-8 w-8 bg-gray-300 rounded-full p-1" />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Content */}
+        <div className="pb-32">
+          {currentPage === "home" && (
+            <div>
+              {/* Work Hours Report */}
+              <div className="bg-white m-4 rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">تقرير ساعات العمل لهذا الشهر</h2>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-blue-600 font-bold text-lg">198:00:00</div>
+                    <p className="text-xs text-gray-600 mt-1">الساعات الواجبة</p>
+                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-blue-600 font-bold text-lg">198:00:00</div>
+                    <p className="text-xs text-gray-600 mt-1">ساعات الغياب</p>
+                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-blue-600 font-bold text-lg">00:00:00</div>
+                    <p className="text-xs text-gray-600 mt-1">الساعات الإضافية</p>
+                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-blue-600 font-bold text-lg">00:00:00</div>
+                    <p className="text-xs text-gray-600 mt-1">الحضور لهذا الشهر</p>
+                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                  </div>
+                </div>
+
+                {/* Attendance Registration */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <MapPin className="h-5 w-5 text-orange-500" />
+                    <span className="font-semibold text-gray-900">تم تسجيل الحضور</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="text-center bg-white p-3 rounded">
+                      <p className="text-xs text-gray-600">تسجيل الحضور</p>
+                      <p className="font-mono text-sm text-gray-900">08:00:00 2026-01-29</p>
+                    </div>
+                    <div className="text-center bg-white p-3 rounded">
+                      <p className="text-xs text-gray-600">تسجيل الانصراف</p>
+                      <p className="font-mono text-sm text-gray-900">17:00 2026-01-29...</p>
+                    </div>
+                  </div>
+
+                  {/* Attendance Buttons */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" className="w-full text-gray-600">
+                      تسجيل الانصراف
+                    </Button>
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                      تسجيل الحضور
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentPage === "send-request" && (
+            <div className="p-4">
+              <h2 className="text-lg font-bold text-gray-900 mb-6">إرسال عوض عن موظف</h2>
+              <div className="grid grid-cols-3 gap-4">
+                {REQUEST_TYPES.map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => handleSendRequest(type)}
+                    className={`${type.color} rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:shadow-md transition`}
+                  >
+                    <span className="text-2xl">{type.icon}</span>
+                    <span className="text-xs font-semibold text-center text-gray-700">{type.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {currentPage === "requests" && (
+            <div>
+              {/* Requests Tab Navigation */}
+              <div className="bg-white border-b border-gray-200">
+                <div className="flex overflow-x-auto gap-0">
+                  {["received", "draft", "sent", "attached"].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setRequestsTab(tab as any)}
+                      className={`flex-1 px-4 py-3 font-semibold text-sm whitespace-nowrap border-b-2 transition ${
+                        requestsTab === tab
+                          ? "border-blue-600 text-blue-600"
+                          : "border-transparent text-gray-600"
+                      }`}
+                    >
+                      {tab === "received" && "الواردة"}
+                      {tab === "draft" && "المسودة"}
+                      {tab === "sent" && "المرسلة"}
+                      {tab === "attached" && "المملحقة"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="bg-white p-4 m-4 rounded-lg">
+                <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
+                  <Search className="h-5 w-5 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="بحث"
+                    className="flex-1 bg-transparent outline-none text-sm"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Empty State */}
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <AlertCircle className="h-16 w-16 text-gray-400 mb-4" />
+                <p className="text-gray-600 font-semibold mb-2">لا توجد بيانات</p>
+              </div>
+            </div>
+          )}
+
+          {currentPage === "more" && (
+            <div className="p-4">
+              {MORE_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => handleMoreOption(option)}
+                  className="w-full bg-white rounded-lg p-4 mb-3 flex items-center gap-3 hover:shadow-md transition border border-gray-200"
+                >
+                  <span className="text-2xl">{option.icon}</span>
+                  <div className="flex-1 text-right">
+                    <p className="font-semibold text-gray-900 text-sm">{option.name}</p>
+                    <p className="text-xs text-gray-600">{option.desc}</p>
+                  </div>
+                  <ChevronLeft className="h-5 w-5 text-gray-400" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Bottom Navigation */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+          <div className="flex items-center justify-center relative -translate-y-6">
+            <div className="flex gap-8 px-4">
+              <button
+                onClick={() => setCurrentPage("more")}
+                className="bg-blue-700 rounded-full p-4 text-white shadow-lg hover:bg-blue-800"
+              >
+                <MoreHorizontal className="h-6 w-6" />
+              </button>
+              <button
+                onClick={() => setCurrentPage("send-request")}
+                className="bg-yellow-500 rounded-full p-5 text-white shadow-lg hover:bg-yellow-600"
+              >
+                <Plus className="h-7 w-7" />
+              </button>
+              <button
+                onClick={() => setCurrentPage("requests")}
+                className="bg-blue-700 rounded-full p-4 text-white shadow-lg hover:bg-blue-800 relative"
+              >
+                <FileText className="h-6 w-6" />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {notificationCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-around pt-2 pb-3 px-4">
+            <button
+              onClick={() => setCurrentPage("more")}
+              className={`flex flex-col items-center gap-1 ${currentPage === "more" ? "text-blue-600" : "text-gray-600"}`}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+              <span className="text-xs">المزيد</span>
+            </button>
+            <button
+              onClick={() => setCurrentPage("requests")}
+              className={`flex flex-col items-center gap-1 ${currentPage === "requests" ? "text-blue-600" : "text-gray-600"}`}
+            >
+              <FileText className="h-5 w-5" />
+              <span className="text-xs">الطلبات</span>
+            </button>
+            <div className="w-1"></div>
+            <button
+              onClick={() => setCurrentPage("home")}
+              className={`flex flex-col items-center gap-1 ${currentPage === "home" ? "text-blue-600" : "text-gray-600"}`}
+            >
+              <Home className="h-5 w-5" />
+              <span className="text-xs">الرئيسية</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== DESKTOP VIEW ===== */}
+      <div className="hidden md:block">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Bell className="h-6 w-6 text-gray-700 cursor-pointer" />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -left-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {notificationCount}
+                  </span>
+                )}
+              </div>
+              <Settings className="h-6 w-6 text-gray-700 cursor-pointer" />
+            </div>
+            <h1 className="text-2xl font-bold text-[#004e89]">مرحباً {user.name}</h1>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-sm text-gray-600">الدور</p>
+                <p className="font-medium text-gray-800">{user.role}</p>
+              </div>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                خروج
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Desktop Content */}
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          {currentPage === "home" && (
+            <>
+              {/* Hero Section */}
+              <div className="bg-gradient-to-r from-[#004e89] to-[#003865] text-white rounded-xl p-8 mb-8">
+                <h2 className="text-3xl font-bold mb-2">لوحة تحكم الموظف</h2>
+                <p className="text-blue-100">مرحباً بك في نظام إدارة الموارد البشرية</p>
+              </div>
+
+              {/* Work Hours Summary */}
+              <div className="grid grid-cols-4 gap-4 mb-8">
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <Clock className="h-8 w-8 text-blue-500" />
+                  </div>
+                  <p className="text-sm text-gray-600 mb-1">الساعات الواجبة</p>
+                  <p className="text-2xl font-bold text-gray-900">198:00:00</p>
+                  <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <Zap className="h-8 w-8 text-orange-500" />
+                  </div>
+                  <p className="text-sm text-gray-600 mb-1">ساعات الغياب</p>
+                  <p className="text-2xl font-bold text-gray-900">00:00:00</p>
+                  <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <DollarSign className="h-8 w-8 text-green-500" />
+                  </div>
+                  <p className="text-sm text-gray-600 mb-1">الساعات الإضافية</p>
+                  <p className="text-2xl font-bold text-gray-900">00:00:00</p>
+                  <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <MapPin className="h-8 w-8 text-purple-500" />
+                  </div>
+                  <p className="text-sm text-gray-600 mb-1">الحضور لهذا الشهر</p>
+                  <p className="text-2xl font-bold text-gray-900">00:00:00</p>
+                  <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
+                </div>
+              </div>
+
+              {/* Attendance Card */}
+              <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+                <h3 className="text-lg font-bold text-gray-900 mb-6">تم تسجيل الحضور</h3>
+                <div className="grid grid-cols-3 gap-6">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">تسجيل الحضور</p>
+                    <p className="font-mono text-lg text-gray-900 font-bold">08:00:00 2026-01-29</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">تسجيل الانصراف</p>
+                    <p className="font-mono text-lg text-gray-900 font-bold">17:00 2026-01-29</p>
+                  </div>
+                  <div className="flex gap-3 items-end">
+                    <Button variant="outline" className="flex-1">
+                      تسجيل الانصراف
+                    </Button>
+                    <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
+                      تسجيل الحضور
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="grid grid-cols-4 gap-4 mb-8">
+                <button
+                  onClick={() => setCurrentPage("requests")}
+                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center"
+                >
+                  <FileText className="h-8 w-8 text-blue-500 mx-auto mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-1">الطلبات</h3>
+                  <p className="text-sm text-gray-600">عرض الطلبات الواردة والمرسلة</p>
+                </button>
+
+                <button
+                  onClick={() => setCurrentPage("send-request")}
+                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center"
+                >
+                  <Plus className="h-8 w-8 text-green-500 mx-auto mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-1">طلب جديد</h3>
+                  <p className="text-sm text-gray-600">إرسال طلب جديد</p>
+                </button>
+
+                <button
+                  onClick={() => setCurrentPage("more")}
+                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center"
+                >
+                  <Briefcase className="h-8 w-8 text-purple-500 mx-auto mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-1">الخدمات</h3>
+                  <p className="text-sm text-gray-600">جميع الخدمات والخيارات</p>
+                </button>
+
+                <button className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center">
+                  <User className="h-8 w-8 text-orange-500 mx-auto mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-1">ملفي</h3>
+                  <p className="text-sm text-gray-600">بيانات الملف الشخصي</p>
+                </button>
+              </div>
+
+              {/* Employee Info */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">معلوماتك</h3>
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="border-r border-gray-200 pr-6">
+                    <p className="text-sm text-gray-600 mb-1">رقم الموظف</p>
+                    <p className="font-mono text-lg text-gray-900">{user.empId}</p>
+                  </div>
+                  <div className="border-r border-gray-200 pr-6">
+                    <p className="text-sm text-gray-600 mb-1">البريد الإلكتروني</p>
+                    <p className="text-lg text-gray-900">{user.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">الدور الوظيفي</p>
+                    <p className="text-lg text-gray-900 font-medium">
+                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm">
+                        {user.role}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {currentPage === "send-request" && (
+            <>
+              <h2 className="text-3xl font-bold text-gray-900 mb-8">إرسال طلب جديد</h2>
+              <div className="grid grid-cols-5 gap-4">
+                {REQUEST_TYPES.map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => handleSendRequest(type)}
+                    className={`${type.color} rounded-lg p-6 flex flex-col items-center justify-center gap-3 hover:shadow-md transition h-40`}
+                  >
+                    <span className="text-4xl">{type.icon}</span>
+                    <span className="text-sm font-semibold text-center text-gray-700">{type.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {currentPage === "requests" && (
+            <>
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">الطلبات</h2>
+              
+              {/* Tabs */}
+              <div className="bg-white rounded-lg shadow-sm mb-6 border-b">
+                <div className="flex border-b">
+                  {["received", "draft", "sent", "attached"].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setRequestsTab(tab as any)}
+                      className={`flex-1 px-6 py-4 font-semibold border-b-2 transition ${
+                        requestsTab === tab
+                          ? "border-blue-600 text-blue-600"
+                          : "border-transparent text-gray-600"
+                      }`}
+                    >
+                      {tab === "received" && "الواردة"}
+                      {tab === "draft" && "المسودة"}
+                      {tab === "sent" && "المرسلة"}
+                      {tab === "attached" && "المملحقة"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search and Filter */}
+                <div className="p-6 flex gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="بحث"
+                      className="w-full pr-10 pl-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <Filter className="h-4 w-4" />
+                    تصفية
+                  </Button>
+                </div>
+              </div>
+
+              {/* Empty State */}
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 font-semibold mb-6">لا توجد طلبات</p>
+                <Button
+                  onClick={() => setCurrentPage("send-request")}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 ml-2" />
+                  إرسال طلب جديد
+                </Button>
+              </div>
+            </>
+          )}
+
+          {currentPage === "more" && (
+            <>
+              <h2 className="text-3xl font-bold text-gray-900 mb-8">الخدمات والخيارات</h2>
+              <div className="grid grid-cols-2 gap-4">
+                {MORE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => handleMoreOption(option)}
+                    className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-right border border-gray-200"
+                  >
+                    <div className="flex items-start gap-4">
+                      <span className="text-3xl">{option.icon}</span>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 mb-1">{option.name}</h3>
+                        <p className="text-sm text-gray-600">{option.desc}</p>
+                      </div>
+                      <ChevronLeft className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}

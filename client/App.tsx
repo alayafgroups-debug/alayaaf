@@ -37,6 +37,9 @@ import HRAttendanceCalculate from "./pages/HRAttendanceCalculate";
 import HRAttendanceReport from "./pages/HRAttendanceReport";
 import HRAttendanceMonthlyReport from "./pages/HRAttendanceMonthlyReport";
 import HRAttendanceSchedules from "./pages/HRAttendanceSchedules";
+import Login from "./pages/Login";
+import EmployeeDashboard from "./pages/EmployeeDashboard";
+import AdminEmployeeRegistration from "./pages/AdminEmployeeRegistration";
 import HRPayrollStatement from "./pages/HRPayrollStatement";
 import HRPayrollArchive from "./pages/HRPayrollArchive";
 import HRPayrollFinancialData from "./pages/HRPayrollFinancialData";
@@ -105,6 +108,17 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={<Login />} />
+
+          {/* Employee Routes */}
+          <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+          <Route path="/hr/employee-dashboard" element={<EmployeeDashboard />} />
+
+          {/* Admin - Employee Registration */}
+          <Route path="/admin/register-employee" element={<AdminEmployeeRegistration />} />
+
+          {/* Admin Routes */}
           <Route path="/" element={<Dashboard />} />
           <Route path="/sales" element={<Navigate to="/sales/quotations" replace />} />
           <Route path="/sales/quotations" element={<Quotations />} />

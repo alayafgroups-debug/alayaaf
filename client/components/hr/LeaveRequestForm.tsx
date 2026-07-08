@@ -15,9 +15,13 @@ import {
 interface LeaveRequestFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  employeeInfo?: {
+    empId: string;
+    name: string;
+  };
 }
 
-export default function LeaveRequestForm({ open, onOpenChange }: LeaveRequestFormProps) {
+export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: LeaveRequestFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     leaveType: "",
@@ -54,16 +58,24 @@ export default function LeaveRequestForm({ open, onOpenChange }: LeaveRequestFor
         return;
       }
 
-      const { error } = await supabase.from("hr_leave_requests").insert({
-        leave_type: formData.leaveType,
+      const empId = employeeInfo?.empId || "EMP-001";
+      const empName = employeeInfo?.name || "موظف";
+
+      const leaveTypeMap: Record<string, string> = {
+        annual: "إجازة سنوية",
+        sick: "إجازة مرضية",
+        emergency: "إجازة اضطرارية",
+        unpaid: "إجازة بدون راتب",
+      };
+
+      const { error } = await supabase.from("leave_requests").insert({
+        emp_id: empId,
+        emp_name: empName,
+        leave_type: leaveTypeMap[formData.leaveType] || formData.leaveType,
         start_date: formData.startDate,
         end_date: formData.endDate,
-        duration_days: duration,
-        address_during_leave: formData.address,
-        substitute_employee_id: formData.substituteId,
-        phone: formData.phone,
-        reason: formData.reason,
-        status: "pending",
+        status: "معلق",
+        notes: `مدة الإجازة: ${duration} يوم | العنوان: ${formData.address} | البديل: ${formData.substituteId} | الهاتف: ${formData.phone} | السبب: ${formData.reason}`,
       });
 
       if (error) throw error;

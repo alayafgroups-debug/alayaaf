@@ -219,11 +219,16 @@ export default function HRRequestsSend() {
       </div>
 
       {/* Forms */}
-      <LeaveRequestForm open={leaveFormOpen} onOpenChange={setLeaveFormOpen} />
+      <LeaveRequestForm
+        open={leaveFormOpen}
+        onOpenChange={setLeaveFormOpen}
+        employeeInfo={{ empId: employeeInfo.empId, name: employeeInfo.name }}
+      />
       <DynamicRequestForm
         open={dynamicFormOpen}
         onOpenChange={setDynamicFormOpen}
         schema={activeSchemaId ? requestFormSchemas[activeSchemaId] : null}
+        employeeInfo={{ empId: employeeInfo.empId, name: employeeInfo.name }}
       />
     </Layout>
   );

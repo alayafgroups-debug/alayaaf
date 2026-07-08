@@ -3,27 +3,86 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus, Upload, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FormSchema, FormField } from "./formSchemas";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   schema: FormSchema | null;
+  employeeInfo?: {
+    empId: string;
+    name: string;
+  };
 }
 
-export default function DynamicRequestForm({ open, onOpenChange, schema }: Props) {
+export default function DynamicRequestForm({ open, onOpenChange, schema, employeeInfo }: Props) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
 
   if (!schema) return null;
 
   const handleSubmit = async () => {
+    if (!schema) return;
+
+    const requiredFields = schema.fields.filter((f) => f.required);
+    const missingRequired = requiredFields.find((f) => {
+      const value = formData[f.name];
+      return value === undefined || value === null || String(value).trim() === "";
+    });
+
+    if (missingRequired) {
+      toast.error(`يرجى تعبئة الحقل الإلزامي: ${missingRequired.label}`);
+      return;
+    }
+
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+
+    const startDate =
+      formData.start_date ||
+      formData.date ||
+      formData.from_date ||
+      formData.return_date ||
+      formData.transfer_date ||
+      formData.proposed_date ||
+      formData.last_day ||
+      today;
+
+    const endDate =
+      formData.end_date ||
+      formData.to_date ||
+      formData.date ||
+      formData.last_day ||
+      startDate;
+
+    const empId = employeeInfo?.empId || "EMP-001";
+    const empName = employeeInfo?.name || "موظف";
+
     setLoading(true);
-    // Mock API call
-    setTimeout(() => {
-      alert("تم إرسال الطلب بنجاح");
-      setLoading(false);
+    try {
+      const { error } = await supabase.from("leave_requests").insert([
+        {
+          emp_id: empId,
+          emp_name: empName,
+          leave_type: schema.title,
+          start_date: startDate,
+          end_date: endDate,
+          status: "معلق",
+          notes: JSON.stringify(formData),
+        },
+      ]);
+
+      if (error) throw error;
+
+      toast.success("تم إرسال الطلب بنجاح");
+      setFormData({});
       onOpenChange(false);
-    }, 1000);
+    } catch {
+      toast.error("تعذر إرسال الطلب، تحقق من إعدادات قاعدة البيانات");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderField = (field: FormField) => {

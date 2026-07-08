@@ -97,7 +97,7 @@ export default function EmployeeDashboard() {
           {/* Attendance */}
           {user.permissions["view_attendance"] !== false && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition cursor-pointer"
-              onClick={() => navigate("/employee/attendance")}
+              onClick={() => navigate("/hr/attendance/report")}
             >
               <div className="flex items-center justify-between mb-4">
                 <Clock className="h-8 w-8 text-blue-500" />
@@ -111,7 +111,7 @@ export default function EmployeeDashboard() {
           {/* Payroll */}
           {user.permissions["view_payroll"] !== false && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition cursor-pointer"
-              onClick={() => navigate("/employee/payroll")}
+              onClick={() => navigate("/hr/payroll/archive")}
             >
               <div className="flex items-center justify-between mb-4">
                 <DollarSign className="h-8 w-8 text-green-500" />
@@ -125,7 +125,7 @@ export default function EmployeeDashboard() {
           {/* Leave Requests */}
           {user.permissions["request_leave"] !== false && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition cursor-pointer"
-              onClick={() => navigate("/employee/leaves")}
+              onClick={() => navigate("/hr/leaves/employees")}
             >
               <div className="flex items-center justify-between mb-4">
                 <FileText className="h-8 w-8 text-orange-500" />
@@ -138,7 +138,7 @@ export default function EmployeeDashboard() {
 
           {/* Profile */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition cursor-pointer"
-            onClick={() => navigate("/employee/profile")}
+            onClick={() => navigate("/hr/employees")}
           >
             <div className="flex items-center justify-between mb-4">
               <User className="h-8 w-8 text-purple-500" />

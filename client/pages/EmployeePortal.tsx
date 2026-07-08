@@ -19,10 +19,6 @@ import {
   Home,
   Briefcase,
   Zap,
-  Eye,
-  Download,
-  Share2,
-  Trash2,
   Filter,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -144,85 +140,113 @@ export default function EmployeePortal() {
       {/* ===== MOBILE VIEW ===== */}
       <div className="md:hidden">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Bell className="h-6 w-6 text-gray-700 cursor-pointer" />
-                {notificationCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {notificationCount}
-                  </span>
-                )}
-              </div>
-              <Settings className="h-6 w-6 text-gray-700 cursor-pointer" />
-            </div>
-            <h1 className="text-center text-lg font-semibold text-gray-800">{user.name}</h1>
-            <div className="text-right">
-              <p className="text-xs text-gray-600">{user.role}</p>
-              <User className="h-8 w-8 bg-gray-300 rounded-full p-1" />
-            </div>
+        <div className="bg-gradient-to-l from-[#004e89] to-[#0066b3] shadow-md sticky top-0 z-10">
+          <div className="flex items-center justify-between px-4 py-4">
+            {currentPage === "home" ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Bell className="h-6 w-6 text-white cursor-pointer" />
+                    {notificationCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {notificationCount}
+                      </span>
+                    )}
+                  </div>
+                  <Settings className="h-6 w-6 text-white cursor-pointer" />
+                </div>
+                <div className="text-center">
+                  <h1 className="text-base font-bold text-white">{user.name}</h1>
+                  <p className="text-xs text-blue-100">{user.role}</p>
+                </div>
+                <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
+                  <User className="h-5 w-5 text-white" />
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setCurrentPage("home")}
+                  className="flex items-center gap-1 text-white"
+                >
+                  <ChevronLeft className="h-6 w-6 rotate-180" />
+                  <span className="text-sm">رجوع</span>
+                </button>
+                <h1 className="text-base font-bold text-white">
+                  {currentPage === "requests" && "الطلبات"}
+                  {currentPage === "send-request" && "طلب جديد"}
+                  {currentPage === "more" && "المزيد"}
+                </h1>
+                <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
+                  <User className="h-5 w-5 text-white" />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {/* Mobile Content */}
         <div className="pb-32">
           {currentPage === "home" && (
-            <div>
+            <div className="p-4 space-y-4">
               {/* Work Hours Report */}
-              <div className="bg-white m-4 rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">تقرير ساعات العمل لهذا الشهر</h2>
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <h2 className="text-lg font-bold text-gray-900 mb-5 text-center">تقرير ساعات العمل لهذا الشهر</h2>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-blue-600 font-bold text-lg">198:00:00</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50 rounded-xl p-4 text-center">
+                    <div className="text-blue-600 font-bold text-lg font-mono">198:00:00</div>
                     <p className="text-xs text-gray-600 mt-1">الساعات الواجبة</p>
-                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
                   </div>
-                  <div className="text-center">
-                    <div className="text-blue-600 font-bold text-lg">198:00:00</div>
+                  <div className="bg-red-50 rounded-xl p-4 text-center">
+                    <div className="text-red-500 font-bold text-lg font-mono">198:00:00</div>
                     <p className="text-xs text-gray-600 mt-1">ساعات الغياب</p>
-                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
                   </div>
-                  <div className="text-center">
-                    <div className="text-blue-600 font-bold text-lg">00:00:00</div>
+                  <div className="bg-orange-50 rounded-xl p-4 text-center">
+                    <div className="text-orange-500 font-bold text-lg font-mono">00:00:00</div>
                     <p className="text-xs text-gray-600 mt-1">الساعات الإضافية</p>
-                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
                   </div>
-                  <div className="text-center">
-                    <div className="text-blue-600 font-bold text-lg">00:00:00</div>
+                  <div className="bg-green-50 rounded-xl p-4 text-center">
+                    <div className="text-green-600 font-bold text-lg font-mono">00:00:00</div>
                     <p className="text-xs text-gray-600 mt-1">الحضور لهذا الشهر</p>
-                    <CheckCircle className="h-5 w-5 text-green-500 mx-auto mt-2" />
+                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Attendance Registration */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                    <MapPin className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <span className="font-semibold text-gray-900">تم تسجيل الحضور</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="text-center bg-green-50 p-3 rounded-xl">
+                    <p className="text-xs text-gray-500 mb-1">تسجيل الحضور</p>
+                    <p className="font-mono text-sm font-bold text-gray-900">08:00:00</p>
+                    <p className="font-mono text-xs text-gray-500">2026-01-29</p>
+                  </div>
+                  <div className="text-center bg-red-50 p-3 rounded-xl">
+                    <p className="text-xs text-gray-500 mb-1">تسجيل الانصراف</p>
+                    <p className="font-mono text-sm font-bold text-gray-900">17:00:00</p>
+                    <p className="font-mono text-xs text-gray-500">2026-01-29</p>
                   </div>
                 </div>
 
-                {/* Attendance Registration */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <MapPin className="h-5 w-5 text-orange-500" />
-                    <span className="font-semibold text-gray-900">تم تسجيل الحضور</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center bg-white p-3 rounded">
-                      <p className="text-xs text-gray-600">تسجيل الحضور</p>
-                      <p className="font-mono text-sm text-gray-900">08:00:00 2026-01-29</p>
-                    </div>
-                    <div className="text-center bg-white p-3 rounded">
-                      <p className="text-xs text-gray-600">تسجيل الانصراف</p>
-                      <p className="font-mono text-sm text-gray-900">17:00 2026-01-29...</p>
-                    </div>
-                  </div>
-
-                  {/* Attendance Buttons */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button variant="outline" className="w-full text-gray-600">
-                      تسجيل الانصراف
-                    </Button>
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                      تسجيل الحضور
-                    </Button>
-                  </div>
+                {/* Attendance Buttons */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Button variant="outline" className="w-full text-gray-600 rounded-xl">
+                    تسجيل الانصراف
+                  </Button>
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
+                    تسجيل الحضور
+                  </Button>
                 </div>
               </div>
             </div>
@@ -313,57 +337,54 @@ export default function EmployeePortal() {
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-          <div className="flex items-center justify-center relative -translate-y-6">
-            <div className="flex gap-8 px-4">
-              <button
-                onClick={() => setCurrentPage("more")}
-                className="bg-blue-700 rounded-full p-4 text-white shadow-lg hover:bg-blue-800"
-              >
-                <MoreHorizontal className="h-6 w-6" />
-              </button>
-              <button
-                onClick={() => setCurrentPage("send-request")}
-                className="bg-yellow-500 rounded-full p-5 text-white shadow-lg hover:bg-yellow-600"
-              >
-                <Plus className="h-7 w-7" />
-              </button>
-              <button
-                onClick={() => setCurrentPage("requests")}
-                className="bg-blue-700 rounded-full p-4 text-white shadow-lg hover:bg-blue-800 relative"
-              >
-                <FileText className="h-6 w-6" />
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+          {/* Centered FAB */}
+          <button
+            onClick={() => setCurrentPage("send-request")}
+            className="absolute -top-6 left-1/2 -translate-x-1/2 bg-yellow-500 rounded-full p-4 text-white shadow-lg hover:bg-yellow-600 border-4 border-white"
+          >
+            <Plus className="h-6 w-6" />
+          </button>
+
+          <div className="flex items-center justify-between px-6 py-3">
+            <button
+              onClick={() => setCurrentPage("home")}
+              className={`flex flex-col items-center gap-1 w-16 ${currentPage === "home" ? "text-blue-600" : "text-gray-500"}`}
+            >
+              <Home className="h-5 w-5" />
+              <span className="text-xs">الرئيسية</span>
+            </button>
+            <button
+              onClick={() => setCurrentPage("requests")}
+              className={`flex flex-col items-center gap-1 w-16 relative ${currentPage === "requests" ? "text-blue-600" : "text-gray-500"}`}
+            >
+              <div className="relative">
+                <FileText className="h-5 w-5" />
                 {notificationCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  <span className="absolute -top-2 -right-2 bg-yellow-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
                     {notificationCount}
                   </span>
                 )}
-              </button>
-            </div>
-          </div>
+              </div>
+              <span className="text-xs">الطلبات</span>
+            </button>
 
-          <div className="flex items-center justify-around pt-2 pb-3 px-4">
+            {/* Spacer for FAB */}
+            <div className="w-16"></div>
+
             <button
               onClick={() => setCurrentPage("more")}
-              className={`flex flex-col items-center gap-1 ${currentPage === "more" ? "text-blue-600" : "text-gray-600"}`}
+              className={`flex flex-col items-center gap-1 w-16 ${currentPage === "more" ? "text-blue-600" : "text-gray-500"}`}
             >
               <MoreHorizontal className="h-5 w-5" />
               <span className="text-xs">المزيد</span>
             </button>
             <button
-              onClick={() => setCurrentPage("requests")}
-              className={`flex flex-col items-center gap-1 ${currentPage === "requests" ? "text-blue-600" : "text-gray-600"}`}
+              onClick={handleLogout}
+              className="flex flex-col items-center gap-1 w-16 text-gray-500"
             >
-              <FileText className="h-5 w-5" />
-              <span className="text-xs">الطلبات</span>
-            </button>
-            <div className="w-1"></div>
-            <button
-              onClick={() => setCurrentPage("home")}
-              className={`flex flex-col items-center gap-1 ${currentPage === "home" ? "text-blue-600" : "text-gray-600"}`}
-            >
-              <Home className="h-5 w-5" />
-              <span className="text-xs">الرئيسية</span>
+              <LogOut className="h-5 w-5" />
+              <span className="text-xs">خروج</span>
             </button>
           </div>
         </div>
@@ -405,6 +426,15 @@ export default function EmployeePortal() {
 
         {/* Desktop Content */}
         <main className="max-w-7xl mx-auto px-6 py-8">
+          {currentPage !== "home" && (
+            <button
+              onClick={() => setCurrentPage("home")}
+              className="flex items-center gap-2 text-gray-600 hover:text-blue-600 mb-6 transition"
+            >
+              <ChevronLeft className="h-5 w-5 rotate-180" />
+              <span className="font-medium">رجوع للرئيسية</span>
+            </button>
+          )}
           {currentPage === "home" && (
             <>
               {/* Hero Section */}

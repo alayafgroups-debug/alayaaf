@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/lib/supabaseClient";
 
-type AttendanceDay = { day: number; status: "present" | "absent" | "weekend" };
+type AttendanceDay = { day: number; status: "present" | "absent" | "future" };
 type EmpRow = { id: string; name: string; attendance: AttendanceDay[] };
 
 export default function HRAttendanceCalculate() {
@@ -30,26 +30,34 @@ export default function HRAttendanceCalculate() {
       const startDate = `${year}-${String(mon).padStart(2, "0")}-01`;
       const endDate = `${year}-${String(mon).padStart(2, "0")}-${daysInMonth}`;
 
-      const { data: attRecords } = await supabase.from("attendance").select("employee_id, date, status")
+      const { data: attRecords } = await supabase.from("attendance").select("emp_id, date, status")
         .gte("date", startDate).lte("date", endDate);
 
       const attMap: Record<string, Record<number, string>> = {};
       (attRecords ?? []).forEach((r: any) => {
-        if (!attMap[r.employee_id]) attMap[r.employee_id] = {};
+        const key = String(r.emp_id ?? "");
+        if (!key) return;
+        if (!attMap[key]) attMap[key] = {};
         const d = new Date(r.date).getDate();
-        attMap[r.employee_id][d] = r.status;
+        attMap[key][d] = r.status;
       });
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       setData(emps.map((e: any) => {
-        const empAtt = attMap[e.id] ?? {};
+        const empKey = String(e.emp_id ?? e.id ?? "");
+        const empAtt = attMap[empKey] ?? {};
         const attendance: AttendanceDay[] = Array.from({ length: daysInMonth }, (_, i) => {
           const day = i + 1;
           const date = new Date(year, mon - 1, day);
-          const isWeekend = date.getDay() === 5 || date.getDay() === 6;
-          if (isWeekend) return { day, status: "weekend" as const };
+          date.setHours(0, 0, 0, 0);
+
           const st = empAtt[day];
           if (st === "حاضر" || st === "present") return { day, status: "present" as const };
           if (st === "غائب" || st === "absent") return { day, status: "absent" as const };
+
+          if (date > today) return { day, status: "future" as const };
           return { day, status: "absent" as const };
         });
         return { id: e.id, name: e.name ?? "", attendance };
@@ -109,14 +117,10 @@ export default function HRAttendanceCalculate() {
                       </Avatar>
                     </td>
                     {emp.attendance.map((record) => (
-                      <td key={record.day} className={`py-1.5 px-0.5 border-gray-200 border-b text-lg font-bold ${
-                        record.status === "weekend" ? "bg-green-100" :
-                        record.status === "present" ? "bg-white" :
-                        "bg-white"
-                      }`}>
+                      <td key={record.day} className="py-1.5 px-0.5 border-gray-200 border-b text-lg font-bold bg-white">
                         {record.status === "present" && <div className="flex justify-center text-green-600">✓</div>}
-                        {record.status === "absent" && <div className="flex justify-center text-red-500">○</div>}
-                        {record.status === "weekend" && <div className="flex justify-center text-green-600">✓</div>}
+                        {record.status === "absent" && <div className="flex justify-center text-red-500">✕</div>}
+                        {record.status === "future" && <div className="flex justify-center text-gray-400">○</div>}
                       </td>
                     ))}
                   </tr>

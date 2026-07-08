@@ -41,6 +41,7 @@ import Login from "./pages/Login";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import AdminEmployeeRegistration from "./pages/AdminEmployeeRegistration";
+import SetupDatabase from "./pages/SetupDatabase";
 import HRPayrollStatement from "./pages/HRPayrollStatement";
 import HRPayrollArchive from "./pages/HRPayrollArchive";
 import HRPayrollFinancialData from "./pages/HRPayrollFinancialData";
@@ -109,6 +110,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Setup Route */}
+          <Route path="/setup" element={<SetupDatabase />} />
+
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/employee/login" element={<EmployeeLogin />} />

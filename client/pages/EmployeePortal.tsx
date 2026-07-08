@@ -262,7 +262,7 @@ export default function EmployeePortal() {
     try {
       const { data, error } = await supabase
         .from("leave_requests")
-        .select("id, leave_type, status, created_at, reason")
+        .select("*")
         .eq("emp_id", empId)
         .order("created_at", { ascending: false });
 
@@ -273,7 +273,7 @@ export default function EmployeePortal() {
         type: String(r.leave_type ?? "طلب"),
         status: normalizeStatus(r.status),
         createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
-        reason: String(r.reason ?? "-")
+        reason: String(r.reason ?? r.notes ?? "-")
       }));
 
       setEmployeeRequests(mapped);
@@ -301,8 +301,7 @@ export default function EmployeePortal() {
           start_date: today,
           end_date: today,
           status: "معلق",
-          reason: `طلب ${type.name} من بوابة الموظف`,
-          notes: "تم الإرسال من لوحة الموظف"
+          notes: `طلب ${type.name} من بوابة الموظف`
         },
       ]);
 

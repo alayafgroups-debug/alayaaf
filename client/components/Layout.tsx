@@ -188,20 +188,6 @@ const hrNavItems: HRNavItem[] = [
     ],
   },
   {
-    icon: Network, label: "الهيكل التنظيمي", href: "/hr/organization", hasChildren: true,
-    children: [
-      { icon: Network, label: "شجرة الهيكل التنظيمي", href: "/hr/organization/tree" },
-      { icon: Users2, label: "الفروع", href: "/hr/organization/branches" },
-      { icon: LayoutDashboard, label: "الإدارات", href: "/hr/organization/departments" },
-      { icon: LayoutDashboard, label: "الأقسام", href: "/hr/organization/sections" },
-      { icon: LayoutDashboard, label: "الوحدات", href: "/hr/organization/units" },
-      { icon: LayoutDashboard, label: "الشعب", href: "/hr/organization/subunits" },
-      { icon: LayoutDashboard, label: "الوظائف", href: "/hr/organization/jobs" },
-      { icon: MapPin, label: "مواقع العمل", href: "/hr/organization/work-locations" },
-      { icon: Clock, label: "جداول العمل", href: "/hr/organization/work-schedules" },
-    ],
-  },
-  {
     icon: Coins, label: "تهيئة المعلومات المالية", href: "/hr/financial-setup", hasChildren: true,
     children: [
       { icon: Coins, label: "أنواع البدلات", href: "/hr/financial-setup/allowances" },
@@ -224,6 +210,20 @@ const hrNavItems: HRNavItem[] = [
   },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },
+  {
+    icon: Network, label: "إعدادات الهيكل التنظيمي للشركة", href: "/hr/organization", hasChildren: true,
+    children: [
+      { icon: Network, label: "شجرة الهيكل التنظيمي", href: "/hr/organization/tree" },
+      { icon: Users2, label: "الفروع", href: "/hr/organization/branches" },
+      { icon: LayoutDashboard, label: "الإدارات", href: "/hr/organization/departments" },
+      { icon: LayoutDashboard, label: "الأقسام", href: "/hr/organization/sections" },
+      { icon: LayoutDashboard, label: "الوحدات", href: "/hr/organization/units" },
+      { icon: LayoutDashboard, label: "الشعب", href: "/hr/organization/subunits" },
+      { icon: LayoutDashboard, label: "الوظائف", href: "/hr/organization/jobs" },
+      { icon: MapPin, label: "مواقع العمل", href: "/hr/organization/work-locations" },
+      { icon: Clock, label: "جداول العمل", href: "/hr/organization/work-schedules" },
+    ],
+  },
   {
     icon: ShieldCheck, label: "صلاحيات الموظفين", href: "/hr/permissions", hasChildren: true,
     children: [

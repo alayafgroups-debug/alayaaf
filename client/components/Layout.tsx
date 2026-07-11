@@ -233,6 +233,12 @@ const hrNavItems: HRNavItem[] = [
   },
 ];
 
+function getActiveHRParent(pathname: string) {
+  return hrNavItems.find(
+    (item) => item.hasChildren && item.children?.some((child) => child.href === pathname),
+  )?.href ?? null;
+}
+
 /* ── Per-item accent colors for active state ── */
 const itemColors: Record<string, { icon: string; active: string; glow: string; dot: string; text: string; subBg: string; border: string }> = {
   "/":          { icon: "from-sky-400 to-blue-600",      active: "bg-sky-500/15 border-sky-500/25",      glow: "shadow-sky-500/20",      dot: "bg-sky-400",      text: "text-sky-300",      subBg: "bg-sky-500/[0.06]",      border: "border-sky-400/20" },
@@ -282,6 +288,13 @@ function HRSidebar({
     if (navRef.current) {
       sidebarScrollPositions.hr = navRef.current.scrollTop;
     }
+  };
+
+  const navigateKeepingScroll = (href: string) => {
+    if (navRef.current) {
+      sidebarScrollPositions.hr = navRef.current.scrollTop;
+    }
+    navigate(href);
   };
 
   const lastAutoExpandedPath = useRef<string | null>(null);
@@ -411,7 +424,7 @@ function HRSidebar({
                   if (item.hasChildren) {
                     setExpandedMenu(isExpanded ? null : item.href);
                   } else {
-                    navigate(item.href);
+                    navigateKeepingScroll(item.href);
                   }
                 }}
                 className={cn(
@@ -460,7 +473,7 @@ function HRSidebar({
                     return (
                       <button
                         key={child.href}
-                        onClick={() => navigate(child.href)}
+                        onClick={() => navigateKeepingScroll(child.href)}
                         className={cn(
                           "w-full text-right flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
                           isChildActive
@@ -817,10 +830,12 @@ function MainSidebar({
    Layout Component
    ═══════════════════════════════════════════════════════ */
 export default function Layout({ children }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [expandedHRMenu, setExpandedHRMenu] = useState<string | null>(null);
-  const [expandedMainMenu, setExpandedMainMenu] = useState<string | null>(null);
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandedHRMenu, setExpandedHRMenu] = useState<string | null>(() =>
+    getActiveHRParent(location.pathname),
+  );
+  const [expandedMainMenu, setExpandedMainMenu] = useState<string | null>(null);
 
   const isHRSection = location.pathname.startsWith("/hr");
 

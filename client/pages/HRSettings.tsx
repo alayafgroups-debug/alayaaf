@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Layout from "@/components/Layout";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Save, Settings2 } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, CalendarClock, MapPin, Save, Settings2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 
@@ -300,6 +300,28 @@ export default function HRSettings() {
                 {tabLabels[tab]}
               </button>
             ))}
+            <span className="hidden sm:block w-px bg-gray-200 mx-1" />
+            <button
+              onClick={() => navigate("/hr/organization/jobs")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition"
+            >
+              <BriefcaseBusiness className="h-4 w-4" />
+              الوظائف
+            </button>
+            <button
+              onClick={() => navigate("/hr/organization/work-locations")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition"
+            >
+              <MapPin className="h-4 w-4" />
+              مواقع العمل
+            </button>
+            <button
+              onClick={() => navigate("/hr/organization/work-schedules")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition"
+            >
+              <CalendarClock className="h-4 w-4" />
+              جداول العمل والشركات
+            </button>
           </div>
 
           <div className="p-4 space-y-4">

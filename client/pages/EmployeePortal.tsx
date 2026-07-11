@@ -26,6 +26,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
+import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
+import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
+import { requestFormSchemas } from "@/components/hr/formSchemas";
 
 interface UserSession {
   id: string;
@@ -45,6 +48,33 @@ interface EmployeeRequest {
 }
 
 type AppPage = "home" | "requests" | "send-request" | "more";
+
+// Map Arabic request name → schema ID used in DynamicRequestForm / LeaveRequestForm
+const REQUEST_NAME_TO_SCHEMA: Record<string, string> = {
+  "صيانة": "maintenance",
+  "الصرف": "disbursement",
+  "السلف": "advance",
+  "استئذان": "accommodation",
+  "الإجازات": "leave",
+  "عهدة": "custody",
+  "عمل إضافي": "overtime",
+  "دورة تدريبية": "training",
+  "نقل": "transfer",
+  "إخلاء طرف": "clearance",
+  "شراء": "purchase",
+  "إضافة طرف": "add_party",
+  "مباشرة العمل": "return_work",
+  "انتداب": "secondment",
+  "استقالة": "resignation",
+  "صرف امتياز مالي": "disburse_bonus",
+  "إقالة موظف": "termination",
+  "وظيفة شاغرة": "vacancy",
+  "إضافة موظف": "add_employee",
+  "تعديل راتب": "salary_adj",
+  "مهمة عمل": "mission",
+  "صرف عمولة": "commission",
+  "صرف مستحقات إجازة": "leave_dues",
+};
 
 const REQUEST_TYPES = [
   { id: 1, name: "صيانة", icon: "🔧", color: "bg-gray-100" },
@@ -106,6 +136,11 @@ export default function EmployeePortal() {
   const [employeeRequests, setEmployeeRequests] = useState<EmployeeRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [allowedRequests, setAllowedRequests] = useState<string[]>([]);
+
+  // Form state for request dialogs
+  const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
+  const [leaveFormOpen, setLeaveFormOpen] = useState(false);
+  const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
 
   // Face verification camera state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -287,32 +322,18 @@ export default function EmployeePortal() {
     }
   };
 
-  const handleSendRequest = async (type: typeof REQUEST_TYPES[0]) => {
+  const handleSendRequest = (type: typeof REQUEST_TYPES[0]) => {
     if (!user) return;
-
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-
-    try {
-      const { error } = await supabase.from("leave_requests").insert([
-        {
-          emp_id: user.empId,
-          emp_name: user.name,
-          leave_type: type.name,
-          start_date: today,
-          end_date: today,
-          status: "معلق",
-          notes: `طلب ${type.name} من بوابة الموظف`
-        },
-      ]);
-
-      if (error) throw error;
-
-      toast.success(`تم إرسال طلب ${type.name} بنجاح`);
-      await loadEmployeeRequests(user.empId);
-      setCurrentPage("requests");
-    } catch {
-      toast.error("تعذر إرسال الطلب، تحقق من إعدادات قاعدة البيانات");
+    const schemaId = REQUEST_NAME_TO_SCHEMA[type.name];
+    if (!schemaId) {
+      toast.info(`نموذج "${type.name}" غير متوفر حالياً`);
+      return;
+    }
+    if (schemaId === "leave") {
+      setLeaveFormOpen(true);
+    } else {
+      setActiveSchemaId(schemaId);
+      setDynamicFormOpen(true);
     }
   };
 
@@ -1121,6 +1142,26 @@ export default function EmployeePortal() {
           </div>
         </div>
       )}
+
+      {/* ── Request Form Dialogs ── */}
+      <DynamicRequestForm
+        open={dynamicFormOpen}
+        onOpenChange={(open) => {
+          setDynamicFormOpen(open);
+          if (!open && user?.empId) loadEmployeeRequests(user.empId);
+        }}
+        schema={activeSchemaId ? (requestFormSchemas[activeSchemaId] ?? null) : null}
+        employeeInfo={user ? { empId: user.empId, name: user.name } : undefined}
+      />
+
+      <LeaveRequestForm
+        open={leaveFormOpen}
+        onOpenChange={(open) => {
+          setLeaveFormOpen(open);
+          if (!open && user?.empId) loadEmployeeRequests(user.empId);
+        }}
+        employeeInfo={user ? { empId: user.empId, name: user.name } : undefined}
+      />
     </div>
   );
 }

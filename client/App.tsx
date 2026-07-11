@@ -33,6 +33,7 @@ import HRUserLogs from "./pages/HRUserLogs";
 import HRRequestsSend from "./pages/HRRequestsSend";
 import HRRequestsIncoming from "./pages/HRRequestsIncoming";
 import HRRequestsSent from "./pages/HRRequestsSent";
+import HRRequestFormSettings from "./pages/HRRequestFormSettings";
 import HRAttendanceCalculate from "./pages/HRAttendanceCalculate";
 import HRAttendanceReport from "./pages/HRAttendanceReport";
 import HRAttendanceMonthlyReport from "./pages/HRAttendanceMonthlyReport";
@@ -155,6 +156,7 @@ const App = () => (
           <Route path="/hr/requests/send" element={<HRRequestsSend />} />
           <Route path="/hr/requests/incoming" element={<HRRequestsIncoming />} />
           <Route path="/hr/requests/sent" element={<HRRequestsSent />} />
+          <Route path="/hr/requests/form-settings" element={<HRRequestFormSettings />} />
           <Route path="/hr/payroll" element={<Navigate to="/hr/payroll/statement" replace />} />
           <Route path="/hr/payroll/statement" element={<HRPayrollStatement />} />
           <Route path="/hr/payroll/archive" element={<HRPayrollArchive />} />

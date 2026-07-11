@@ -32,14 +32,30 @@ export const requestFormSchemas: Record<string, FormSchema> = {
   advance: {
     id: "advance", title: "السلف",
     fields: [
-      { name: "advance_type", label: "أنواع السلف", type: "select", required: true },
-      { name: "currency", label: "عملة", type: "select", required: true, options: [{label: "SAR", value: "SAR"}] },
+      { name: "advance_type", label: "أنواع السلف", type: "select", required: false, options: [
+        { label: "سلفة شخصية", value: "personal" },
+        { label: "سلفة طارئة", value: "emergency" },
+        { label: "سلفة سكن", value: "housing" },
+        { label: "سلفة زواج", value: "marriage" },
+        { label: "سلفة علاجية", value: "medical" },
+        { label: "سلفة تعليمية", value: "education" },
+        { label: "سلفة أخرى", value: "other" },
+      ]},
+      { name: "currency", label: "عملة", type: "select", required: true, options: [{label: "ريال سعودي (SAR)", value: "SAR"}, {label: "دولار (USD)", value: "USD"}] },
       { name: "amount", label: "قيمة القرض", type: "number", required: true },
-      { name: "payment_method", label: "طريقة السداد", type: "select", required: true },
+      { name: "payment_method", label: "طريقة السداد", type: "select", required: false, options: [
+        { label: "اقتطاع من الراتب", value: "salary" },
+        { label: "تحويل بنكي", value: "bank" },
+        { label: "نقداً", value: "cash" },
+      ]},
       { name: "start_date", label: "تاريخ بداية الاستقطاع", type: "date", required: true },
       { name: "installments", label: "عدد الأقساط الشهرية", type: "number", required: true },
-      { name: "installment_amount", label: "قيمة القسط الشهري", type: "number", required: true },
-      { name: "guarantor", label: "الكفيل", type: "select" },
+      { name: "installment_amount", label: "قيمة القسط الشهري", type: "number", required: false },
+      { name: "guarantor", label: "الكفيل", type: "select", options: [
+        { label: "بدون كفيل", value: "none" },
+        { label: "كفيل داخلي", value: "internal" },
+        { label: "كفيل خارجي", value: "external" },
+      ]},
       { name: "phone", label: "رقم الهاتف", type: "text", required: true },
       { name: "notes", label: "ملاحظات", type: "textarea", colSpan: 2 }
     ]

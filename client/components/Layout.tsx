@@ -113,6 +113,7 @@ const hrNavItems: HRNavItem[] = [
       { icon: Send, label: "إرسال الطلبات", href: "/hr/requests/send" },
       { icon: Inbox, label: "الطلبات الواردة", href: "/hr/requests/incoming" },
       { icon: MailCheck, label: "الطلبات المرسلة", href: "/hr/requests/sent" },
+      { icon: Settings, label: "إعداد حقول الطلبات", href: "/hr/requests/form-settings" },
     ],
   },
   {

@@ -108,22 +108,28 @@ const formatRequestReason = (requestType: string, rawReason: unknown) => {
   if (!raw) return "-";
 
   try {
-    const values = JSON.parse(raw);
+    const values = JSON.parse(raw) as Record<string, unknown>;
     if (!values || typeof values !== "object" || Array.isArray(values)) return raw;
 
     const schema = Object.values(requestFormSchemas).find((item) => item.title === requestType);
-    return Object.entries(values)
-      .filter(([, value]) => value !== "" && value !== null && value !== undefined)
-      .map(([name, value]) => {
-        const field = schema?.fields.find((item) => item.name === name);
-        const label = field?.label ?? name.replace(/_/g, " ");
-        const optionLabel = field?.options?.find((option) => option.value === String(value))?.label;
-        const displayValue = optionLabel ?? (typeof value === "boolean" ? (value ? "نعم" : "لا") : String(value));
-        return `${label}: ${displayValue}`;
-      })
-      .join(" • ") || "-";
+    const reasonKey = ["reason", "purpose", "advance_type", "type", "description", "notes"]
+      .find((key) => values[key] !== "" && values[key] !== null && values[key] !== undefined);
+    const valueKey = ["amount", "value", "total", "loan_amount", "requested_amount"]
+      .find((key) => values[key] !== "" && values[key] !== null && values[key] !== undefined);
+
+    const parts: string[] = [];
+    if (reasonKey) {
+      const field = schema?.fields.find((item) => item.name === reasonKey);
+      const reasonValue = field?.options?.find((option) => option.value === String(values[reasonKey]))?.label
+        ?? String(values[reasonKey]);
+      parts.push(`السبب: ${reasonValue}`);
+    }
+    if (valueKey) parts.push(`القيمة: ${String(values[valueKey])}`);
+
+    return parts.join(" • ") || "-";
   } catch {
-    return raw;
+    const reasonMatch = raw.match(/السبب:\s*([^|]+)/);
+    return reasonMatch ? `السبب: ${reasonMatch[1].trim()}` : raw;
   }
 };
 

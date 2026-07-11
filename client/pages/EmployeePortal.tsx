@@ -103,6 +103,30 @@ const REQUEST_TYPES = [
   { id: 23, name: "صرف مستحقات إجازة", icon: "📑", color: "bg-green-100" },
 ];
 
+const formatRequestReason = (requestType: string, rawReason: unknown) => {
+  const raw = String(rawReason ?? "").trim();
+  if (!raw) return "-";
+
+  try {
+    const values = JSON.parse(raw);
+    if (!values || typeof values !== "object" || Array.isArray(values)) return raw;
+
+    const schema = Object.values(requestFormSchemas).find((item) => item.title === requestType);
+    return Object.entries(values)
+      .filter(([, value]) => value !== "" && value !== null && value !== undefined)
+      .map(([name, value]) => {
+        const field = schema?.fields.find((item) => item.name === name);
+        const label = field?.label ?? name.replace(/_/g, " ");
+        const optionLabel = field?.options?.find((option) => option.value === String(value))?.label;
+        const displayValue = optionLabel ?? (typeof value === "boolean" ? (value ? "نعم" : "لا") : String(value));
+        return `${label}: ${displayValue}`;
+      })
+      .join(" • ") || "-";
+  } catch {
+    return raw;
+  }
+};
+
 const MORE_OPTIONS = [
   { id: 1, name: "الملف الشخصي", desc: "المعلومات الشخصية، تعديل البيانات الشخصية", icon: "👤" },
   { id: 2, name: "تقييم الأداء", desc: "تقييماتي لزملائي الخزين، إرشيف التقييم", icon: "⭐" },
@@ -310,7 +334,7 @@ export default function EmployeePortal() {
         type: String(r.leave_type ?? "طلب"),
         status: normalizeStatus(r.status),
         createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
-        reason: String(r.reason ?? r.notes ?? "-"),
+        reason: formatRequestReason(String(r.leave_type ?? "طلب"), r.reason ?? r.notes),
         adminNote: String(r.admin_note ?? ""),
       }));
 

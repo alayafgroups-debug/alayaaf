@@ -277,17 +277,17 @@ export default function HREmployeesInactive() {
             <table className="w-full text-xs" dir="rtl">
               <thead>
                 <tr className="bg-slate-100 border-b border-gray-200">
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الرقم الوظيفي</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الاسم</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الفرع</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">القسم</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">المسمى الوظيفي</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الجنسية</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">رقم الهوية</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">تاريخ التعيين</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">رقم الجوال</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الحالة</th>
-                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600">إجراءات</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الرقم الوظيفي</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الفرع</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">القسم</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">المسمى الوظيفي</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الجنسية</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الهوية</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">تاريخ التعيين</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الجوال</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الحالة</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
                 </tr>
               </thead>
               <tbody>

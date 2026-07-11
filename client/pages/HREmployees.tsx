@@ -273,7 +273,7 @@ export default function HREmployees() {
             <table className="w-full text-xs" dir="rtl">
               <thead>
                 <tr className="bg-slate-100 border-b border-gray-200">
-                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 w-8">
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 w-8 whitespace-nowrap">
                     <input
                       type="checkbox"
                       checked={allPageSelected}
@@ -281,21 +281,21 @@ export default function HREmployees() {
                       className="rounded"
                     />
                   </th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الرقم الوظيفي</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الاسم</th>
-                  {visibleColumns.englishName && <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الاسم بالإنجليزية</th>}
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الفرع</th>
-                  {visibleColumns.directorate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الإدارة</th>}
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">القسم</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">مجال العمل</th>
-                  {visibleColumns.nationality && <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الجنسية</th>}
-                  {visibleColumns.nationalId && <th className="px-3 py-2.5 text-right font-semibold text-gray-600">المنطقة المختار</th>}
-                  {visibleColumns.hireDate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600">تاريخ التعيين</th>}
-                  {visibleColumns.phone && <th className="px-3 py-2.5 text-right font-semibold text-gray-600">رقم الجوال</th>}
-                  {visibleColumns.email && <th className="px-3 py-2.5 text-right font-semibold text-gray-600">البريد الإلكتروني</th>}
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">وضع العمل</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">الحالة</th>
-                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600">إجراءات</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الرقم الوظيفي</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
+                  {visibleColumns.englishName && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم بالإنجليزية</th>}
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الفرع</th>
+                  {visibleColumns.directorate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الإدارة</th>}
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">القسم</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">المسمى الوظيفي</th>
+                  {visibleColumns.nationality && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الجنسية</th>}
+                  {visibleColumns.nationalId && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الهوية</th>}
+                  {visibleColumns.hireDate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">تاريخ التعيين</th>}
+                  {visibleColumns.phone && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الجوال</th>}
+                  {visibleColumns.email && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">البريد الإلكتروني</th>}
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">وضع العمل</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الحالة</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
                 </tr>
               </thead>
               <tbody>

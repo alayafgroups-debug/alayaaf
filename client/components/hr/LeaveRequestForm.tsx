@@ -83,8 +83,8 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
       alert("تم إرسال الطلب بنجاح");
       onOpenChange(false);
     } catch (error: any) {
-      console.error(error);
-      alert("حدث خطأ أثناء إرسال الطلب");
+      console.error("Leave request submission failed:", error);
+      alert(error?.message || "حدث خطأ أثناء إرسال الطلب");
     } finally {
       setLoading(false);
     }

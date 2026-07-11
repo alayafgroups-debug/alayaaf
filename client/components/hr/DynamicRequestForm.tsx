@@ -78,8 +78,9 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
       toast.success("تم إرسال الطلب بنجاح");
       setFormData({});
       onOpenChange(false);
-    } catch {
-      toast.error("تعذر إرسال الطلب، تحقق من إعدادات قاعدة البيانات");
+    } catch (error: any) {
+      console.error("Request submission failed:", error);
+      toast.error(error?.message || "تعذر إرسال الطلب، تحقق من إعدادات قاعدة البيانات");
     } finally {
       setLoading(false);
     }

@@ -45,6 +45,7 @@ interface EmployeeRequest {
   status: string;
   createdAt: string;
   reason: string;
+  adminNote: string;
 }
 
 type AppPage = "home" | "requests" | "send-request" | "more";
@@ -309,7 +310,8 @@ export default function EmployeePortal() {
         type: String(r.leave_type ?? "طلب"),
         status: normalizeStatus(r.status),
         createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
-        reason: String(r.reason ?? r.notes ?? "-")
+        reason: String(r.reason ?? r.notes ?? "-"),
+        adminNote: String(r.admin_note ?? ""),
       }));
 
       setEmployeeRequests(mapped);
@@ -626,6 +628,11 @@ export default function EmployeePortal() {
                       </div>
                       <p className="text-xs text-gray-500 mb-1">تاريخ الإرسال: {req.createdAt}</p>
                       <p className="text-sm text-gray-600">{req.reason}</p>
+                      {req.adminNote && (
+                        <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                          <span className="font-semibold">رد الإدارة: </span>{req.adminNote}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -991,7 +998,14 @@ export default function EmployeePortal() {
                         {filteredRequests.map((req) => (
                           <tr key={req.id} className="border-b hover:bg-gray-50">
                             <td className="py-3 px-4 font-medium">{req.type}</td>
-                            <td className="py-3 px-4 text-gray-600">{req.reason}</td>
+                            <td className="py-3 px-4 text-gray-600">
+                              <div>{req.reason}</div>
+                              {req.adminNote && (
+                                <div className="mt-2 rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-900">
+                                  <span className="font-semibold">رد الإدارة: </span>{req.adminNote}
+                                </div>
+                              )}
+                            </td>
                             <td className="py-3 px-4">{req.createdAt}</td>
                             <td className="py-3 px-4 text-center">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${

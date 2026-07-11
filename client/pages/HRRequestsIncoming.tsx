@@ -9,12 +9,15 @@ import { toast } from "@/hooks/use-toast";
 type RequestRow = {
   id: string; requestDate: string; empId: string; empName: string;
   moveType: string; requestType: string; status: string; lastUpdate: string;
+  adminNote: string;
 };
 
 export default function HRRequestsIncoming() {
   const [items, setItems] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -36,6 +39,7 @@ export default function HRRequestsIncoming() {
           moveType: "إجازة", requestType: r.leave_type ?? "-",
           status,
           lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
+          adminNote: r.admin_note ?? "",
         };
       }));
     } catch { setItems([]); } finally { setLoading(false); }
@@ -47,15 +51,23 @@ export default function HRRequestsIncoming() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleApprove = async (item: RequestRow) => {
-    await supabase.from("leave_requests").update({ status: "موافق" }).eq("id", item.id);
-    toast({ title: "تمت الموافقة على الطلب" });
-    loadData();
-  };
+  const updateRequestStatus = async (item: RequestRow, status: "موافق" | "مرفوض") => {
+    setUpdatingId(item.id);
+    const { error } = await supabase
+      .from("leave_requests")
+      .update({
+        status,
+        admin_note: reviewNotes[item.id]?.trim() || item.adminNote || null,
+      })
+      .eq("id", item.id);
 
-  const handleReject = async (item: RequestRow) => {
-    await supabase.from("leave_requests").update({ status: "مرفوض" }).eq("id", item.id);
-    toast({ title: "تم رفض الطلب" });
+    setUpdatingId(null);
+    if (error) {
+      toast({ title: "تعذر تحديث الطلب", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: status === "موافق" ? "تمت الموافقة على الطلب" : "تم رفض الطلب" });
     loadData();
   };
 
@@ -86,7 +98,7 @@ export default function HRRequestsIncoming() {
                   <th className="py-3 px-4 font-medium">نوع الطلب</th>
                   <th className="py-3 px-4 font-medium text-center">الحالة</th>
                   <th className="py-3 px-4 font-medium">آخر تحديث</th>
-                  <th className="py-3 px-4 font-medium text-center w-28">الإجراءات</th>
+                  <th className="py-3 px-4 font-medium text-center min-w-64">ملاحظة الإدارة والإجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y bg-white">
@@ -105,11 +117,22 @@ export default function HRRequestsIncoming() {
                     </td>
                     <td className="py-3 px-4">{row.lastUpdate}</td>
                     <td className="py-3 px-4">
-                      {row.status === "معلق" && (
-                        <div className="flex justify-center gap-2">
-                          <button onClick={() => handleApprove(row)} className="text-emerald-500 hover:text-emerald-700" title="موافقة"><CheckCircle className="h-5 w-5" /></button>
-                          <button onClick={() => handleReject(row)} className="text-red-500 hover:text-red-700" title="رفض"><XCircle className="h-5 w-5" /></button>
+                      {row.status === "معلق" ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={reviewNotes[row.id] ?? row.adminNote}
+                            onChange={(e) => setReviewNotes((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                            placeholder="اكتب ملاحظة للموظف (اختياري)"
+                            rows={2}
+                            className="w-full resize-none rounded-md border border-gray-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                          <div className="flex justify-center gap-3">
+                            <button disabled={updatingId === row.id} onClick={() => updateRequestStatus(row, "موافق")} className="text-emerald-500 hover:text-emerald-700 disabled:opacity-40" title="موافقة"><CheckCircle className="h-5 w-5" /></button>
+                            <button disabled={updatingId === row.id} onClick={() => updateRequestStatus(row, "مرفوض")} className="text-red-500 hover:text-red-700 disabled:opacity-40" title="رفض"><XCircle className="h-5 w-5" /></button>
+                          </div>
                         </div>
+                      ) : (
+                        <span className="text-xs text-gray-600">{row.adminNote || "لا توجد ملاحظة"}</span>
                       )}
                     </td>
                   </tr>

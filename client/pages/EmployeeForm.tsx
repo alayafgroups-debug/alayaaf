@@ -430,14 +430,17 @@ export default function EmployeeForm({
       };
 
       if (mode === "create") {
-        await supabase.from("employees").insert([payload]);
+        const { error: insertError } = await supabase.from("employees").insert([payload]);
+        if (insertError) throw insertError;
       } else {
-        await supabase.from("employees").update(payload).eq("id", form.id);
+        const { error: updateError } = await supabase.from("employees").update(payload).eq("id", form.id);
+        if (updateError) throw updateError;
       }
       toast({ title: mode === "create" ? "تم إضافة الموظف" : "تم تحديث البيانات", description: `بيانات ${form.name} تم حفظها بنجاح` });
       onSaved();
-    } catch (e) {
-      toast({ title: "خطأ", description: "حدث خطأ أثناء الحفظ", variant: "destructive" });
+    } catch (e: unknown) {
+      const message = (e as { message?: string })?.message ?? "حدث خطأ أثناء الحفظ";
+      toast({ title: "خطأ في الحفظ", description: message, variant: "destructive" });
     } finally {
       setSaving(false);
     }

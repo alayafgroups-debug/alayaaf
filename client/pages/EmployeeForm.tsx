@@ -82,6 +82,8 @@ export type EmpFormData = {
   currency: string;
   allowances: Allowance[];
   socialInsurance: string;
+  socialInsuranceType: string;
+  socialInsuranceStartDate: string;
   insuranceOther: string;
   bankName: string;
   bankBranch: string;
@@ -153,7 +155,9 @@ export const emptyForm = (): EmpFormData => ({
   baseSalary: 0,
   currency: "SAR",
   allowances: [],
-  socialInsurance: "",
+  socialInsurance: "لا",
+  socialInsuranceType: "",
+  socialInsuranceStartDate: "",
   insuranceOther: "",
   bankName: "",
   bankBranch: "",
@@ -220,7 +224,9 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
   baseSalary: Number(r.base_salary ?? 0),
   currency: String(r.currency ?? "SAR"),
   allowances: Array.isArray(r.allowances) ? (r.allowances as Allowance[]) : [],
-  socialInsurance: String(r.social_insurance ?? ""),
+  socialInsurance: ["نعم", "مشمول"].includes(String(r.social_insurance ?? "")) ? "نعم" : "لا",
+  socialInsuranceType: String(r.social_insurance_type ?? ""),
+  socialInsuranceStartDate: String(r.social_insurance_start_date ?? ""),
   insuranceOther: String(r.insurance_other ?? ""),
   bankName: String(r.bank_name ?? ""),
   bankBranch: String(r.bank_branch ?? ""),
@@ -229,13 +235,15 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
   bankBranch2: String(r.bank_branch2 ?? ""),
   bankAccount2: String(r.bank_account2 ?? ""),
   permissions: Array.isArray(r.permissions) ? (r.permissions as string[]) : [],
-  insuranceItems: Array.isArray(r.insurance_items) ? (r.insurance_items as InsuranceItem[]) : [],
+  insuranceItems: Array.isArray(r.insurance_items)
+    ? (r.insurance_items as InsuranceItem[])
+    : [],
   documents: (r.documents as Record<string, string>) ?? {},
   username: String(r.username ?? ""),
   accountTitle: String(r.account_title ?? ""),
   employeeRole: String(r.employee_role ?? ""),
   password: "",
-  status: String(r.status ?? "نشط"),
+  status: String(r.status ?? "نشط") === "نشط" ? "فعال" : String(r.status ?? "غير نشط") === "غير نشط" ? "غير فعال" : String(r.status ?? "فعال"),
   empId: String(r.emp_id ?? ""),
   costCenter: String(r.cost_center ?? ""),
   notes: String(r.notes ?? ""),
@@ -244,23 +252,43 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const NATIONALITIES = ["المملكة العربية السعودية", "مصر", "سوريا", "باكستان", "الهند", "الفلبين", "اليمن", "السودان", "الأردن", "لبنان", "بنغلاديش", "إثيوبيا", "نيجيريا", "أخرى"];
-const DEPARTMENTS = ["قسم الصيانة والتشغيل", "قسم شركة البرمجيات", "قسم المبيعات", "قسم الموارد البشرية", "قسم المحاسبة", "الإدارة العليا"];
+const DEFAULT_DEPARTMENTS = ["الإدارة العليا", "إدارة الموارد البشرية", "إدارة المالية", "إدارة التشغيل", "إدارة المبيعات"];
+const DEFAULT_SECTIONS = ["الموارد البشرية", "المحاسبة", "الصيانة والتشغيل", "المبيعات", "تقنية المعلومات"];
 const BRANCHES = ["فرع التشغيل والصيانة", "الفرع الرئيسي", "فرع المبيعات"];
-const STATUSES = ["نشط", "غير نشط", "إجازة", "منتهي"];
 const GENDERS = ["ذكر", "أنثى"];
 const MARITAL_STATUSES = ["أعزب", "متزوج", "مطلق", "أرمل"];
+const DEFAULT_JOBS = ["مدير عام", "مدير موارد بشرية", "مدير مالي", "محاسب", "مهندس", "فني صيانة", "مسؤول مبيعات", "مسؤول مشتريات", "أخصائي موارد بشرية", "موظف إداري"];
 const EMPLOYEE_ROLES = ["مدير", "محاسب", "مهندس", "فني", "موظف", "مشرف", "مدير قسم", "مدير عام"];
 const CURRENCIES = ["SAR - Saudi Riyal", "USD - US Dollar", "EUR - Euro", "AED - UAE Dirham"];
-const WORK_SCHEDULES = ["جدول شركة", "جدول مرن", "عمل من المنزل", "نظام ورديات"];
+const DEFAULT_WORK_SCHEDULES = ["جدول الشركة الأساسي", "جدول مرن", "عمل من المنزل", "نظام ورديات"];
+const DEFAULT_WORK_LOCATIONS = ["المقر الرئيسي", "فرع التشغيل والصيانة", "فرع المبيعات"];
 const ALLOWANCE_TYPES = ["بدل السكن", "بدل النقل", "بدل الأطفال", "بدل الطعام", "بدل الهاتف", "بدل اللباس", "أخرى"];
-const SOCIAL_INSURANCE_OPTIONS = ["مشمول", "غير مشمول", "معفى"];
+const SOCIAL_INSURANCE_TYPES = ["سعودي قابل للخصم", "سعودي غير قابل للخصم"];
+
+type OrganizationOptions = {
+  departments: string[];
+  sections: string[];
+  jobs: string[];
+  workLocations: string[];
+  workSchedules: string[];
+  companies: string[];
+};
+
+const DEFAULT_ORGANIZATION_OPTIONS: OrganizationOptions = {
+  departments: DEFAULT_DEPARTMENTS,
+  sections: DEFAULT_SECTIONS,
+  jobs: DEFAULT_JOBS,
+  workLocations: DEFAULT_WORK_LOCATIONS,
+  workSchedules: DEFAULT_WORK_SCHEDULES,
+  companies: ["الشركة الرئيسية"],
+};
 
 const PERMISSIONS_COLUMNS = [
-  ["إلزام كامل", "إجازات", "استئناف", "إجازة رضاعة", "صرف مستحقات إدارية"],
-  ["دورة تدريبية", "انتقال", "انتهاء الخدمة", "صرف مستحقات", "أخرى"],
-  ["تعريف", "عمل إضافي", "هياشيم العمل", "إلغاء طلب", "تعديل راتب"],
-  ["عهدة", "شأو", "تعريف بالكارك", "ضوابط رواتب الموظفين", "مهمة عمل"],
-  ["عهدة مالية", "عوائد", "تصفية مستحقات", "وظيفة شاغرة", "حوافز عمومية"],
+  ["صيانة", "الصرف", "السلف", "استئذان", "الإجازات"],
+  ["عهدة", "عمل إضافي", "دورة تدريبية", "نقل", "إخلاء طرف"],
+  ["شراء", "إضافة طرف", "مباشرة العمل", "انتداب", "استقالة"],
+  ["صرف امتياز مالي", "إقالة موظف", "وظيفة شاغرة", "إضافة موظف"],
+  ["تعديل راتب", "مهمة عمل", "صرف عمولة", "صرف مستحقات إجازة"],
 ];
 
 const DOCUMENT_TYPES = [
@@ -323,9 +351,19 @@ export default function EmployeeForm({
     }
     setSaving(true);
     try {
+      // Auto-generate emp_id and job number for new employees
+      let autoEmpId = form.empId;
+      let autoAccountTitle = form.accountTitle;
+      if (mode === "create" && !autoEmpId) {
+        const { count } = await supabase.from("employees").select("*", { count: "exact", head: true });
+        const nextNum = String((count ?? 0) + 1).padStart(3, "0");
+        autoEmpId = `EMP-${nextNum}`;
+        if (!autoAccountTitle) autoAccountTitle = autoEmpId;
+      }
+
       const payload = {
         id: form.id,
-        emp_id: form.empId || null,
+        emp_id: autoEmpId || null,
         name: form.name,
         first_name: form.firstName,
         birth_date: form.birthDate || null,
@@ -371,6 +409,8 @@ export default function EmployeeForm({
         currency: form.currency,
         allowances: form.allowances,
         social_insurance: form.socialInsurance,
+        social_insurance_type: form.socialInsuranceType,
+        social_insurance_start_date: form.socialInsuranceStartDate || null,
         insurance_other: form.insuranceOther,
         bank_name: form.bankName,
         bank_branch: form.bankBranch,
@@ -382,7 +422,7 @@ export default function EmployeeForm({
         insurance_items: form.insuranceItems,
         documents: form.documents,
         username: form.username,
-        account_title: form.accountTitle,
+        account_title: autoAccountTitle,
         employee_role: form.employeeRole,
         status: form.status,
         cost_center: form.costCenter,
@@ -514,8 +554,8 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
 
       {/* Row 1: Names */}
       <div className="grid grid-cols-2 gap-4">
-        <FInput label="الاسم الكامل (حسبي) *" value={form.firstName} onChange={(v) => set("firstName", v)} placeholder="الاسم الكامل (حسبي)" />
-        <FInput label="الاسم الكامل (إجباري) *" value={form.name} onChange={(v) => set("name", v)} placeholder="الاسم الكامل (إجباري)" />
+        <FInput label="الاسم كامل عربي *" value={form.name} onChange={(v) => set("name", v)} placeholder="الاسم كامل عربي" />
+        <FInput label="الاسم كامل إنجليزي" value={form.firstName} onChange={(v) => set("firstName", v)} placeholder="Full name in English" />
       </div>
 
       {/* Row 2: Gender / Birthdate */}
@@ -593,8 +633,8 @@ function Step2Job({ form, set }: { form: EmpFormData; set: <K extends keyof EmpF
     <div className="space-y-5">
       {/* Row 1: Division / Job Title */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الشعبة *" value={form.division} onChange={(v) => set("division", v)} options={DEPARTMENTS} placeholder="--" />
-        <FSelect label="المسمى الوظيفي *" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={EMPLOYEE_ROLES} placeholder="--" />
+        <FSelect label="الشعبة *" value={form.division} onChange={(v) => set("division", v)} options={DEFAULT_DEPARTMENTS} placeholder="--" />
+        <FSelect label="المسمى الوظيفي *" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={DEFAULT_JOBS} placeholder="--" />
       </div>
 
       {/* Row 2: Branch / Employment Type */}
@@ -603,16 +643,22 @@ function Step2Job({ form, set }: { form: EmpFormData; set: <K extends keyof EmpF
         <FSelect label="الفرع *" value={form.branch} onChange={(v) => set("branch", v)} options={BRANCHES} placeholder="--" />
       </div>
 
+      {/* Status Row */}
+      <div className="grid grid-cols-2 gap-4">
+        <FSelect label="الحالة *" value={form.status} onChange={(v) => set("status", v)} options={["فعال", "غير فعال", "إجازة", "منتهي"]} placeholder="--" />
+        <div />
+      </div>
+
       {/* Row 3: Directorate / Department */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الإدارة *" value={form.directorate} onChange={(v) => set("directorate", v)} options={DEPARTMENTS} placeholder="--" />
-        <FSelect label="القسم *" value={form.department} onChange={(v) => set("department", v)} options={DEPARTMENTS} placeholder="--" />
+        <FSelect label="الإدارة *" value={form.directorate} onChange={(v) => set("directorate", v)} options={DEFAULT_DEPARTMENTS} placeholder="--" />
+        <FSelect label="القسم *" value={form.department} onChange={(v) => set("department", v)} options={DEFAULT_SECTIONS} placeholder="--" />
       </div>
 
       {/* Row 4: Other Locations / Work Location */}
       <div className="grid grid-cols-2 gap-4">
         <FInput label="مواقع العمل الأخرى" value={form.otherWorkLocations} onChange={(v) => set("otherWorkLocations", v)} />
-        <FInput label="مكان العمل *" value={form.workLocation} onChange={(v) => set("workLocation", v)} />
+        <FSelect label="مكان العمل *" value={form.workLocation} onChange={(v) => set("workLocation", v)} options={DEFAULT_WORK_LOCATIONS} placeholder="--" />
       </div>
       <p className="text-xs text-gray-400 -mt-3">يمكنك إضافة مواقع متعددة بعد إدارة هذا الموظف للأساسي</p>
 
@@ -624,7 +670,7 @@ function Step2Job({ form, set }: { form: EmpFormData; set: <K extends keyof EmpF
 
       {/* Row 6: Is Contract End (radio) */}
       <div className="flex items-center gap-6">
-        <span className="text-sm font-medium text-gray-700">في انتهاء</span>
+        <span className="text-sm font-medium text-gray-700">فترة تجربة</span>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" name="isContractEnd" checked={form.isContractEnd === true} onChange={() => set("isContractEnd", true)} className="accent-blue-600" />
           <span className="text-sm">نعم</span>
@@ -637,19 +683,19 @@ function Step2Job({ form, set }: { form: EmpFormData; set: <K extends keyof EmpF
 
       {/* Row 7: Employee Category / Contract End Date */}
       <div className="grid grid-cols-2 gap-4">
-        <FInput label="أبطة الموظفين *" value={form.employeeCategory} onChange={(v) => set("employeeCategory", v)} />
-        <FInput label="تاريخ انهاء العقد *" value={form.contractEndDate} onChange={(v) => set("contractEndDate", v)} type="date" />
+        <FSelect label="فئة الموظف" value={form.employeeCategory} onChange={(v) => set("employeeCategory", v)} options={["دوام", "عقد", "جزئي", "مؤقت"]} placeholder="--" />
+        <FInput label="تاريخ انتهاء العقد" value={form.contractEndDate} onChange={(v) => set("contractEndDate", v)} type="date" />
       </div>
 
       {/* Row 8: Work Schedule / Work Time */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="جدول العمل *" value={form.workSchedule} onChange={(v) => set("workSchedule", v)} options={WORK_SCHEDULES} placeholder="جدون شركة!" />
+        <FSelect label="جدول العمل *" value={form.workSchedule} onChange={(v) => set("workSchedule", v)} options={DEFAULT_WORK_SCHEDULES} placeholder="--" />
         <FSelect label="وقت العمل *" value={form.workTime} onChange={(v) => set("workTime", v)} options={["صباحي", "مسائي", "كامل", "ورديات"]} placeholder="--" />
       </div>
 
       {/* Row 9: Attendance Exempt / Daily Hours */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="معلى من الحضور اليومي" value={form.attendanceExempt ? "نعم" : "لا"} onChange={(v) => set("attendanceExempt", v === "نعم")} options={["نعم", "لا"]} placeholder="--" />
+        <FSelect label="معفي من الحضور اليومي" value={form.attendanceExempt ? "نعم" : "لا"} onChange={(v) => set("attendanceExempt", v === "نعم")} options={["نعم", "لا"]} placeholder="--" />
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">عدد ساعات اليوم</label>
           <input type="number" value={form.dailyHours} onChange={(e) => set("dailyHours", Number(e.target.value))} min={0} max={24} className={inputCls} />
@@ -685,7 +731,7 @@ function Step2Job({ form, set }: { form: EmpFormData; set: <K extends keyof EmpF
       {/* Management Days / Training Days */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">بعد أيام الإدارة للتسجيل *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">عدد أيام الإجازة المسموح بها خلال السنة التعاقدية *</label>
           <input type="number" value={form.managementDaysAfter} onChange={(e) => set("managementDaysAfter", Number(e.target.value))} min={0} className={inputCls} />
         </div>
         <div>
@@ -778,9 +824,44 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
       {/* Insurance Info */}
       <div>
         <h3 className="text-sm font-semibold text-gray-800 mb-3">معلومات التأمين</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <FSelect label="التأمينات الاجتماعية" value={form.socialInsurance} onChange={(v) => set("socialInsurance", v)} options={SOCIAL_INSURANCE_OPTIONS} placeholder="--" />
-          <FInput label="أخر" value={form.insuranceOther} onChange={(v) => set("insuranceOther", v)} />
+        <div className="space-y-4">
+          <div className="flex items-center gap-6">
+            <span className="text-sm font-medium text-gray-700">التأمينات الاجتماعية *</span>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="radio" name="socialInsurance" checked={form.socialInsurance === "نعم"} onChange={() => set("socialInsurance", "نعم")} className="accent-blue-600" />
+              <span className="text-sm">نعم</span>
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="radio" name="socialInsurance" checked={form.socialInsurance !== "نعم"} onChange={() => set("socialInsurance", "لا")} className="accent-blue-600" />
+              <span className="text-sm">لا</span>
+            </label>
+          </div>
+          {form.socialInsurance === "نعم" && (
+            <div className="bg-blue-50 rounded-lg p-4 space-y-4 border border-blue-200">
+              <FSelect label="نوع التأمين *" value={form.socialInsuranceType} onChange={(v) => set("socialInsuranceType", v)} options={SOCIAL_INSURANCE_TYPES} placeholder="اختر نوع التأمين" />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ الاشتراك (ميلادي) *</label>
+                <input
+                  type="date"
+                  value={form.socialInsuranceStartDate}
+                  onChange={(e) => set("socialInsuranceStartDate", e.target.value)}
+                  className={inputCls}
+                />
+                {form.socialInsuranceStartDate && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    التاريخ بالهجري: {
+                      (() => {
+                        try {
+                          const d = new Date(form.socialInsuranceStartDate);
+                          return d.toLocaleDateString("ar-SA-u-ca-islamic", { year: "numeric", month: "long", day: "numeric" });
+                        } catch { return ""; }
+                      })()
+                    }
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -910,10 +991,10 @@ function Step7Account({
 }) {
   return (
     <div className="space-y-5">
-      {/* Username / Account Title */}
+      {/* Job Number / Username */}
       <div className="grid grid-cols-2 gap-4">
-        <FInput label="الاسم الوظيفي *" value={form.username} onChange={(v) => set("username", v)} placeholder="" />
-        <FInput label="لقب الشمول *" value={form.accountTitle} onChange={(v) => set("accountTitle", v)} placeholder="" />
+        <FInput label="الرقم الوظيفي *" value={form.accountTitle} onChange={(v) => set("accountTitle", v)} placeholder="يتم توليده تلقائيًا" />
+        <FInput label="اسم المستخدم *" value={form.username} onChange={(v) => set("username", v)} placeholder="" />
       </div>
 
       {/* Password */}
@@ -953,6 +1034,7 @@ function Step7Account({
         <FSelect label="صلاحية الموظف *" value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={EMPLOYEE_ROLES} placeholder="--" />
         <div />
       </div>
+      <p className="text-xs text-gray-400">سيتم إرسال بيانات الدخول (رقم الموظف + كلمة المرور) للموظف بعد الحفظ.</p>
     </div>
   );
 }

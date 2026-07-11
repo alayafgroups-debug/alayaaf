@@ -37,6 +37,7 @@ import {
   Network,
   Coins,
   Scale,
+  MapPin,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -195,6 +196,9 @@ const hrNavItems: HRNavItem[] = [
       { icon: LayoutDashboard, label: "الأقسام", href: "/hr/organization/sections" },
       { icon: LayoutDashboard, label: "الوحدات", href: "/hr/organization/units" },
       { icon: LayoutDashboard, label: "الشعب", href: "/hr/organization/subunits" },
+      { icon: LayoutDashboard, label: "الوظائف", href: "/hr/organization/jobs" },
+      { icon: MapPin, label: "مواقع العمل", href: "/hr/organization/work-locations" },
+      { icon: Clock, label: "جداول العمل", href: "/hr/organization/work-schedules" },
     ],
   },
   {

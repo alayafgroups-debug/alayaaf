@@ -82,6 +82,9 @@ import HROrgDepartments from "./pages/HROrgDepartments";
 import HROrgSections from "./pages/HROrgSections";
 import HROrgUnits from "./pages/HROrgUnits";
 import HROrgSubunits from "./pages/HROrgSubunits";
+import HROrgJobs from "./pages/HROrgJobs";
+import HROrgWorkLocations from "./pages/HROrgWorkLocations";
+import HROrgWorkSchedules from "./pages/HROrgWorkSchedules";
 import HRFinancialAllowances from "./pages/HRFinancialAllowances";
 import HRFinancialOvertime from "./pages/HRFinancialOvertime";
 import HRFinancialDeductions from "./pages/HRFinancialDeductions";
@@ -202,6 +205,9 @@ const App = () => (
           <Route path="/hr/organization/sections" element={<HROrgSections />} />
           <Route path="/hr/organization/units" element={<HROrgUnits />} />
           <Route path="/hr/organization/subunits" element={<HROrgSubunits />} />
+          <Route path="/hr/organization/jobs" element={<HROrgJobs />} />
+          <Route path="/hr/organization/work-locations" element={<HROrgWorkLocations />} />
+          <Route path="/hr/organization/work-schedules" element={<HROrgWorkSchedules />} />
           <Route path="/hr/financial-setup" element={<Navigate to="/hr/financial-setup/allowances" replace />} />
           <Route path="/hr/financial-setup/allowances" element={<HRFinancialAllowances />} />
           <Route path="/hr/financial-setup/overtime" element={<HRFinancialOvertime />} />

@@ -419,50 +419,63 @@ function HRSidebar({
 
           return (
             <div key={item.href}>
-              <button
-                onClick={() => {
-                  if (item.hasChildren) {
-                    setExpandedMenu(isExpanded ? null : item.href);
-                  } else {
-                    navigateKeepingScroll(item.href);
-                  }
-                }}
+              <div
                 className={cn(
                   "group w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200 border border-transparent",
                   isItemActive
                     ? "text-white bg-emerald-500/15 border-emerald-500/25"
                     : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
                 )}
-                title={item.label}
               >
-                <div
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300 flex-shrink-0",
-                    isItemActive
-                      ? "bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
-                      : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70"
-                  )}
+                {/* Icon + Label: clicking expands or navigates */}
+                <button
+                  onClick={() => {
+                    if (item.hasChildren) {
+                      setExpandedMenu(item.href); // only opens, never closes
+                    } else {
+                      navigateKeepingScroll(item.href);
+                    }
+                  }}
+                  className="flex items-center gap-3 flex-1 min-w-0"
+                  title={item.label}
                 >
-                  <Icon className="h-4 w-4" />
-                </div>
-                {sidebarOpen && (
-                  <>
-                    <span className={cn("flex-1 text-right", isItemActive && "font-semibold")}>
+                  <div
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300 flex-shrink-0",
+                      isItemActive
+                        ? "bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
+                        : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  {sidebarOpen && (
+                    <span className={cn("flex-1 text-right truncate", isItemActive && "font-semibold")}>
                       {item.label}
                     </span>
-                    {item.hasChildren ? (
-                      <ChevronDown
-                        className={cn(
-                          "h-3.5 w-3.5 transition-transform duration-300 text-white/25",
-                          isExpanded && "rotate-180 text-white/50"
-                        )}
-                      />
-                    ) : isItemActive ? (
-                      <span className="h-1 w-5 rounded-full bg-gradient-to-l from-emerald-400 to-teal-500 opacity-60" />
-                    ) : null}
-                  </>
-                )}
-              </button>
+                  )}
+                </button>
+
+                {/* Chevron: ONLY this toggles open/close */}
+                {sidebarOpen && item.hasChildren ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedMenu(isExpanded ? null : item.href);
+                    }}
+                    className="flex-shrink-0 p-1 rounded hover:bg-white/10 transition"
+                  >
+                    <ChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 transition-transform duration-300 text-white/25",
+                        isExpanded && "rotate-180 text-white/50"
+                      )}
+                    />
+                  </button>
+                ) : sidebarOpen && isItemActive ? (
+                  <span className="h-1 w-5 rounded-full bg-gradient-to-l from-emerald-400 to-teal-500 opacity-60 flex-shrink-0" />
+                ) : null}
+              </div>
 
               {/* Children sub-menu */}
               {item.hasChildren && isExpanded && sidebarOpen && item.children && (

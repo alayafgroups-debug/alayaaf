@@ -105,6 +105,7 @@ export default function EmployeePortal() {
   const [searchQuery, setSearchQuery] = useState("");
   const [employeeRequests, setEmployeeRequests] = useState<EmployeeRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
+  const [allowedRequests, setAllowedRequests] = useState<string[]>([]);
 
   // Face verification camera state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -323,11 +324,33 @@ export default function EmployeePortal() {
     }
   };
 
+  // Fetch employee permissions from DB to filter request types
   useEffect(() => {
-    if (user?.empId) {
-      loadEmployeeRequests(user.empId);
-    }
+    if (!user?.empId) return;
+    const fetchPermissions = async () => {
+      try {
+        const { data } = await supabase
+          .from("employees")
+          .select("permissions")
+          .eq("emp_id", user.empId)
+          .maybeSingle();
+        if (data && Array.isArray(data.permissions) && data.permissions.length > 0) {
+          setAllowedRequests(data.permissions as string[]);
+        } else {
+          setAllowedRequests([]); // empty = show all
+        }
+      } catch {
+        setAllowedRequests([]);
+      }
+    };
+    fetchPermissions();
+    loadEmployeeRequests(user.empId);
   }, [user?.empId]);
+
+  // Visible request types: filtered by permissions (if any are set)
+  const visibleRequestTypes = allowedRequests.length > 0
+    ? REQUEST_TYPES.filter((t) => allowedRequests.includes(t.name))
+    : REQUEST_TYPES;
 
   useEffect(() => {
     if (!user?.empId || currentPage !== "requests") return;
@@ -500,9 +523,11 @@ export default function EmployeePortal() {
 
           {currentPage === "send-request" && (
             <div className="p-4">
-              <h2 className="text-lg font-bold text-gray-900 mb-6">إرسال عوض عن موظف</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-6">إرسال طلب جديد</h2>
               <div className="grid grid-cols-3 gap-4">
-                {REQUEST_TYPES.map((type) => (
+                {visibleRequestTypes.length === 0 ? (
+                  <p className="col-span-3 text-center text-gray-400 py-10">لا توجد طلبات متاحة لك</p>
+                ) : visibleRequestTypes.map((type) => (
                   <button
                     key={type.id}
                     onClick={() => handleSendRequest(type)}
@@ -854,7 +879,9 @@ export default function EmployeePortal() {
             <>
               <h2 className="text-3xl font-bold text-gray-900 mb-8">إرسال طلب جديد</h2>
               <div className="grid grid-cols-5 gap-4">
-                {REQUEST_TYPES.map((type) => (
+                {visibleRequestTypes.length === 0 ? (
+                  <p className="col-span-5 text-center text-gray-400 py-10">لا توجد طلبات متاحة لك</p>
+                ) : visibleRequestTypes.map((type) => (
                   <button
                     key={type.id}
                     onClick={() => handleSendRequest(type)}

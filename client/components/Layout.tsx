@@ -264,13 +264,13 @@ const sidebarScrollPositions: Record<string, number> = {
 function HRSidebar({
   sidebarOpen,
   setSidebarOpen,
-  expandedMenu,
-  setExpandedMenu
+  expandedMenus,
+  setExpandedMenus
 }: {
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
-  expandedMenu: string | null;
-  setExpandedMenu: (v: string | null) => void;
+  expandedMenus: Set<string>;
+  setExpandedMenus: React.Dispatch<React.SetStateAction<Set<string>>>;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -299,28 +299,27 @@ function HRSidebar({
 
   const lastAutoExpandedPath = useRef<string | null>(null);
 
-  // Auto-expand if we're on a child route, but only on initial mount or when actually navigating to a new parent section
+  // Auto-expand the active parent WITHOUT closing any other open menus
   useEffect(() => {
     let activeParentHref: string | null = null;
-
     for (const item of hrNavItems) {
       if (item.hasChildren && item.children) {
-        const isChildActive = item.children.some(c => location.pathname === c.href);
-        if (isChildActive) {
+        if (item.children.some(c => location.pathname === c.href)) {
           activeParentHref = item.href;
           break;
         }
-      } else if (location.pathname === item.href) {
-        activeParentHref = item.href;
       }
     }
-
-    // Only auto-expand when navigating to a new path or on initial load
     if (activeParentHref && lastAutoExpandedPath.current !== location.pathname) {
       lastAutoExpandedPath.current = location.pathname;
-      setExpandedMenu(activeParentHref);
+      setExpandedMenus(prev => {
+        if (prev.has(activeParentHref!)) return prev;
+        const next = new Set(prev);
+        next.add(activeParentHref!);
+        return next;
+      });
     }
-  }, [location.pathname, setExpandedMenu]);
+  }, [location.pathname, setExpandedMenus]);
 
   return (
     <aside
@@ -411,7 +410,7 @@ function HRSidebar({
           }
 
           const Icon = item.icon;
-          const isExpanded = expandedMenu === item.href;
+          const isExpanded = expandedMenus.has(item.href);
           const hasChildActive = item.hasChildren && item.children?.some(c => location.pathname === c.href);
           const isItemActive = item.hasChildren
             ? hasChildActive
@@ -431,7 +430,12 @@ function HRSidebar({
                 <button
                   onClick={() => {
                     if (item.hasChildren) {
-                      setExpandedMenu(item.href); // only opens, never closes
+                      setExpandedMenus(prev => {
+                        if (prev.has(item.href)) return prev;
+                        const next = new Set(prev);
+                        next.add(item.href);
+                        return next;
+                      });
                     } else {
                       navigateKeepingScroll(item.href);
                     }
@@ -461,7 +465,11 @@ function HRSidebar({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setExpandedMenu(isExpanded ? null : item.href);
+                      setExpandedMenus(prev => {
+                        const next = new Set(prev);
+                        isExpanded ? next.delete(item.href) : next.add(item.href);
+                        return next;
+                      });
                     }}
                     className="flex-shrink-0 p-1 rounded hover:bg-white/10 transition"
                   >
@@ -845,9 +853,10 @@ function MainSidebar({
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [expandedHRMenu, setExpandedHRMenu] = useState<string | null>(() =>
-    getActiveHRParent(location.pathname),
-  );
+  const [expandedHRMenus, setExpandedHRMenus] = useState<Set<string>>(() => {
+    const parent = getActiveHRParent(location.pathname);
+    return parent ? new Set([parent]) : new Set();
+  });
   const [expandedMainMenu, setExpandedMainMenu] = useState<string | null>(null);
 
   const isHRSection = location.pathname.startsWith("/hr");
@@ -859,8 +868,8 @@ export default function Layout({ children }: LayoutProps) {
         <HRSidebar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          expandedMenu={expandedHRMenu}
-          setExpandedMenu={setExpandedHRMenu}
+          expandedMenus={expandedHRMenus}
+          setExpandedMenus={setExpandedHRMenus}
         />
       ) : (
         <MainSidebar

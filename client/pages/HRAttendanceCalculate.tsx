@@ -21,7 +21,12 @@ export default function HRAttendanceCalculate() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: emps } = await supabase.from("employees").select("id, emp_id, name").eq("status", "نشط").order("name");
+      const { data: emps, error: employeesError } = await supabase
+        .from("employees")
+        .select("id, emp_id, name")
+        .in("status", ["نشط", "فعال", "active"])
+        .order("name");
+      if (employeesError) throw employeesError;
       if (!emps) { setLoading(false); return; }
 
       const [year, mon] = month.split("-").map(Number);
@@ -30,8 +35,9 @@ export default function HRAttendanceCalculate() {
       const startDate = `${year}-${String(mon).padStart(2, "0")}-01`;
       const endDate = `${year}-${String(mon).padStart(2, "0")}-${daysInMonth}`;
 
-      const { data: attRecords } = await supabase.from("attendance").select("emp_id, date, status")
+      const { data: attRecords, error: attendanceError } = await supabase.from("attendance").select("emp_id, date, status")
         .gte("date", startDate).lte("date", endDate);
+      if (attendanceError) throw attendanceError;
 
       const attMap: Record<string, Record<number, string>> = {};
       (attRecords ?? []).forEach((r: any) => {
@@ -62,7 +68,10 @@ export default function HRAttendanceCalculate() {
         });
         return { id: e.id, name: e.name ?? "", attendance };
       }));
-    } catch {} finally { setLoading(false); }
+    } catch (error) {
+      console.error("Error loading attendance calculation:", error);
+      setData([]);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, [month]);

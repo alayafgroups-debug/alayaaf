@@ -120,7 +120,8 @@ export default function HRAttendanceReport() {
     if (!confirm("هل متأكد من حذف هذا السجل؟")) return;
 
     try {
-      await supabase.from("attendance_records").delete().eq("id", id);
+      const { error } = await supabase.from("attendance").delete().eq("id", id);
+      if (error) throw error;
       toast.success("تم الحذف بنجاح");
       loadData();
     } catch (err) {

@@ -133,6 +133,9 @@ const formatRequestReason = (requestType: string, rawReason: unknown) => {
   }
 };
 
+const getLocalDate = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
 const MORE_OPTIONS = [
   { id: 1, name: "الملف الشخصي", desc: "المعلومات الشخصية، تعديل البيانات الشخصية", icon: "👤" },
   { id: 2, name: "تقييم الأداء", desc: "تقييماتي لزملائي الخزين، إرشيف التقييم", icon: "⭐" },
@@ -167,6 +170,7 @@ export default function EmployeePortal() {
   const [employeeRequests, setEmployeeRequests] = useState<EmployeeRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [allowedRequests, setAllowedRequests] = useState<string[]>([]);
+  const [employeeDepartment, setEmployeeDepartment] = useState("");
 
   // Form state for request dialogs
   const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
@@ -217,45 +221,35 @@ export default function EmployeePortal() {
   };
 
   const saveAttendance = async (mode: "in" | "out", time: string, date: string) => {
-    if (!user) return;
+    if (!user) return false;
     try {
-      if (mode === "in") {
-        await supabase.from("attendance").insert([
-          {
-            emp_id: user.empId,
-            emp_name: user.name,
-            check_in: time,
-            date: date,
-            status: "حاضر",
-          },
-        ]);
-      } else {
-        // update today's record with check_out
-        const { data: existing } = await supabase
-          .from("attendance")
-          .select("id")
-          .eq("emp_id", user.empId)
-          .eq("date", date)
-          .limit(1);
-        if (existing && existing.length > 0) {
-          await supabase
-            .from("attendance")
-            .update({ check_out: time })
-            .eq("id", (existing[0] as any).id);
-        } else {
-          await supabase.from("attendance").insert([
-            {
-              emp_id: user.empId,
-              emp_name: user.name,
-              check_out: time,
-              date: date,
-              status: "حاضر",
-            },
-          ]);
-        }
-      }
-    } catch {
-      // Silent fail - keep local state even if DB write fails
+      const { data: existing, error: lookupError } = await supabase
+        .from("attendance")
+        .select("id")
+        .eq("emp_id", user.empId)
+        .eq("date", date)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (lookupError) throw lookupError;
+
+      const attendanceData = {
+        emp_id: user.empId,
+        emp_name: user.name,
+        department: employeeDepartment || null,
+        date,
+        status: "حاضر",
+        ...(mode === "in" ? { check_in: time } : { check_out: time }),
+      };
+
+      const { error } = existing?.length
+        ? await supabase.from("attendance").update(attendanceData).eq("id", existing[0].id)
+        : await supabase.from("attendance").insert([attendanceData]);
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.error("Attendance save failed:", error);
+      toast.error(error?.message || "تعذر حفظ الحضور في قاعدة البيانات");
+      return false;
     }
   };
 
@@ -265,9 +259,13 @@ export default function EmployeePortal() {
     setTimeout(async () => {
       const now = new Date();
       const time = now.toLocaleTimeString("en-GB", { hour12: false });
-      const date = now.toISOString().slice(0, 10);
+      const date = getLocalDate(now);
 
-      await saveAttendance(cameraMode, time, date);
+      const saved = await saveAttendance(cameraMode, time, date);
+      if (!saved) {
+        setVerifyStatus("idle");
+        return;
+      }
 
       if (cameraMode === "in") {
         setCheckInTime(`${time} ${date}`);
@@ -384,9 +382,10 @@ export default function EmployeePortal() {
       try {
         const { data } = await supabase
           .from("employees")
-          .select("permissions")
+          .select("permissions, department")
           .eq("emp_id", user.empId)
           .maybeSingle();
+        setEmployeeDepartment(String(data?.department ?? ""));
         if (data && Array.isArray(data.permissions) && data.permissions.length > 0) {
           setAllowedRequests(data.permissions as string[]);
         } else {
@@ -396,7 +395,26 @@ export default function EmployeePortal() {
         setAllowedRequests([]);
       }
     };
+    const loadTodayAttendance = async () => {
+      const today = getLocalDate();
+      const { data, error } = await supabase
+        .from("attendance")
+        .select("check_in, check_out")
+        .eq("emp_id", user.empId)
+        .eq("date", today)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) {
+        console.error("Attendance load failed:", error);
+        return;
+      }
+      const record = data?.[0];
+      setCheckInTime(record?.check_in ? `${record.check_in} ${today}` : null);
+      setCheckOutTime(record?.check_out ? `${record.check_out} ${today}` : null);
+    };
+
     fetchPermissions();
+    loadTodayAttendance();
     loadEmployeeRequests(user.empId);
   }, [user?.empId]);
 

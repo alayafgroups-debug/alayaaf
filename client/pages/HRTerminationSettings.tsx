@@ -6,6 +6,19 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 
+const MAIN_SETTINGS_KEY = "termination_main_settings";
+const MAIN_SETTINGS_DEFAULT = {
+  autoApprove: "no",
+  approver1: "",
+  approver2: "",
+  approver3: "",
+  gratuityBase: "basic",
+  calcLessThanYear: "no",
+  rate5andBelow: "half",
+  rateAbove5: "full",
+  calcDayOfEnd: "no",
+};
+
 const CLEARANCE_KEY = "termination_clearance_template";
 const RELEASE_KEY = "termination_release_template";
 
@@ -16,6 +29,7 @@ const RELEASE_DEFAULT = `<p style="text-align:center"><strong>إقرار من ش
 type Reason = { id: string; reason: string };
 
 const TABS = [
+  { id: "main", label: "إعدادات إنهاء الخدمة" },
   { id: "clearance", label: "إعداد قالب إقرار مخالصة خدمة" },
   { id: "release", label: "إعداد قالب إقرار إخلاء طرف" },
   { id: "reasons", label: "أسباب إخلاء الطرف" },
@@ -133,6 +147,15 @@ function RichEditor({
   );
 }
 
+function SettingsField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-800">{label}</label>
+      {children}
+    </div>
+  );
+}
+
 function ToolBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -147,7 +170,9 @@ function ToolBtn({ title, onClick, children }: { title: string; onClick: () => v
 }
 
 export default function HRTerminationSettings() {
-  const [activeTab, setActiveTab] = useState("clearance");
+  const [activeTab, setActiveTab] = useState("main");
+  const [mainSettings, setMainSettings] = useState(MAIN_SETTINGS_DEFAULT);
+  const [savingMain, setSavingMain] = useState(false);
   const [clearanceTemplate, setClearanceTemplate] = useState(CLEARANCE_DEFAULT);
   const [releaseTemplate, setReleaseTemplate] = useState(RELEASE_DEFAULT);
   const [reasons, setReasons] = useState<Reason[]>([]);
@@ -158,14 +183,34 @@ export default function HRTerminationSettings() {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [savingReason, setSavingReason] = useState(false);
 
+  const saveMainSettings = async () => {
+    setSavingMain(true);
+    try {
+      const { error } = await supabase.from("hr_settings").upsert(
+        { setting_key: MAIN_SETTINGS_KEY, setting_value: mainSettings },
+        { onConflict: "setting_key" }
+      );
+      if (error) throw error;
+      toast({ title: "تم حفظ الإعدادات بنجاح" });
+    } catch (error) {
+      toast({ title: "تعذر الحفظ", description: error instanceof Error ? error.message : "", variant: "destructive" });
+    } finally {
+      setSavingMain(false);
+    }
+  };
+
   useEffect(() => {
     const loadTemplates = async () => {
       const { data } = await supabase
         .from("hr_settings")
         .select("setting_key, setting_value")
-        .in("setting_key", [CLEARANCE_KEY, RELEASE_KEY]);
+        .in("setting_key", [CLEARANCE_KEY, RELEASE_KEY, MAIN_SETTINGS_KEY]);
 
       (data ?? []).forEach((row: any) => {
+        if (row.setting_key === MAIN_SETTINGS_KEY && row.setting_value) {
+          const val = typeof row.setting_value === "object" ? row.setting_value : JSON.parse(row.setting_value);
+          setMainSettings((prev) => ({ ...prev, ...val }));
+        }
         const val = typeof row.setting_value === "string" ? row.setting_value : JSON.stringify(row.setting_value);
         const clean = val.replace(/^"|"$/g, "").replace(/\\n/g, "\n");
         if (row.setting_key === CLEARANCE_KEY && clean) setClearanceTemplate(clean);
@@ -266,6 +311,81 @@ export default function HRTerminationSettings() {
               </button>
             ))}
           </div>
+
+          {/* Main settings tab */}
+          {activeTab === "main" && (
+            <div className="p-6 space-y-6" dir="rtl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+
+                <div className="space-y-3 md:col-span-2">
+                  <label className="text-sm font-medium text-gray-800">الموافقة التلقائية لعملية إنهاء الخدمة *</label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="autoApprove" value="yes" checked={mainSettings.autoApprove === "yes"} onChange={() => setMainSettings((s) => ({ ...s, autoApprove: "yes" }))} /><span className="text-sm">نعم</span></label>
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="autoApprove" value="no" checked={mainSettings.autoApprove === "no"} onChange={() => setMainSettings((s) => ({ ...s, autoApprove: "no" }))} /><span className="text-sm">لا</span></label>
+                  </div>
+                </div>
+
+                <SettingsField label="مستوى الموافقة الأول">
+                  <input value={mainSettings.approver1} onChange={(e) => setMainSettings((s) => ({ ...s, approver1: e.target.value }))} className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]" placeholder="اسم الموافق" />
+                </SettingsField>
+
+                <SettingsField label="مستوى الموافقة الثاني">
+                  <input value={mainSettings.approver2} onChange={(e) => setMainSettings((s) => ({ ...s, approver2: e.target.value }))} className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]" placeholder="اسم الموافق" />
+                </SettingsField>
+
+                <SettingsField label="مستوى الموافقة الثالث">
+                  <input value={mainSettings.approver3} onChange={(e) => setMainSettings((s) => ({ ...s, approver3: e.target.value }))} className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]" placeholder="اسم الموافق" />
+                </SettingsField>
+
+                <SettingsField label="مكافأة إنهاء الخدمة تحتسب من *">
+                  <select value={mainSettings.gratuityBase} onChange={(e) => setMainSettings((s) => ({ ...s, gratuityBase: e.target.value }))} className="h-10 w-full rounded-md border border-gray-300 px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
+                    <option value="basic">الراتب الأساسي</option>
+                    <option value="total">الراتب الإجمالي</option>
+                  </select>
+                </SettingsField>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-gray-800">هل تحسب المكافأة للموظفين الذين خدموا في الشركة لأقل من سنة *</label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="calcLessThanYear" value="yes" checked={mainSettings.calcLessThanYear === "yes"} onChange={() => setMainSettings((s) => ({ ...s, calcLessThanYear: "yes" }))} /><span className="text-sm">نعم</span></label>
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="calcLessThanYear" value="no" checked={mainSettings.calcLessThanYear === "no"} onChange={() => setMainSettings((s) => ({ ...s, calcLessThanYear: "no" }))} /><span className="text-sm">لا</span></label>
+                  </div>
+                </div>
+
+                <SettingsField label="مقدار المكافأة لكل سنة للموظفين الذين خدموا أقل أو ما يساوي خمس سنين *">
+                  <select value={mainSettings.rate5andBelow} onChange={(e) => setMainSettings((s) => ({ ...s, rate5andBelow: e.target.value }))} className="h-10 w-full rounded-md border border-gray-300 px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
+                    <option value="half">نصف راتب لكل سنة</option>
+                    <option value="full">راتب شهر لكل سنة</option>
+                  </select>
+                </SettingsField>
+
+                <SettingsField label="مقدار المكافأة لكل سنة للموظفين الذين خدموا أكثر من خمس سنين *">
+                  <select value={mainSettings.rateAbove5} onChange={(e) => setMainSettings((s) => ({ ...s, rateAbove5: e.target.value }))} className="h-10 w-full rounded-md border border-gray-300 px-3 bg-white text-sm outline-none focus:ring-2 focus:ring-[#004e89]">
+                    <option value="full">راتب شهر لكل سنة</option>
+                    <option value="half">نصف راتب لكل سنة</option>
+                  </select>
+                </SettingsField>
+
+                <div className="space-y-3 md:col-span-2">
+                  <label className="text-sm font-medium text-gray-800">احتساب يوم انتهاء الخدمة ضمن مدة الخدمة *</label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="calcDayOfEnd" value="yes" checked={mainSettings.calcDayOfEnd === "yes"} onChange={() => setMainSettings((s) => ({ ...s, calcDayOfEnd: "yes" }))} /><span className="text-sm">نعم</span></label>
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="calcDayOfEnd" value="no" checked={mainSettings.calcDayOfEnd === "no"} onChange={() => setMainSettings((s) => ({ ...s, calcDayOfEnd: "no" }))} /><span className="text-sm">لا</span></label>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 bg-gray-50 rounded-lg p-4 text-sm text-gray-600 leading-7 border border-gray-200">
+                  <p>عند اختيار “نعم” يُحسب تاريخ انتهاء الخدمة (نفسه) ضمن احتساب مكافأة نهاية الخدمة في احتساب مدة الخدمة. هذا هو الوضع الافتراضي وفق مطابق لهذا السلوك السابق. وعند اختيار “لا” يُحسب مدة الخدمة بالفرق بين تاريخ المباشرة وتاريخ انتهاء الخدمة دون إضافة يوم. هذا ما يطابق حاسبة الموارد البشرية وتقارير وزارة الموارد البشرية لاحتساب جميع مستحقات نهاية الخدمة.</p>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button onClick={saveMainSettings} disabled={savingMain} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">
+                  {savingMain ? "جاري الحفظ..." : "حفظ"}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Clearance template tab */}
           {activeTab === "clearance" && (

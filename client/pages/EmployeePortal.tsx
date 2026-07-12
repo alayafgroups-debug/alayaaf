@@ -325,16 +325,24 @@ export default function EmployeePortal() {
   const loadEmployeeRequests = async (empId: string) => {
     setRequestsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("leave_requests")
-        .select("*")
-        .eq("emp_id", empId)
-        .order("created_at", { ascending: false });
+      const [requestsResult, investigationsResult] = await Promise.all([
+        supabase
+          .from("leave_requests")
+          .select("*")
+          .eq("emp_id", empId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("penalty_investigations")
+          .select("*")
+          .eq("emp_id", empId)
+          .order("sent_at", { ascending: false }),
+      ]);
 
-      if (error) throw error;
+      if (requestsResult.error) throw requestsResult.error;
+      if (investigationsResult.error) throw investigationsResult.error;
 
-      const mapped: EmployeeRequest[] = (data ?? []).map((r: any) => ({
-        id: String(r.id),
+      const requests: EmployeeRequest[] = (requestsResult.data ?? []).map((r: any) => ({
+        id: `request-${String(r.id)}`,
         type: String(r.leave_type ?? "طلب"),
         status: normalizeStatus(r.status),
         createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
@@ -342,6 +350,16 @@ export default function EmployeePortal() {
         adminNote: String(r.admin_note ?? ""),
       }));
 
+      const investigations: EmployeeRequest[] = (investigationsResult.data ?? []).map((r: any) => ({
+        id: `investigation-${String(r.id)}`,
+        type: "مساءلة إدارية",
+        status: normalizeStatus(r.status === "مرسلة" ? "معلق" : r.status),
+        createdAt: r.sent_at ? new Date(r.sent_at).toLocaleDateString("ar-SA") : "-",
+        reason: `${String(r.subject ?? "مساءلة")} — ${String(r.message ?? "")}`,
+        adminNote: "",
+      }));
+
+      const mapped = [...requests, ...investigations].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       setEmployeeRequests(mapped);
       setNotificationCount(mapped.filter((r) => r.status === "معلق").length);
     } catch {

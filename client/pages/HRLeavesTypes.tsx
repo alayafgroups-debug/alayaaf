@@ -37,14 +37,17 @@ export default function HRLeavesTypes() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("leave_types").select("*").order("id");
+      const { data, error } = await supabase.from("leave_types").select("*").order("id");
+      if (error) throw error;
       if (data) setItems(data.map((r: any) => ({
         id: String(r.id), name: r.name ?? "", name_en: r.name_en ?? "",
         max_days: r.max_days ?? 0, deduction_percent: r.deduction_percent ?? 0,
-        paid: r.paid ?? true, affects_balance: r.affects_balance ?? true,
+        paid: r.is_paid ?? true, affects_balance: r.affects_balance ?? true,
         gender: r.gender ?? "both", status: r.status ?? "مفعلة",
       })));
-    } catch { } finally { setLoading(false); }
+    } catch (error) {
+      toast({ title: "تعذر تحميل تصنيفات الإجازات", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع", variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -67,24 +70,33 @@ export default function HRLeavesTypes() {
     setSaving(true);
     try {
       const payload = {
-        name: formName, name_en: formNameEn, max_days: Number(formDays),
-        deduction_percent: Number(formDeduction), paid: formPaid,
+        name: formName.trim(), name_en: formNameEn.trim(), max_days: Number(formDays),
+        deduction_percent: Number(formDeduction), is_paid: formPaid,
         affects_balance: formAffects, gender: formGender,
       };
       if (editingId) {
-        await supabase.from("leave_types").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("leave_types").update(payload).eq("id", editingId);
+        if (error) throw error;
         toast({ title: "تم التعديل بنجاح" });
       } else {
-        await supabase.from("leave_types").insert([payload]);
+        const { error } = await supabase.from("leave_types").insert([payload]);
+        if (error) throw error;
         toast({ title: "تمت الإضافة بنجاح" });
       }
-      resetForm(); loadData();
-    } catch { toast({ title: "خطأ", variant: "destructive" }); } finally { setSaving(false); }
+      resetForm();
+      await loadData();
+    } catch (error) {
+      toast({ title: "تعذر حفظ التصنيف", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع", variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: LeaveType) => {
     if (!confirm(`حذف "${item.name}"؟`)) return;
-    await supabase.from("leave_types").delete().eq("id", item.id);
+    const { error } = await supabase.from("leave_types").delete().eq("id", item.id);
+    if (error) {
+      toast({ title: "تعذر حذف التصنيف", description: error.message, variant: "destructive" });
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: "تم الحذف" });
   };

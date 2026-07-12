@@ -325,7 +325,7 @@ export default function EmployeePortal() {
   const loadEmployeeRequests = async (empId: string) => {
     setRequestsLoading(true);
     try {
-      const [requestsResult, investigationsResult] = await Promise.all([
+      const [requestsResult, investigationsResult, warningsResult] = await Promise.all([
         supabase
           .from("leave_requests")
           .select("*")
@@ -336,10 +336,16 @@ export default function EmployeePortal() {
           .select("*")
           .eq("emp_id", empId)
           .order("sent_at", { ascending: false }),
+        supabase
+          .from("penalty_warnings")
+          .select("*")
+          .eq("emp_id", empId)
+          .order("sent_at", { ascending: false }),
       ]);
 
       if (requestsResult.error) throw requestsResult.error;
       if (investigationsResult.error) throw investigationsResult.error;
+      if (warningsResult.error) throw warningsResult.error;
 
       const requests: EmployeeRequest[] = (requestsResult.data ?? []).map((r: any) => ({
         id: `request-${String(r.id)}`,
@@ -359,7 +365,16 @@ export default function EmployeePortal() {
         adminNote: "",
       }));
 
-      const mapped = [...requests, ...investigations].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const warnings: EmployeeRequest[] = (warningsResult.data ?? []).map((r: any) => ({
+        id: `warning-${String(r.id)}`,
+        type: "إنذار إداري",
+        status: normalizeStatus(r.status === "مرسل" ? "معلق" : r.status),
+        createdAt: r.sent_at ? new Date(r.sent_at).toLocaleDateString("ar-SA") : "-",
+        reason: `${String(r.subject ?? "إنذار")} — ${String(r.message ?? "")}`,
+        adminNote: "",
+      }));
+
+      const mapped = [...requests, ...investigations, ...warnings].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       setEmployeeRequests(mapped);
       setNotificationCount(mapped.filter((r) => r.status === "معلق").length);
     } catch {

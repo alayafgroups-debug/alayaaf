@@ -64,6 +64,7 @@ export default function HRPayrollStatement() {
   const [approvalBranch, setApprovalBranch] = useState("الكل");
   const [approvalLocation, setApprovalLocation] = useState("الكل");
   const [approvalStopKeyword, setApprovalStopKeyword] = useState("");
+  const [stoppedEmployeeIds, setStoppedEmployeeIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const load = async () => {
@@ -232,6 +233,7 @@ export default function HRPayrollStatement() {
     setApprovalBranch("الكل");
     setApprovalLocation("الكل");
     setApprovalStopKeyword("");
+    setStoppedEmployeeIds(new Set());
     setApprovalOpen(true);
   };
 
@@ -242,8 +244,29 @@ export default function HRPayrollStatement() {
       if (approvalDepartment !== "الكل" && e.department !== approvalDepartment) return false;
       if (approvalBranch !== "الكل" && e.branch !== approvalBranch) return false;
       if (approvalLocation !== "الكل" && e.workLocation !== approvalLocation) return false;
-      if (approvalStopKeyword && !e.name.includes(approvalStopKeyword)) return false;
       return true;
+    });
+  };
+
+  const stopSuggestions = useMemo(() => {
+    const keyword = approvalStopKeyword.trim();
+    if (!keyword) return [];
+
+    return getApprovalEmployees()
+      .filter((e) => !stoppedEmployeeIds.has(e.id) && e.name.includes(keyword))
+      .slice(0, 6);
+  }, [approvalStopKeyword, selectedEmployees, approvalScope, approvalDepartment, approvalBranch, approvalLocation, stoppedEmployeeIds]);
+
+  const addStoppedEmployee = (employee: EmpLite) => {
+    setStoppedEmployeeIds((prev) => new Set(prev).add(employee.id));
+    setApprovalStopKeyword("");
+  };
+
+  const removeStoppedEmployee = (employeeId: string) => {
+    setStoppedEmployeeIds((prev) => {
+      const next = new Set(prev);
+      next.delete(employeeId);
+      return next;
     });
   };
 
@@ -256,13 +279,54 @@ export default function HRPayrollStatement() {
 
     setApprovalSubmitting(true);
     try {
-      const done = await createPayrollRecords(target);
-      if (done) {
-        toast({ title: "تم إرسال طلب الاعتماد", description: `تم تجهيز ${target.length} موظف للاعتماد` });
-        setApprovalOpen(false);
-        setSelected(new Set());
-        setPageMode("setup");
+      const { data: existing, error: existingError } = await supabase
+        .from("payroll")
+        .select("emp_id")
+        .eq("month", period);
+      if (existingError) throw existingError;
+
+      const existingIds = new Set((existing || []).map((row) => String(row.emp_id)));
+      const missingPayload = target
+        .filter((employee) => !existingIds.has(employee.id))
+        .map((employee) => ({
+          emp_id: employee.id,
+          emp_name: employee.name,
+          department: employee.department,
+          month: period,
+          basic_salary: employee.baseSalary,
+          allowances: 0,
+          deductions: 0,
+          net_salary: employee.baseSalary,
+          status: stoppedEmployeeIds.has(employee.id) ? "موقوف" : "معلق",
+        }));
+
+      if (missingPayload.length > 0) {
+        const { error } = await supabase.from("payroll").insert(missingPayload);
+        if (error) throw error;
       }
+
+      const stoppedIds = target.filter((employee) => stoppedEmployeeIds.has(employee.id)).map((employee) => employee.id);
+      const activeIds = target.filter((employee) => !stoppedEmployeeIds.has(employee.id)).map((employee) => employee.id);
+
+      if (stoppedIds.length > 0) {
+        const { error } = await supabase.from("payroll").update({ status: "موقوف" }).eq("month", period).in("emp_id", stoppedIds);
+        if (error) throw error;
+      }
+
+      if (activeIds.length > 0) {
+        const { error } = await supabase.from("payroll").update({ status: "معلق" }).eq("month", period).in("emp_id", activeIds);
+        if (error) throw error;
+      }
+
+      toast({
+        title: "تم إرسال طلب الاعتماد",
+        description: `تم تجهيز ${activeIds.length} موظف وإيقاف راتب ${stoppedIds.length} موظف`,
+      });
+      setApprovalOpen(false);
+      setSelected(new Set());
+      setPageMode("setup");
+    } catch (error) {
+      toast({ title: "تعذر تطبيق كشف الرواتب", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع", variant: "destructive" });
     } finally {
       setApprovalSubmitting(false);
     }
@@ -482,12 +546,44 @@ export default function HRPayrollStatement() {
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-lg font-semibold text-gray-700">إيقاف رواتب الموظفين</label>
-                      <Input
-                        value={approvalStopKeyword}
-                        onChange={(e) => setApprovalStopKeyword(e.target.value)}
-                        placeholder="اختر الموظف المراد إيقاف راتبه"
-                        className="h-12"
-                      />
+                      <div className="relative">
+                        <Input
+                          value={approvalStopKeyword}
+                          onChange={(e) => setApprovalStopKeyword(e.target.value)}
+                          placeholder="ابدأ بكتابة اسم الموظف"
+                          className="h-12"
+                        />
+                        {stopSuggestions.length > 0 && (
+                          <div className="absolute z-20 top-full mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg overflow-hidden">
+                            {stopSuggestions.map((employee) => (
+                              <button
+                                key={employee.id}
+                                type="button"
+                                onClick={() => addStoppedEmployee(employee)}
+                                className="w-full px-4 py-3 text-right hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                              >
+                                <span className="block font-medium text-gray-900">{employee.name}</span>
+                                <span className="block text-xs text-gray-500">{employee.department || employee.jobTitle || "موظف"}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {stoppedEmployeeIds.size > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {getApprovalEmployees()
+                            .filter((employee) => stoppedEmployeeIds.has(employee.id))
+                            .map((employee) => (
+                              <div key={employee.id} className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm text-red-700 border border-red-200">
+                                <span>{employee.name}</span>
+                                <button type="button" onClick={() => removeStoppedEmployee(employee.id)} aria-label={`إلغاء إيقاف راتب ${employee.name}`}>
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500">سيتم حفظ حالة «موقوف» فعلياً في كشف رواتب الفترة المحددة عند الإرسال.</p>
                     </div>
                   </div>
                 )}

@@ -75,7 +75,7 @@ export default function HRRequestsIncoming() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="space-y-6 w-full" dir="rtl">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">الطلبات الواردة</h1>
         </div>

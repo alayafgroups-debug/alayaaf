@@ -438,7 +438,7 @@ export default function HREmployees() {
 function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData; onBack: () => void; onEdit: () => void }) {
   return (
     <Layout>
-      <div dir="rtl" className="space-y-6 max-w-4xl">
+      <div dir="rtl" className="space-y-6 w-full">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">بيانات الموظف</h1>
           <div className="flex gap-2">

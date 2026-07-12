@@ -275,7 +275,7 @@ export default function HRAttendanceReport() {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6" dir="rtl">
+      <div className="space-y-5 w-full" dir="rtl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {selectedSchedule && (

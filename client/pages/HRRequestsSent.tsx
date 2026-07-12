@@ -70,7 +70,7 @@ export default function HRRequestsSent() {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-7xl space-y-5" dir="rtl">
+      <div className="space-y-5 w-full" dir="rtl">
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <span className="text-blue-600 font-medium">الطلبات</span>
           <span>/</span>

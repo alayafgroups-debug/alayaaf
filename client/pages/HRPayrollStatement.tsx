@@ -130,7 +130,11 @@ export default function HRPayrollStatement() {
       if (departmentFilter !== "الكل" && e.department !== departmentFilter) return false;
       if (locationFilter !== "الكل" && e.workLocation !== locationFilter) return false;
       if (typeFilter !== "الكل" && e.employeeType !== typeFilter) return false;
-      if (statusFilter !== "الكل" && e.status !== statusFilter) return false;
+      if (statusFilter !== "الكل") {
+        const isActiveFilter = statusFilter === "نشط";
+        const isActiveEmployee = e.status === "نشط" || e.status === "فعال";
+        if (isActiveFilter ? !isActiveEmployee : e.status !== statusFilter) return false;
+      }
 
       return true;
     });

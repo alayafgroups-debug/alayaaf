@@ -943,25 +943,24 @@ export default function EmployeePortal() {
                 </div>
               </div>
 
-              {/* Services Grid — all services directly on home */}
-              <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-5">الخدمات والخيارات</h2>
-                <div className="grid grid-cols-4 gap-4">
-                  {MORE_OPTIONS.filter((o) => !o.logout).map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => handleMoreOption(option)}
-                      className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition text-right flex items-start gap-3"
-                    >
-                      <span className="text-2xl flex-shrink-0">{option.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 text-sm">{option.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{option.desc}</p>
-                      </div>
-                      <ChevronLeft className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                    </button>
-                  ))}
-                </div>
+              {/* Quick Actions Row */}
+              <div className="grid grid-cols-4 gap-4 mb-2">
+                <button onClick={() => setCurrentPage("requests")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                  <FileText className="h-8 w-8 text-[#004e89]" />
+                  <div><p className="font-semibold text-gray-900 text-sm">الطلبات</p><p className="text-xs text-gray-500 mt-0.5">عرض الطلبات الواردة والمرسلة</p></div>
+                </button>
+                <button onClick={() => setCurrentPage("send-request")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                  <Plus className="h-8 w-8 text-green-500" />
+                  <div><p className="font-semibold text-gray-900 text-sm">طلب جديد</p><p className="text-xs text-gray-500 mt-0.5">إرسال طلب جديد</p></div>
+                </button>
+                <button onClick={() => setCurrentPage("more")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                  <Briefcase className="h-8 w-8 text-purple-500" />
+                  <div><p className="font-semibold text-gray-900 text-sm">الخدمات</p><p className="text-xs text-gray-500 mt-0.5">جميع الخدمات والخيارات</p></div>
+                </button>
+                <button onClick={() => setCurrentPage("profile")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                  <User className="h-8 w-8 text-orange-500" />
+                  <div><p className="font-semibold text-gray-900 text-sm">ملفي</p><p className="text-xs text-gray-500 mt-0.5">بيانات الملف الشخصي</p></div>
+                </button>
               </div>
             </>
           )}

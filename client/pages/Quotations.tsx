@@ -68,9 +68,6 @@ const statusColors: Record<string, string> = {
 const COMPANY_LOGO_URL =
   "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200";
 
-const COMPANY_BARCODE_URL =
-  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2F2f0ac7e4a5824676b83f27699b1d8a92?format=webp&width=800&height=1200";
-
 const COMPANY_INFO = {
   nameAr: "شركة إدارة العياف للمقاولات",
   nameEn: "Al-ayaf Management company",
@@ -225,19 +222,24 @@ export default function Quotations() {
           <meta charset="utf-8" />
           <title>عرض سعر ${quotation.id}</title>
           <style>
-            *{box-sizing:border-box} body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111827}
-            .sheet{max-width:1200px;margin:0 auto}
-            .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
-            .logo{width:140px;height:100px;object-fit:contain}
-            .title{font-size:32px;font-weight:700;margin:0}
-            .meta{font-size:15px;line-height:1.7}
-            .customer{margin:14px 0 12px;font-size:22px;text-align:center;line-height:1.7}
-            table{width:100%;border-collapse:collapse;font-size:18px}
-            th,td{border:1px solid #e5e7eb;padding:8px;text-align:center}
-            th{background:#e5e7eb;font-weight:700}
-            .totals{width:420px;margin-top:12px;font-size:30px}
-            .totals div{display:flex;justify-content:space-between;border-bottom:1px solid #d1d5db;padding:6px 0}
-            .bank{margin-top:30px;font-size:18px;line-height:1.9;display:flex;gap:24px;align-items:flex-start;justify-content:space-between}.barcode{width:180px;height:180px;object-fit:contain;border:1px solid #e5e7eb;padding:4px}
+            @page{size:A4 landscape;margin:10mm}
+            *{box-sizing:border-box}
+            body{font-family:Arial,"Tahoma",sans-serif;margin:0;padding:0;color:#111827;font-size:11px;line-height:1.5}
+            .sheet{width:100%;margin:0 auto}
+            .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid #1d4ed8}
+            .logo{width:105px;height:72px;object-fit:contain}
+            .title{font-size:23px;font-weight:700;margin:0 0 4px}
+            .meta{font-size:11px;line-height:1.6}
+            .customer{margin:10px 0;padding:8px 12px;border:1px solid #dbeafe;border-radius:6px;background:#f8fafc;font-size:12px;text-align:right;line-height:1.7}
+            table{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed}
+            th,td{border:1px solid #cbd5e1;padding:6px 4px;text-align:center;vertical-align:middle;overflow-wrap:anywhere}
+            th{background:#e2e8f0;font-weight:700;color:#0f172a}
+            th:nth-child(2),td:nth-child(2){width:22%;text-align:right}
+            .totals{width:340px;margin-top:10px;font-size:12px}
+            .totals div{display:flex;justify-content:space-between;border-bottom:1px solid #d1d5db;padding:5px 7px}
+            .totals div:last-child{background:#eff6ff;border:1px solid #93c5fd;font-weight:700;font-size:13px}
+            .bank{margin-top:18px;padding-top:10px;border-top:1px solid #cbd5e1;font-size:11px;line-height:1.8}
+            @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
           </style>
         </head>
         <body>
@@ -298,7 +300,6 @@ export default function Quotations() {
                 *رقم الحساب: ${COMPANY_INFO.accountNo}<br/>
                 *رقم الايبان: ${COMPANY_INFO.iban}
               </div>
-              <img src="${COMPANY_BARCODE_URL}" class="barcode" alt="barcode" />
             </div>
           </div>
         </body>

@@ -592,9 +592,15 @@ function MainSidebar({
     }
   };
 
+  const activeSubmenuParent = Object.entries(navSubMenus).find(([, subItems]) =>
+    subItems.some((subItem) => subItem.href === location.pathname)
+  )?.[0];
+
   const isActive = (path: string) =>
-    location.pathname === path ||
-    (path !== "/" && location.pathname.startsWith(path));
+    activeSubmenuParent
+      ? path === activeSubmenuParent
+      : location.pathname === path ||
+        (path !== "/" && location.pathname.startsWith(path));
 
   const navItems = [
     { icon: BarChart3, label: "لوحة التحكم", href: "/" },
@@ -611,23 +617,25 @@ function MainSidebar({
   const lastAutoExpandedPath = useRef<string | null>(null);
 
   useEffect(() => {
-    let activeParentHref: string | null = null;
+    let activeParentHref: string | null = activeSubmenuParent ?? null;
 
-    navItems.forEach((item) => {
-      if (
-        location.pathname.startsWith(item.href) &&
-        item.href !== "/" &&
-        item.hasSubmenu
-      ) {
-        activeParentHref = item.href;
-      }
-    });
+    if (!activeParentHref) {
+      navItems.forEach((item) => {
+        if (
+          location.pathname.startsWith(item.href) &&
+          item.href !== "/" &&
+          item.hasSubmenu
+        ) {
+          activeParentHref = item.href;
+        }
+      });
+    }
 
     if (activeParentHref && lastAutoExpandedPath.current !== location.pathname) {
       lastAutoExpandedPath.current = location.pathname;
       setExpandedMenu(activeParentHref);
     }
-  }, [location.pathname, setExpandedMenu]);
+  }, [location.pathname, activeSubmenuParent, setExpandedMenu]);
 
   return (
     <aside

@@ -47,6 +47,7 @@ type Invoice = {
   date: string;
   dueDate: string;
   customer: string;
+  customerAddress: string;
   total: string;
   paid: string;
   remaining: string;
@@ -72,6 +73,7 @@ export default function SalesInvoices() {
           date: row.date ?? "",
           dueDate: row.due_date ?? row.dueDate ?? "",
           customer: row.customer ?? "",
+          customerAddress: String(row.customer_address ?? localStorage.getItem(`sales-invoice-address-${row.id}`) ?? ""),
           total: row.total ?? "",
           paid: row.paid ?? "",
           remaining: row.remaining ?? "",
@@ -261,7 +263,7 @@ export default function SalesInvoices() {
                 <div class="meta-grid">
                   <div class="meta-cell">
                     <div class="row"><span class="label">العميل</span><span class="value">${escapeHtml(invoice.customer)}</span></div>
-                    <div class="row"><span class="label">العنوان</span><span class="value">المملكة العربية السعودية</span></div>
+                    <div class="row"><span class="label">العنوان الوطني</span><span class="value">${escapeHtml(invoice.customerAddress || "-")}</span></div>
                     <div class="row"><span class="label">الهاتف</span><span class="value">0507089850</span></div>
                     <div class="row"><span class="label">رقم التسجيل الضريبي</span><span class="value">312731286200003</span></div>
                   </div>
@@ -616,8 +618,8 @@ function InvoiceDetails({
                     <span className="text-sm font-bold text-foreground">{invoice.customer}</span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-600">العنوان</span>
-                    <span className="text-sm font-bold text-foreground">العزيزية، مكة المكرمة</span>
+                    <span className="text-slate-600">العنوان الوطني</span>
+                    <span className="text-sm font-bold text-foreground">{invoice.customerAddress || "-"}</span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">رقم التسجيل الضريبي</span>
@@ -738,6 +740,7 @@ function InvoiceEdit({
   const [invoiceDate, setInvoiceDate] = useState(invoice.date);
   const [dueDate, setDueDate] = useState(invoice.dueDate);
   const [customer, setCustomer] = useState(invoice.customer);
+  const [customerAddress, setCustomerAddress] = useState(invoice.customerAddress);
   const [status, setStatus] = useState(invoice.status);
   const [items, setItems] = useState(
     () =>
@@ -820,11 +823,13 @@ function InvoiceEdit({
         `sales-invoice-items-${invoice.id}`,
         JSON.stringify(items)
       );
+      localStorage.setItem(`sales-invoice-address-${invoice.id}`, customerAddress);
       onUpdated({
         ...invoice,
         date: invoiceDate,
         dueDate,
         customer,
+        customerAddress,
         total: `ريال ${totalValue.toFixed(2)}`,
         remaining: `ريال ${remainingValue.toFixed(2)}`,
         status,
@@ -893,6 +898,16 @@ function InvoiceEdit({
                 type="text"
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[12px] font-semibold text-muted-foreground block text-right">العنوان الوطني</label>
+              <input
+                type="text"
+                value={customerAddress}
+                onChange={(event) => setCustomerAddress(event.target.value)}
+                placeholder="رقم المبنى، الشارع، الحي، المدينة، الرمز البريدي"
                 className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
@@ -1209,6 +1224,7 @@ function InvoiceForm({
   const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [customer, setCustomer] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
   const [project, setProject] = useState("");
   const [warehouse, setWarehouse] = useState("");
@@ -1299,11 +1315,13 @@ function InvoiceForm({
         `sales-invoice-items-${data.id ?? invoiceId}`,
         JSON.stringify(items)
       );
+      localStorage.setItem(`sales-invoice-address-${data.id ?? invoiceId}`, customerAddress);
       onSaved({
         id: data.id ?? invoiceId,
         date: data.date ?? invoiceDate,
         dueDate: data.due_date ?? dueDate,
         customer: data.customer ?? customer,
+        customerAddress,
         total: data.total ?? payload.total,
         paid: data.paid ?? payload.paid,
         remaining: data.remaining ?? payload.remaining,
@@ -1400,6 +1418,17 @@ function InvoiceForm({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">العنوان الوطني</label>
+                  <input
+                    type="text"
+                    value={customerAddress}
+                    onChange={(event) => setCustomerAddress(event.target.value)}
+                    placeholder="رقم المبنى، الشارع، الحي، المدينة، الرمز البريدي"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
+                  />
                 </div>
 
                 <div className="space-y-1">

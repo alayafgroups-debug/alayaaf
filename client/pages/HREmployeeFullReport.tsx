@@ -208,7 +208,7 @@ export default function HREmployeeFullReport() {
           .order("date"),
         supabase
           .from("payroll")
-          .select("id, emp_id, month, basic_salary, allowances, overtime, bonus, deductions, net_salary, notes")
+          .select("id, emp_id, month, basic_salary, allowances, deductions, net_salary, notes")
           .in("emp_id", identifiers)
           .gte("month", fromMonth)
           .lte("month", toMonth)

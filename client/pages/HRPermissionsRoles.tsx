@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { FileText, Printer, ShieldCheck, Plus, Trash2, Edit, Search, RefreshCw } from "lucide-react";
+import { Printer, Plus, Trash2, Edit, Search, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "react-router-dom";
@@ -63,12 +63,12 @@ export default function HRPermissionsRoles() {
 
   const handleDelete = async (role: RoleRow) => {
     if (!confirm(`حذف الدور "${role.nameAr}"؟`)) return;
-    try {
-      await supabase.from("user_roles").delete().eq("id", role.id);
+    const { error } = await supabase.from("user_roles").delete().eq("id", role.id);
+    if (error) {
+      toast.error(`تعذر حذف الدور: ${error.message}`);
+    } else {
       setRoles((prev) => prev.filter((r) => r.id !== role.id));
-      toast.success("تم الحذف بنجاح");
-    } catch (err) {
-      toast.error("خطأ في حذف الدور");
+      toast.success("تم حذف الدور بنجاح");
     }
   };
 
@@ -153,7 +153,7 @@ export default function HRPermissionsRoles() {
                       <td className="py-3 px-3 text-gray-500 text-xs">{role.updateDate}</td>
                       <td className="py-3 px-3">
                         <div className="flex items-center justify-center gap-1">
-                          <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="تعديل"><Edit className="h-4 w-4" /></button>
+                          <button onClick={() => navigate(`/hr/permissions/edit-role/${role.id}`)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="تعديل"><Edit className="h-4 w-4" /></button>
                           <button onClick={() => handleDelete(role)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="حذف"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </td>

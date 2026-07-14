@@ -226,6 +226,7 @@ const App = () => (
           <Route path="/hr/permissions" element={<Navigate to="/hr/permissions/roles" replace />} />
           <Route path="/hr/permissions/roles" element={<HRPermissionsRoles />} />
           <Route path="/hr/permissions/add-role" element={<HRPermissionsAddRole />} />
+          <Route path="/hr/permissions/edit-role/:roleId" element={<HRPermissionsAddRole />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />
           <Route path="/hr/reports" element={<HRReports />} />

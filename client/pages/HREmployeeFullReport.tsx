@@ -114,17 +114,19 @@ const ZAIN_EXAMPLE_DEDUCTIONS: DeductionItem[] = [
 const createZainJuneAttendance = (employee: Employee, selectedMonth: string): Attendance[] => {
   const [year, monthNumber] = selectedMonth.split("-").map(Number);
   const daysInMonth = new Date(year, monthNumber, 0).getDate();
-  const absentDays = new Set([3, 9, 16, 23]);
-  const lateDays = new Set([5, 14, 28]);
-  const records: Attendance[] = [];
+  const workDays = Array.from({ length: daysInMonth }, (_, index) => index + 1)
+    .filter((day) => {
+      const weekday = new Date(year, monthNumber - 1, day).getDay();
+      return weekday !== 5 && weekday !== 6;
+    });
+  const absentDays = new Set([workDays[2], workDays[7], workDays[12], workDays[17]]);
+  const lateDays = new Set([workDays[4], workDays[9], workDays[15]]);
 
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(year, monthNumber - 1, day);
-    if (date.getDay() === 5 || date.getDay() === 6) continue;
+  return workDays.map((day) => {
     const dateValue = `${selectedMonth}-${String(day).padStart(2, "0")}`;
     const absent = absentDays.has(day);
     const late = lateDays.has(day);
-    records.push({
+    return {
       id: `zain-example-${dateValue}`,
       empId: employee.empId,
       date: dateValue,
@@ -133,9 +135,8 @@ const createZainJuneAttendance = (employee: Employee, selectedMonth: string): At
       status: absent ? "غائب" : late ? "متأخر" : "حاضر",
       lateMinutes: late ? 80 : 0,
       notes: absent ? "غياب دون عذر معتمد" : late ? "تم إشعار الموظف بالتأخير" : "",
-    });
-  }
-  return records;
+    };
+  });
 };
 
 export default function HREmployeeFullReport() {
@@ -288,9 +289,12 @@ export default function HREmployeeFullReport() {
 
       setReports(selectedEmployees.map((employee) => {
         const employeeKeys = new Set([employee.id, employee.empId]);
+        const normalizedName = employee.name.replace(/\s/g, "");
+        const isZainEmployee = employee.empId.toUpperCase() === "EMP-001"
+          || (normalizedName.includes("زين") && normalizedName.includes("الحربي"));
         const isZainJuneExample = periodType === "month"
           && month.endsWith("-06")
-          && employee.name.replace(/\s/g, "").includes("زينالحربي");
+          && isZainEmployee;
 
         if (isZainJuneExample) {
           return {

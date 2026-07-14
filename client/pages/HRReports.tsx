@@ -1,7 +1,6 @@
 import { useState } from "react";
 import Layout from "@/components/Layout";
 import { cn } from "@/lib/utils";
-import LeavesReport from "@/components/hr/reports/LeavesReport";
 import DynamicReport from "@/components/hr/reports/DynamicReport";
 import { reportSchemas } from "@/components/hr/reports/reportSchemas";
 
@@ -78,9 +77,7 @@ export default function HRReports() {
 
           {/* Content Body */}
           <div className="flex-1 p-0 overflow-hidden bg-gray-50/30 relative">
-            {selectedReport === "إجازات" ? (
-              <LeavesReport key="leaves" />
-            ) : selectedReport && reportSchemas[selectedReport] ? (
+            {selectedReport && reportSchemas[selectedReport] ? (
               <DynamicReport key={selectedReport} schema={reportSchemas[selectedReport]} />
             ) : selectedReport ? (
               <div className="bg-white rounded-xl border border-gray-200 p-8 m-6 min-h-[400px] flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-200">

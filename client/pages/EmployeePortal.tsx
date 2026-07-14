@@ -560,7 +560,7 @@ export default function EmployeePortal() {
         <div className="pb-32">
           {currentPage === "home" && (
             <div className="pb-28">
-              {/* ── Attendance banner ── */}
+              {/* ── Attendance banner (inside header gradient) ── */}
               <div className="bg-gradient-to-l from-[#004e89] to-[#0066b3] px-4 pt-4 pb-6">
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div className="text-center bg-white/10 rounded-xl p-3">
@@ -584,25 +584,28 @@ export default function EmployeePortal() {
                 </div>
               </div>
 
-              {/* ── Services grid ── all services immediately visible */}
-              <div className="p-4">
-                <h2 className="font-bold text-gray-900 text-base mb-3">الخدمات والخيارات</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {MORE_OPTIONS.filter((o) => !o.logout).map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => handleMoreOption(option)}
-                      className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-start gap-3 hover:shadow-md transition text-right"
-                    >
-                      <span className="text-2xl flex-shrink-0">{option.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 text-xs truncate">{option.name}</p>
-                        <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{option.desc}</p>
-                      </div>
-                      <ChevronLeft className="h-4 w-4 text-gray-300 flex-shrink-0 mt-0.5" />
-                    </button>
-                  ))}
-                </div>
+              {/* ── 4-card quick actions row (same as desktop) ── */}
+              <div className="p-4 grid grid-cols-2 gap-3">
+                <button onClick={() => setCurrentPage("requests")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
+                  <FileText className="h-7 w-7 text-[#004e89]" />
+                  <p className="font-semibold text-gray-900 text-xs">الطلبات</p>
+                  <p className="text-[10px] text-gray-500 text-center">عرض الطلبات الواردة والمرسلة</p>
+                </button>
+                <button onClick={() => setCurrentPage("send-request")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
+                  <Plus className="h-7 w-7 text-green-500" />
+                  <p className="font-semibold text-gray-900 text-xs">طلب جديد</p>
+                  <p className="text-[10px] text-gray-500 text-center">إرسال طلب جديد</p>
+                </button>
+                <button onClick={() => setCurrentPage("more")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
+                  <Briefcase className="h-7 w-7 text-purple-500" />
+                  <p className="font-semibold text-gray-900 text-xs">الخدمات</p>
+                  <p className="text-[10px] text-gray-500 text-center">جميع الخدمات والخيارات</p>
+                </button>
+                <button onClick={() => setCurrentPage("profile")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
+                  <User className="h-7 w-7 text-orange-500" />
+                  <p className="font-semibold text-gray-900 text-xs">ملفي</p>
+                  <p className="text-[10px] text-gray-500 text-center">بيانات الملف الشخصي</p>
+                </button>
               </div>
             </div>
           )}

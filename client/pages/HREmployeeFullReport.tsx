@@ -52,10 +52,20 @@ type Payroll = {
   notes: string;
 };
 
+type DeductionItem = {
+  title: string;
+  amount: number;
+  reason: string;
+  notification: string;
+  acknowledgement: string;
+};
+
 type EmployeeReport = {
   employee: Employee;
   attendance: Attendance[];
   payroll: Payroll[];
+  deductionItems: DeductionItem[];
+  isExample: boolean;
 };
 
 const now = new Date();
@@ -92,6 +102,41 @@ const escapeHtml = (value: unknown) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+
+const ZAIN_EXAMPLE_DEDUCTIONS: DeductionItem[] = [
+  { title: "خصم أيام الغياب", amount: 1500, reason: "الغياب دون عذر معتمد خلال 4 أيام عمل متفرقة", notification: "تم إشعاره كتابياً قبل اعتماد الخصم ومراجعته معه", acknowledgement: "أكد الموظف استلام الإشعار واطلاعه على السبب" },
+  { title: "عدم إكمال مهمة", amount: 900, reason: "عدم تسليم المهمة التشغيلية المكلف بها ضمن الموعد المحدد", notification: "تم تنبيهه مسبقاً ومنحه مهلة إضافية لإكمال المهمة", acknowledgement: "أكد الموظف علمه بالتكليف والمهلة الإضافية" },
+  { title: "الامتناع عن تنفيذ تعليمات العمل", amount: 700, reason: "الامتناع عن تنفيذ توجيه إداري موثق متعلق بسير العمل", notification: "تم إبلاغه بالتوجيه ونتيجة عدم الالتزام قبل تسجيل الخصم", acknowledgement: "أكد الموظف استلام التوجيه وفهم ما يترتب عليه" },
+  { title: "إنذار إداري", amount: 500, reason: "إنذار بسبب تكرار مخالفة إجراءات العمل الداخلية", notification: "تم تسليمه الإنذار ومناقشة المخالفة معه مسبقاً", acknowledgement: "وقع الموظف بما يفيد استلام الإنذار والعلم بمضمونه" },
+  { title: "التأخير وعدم استكمال ساعات الدوام", amount: 400, reason: "تأخر متكرر وعدم استكمال ساعات الدوام في 3 أيام", notification: "تم إرسال كشف التأخير إليه قبل إقفال مسير الراتب", acknowledgement: "أكد الموظف صحة أوقات الحضور المسجلة واطلاعه عليها" },
+];
+
+const createZainJuneAttendance = (employee: Employee, selectedMonth: string): Attendance[] => {
+  const [year, monthNumber] = selectedMonth.split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const absentDays = new Set([3, 9, 16, 23]);
+  const lateDays = new Set([5, 14, 28]);
+  const records: Attendance[] = [];
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, monthNumber - 1, day);
+    if (date.getDay() === 5 || date.getDay() === 6) continue;
+    const dateValue = `${selectedMonth}-${String(day).padStart(2, "0")}`;
+    const absent = absentDays.has(day);
+    const late = lateDays.has(day);
+    records.push({
+      id: `zain-example-${dateValue}`,
+      empId: employee.empId,
+      date: dateValue,
+      checkIn: absent ? "" : late ? "09:20" : "08:00",
+      checkOut: absent ? "" : late ? "16:30" : "17:00",
+      status: absent ? "غائب" : late ? "متأخر" : "حاضر",
+      lateMinutes: late ? 80 : 0,
+      notes: absent ? "غياب دون عذر معتمد" : late ? "تم إشعار الموظف بالتأخير" : "",
+    });
+  }
+  return records;
+};
 
 export default function HREmployeeFullReport() {
   const navigate = useNavigate();
@@ -243,10 +288,37 @@ export default function HREmployeeFullReport() {
 
       setReports(selectedEmployees.map((employee) => {
         const employeeKeys = new Set([employee.id, employee.empId]);
+        const isZainJuneExample = periodType === "month"
+          && month.endsWith("-06")
+          && employee.name.replace(/\s/g, "").includes("زينالحربي");
+
+        if (isZainJuneExample) {
+          return {
+            employee: { ...employee, baseSalary: 5000, totalSalary: 5000 },
+            attendance: createZainJuneAttendance(employee, month),
+            payroll: [{
+              id: `zain-example-payroll-${month}`,
+              empId: employee.empId,
+              month,
+              basicSalary: 5000,
+              allowances: 0,
+              overtime: 0,
+              bonus: 0,
+              deductions: 4000,
+              netSalary: 1000,
+              notes: "تم إبلاغ الموظف مسبقاً بجميع الخصومات وأسبابها، وأكد استلام الإشعارات والاطلاع عليها.",
+            }],
+            deductionItems: ZAIN_EXAMPLE_DEDUCTIONS,
+            isExample: true,
+          };
+        }
+
         return {
           employee,
           attendance: attendance.filter((record) => employeeKeys.has(record.empId)),
           payroll: payroll.filter((record) => employeeKeys.has(record.empId)),
+          deductionItems: [],
+          isExample: false,
         };
       }));
     } catch (error: any) {
@@ -272,6 +344,9 @@ export default function HREmployeeFullReport() {
       }), { basic: 0, allowances: 0, overtime: 0, bonus: 0, deductions: 0, net: 0 });
       const gross = payroll.basic + payroll.allowances + payroll.overtime + payroll.bonus;
       const notes = report.payroll.map((item) => item.notes).filter(Boolean).join("، ") || "لا توجد أسباب خصم مسجلة";
+      const deductionRows = report.deductionItems.length
+        ? report.deductionItems.map((item) => `<tr><td>${escapeHtml(item.title)}</td><td>${money(item.amount)} ر.س</td><td>${escapeHtml(item.reason)}</td><td><span class="notice-check">✓</span> ${escapeHtml(item.notification)}<br><b>${escapeHtml(item.acknowledgement)}</b></td></tr>`).join("")
+        : `<tr><td colspan="4">${escapeHtml(notes)}</td></tr>`;
       const present = report.attendance.filter(isPresent).length;
       const absent = report.attendance.filter((record) => !isPresent(record)).length;
       const late = report.attendance.filter((record) => record.lateMinutes > 0).length;
@@ -312,7 +387,9 @@ export default function HREmployeeFullReport() {
             <div class="gross"><span>إجمالي الراتب</span><strong>${money(gross)} ر.س</strong></div>
             <div class="deduction"><span>إجمالي الخصومات</span><strong>− ${money(payroll.deductions)} ر.س</strong></div>
           </div>
-          <div class="reason"><span>أسباب الخصومات والملاحظات</span><p>${escapeHtml(notes)}</p></div>
+          <div class="section-title"><h3>تفصيل الخصومات وأسبابها</h3></div>
+          <table class="deductions-table"><thead><tr><th>نوع الخصم</th><th>المبلغ</th><th>السبب</th><th>الإبلاغ والتأكيد</th></tr></thead><tbody>${deductionRows}</tbody></table>
+          <div class="reason"><span>تأكيد الإبلاغ المسبق</span><p>${escapeHtml(notes)}</p></div>
           <div class="net"><span>صافي الراتب المستحق</span><strong>${money(payroll.net || (gross - payroll.deductions))} ر.س</strong></div>
           <div class="signatures"><div>مسؤول الموارد البشرية</div><div>المدير المالي</div><div>توقيع الموظف</div></div>
           <div class="footer">تاريخ إصدار التقرير: ${new Date().toLocaleDateString("ar-SA")}</div>
@@ -320,7 +397,7 @@ export default function HREmployeeFullReport() {
     }).join("");
 
     printWindow.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير الموظف الكامل</title><style>
-      @page{size:A4;margin:9mm}*{box-sizing:border-box}body{margin:0;background:#e2e8f0;color:#0f172a;font-family:Arial,"Tahoma",sans-serif}.page{width:210mm;min-height:277mm;margin:10px auto;background:#fff;padding:11mm;page-break-after:always;position:relative;overflow:hidden}.page:last-child{page-break-after:auto}.report-head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #0f766e;padding-bottom:12px}.report-head h1{font-size:25px;margin:3px 0}.report-head p{font-size:11px;color:#64748b;margin:0}.eyebrow{font-size:10px;font-weight:700;color:#0f766e;letter-spacing:1px}.brand{width:55px;height:55px;border-radius:18px;background:linear-gradient(135deg,#0f766e,#0ea5e9);display:grid;place-items:center;color:#fff;font-size:20px;font-weight:800}.employee-card{display:flex;align-items:center;gap:12px;margin:14px 0;background:linear-gradient(135deg,#f0fdfa,#eff6ff);border:1px solid #bae6d8;border-radius:14px;padding:12px}.avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#0f766e;color:#fff;font-size:20px;font-weight:800}.employee-card h2{margin:0 0 4px;font-size:18px}.employee-card p{margin:0;color:#64748b;font-size:11px}.identity{margin-right:auto;text-align:center;background:#fff;border-radius:9px;padding:7px 15px;border:1px solid #dbeafe}.identity span,.meta-grid span,.finance-grid span,.reason span,.net span{display:block;color:#64748b;font-size:10px;margin-bottom:4px}.identity strong{font-size:14px;color:#0f766e}.meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.meta-grid div{border:1px solid #e2e8f0;border-radius:8px;padding:8px}.meta-grid strong{font-size:11px}.section-title{display:flex;justify-content:space-between;align-items:center;margin:15px 0 7px}.section-title h3{font-size:14px;margin:0;padding-right:8px;border-right:4px solid #0f766e}.stats{display:flex;gap:6px}.stats b{font-size:9px;border-radius:20px;padding:4px 8px}.green{color:#047857;background:#d1fae5}.red{color:#b91c1c;background:#fee2e2}.amber{color:#b45309;background:#fef3c7}table{width:100%;border-collapse:collapse;font-size:9px}th{background:#0f766e;color:#fff;padding:6px}td{border:1px solid #e2e8f0;text-align:center;padding:5px}.status{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;color:#fff;font-weight:800;font-size:12px}.status.ok{background:#10b981}.status.bad{background:#ef4444}.empty{padding:18px;color:#64748b}.finance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.finance-grid div{border:1px solid #e2e8f0;border-radius:9px;padding:9px}.finance-grid strong{font-size:11px}.finance-grid .gross{background:#eff6ff;border-color:#bfdbfe}.finance-grid .deduction{background:#fff1f2;border-color:#fecdd3}.deduction strong{color:#be123c}.reason{margin-top:8px;border:1px solid #fde68a;background:#fffbeb;border-radius:9px;padding:8px}.reason p{font-size:10px;margin:0}.net{margin-top:9px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#fff;border-radius:11px;padding:11px 15px;display:flex;align-items:center;justify-content:space-between}.net span{color:#ccfbf1;margin:0}.net strong{font-size:20px}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin-top:24px;text-align:center;color:#475569;font-size:10px}.signatures div{padding-top:16px;border-top:1px dashed #94a3b8}.footer{position:absolute;bottom:7mm;left:11mm;right:11mm;border-top:1px solid #e2e8f0;padding-top:5px;text-align:center;color:#94a3b8;font-size:8px}@media print{body{background:#fff}.page{margin:0;box-shadow:none}}
+      @page{size:A4;margin:9mm}*{box-sizing:border-box}body{margin:0;background:#e2e8f0;color:#0f172a;font-family:Arial,"Tahoma",sans-serif}.page{width:210mm;min-height:277mm;margin:10px auto;background:#fff;padding:11mm;page-break-after:always;position:relative;overflow:hidden}.page:last-child{page-break-after:auto}.report-head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #0f766e;padding-bottom:12px}.report-head h1{font-size:25px;margin:3px 0}.report-head p{font-size:11px;color:#64748b;margin:0}.eyebrow{font-size:10px;font-weight:700;color:#0f766e;letter-spacing:1px}.brand{width:55px;height:55px;border-radius:18px;background:linear-gradient(135deg,#0f766e,#0ea5e9);display:grid;place-items:center;color:#fff;font-size:20px;font-weight:800}.employee-card{display:flex;align-items:center;gap:12px;margin:14px 0;background:linear-gradient(135deg,#f0fdfa,#eff6ff);border:1px solid #bae6d8;border-radius:14px;padding:12px}.avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#0f766e;color:#fff;font-size:20px;font-weight:800}.employee-card h2{margin:0 0 4px;font-size:18px}.employee-card p{margin:0;color:#64748b;font-size:11px}.identity{margin-right:auto;text-align:center;background:#fff;border-radius:9px;padding:7px 15px;border:1px solid #dbeafe}.identity span,.meta-grid span,.finance-grid span,.reason span,.net span{display:block;color:#64748b;font-size:10px;margin-bottom:4px}.identity strong{font-size:14px;color:#0f766e}.meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.meta-grid div{border:1px solid #e2e8f0;border-radius:8px;padding:8px}.meta-grid strong{font-size:11px}.section-title{display:flex;justify-content:space-between;align-items:center;margin:15px 0 7px}.section-title h3{font-size:14px;margin:0;padding-right:8px;border-right:4px solid #0f766e}.stats{display:flex;gap:6px}.stats b{font-size:9px;border-radius:20px;padding:4px 8px}.green{color:#047857;background:#d1fae5}.red{color:#b91c1c;background:#fee2e2}.amber{color:#b45309;background:#fef3c7}table{width:100%;border-collapse:collapse;font-size:9px}th{background:#0f766e;color:#fff;padding:6px}td{border:1px solid #e2e8f0;text-align:center;padding:5px}.status{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;color:#fff;font-weight:800;font-size:12px}.status.ok{background:#10b981}.status.bad{background:#ef4444}.empty{padding:18px;color:#64748b}.deductions-table{font-size:7.5px}.deductions-table td{padding:4px}.deductions-table td:nth-child(2){white-space:nowrap;font-weight:700;color:#be123c}.deductions-table b{color:#047857}.notice-check{display:inline-grid;place-items:center;width:13px;height:13px;border-radius:50%;background:#10b981;color:#fff;font-weight:800}.finance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.finance-grid div{border:1px solid #e2e8f0;border-radius:9px;padding:9px}.finance-grid strong{font-size:11px}.finance-grid .gross{background:#eff6ff;border-color:#bfdbfe}.finance-grid .deduction{background:#fff1f2;border-color:#fecdd3}.deduction strong{color:#be123c}.reason{margin-top:8px;border:1px solid #fde68a;background:#fffbeb;border-radius:9px;padding:8px}.reason p{font-size:10px;margin:0}.net{margin-top:9px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#fff;border-radius:11px;padding:11px 15px;display:flex;align-items:center;justify-content:space-between}.net span{color:#ccfbf1;margin:0}.net strong{font-size:20px}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin-top:24px;text-align:center;color:#475569;font-size:10px}.signatures div{padding-top:16px;border-top:1px dashed #94a3b8}.footer{position:absolute;bottom:7mm;left:11mm;right:11mm;border-top:1px solid #e2e8f0;padding-top:5px;text-align:center;color:#94a3b8;font-size:8px}@media print{body{background:#fff}.page{margin:0;box-shadow:none}}
     </style></head><body>${pages}<script>window.onload=()=>window.print()</script></body></html>`);
     printWindow.document.close();
   };
@@ -366,7 +443,7 @@ export default function HREmployeeFullReport() {
           {loading ? <div className="py-12 text-center text-sm text-slate-500">جاري تحميل الموظفين...</div> : filteredEmployees.length === 0 ? <div className="py-12 text-center text-sm text-slate-500">لا يوجد موظفون مطابقون للفلاتر</div> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filteredEmployees.map((employee) => { const active = selectedIds.has(employee.id); return <button key={employee.id} onClick={() => toggleEmployee(employee.id)} className={`flex items-center gap-3 rounded-xl border p-3 text-right transition ${active ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500" : "border-slate-200 hover:border-emerald-300"}`}><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${active ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-400"}`}>{active ? <Check className="h-5 w-5" /> : employee.name.charAt(0)}</span><span className="min-w-0"><strong className="block truncate text-sm text-slate-900">{employee.name}</strong><small className="block truncate text-slate-500">#{employee.empId} · {employee.department}</small></span></button>; })}</div>}
         </section>
 
-        {reports.length > 0 && <section className="space-y-4"><div className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-sky-600" /><h2 className="text-xl font-bold">معاينة التقرير</h2></div>{reports.map((report) => { const payroll = report.payroll.reduce((sum, item) => ({ gross: sum.gross + item.basicSalary + item.allowances + item.overtime + item.bonus, deductions: sum.deductions + item.deductions, net: sum.net + item.netSalary }), { gross: 0, deductions: 0, net: 0 }); const present = report.attendance.filter(isPresent).length; const absent = report.attendance.length - present; return <article key={report.employee.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center gap-4 bg-gradient-to-l from-slate-900 to-slate-700 p-5 text-white"><div className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-xl font-bold">{report.employee.name.charAt(0)}</div><div><h3 className="text-lg font-bold">{report.employee.name}</h3><p className="text-xs text-slate-300">#{report.employee.empId} · {report.employee.jobTitle}</p></div><div className="mr-auto flex gap-4 text-xs"><span className="flex items-center gap-1"><Building2 className="h-4 w-4" />{report.employee.department}</span><span className="flex items-center gap-1"><CalendarDays className="h-4 w-4" />{formatDate(range.from)} — {formatDate(range.to)}</span></div></div><div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-5"><div className="rounded-xl bg-emerald-50 p-3"><span className="text-xs text-emerald-700">أيام الحضور</span><strong className="mt-1 block text-xl text-emerald-800">{present}</strong></div><div className="rounded-xl bg-rose-50 p-3"><span className="text-xs text-rose-700">أيام الغياب</span><strong className="mt-1 block text-xl text-rose-800">{absent}</strong></div><div className="rounded-xl bg-sky-50 p-3"><span className="text-xs text-sky-700">إجمالي الراتب</span><strong className="mt-1 block text-lg text-sky-800">{money(payroll.gross)}</strong></div><div className="rounded-xl bg-amber-50 p-3"><span className="text-xs text-amber-700">الخصومات</span><strong className="mt-1 block text-lg text-amber-800">{money(payroll.deductions)}</strong></div><div className="rounded-xl bg-slate-900 p-3 text-white"><span className="text-xs text-slate-300">صافي الراتب</span><strong className="mt-1 block text-lg">{money(payroll.net || payroll.gross - payroll.deductions)}</strong></div></div><div className="border-t border-slate-100 px-5 py-4"><div className="flex flex-wrap gap-2">{report.attendance.slice(0, 31).map((record) => <div key={record.id} title={`${formatDate(record.date)} - ${record.status}`} className={`grid h-9 w-9 place-items-center rounded-full border-2 ${isPresent(record) ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-rose-500 bg-rose-50 text-rose-600"}`}>{isPresent(record) ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}</div>)}</div></div></article>; })}</section>}
+        {reports.length > 0 && <section className="space-y-4"><div className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-sky-600" /><h2 className="text-xl font-bold">معاينة التقرير</h2></div>{reports.map((report) => { const payroll = report.payroll.reduce((sum, item) => ({ gross: sum.gross + item.basicSalary + item.allowances + item.overtime + item.bonus, deductions: sum.deductions + item.deductions, net: sum.net + item.netSalary }), { gross: 0, deductions: 0, net: 0 }); const present = report.attendance.filter(isPresent).length; const absent = report.attendance.length - present; return <article key={report.employee.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center gap-4 bg-gradient-to-l from-slate-900 to-slate-700 p-5 text-white"><div className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-xl font-bold">{report.employee.name.charAt(0)}</div><div><h3 className="text-lg font-bold">{report.employee.name}</h3><p className="text-xs text-slate-300">#{report.employee.empId} · {report.employee.jobTitle}</p></div><div className="mr-auto flex gap-4 text-xs"><span className="flex items-center gap-1"><Building2 className="h-4 w-4" />{report.employee.department}</span><span className="flex items-center gap-1"><CalendarDays className="h-4 w-4" />{formatDate(range.from)} — {formatDate(range.to)}</span></div></div><div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-5"><div className="rounded-xl bg-emerald-50 p-3"><span className="text-xs text-emerald-700">أيام الحضور</span><strong className="mt-1 block text-xl text-emerald-800">{present}</strong></div><div className="rounded-xl bg-rose-50 p-3"><span className="text-xs text-rose-700">أيام الغياب</span><strong className="mt-1 block text-xl text-rose-800">{absent}</strong></div><div className="rounded-xl bg-sky-50 p-3"><span className="text-xs text-sky-700">إجمالي الراتب</span><strong className="mt-1 block text-lg text-sky-800">{money(payroll.gross)}</strong></div><div className="rounded-xl bg-amber-50 p-3"><span className="text-xs text-amber-700">الخصومات</span><strong className="mt-1 block text-lg text-amber-800">{money(payroll.deductions)}</strong></div><div className="rounded-xl bg-slate-900 p-3 text-white"><span className="text-xs text-slate-300">صافي الراتب</span><strong className="mt-1 block text-lg">{money(payroll.net || payroll.gross - payroll.deductions)}</strong></div></div>{report.deductionItems.length > 0 && <div className="border-t border-slate-100 px-5 py-4"><div className="mb-3 flex items-center justify-between"><h4 className="font-bold text-slate-900">تفصيل الخصومات وأسبابها</h4><span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">تم إبلاغ الموظف وأكد الاستلام</span></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-right text-xs"><thead><tr className="bg-slate-50 text-slate-600"><th className="p-2">نوع الخصم</th><th className="p-2">المبلغ</th><th className="p-2">السبب</th><th className="p-2">الإبلاغ والتأكيد</th></tr></thead><tbody>{report.deductionItems.map((item) => <tr key={item.title} className="border-t border-slate-100"><td className="p-2 font-bold text-slate-800">{item.title}</td><td className="p-2 whitespace-nowrap font-bold text-rose-700">{money(item.amount)} ر.س</td><td className="p-2 text-slate-600">{item.reason}</td><td className="p-2"><span className="block text-emerald-700">✓ {item.notification}</span><strong className="mt-1 block text-emerald-800">{item.acknowledgement}</strong></td></tr>)}</tbody><tfoot><tr className="border-t-2 border-slate-300 bg-rose-50"><td className="p-2 font-bold" colSpan={1}>إجمالي الخصومات</td><td className="p-2 font-bold text-rose-700">4,000.00 ر.س</td><td className="p-2 font-bold text-slate-700" colSpan={2}>الراتب 5,000.00 ر.س — صافي المستحق 1,000.00 ر.س</td></tr></tfoot></table></div></div>}<div className="border-t border-slate-100 px-5 py-4"><div className="flex flex-wrap gap-2">{report.attendance.slice(0, 31).map((record) => <div key={record.id} title={`${formatDate(record.date)} - ${record.status}`} className={`grid h-9 w-9 place-items-center rounded-full border-2 ${isPresent(record) ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-rose-500 bg-rose-50 text-rose-600"}`}>{isPresent(record) ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}</div>)}</div></div></article>; })}</section>}
       </div>
     </Layout>
   );

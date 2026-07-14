@@ -12,6 +12,8 @@ import {
   Eye,
   Calendar,
   Clock,
+  FileText,
+  ArrowLeft,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -116,6 +118,29 @@ export default function HRDashboard() {
           <h1 className="text-3xl font-bold text-foreground">لوحة التحكم - الموارد البشرية</h1>
           <p className="mt-1 text-sm text-muted-foreground">نظرة عامة على أداء وإحصائيات الموارد البشرية</p>
         </div>
+
+        <button
+          onClick={() => navigate("/hr/reports/full-employee")}
+          className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-l from-emerald-700 via-teal-700 to-sky-700 p-5 text-right text-white shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl"
+        >
+          <div className="absolute -left-8 -top-10 h-36 w-36 rounded-full bg-white/10" />
+          <div className="relative flex flex-wrap items-center gap-4">
+            <div className="rounded-2xl bg-white/15 p-4 ring-1 ring-white/20">
+              <FileText className="h-7 w-7" />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-2">
+                <span className="rounded-full bg-amber-300 px-2.5 py-0.5 text-[10px] font-bold text-amber-950">تقرير متكامل</span>
+              </div>
+              <h2 className="text-xl font-bold">تقرير الموظف الكامل</h2>
+              <p className="mt-1 text-sm text-emerald-50">الحضور والانصراف والراتب والخصومات وصافي المستحق في تقرير A4 احترافي</p>
+            </div>
+            <div className="mr-auto flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-teal-800 shadow-sm transition-transform group-hover:-translate-x-1">
+              إنشاء تقرير
+              <ArrowLeft className="h-4 w-4" />
+            </div>
+          </div>
+        </button>
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -258,6 +283,9 @@ export default function HRDashboard() {
                 </button>
                 <button onClick={() => navigate("/hr/attendance")} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 text-foreground text-right transition-colors">
                   <Clock className="h-4 w-4" /><span className="text-sm font-medium">سجل الحضور والانصراف</span>
+                </button>
+                <button onClick={() => navigate("/hr/reports/full-employee")} className="w-full flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-right text-emerald-800 transition-colors hover:bg-emerald-100">
+                  <FileText className="h-4 w-4" /><span className="text-sm font-bold">تقرير الموظف الكامل</span>
                 </button>
               </div>
             </div>

@@ -26,6 +26,7 @@ import HREmployees from "./pages/HREmployees";
 import HRPayroll from "./pages/HRPayroll";
 import HRCertificates from "./pages/HRCertificates";
 import HRReports from "./pages/HRReports";
+import HREmployeeFullReport from "./pages/HREmployeeFullReport";
 import HRSettings from "./pages/HRSettings";
 import HREmployeesCooperative from "./pages/HREmployeesCooperative";
 import HREmployeesInactive from "./pages/HREmployeesInactive";
@@ -230,6 +231,7 @@ const App = () => (
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />
           <Route path="/hr/reports" element={<HRReports />} />
+          <Route path="/hr/reports/full-employee" element={<HREmployeeFullReport />} />
           <Route path="/hr/settings" element={<HRSettings />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />

@@ -609,7 +609,6 @@ function MainSidebar({
     { icon: Users, label: "الموارد البشرية", href: "/hr" },
     { icon: CreditCard, label: "العملاء والموردين", href: "/crm", hasSubmenu: true },
     { icon: Receipt, label: "المحاسبة والمالية", href: "/expenses", hasSubmenu: true },
-    { icon: ShieldCheck, label: "المستخدمين والصلاحيات", href: "/users", hasSubmenu: true },
     { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];

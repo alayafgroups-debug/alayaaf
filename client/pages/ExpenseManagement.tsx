@@ -1,10 +1,13 @@
 import Layout from "@/components/Layout";
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Save, X } from "lucide-react";
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Save, X, Printer } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import ChartOfAccountsTree from "@/components/chart-of-accounts/ChartOfAccountsTree";
+
+const COMPANY_LOGO_URL =
+  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200";
 
 type VoucherRow = {
   id: string;
@@ -245,6 +248,31 @@ export default function ExpenseManagement() {
     });
     setPettyCashView(null);
     setIsFormOpen(true);
+  };
+
+  const handlePrintPettyCash = (row: PettyCashRow) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    const escapeHtml = (value: unknown) => String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+    const amount = Number.parseFloat(row.amount || "0") || 0;
+
+    printWindow.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>سند قبض ${escapeHtml(row.voucherNumber)}</title><style>
+      @page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#111827;font-family:Arial,"Tahoma",sans-serif}.voucher{width:100%;min-height:175mm;border:1px solid #d1d5db;padding:14mm 15mm 10mm;position:relative;background:#fff}.header{display:grid;grid-template-columns:150px 1fr 190px;align-items:start;gap:20px}.logo{width:135px;height:90px;object-fit:contain}.company{text-align:right}.company h2{margin:0;font-size:22px}.company p{margin:4px 0;color:#475569;font-size:11px;line-height:1.6}.voucher-title{text-align:center}.voucher-title h1{font-size:29px;margin:0}.voucher-title .en{font-size:14px;font-weight:700;letter-spacing:1.8px;border-bottom:2px solid #0f766e;padding:4px 12px;display:inline-block}.number{margin-top:10px;color:#0f766e;font-size:24px;font-weight:800;letter-spacing:2px}.currency{display:flex;justify-content:center;gap:9px;margin-bottom:7px}.currency span{background:#f1f5f9;padding:5px 10px;font-size:11px;font-weight:700}.date-row{display:flex;justify-content:space-between;margin:17px 0 7px;font-size:12px}.line{display:grid;grid-template-columns:150px 1fr 165px;gap:8px;align-items:end;margin:12px 0;font-size:13px}.label-ar{text-align:right;font-weight:700}.label-en{text-align:left;font-weight:700;direction:ltr}.value{min-height:25px;border-bottom:1px solid #64748b;padding:3px 8px;text-align:center;font-weight:700}.amount-box{display:grid;grid-template-columns:1fr 220px;gap:18px;align-items:center}.amount{border:2px solid #0f766e;border-radius:6px;padding:9px 12px;text-align:center;color:#0f766e;font-size:18px;font-weight:800}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:70px;margin-top:38px;text-align:center}.signature strong{display:block;font-size:13px}.signature small{display:block;color:#64748b;margin-top:3px}.signature .sign-line{border-bottom:1px solid #94a3b8;height:42px}.footer{position:absolute;bottom:0;left:0;right:0;height:10px;background:linear-gradient(90deg,#0284c7,#0f766e)}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.voucher{border:0}}
+    </style></head><body><section class="voucher"><div class="header"><img class="logo" src="${COMPANY_LOGO_URL}" alt="شعار العياف"><div class="voucher-title"><h1>سند قبض</h1><div class="en">RECEIPT VOUCHER</div><div class="number">${escapeHtml(row.voucherNumber)}</div></div><div class="company"><h2>شركة لاكجري العياف</h2><p>Luxury Al Ayaf Company<br>المملكة العربية السعودية<br>VAT No. 314559705300003</p></div></div><div class="date-row"><span><b>التاريخ / Date:</b> ${escapeHtml(row.voucherDate)}</span><div class="currency"><span>هـ / H</span><span>ريال سعودي / S.R. SAR</span></div></div><div class="line"><span class="label-ar">استلمنا من السيد/السادة:</span><div class="value">${escapeHtml(row.beneficiaryName || "-")}</div><span class="label-en">Received from Mr./Mrs.:</span></div><div class="amount-box"><div class="line"><span class="label-ar">مبلغ وقدره:</span><div class="value">${amount.toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ريال سعودي</div><span class="label-en">Amount:</span></div><div class="amount">${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} SAR</div></div><div class="line"><span class="label-ar">نقداً / شيك رقم / البنك:</span><div class="value">${escapeHtml(row.paidBy || "نقداً")}</div><span class="label-en">Cash / Cheque No. / Bank:</span></div><div class="line"><span class="label-ar">وذلك مقابل:</span><div class="value">${escapeHtml(row.purpose || "-")}</div><span class="label-en">Being:</span></div><div class="signatures"><div class="signature"><strong>المستلم</strong><small>Receiver</small><div class="sign-line"></div><span>${escapeHtml(row.receivedBy || "")}</span></div><div class="signature"><strong>المحاسب</strong><small>Accountant</small><div class="sign-line"></div></div><div class="signature"><strong>المدير المالي</strong><small>Finance Manager</small><div class="sign-line"></div></div></div><div class="footer"></div></section></body></html>`);
+    printWindow.document.close();
+    let printed = false;
+    const print = () => { if (printed) return; printed = true; printWindow.focus(); printWindow.print(); };
+    const logo = printWindow.document.querySelector(".logo") as HTMLImageElement | null;
+    if (logo && !logo.complete) {
+      logo.addEventListener("load", print, { once: true });
+      logo.addEventListener("error", print, { once: true });
+      window.setTimeout(print, 3000);
+    } else window.setTimeout(print, 150);
   };
 
   const title = isReports
@@ -594,7 +622,14 @@ export default function ExpenseManagement() {
                 <p className="font-medium text-foreground">{pettyCashView.purpose || "—"}</p>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => handlePrintPettyCash(pettyCashView)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+                >
+                  <Printer className="h-4 w-4" />
+                  طباعة سند القبض
+                </button>
                 <button
                   onClick={() => handleEditPettyCash(pettyCashView)}
                   className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
@@ -822,12 +857,21 @@ function PettyCashForm({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">عملة الدفع</label>
+            <label className="mb-1 block text-xs text-muted-foreground">استلمه</label>
             <input
               value={form.receivedBy}
               onChange={(e) => setForm({ ...form, receivedBy: e.target.value })}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              placeholder="مطلوب"
+              placeholder="اسم المستلم"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">عملة السند</label>
+            <input
+              value="ريال سعودي (SAR)"
+              readOnly
+              className="w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-sm font-semibold"
             />
           </div>
 
@@ -892,15 +936,15 @@ function PettyCashForm({
       <section className="space-y-2 border-t border-border pt-4 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">إضافة لرصيد العميل</span>
-          <span className="font-medium">{amountValue.toFixed(2)}</span>
+          <span className="font-medium">{amountValue.toFixed(2)} ريال</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">المبلغ المدفوع</span>
-          <span className="font-medium">{amountValue.toFixed(2)}</span>
+          <span className="font-medium">{amountValue.toFixed(2)} ريال</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-foreground font-semibold">المتبقي</span>
-          <span className="font-semibold">0.00</span>
+          <span className="font-semibold">0.00 ريال</span>
         </div>
       </section>
 

@@ -21,6 +21,58 @@ const crudPermissions = (prefix: string, item: string): Permission[] => [
 ];
 
 const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
+  "الوصول للأقسام": [
+    {
+      title: "الأقسام الرئيسية للنظام",
+      permissions: [
+        { key: "module.sales", label: "المبيعات" },
+        { key: "module.purchases", label: "المشتريات" },
+        { key: "module.hr", label: "الموارد البشرية" },
+        { key: "module.crm", label: "العملاء والموردين" },
+        { key: "module.accounting", label: "المحاسبة والمالية" },
+        { key: "module.users", label: "المستخدمين والصلاحيات" },
+        { key: "module.ai", label: "الذكاء الاصطناعي" },
+        { key: "module.settings", label: "الإعدادات" },
+        { key: "module.expenses", label: "المصروفات" },
+        { key: "module.inventory", label: "المستودعات والمخازن" },
+      ],
+    },
+    {
+      title: "أقسام الموارد البشرية",
+      permissions: [
+        { key: "hr.employees", label: "الموظفون" },
+        { key: "hr.attendance", label: "الحضور والانصراف" },
+        { key: "hr.payroll", label: "الرواتب" },
+        { key: "hr.leaves", label: "الإجازات" },
+        { key: "hr.penalties", label: "المساءلات والإنذارات" },
+        { key: "hr.reports", label: "التقارير" },
+        { key: "hr.termination", label: "إنهاء الخدمة" },
+        { key: "hr.settings", label: "إعدادات الموارد البشرية" },
+        { key: "hr.permissions", label: "الأدوار والصلاحيات" },
+        { key: "hr.org", label: "الهيكل التنظيمي" },
+      ],
+    },
+    {
+      title: "أقسام المبيعات",
+      permissions: [
+        { key: "sales.quotations", label: "عروض الأسعار" },
+        { key: "sales.orders", label: "أوامر البيع" },
+        { key: "sales.invoices", label: "الفواتير" },
+        { key: "sales.returns", label: "مرتجعات المبيعات" },
+        { key: "sales.reports", label: "تقارير المبيعات" },
+      ],
+    },
+    {
+      title: "أقسام المشتريات",
+      permissions: [
+        { key: "purchases.requests", label: "طلبات الشراء" },
+        { key: "purchases.orders", label: "أوامر الشراء" },
+        { key: "purchases.invoices", label: "فواتير الموردين" },
+        { key: "purchases.receipts", label: "استلام البضاعة" },
+        { key: "purchases.returns", label: "مرتجعات المشتريات" },
+      ],
+    },
+  ],
   "قائمة الموظفين": [
     {
       title: "نطاق عرض الموظفين",
@@ -173,7 +225,20 @@ export default function HRPermissionsAddRole() {
 
           <div className="space-y-5">
             <div className="flex gap-2 border-b border-gray-200 pb-2 overflow-x-auto whitespace-nowrap">
-              {PERMISSION_TABS.map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={cnTab(activeTab === tab)}>{tab}</button>)}
+              {PERMISSION_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={tab === "الوصول للأقسام"
+                    ? `px-4 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === tab ? "bg-emerald-600 text-white" : "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"}`
+                    : cnTab(activeTab === tab)
+                  }
+                >
+                  {tab === "الوصول للأقسام" && <span className="text-base">🏢</span>}
+                  {tab}
+                </button>
+              ))}
             </div>
 
             <div className="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-3">
@@ -183,13 +248,25 @@ export default function HRPermissionsAddRole() {
 
             {PERMISSION_GROUPS[activeTab].map((group) => (
               <div key={group.title} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-800">{group.title}</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-0 p-4">
+                <div className={`px-4 py-3 border-b font-bold ${activeTab === "الوصول للأقسام" ? "bg-emerald-50 text-emerald-800" : "bg-gray-50 text-gray-800"}`}>
+                  {group.title}
+                </div>
+                <div className={`p-4 ${activeTab === "الوصول للأقسام" ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-0"}`}>
                   {group.permissions.map((permission) => (
-                    <div key={permission.key} className="flex items-center justify-between border-b border-gray-100 py-3 gap-4">
-                      <Label htmlFor={permission.key} className="text-sm cursor-pointer">{permission.label}</Label>
-                      <Checkbox id={permission.key} checked={permissions[permission.key] ?? false} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
-                    </div>
+                    activeTab === "الوصول للأقسام" ? (
+                      <label key={permission.key} htmlFor={permission.key} className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${permissions[permission.key] ? "border-emerald-500 bg-emerald-50" : "border-gray-200 bg-gray-50 hover:border-gray-300"}`}>
+                        <span className="font-medium text-sm text-gray-800">{permission.label}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold ${permissions[permission.key] ? "text-emerald-600" : "text-gray-400"}`}>{permissions[permission.key] ? "مفعّل" : "معطّل"}</span>
+                          <Checkbox id={permission.key} checked={permissions[permission.key] ?? false} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
+                        </div>
+                      </label>
+                    ) : (
+                      <div key={permission.key} className="flex items-center justify-between border-b border-gray-100 py-3 gap-4">
+                        <Label htmlFor={permission.key} className="text-sm cursor-pointer">{permission.label}</Label>
+                        <Checkbox id={permission.key} checked={permissions[permission.key] ?? false} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
+                      </div>
+                    )
                   ))}
                 </div>
               </div>

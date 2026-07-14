@@ -559,111 +559,50 @@ export default function EmployeePortal() {
         {/* Mobile Content */}
         <div className="pb-32">
           {currentPage === "home" && (
-            <div className="p-4 space-y-4 pb-24">
-              {/* Work Hours Report */}
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <h2 className="text-lg font-bold text-gray-900 mb-5 text-center">تقرير ساعات العمل لهذا الشهر</h2>
-
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-blue-50 rounded-xl p-4 text-center">
-                    <div className="text-blue-600 font-bold text-lg font-mono">198:00:00</div>
-                    <p className="text-xs text-gray-600 mt-1">الساعات الواجبة</p>
-                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
+            <div className="pb-28">
+              {/* ── Attendance banner ── */}
+              <div className="bg-gradient-to-l from-[#004e89] to-[#0066b3] px-4 pt-4 pb-6">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="text-center bg-white/10 rounded-xl p-3">
+                    <p className="text-white/70 text-[10px] mb-1">تسجيل الحضور</p>
+                    <p className="font-mono text-sm font-bold text-white">{checkInTime ? checkInTime.split(" ")[0] : "--:--:--"}</p>
+                    <p className="font-mono text-[10px] text-white/60">{checkInTime ? checkInTime.split(" ")[1] : "لم يسجل"}</p>
                   </div>
-                  <div className="bg-red-50 rounded-xl p-4 text-center">
-                    <div className="text-red-500 font-bold text-lg font-mono">198:00:00</div>
-                    <p className="text-xs text-gray-600 mt-1">ساعات الغياب</p>
-                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
-                  </div>
-                  <div className="bg-orange-50 rounded-xl p-4 text-center">
-                    <div className="text-orange-500 font-bold text-lg font-mono">00:00:00</div>
-                    <p className="text-xs text-gray-600 mt-1">الساعات الإضافية</p>
-                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
-                  </div>
-                  <div className="bg-green-50 rounded-xl p-4 text-center">
-                    <div className="text-green-600 font-bold text-lg font-mono">00:00:00</div>
-                    <p className="text-xs text-gray-600 mt-1">الحضور لهذا الشهر</p>
-                    <CheckCircle className="h-4 w-4 text-green-500 mx-auto mt-2" />
+                  <div className="text-center bg-white/10 rounded-xl p-3">
+                    <p className="text-white/70 text-[10px] mb-1">تسجيل الانصراف</p>
+                    <p className="font-mono text-sm font-bold text-white">{checkOutTime ? checkOutTime.split(" ")[0] : "--:--:--"}</p>
+                    <p className="font-mono text-[10px] text-white/60">{checkOutTime ? checkOutTime.split(" ")[1] : "لم يسجل"}</p>
                   </div>
                 </div>
-              </div>
-
-              {/* Attendance Registration */}
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                    <MapPin className="h-4 w-4 text-orange-500" />
-                  </div>
-                  <span className="font-semibold text-gray-900">تم تسجيل الحضور</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="text-center bg-green-50 p-3 rounded-xl">
-                    <p className="text-xs text-gray-500 mb-1">تسجيل الحضور</p>
-                    <p className="font-mono text-sm font-bold text-gray-900">
-                      {checkInTime ? checkInTime.split(" ")[0] : "--:--:--"}
-                    </p>
-                    <p className="font-mono text-xs text-gray-500">
-                      {checkInTime ? checkInTime.split(" ")[1] : "لم يسجل بعد"}
-                    </p>
-                  </div>
-                  <div className="text-center bg-red-50 p-3 rounded-xl">
-                    <p className="text-xs text-gray-500 mb-1">تسجيل الانصراف</p>
-                    <p className="font-mono text-sm font-bold text-gray-900">
-                      {checkOutTime ? checkOutTime.split(" ")[0] : "--:--:--"}
-                    </p>
-                    <p className="font-mono text-xs text-gray-500">
-                      {checkOutTime ? checkOutTime.split(" ")[1] : "لم يسجل بعد"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Attendance Buttons */}
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    onClick={() => openCamera("out")}
-                    variant="outline"
-                    className="w-full text-gray-600 rounded-xl gap-2"
-                  >
-                    <ScanFace className="h-4 w-4" />
-                    تسجيل الانصراف
+                <div className="grid grid-cols-2 gap-2">
+                  <Button onClick={() => openCamera("out")} variant="outline" className="w-full bg-white/10 border-white/30 text-white rounded-xl gap-1 text-xs h-9">
+                    <ScanFace className="h-3.5 w-3.5" /> تسجيل الانصراف
                   </Button>
-                  <Button
-                    onClick={() => openCamera("in")}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2"
-                  >
-                    <ScanFace className="h-4 w-4" />
-                    تسجيل الحضور
+                  <Button onClick={() => openCamera("in")} className="w-full bg-white text-[#004e89] font-bold rounded-xl gap-1 text-xs h-9 hover:bg-white/90">
+                    <ScanFace className="h-3.5 w-3.5" /> تسجيل الحضور
                   </Button>
                 </div>
               </div>
 
-              {/* Quick Manager Link */}
-              <button onClick={() => setCurrentPage("manager-requests")} className="w-full bg-[#004e89] text-white rounded-2xl p-4 flex items-center justify-between shadow-sm">
-                <ChevronLeft className="h-5 w-5" />
-                <div className="text-right">
-                  <p className="font-bold text-sm">طلبات تنتظر موافقتك</p>
-                  <p className="text-xs text-blue-200 mt-0.5">إجازات، رواتب، وغيرها</p>
+              {/* ── Services grid ── all services immediately visible */}
+              <div className="p-4">
+                <h2 className="font-bold text-gray-900 text-base mb-3">الخدمات والخيارات</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {MORE_OPTIONS.filter((o) => !o.logout).map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => handleMoreOption(option)}
+                      className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-start gap-3 hover:shadow-md transition text-right"
+                    >
+                      <span className="text-2xl flex-shrink-0">{option.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 text-xs truncate">{option.name}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{option.desc}</p>
+                      </div>
+                      <ChevronLeft className="h-4 w-4 text-gray-300 flex-shrink-0 mt-0.5" />
+                    </button>
+                  ))}
                 </div>
-                <FileText className="h-6 w-6 text-white/80" />
-              </button>
-
-              {/* Services Grid */}
-              <h2 className="font-bold text-gray-900 text-base">الخدمات والخيارات</h2>
-              <div className="grid grid-cols-2 gap-3">
-                {MORE_OPTIONS.filter((o) => !o.logout).map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => handleMoreOption(option)}
-                    className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-start gap-3 hover:shadow-md transition text-right"
-                  >
-                    <span className="text-2xl flex-shrink-0">{option.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 text-xs truncate">{option.name}</p>
-                      <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{option.desc}</p>
-                    </div>
-                  </button>
-                ))}
               </div>
             </div>
           )}
@@ -1004,50 +943,24 @@ export default function EmployeePortal() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
-              <div className="grid grid-cols-4 gap-4 mb-8">
-                <button onClick={() => setCurrentPage("manager-requests")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
-                  <FileText className="h-8 w-8 text-blue-500 mx-auto mb-3" />
-                  <h3 className="font-semibold text-gray-900 mb-1">الطلبات</h3>
-                  <p className="text-sm text-gray-600">موافقة ورفض الطلبات</p>
-                </button>
-                <button onClick={() => setCurrentPage("send-request")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
-                  <Plus className="h-8 w-8 text-green-500 mx-auto mb-3" />
-                  <h3 className="font-semibold text-gray-900 mb-1">طلب جديد</h3>
-                  <p className="text-sm text-gray-600">إرسال طلب جديد</p>
-                </button>
-                <button onClick={() => setCurrentPage("employees")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
-                  <Briefcase className="h-8 w-8 text-purple-500 mx-auto mb-3" />
-                  <h3 className="font-semibold text-gray-900 mb-1">الموظفون</h3>
-                  <p className="text-sm text-gray-600">قائمة الموظفين</p>
-                </button>
-                <button onClick={() => setCurrentPage("profile")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
-                  <User className="h-8 w-8 text-orange-500 mx-auto mb-3" />
-                  <h3 className="font-semibold text-gray-900 mb-1">ملفي</h3>
-                  <p className="text-sm text-gray-600">بيانات الملف الشخصي</p>
-                </button>
-              </div>
-
-              {/* Employee Info */}
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">معلوماتك</h3>
-                <div className="grid grid-cols-3 gap-6">
-                  <div className="border-r border-gray-200 pr-6">
-                    <p className="text-sm text-gray-600 mb-1">رقم الموظف</p>
-                    <p className="font-mono text-lg text-gray-900">{user.empId}</p>
-                  </div>
-                  <div className="border-r border-gray-200 pr-6">
-                    <p className="text-sm text-gray-600 mb-1">البريد الإلكتروني</p>
-                    <p className="text-lg text-gray-900">{user.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">الدور الوظيفي</p>
-                    <p className="text-lg text-gray-900 font-medium">
-                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm">
-                        {user.role}
-                      </span>
-                    </p>
-                  </div>
+              {/* Services Grid — all services directly on home */}
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 mb-5">الخدمات والخيارات</h2>
+                <div className="grid grid-cols-4 gap-4">
+                  {MORE_OPTIONS.filter((o) => !o.logout).map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => handleMoreOption(option)}
+                      className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition text-right flex items-start gap-3"
+                    >
+                      <span className="text-2xl flex-shrink-0">{option.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm">{option.name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{option.desc}</p>
+                      </div>
+                      <ChevronLeft className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                    </button>
+                  ))}
                 </div>
               </div>
             </>

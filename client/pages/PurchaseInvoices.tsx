@@ -28,6 +28,9 @@ import {
   ActionBtn,
 } from "@/components/SalesPageUI";
 
+const COMPANY_LOGO_URL =
+  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200";
+
 /* ── Types ── */
 type InvoiceItem = {
   id: number;
@@ -137,6 +140,13 @@ export default function PurchaseInvoices() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    const escapeHtml = (value: unknown) => String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
     const items = invoice.items.length > 0
       ? invoice.items
       : [{ id: 1, description: "-", unit: "", quantity: 1, unitPrice: parseCurrency(invoice.total), discount: 0, taxPercent: 0 }];
@@ -149,8 +159,8 @@ export default function PurchaseInvoices() {
       const sub = qty * price - disc;
       const tax = (sub * taxPct) / 100;
       return `<tr>
-        <td>${item.description || "-"}</td>
-        <td>${item.unit || "-"}</td>
+        <td>${escapeHtml(item.description || "-")}</td>
+        <td>${escapeHtml(item.unit || "-")}</td>
         <td>${qty}</td>
         <td>${price.toFixed(2)}</td>
         <td>${disc.toFixed(2)}</td>
@@ -175,46 +185,84 @@ export default function PurchaseInvoices() {
           <title>فاتورة مشتريات ${invoice.id}</title>
           <meta charset="utf-8"/>
           <style>
-            body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#0f172a}
-            .header{display:flex;justify-content:space-between;border-bottom:2px solid #1b8c56;padding-bottom:12px;margin-bottom:16px}
-            .title{font-size:24px;font-weight:700;color:#1b8c56}
-            .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-            .card{border:1px solid #e2e8f0;padding:10px;border-radius:6px}
-            .label{color:#64748b;font-size:12px}
-            .value{font-weight:700;font-size:14px;margin-top:2px}
-            table{width:100%;border-collapse:collapse;font-size:13px}
-            th,td{border:1px solid #e2e8f0;padding:8px;text-align:right}
-            th{background:#f8fafc;font-weight:600}
-            .totals{text-align:left;margin-top:16px}
+            @page{size:A4 portrait;margin:10mm}
+            *{box-sizing:border-box}
+            html,body{width:210mm;min-height:297mm}
+            body{font-family:Arial,Tahoma,sans-serif;margin:0;color:#111827;background:#fff}
+            .sheet{width:190mm;max-width:190mm;margin:0 auto;border:1px solid #d1d5db;padding:10px 12px}
+            .company-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+            .company-ar,.company-en{font-size:10.5px;line-height:1.55}
+            .company-ar{text-align:right}.company-en{text-align:left;direction:ltr}
+            .company-logo{width:120px;height:72px;object-fit:contain;display:block;margin:0 auto}
+            .title{text-align:center;font-size:23px;font-weight:700;margin:8px 0 10px}
+            .meta{border:1px solid #d1d5db;margin-bottom:10px}
+            .grid{display:grid;grid-template-columns:1fr 1fr}
+            .card{padding:6px 8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:8px;font-size:11px}
+            .card:nth-child(odd){border-left:1px solid #e5e7eb}
+            .label{color:#4b5563}.value{font-weight:700;text-align:left}
+            table{width:100%;border-collapse:collapse;font-size:11px}
+            th,td{border:1px solid #d1d5db;padding:6px 4px;text-align:center;vertical-align:middle}
+            th{background:#f3f4f6;font-weight:700}
+            .bottom{display:grid;grid-template-columns:1fr 280px;gap:14px;margin-top:12px;align-items:start}
+            .notes{font-size:11px;line-height:1.7;border:1px solid #e5e7eb;padding:8px;min-height:78px}
+            .totals{font-size:12px;border-top:1px solid #d1d5db;padding-top:6px}
+            .totals-row{display:flex;justify-content:space-between;margin-bottom:7px}
+            .final{font-size:14px;font-weight:700;border-top:1px solid #d1d5db;padding-top:7px}
+            .footer{margin-top:14px;padding-top:8px;border-top:1px solid #d1d5db;text-align:center;color:#6b7280;font-size:9px}
+            @media print{html,body{width:210mm}.sheet{width:190mm;max-width:190mm}}
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="title">فاتورة مشتريات</div>
-            <div>رقم الفاتورة: <strong>${invoice.id}</strong></div>
-          </div>
-          <div class="grid">
-            <div class="card"><div class="label">المورد</div><div class="value">${invoice.vendor || "-"}</div></div>
-            <div class="card"><div class="label">تاريخ الفاتورة</div><div class="value">${invoice.date}</div></div>
-            <div class="card"><div class="label">تاريخ الاستحقاق</div><div class="value">${invoice.dueDate || "-"}</div></div>
-            <div class="card"><div class="label">رقم أمر الشراء</div><div class="value">${invoice.poNumber || "-"}</div></div>
-            <div class="card"><div class="label">الإجمالي</div><div class="value">${invoice.total} ريال</div></div>
-            <div class="card"><div class="label">الحالة</div><div class="value">${invoice.status}</div></div>
-          </div>
-          <table>
-            <thead><tr><th>وصف البند</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>الخصم</th><th>الضريبة</th><th>الإجمالي</th></tr></thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-          <div class="totals">
-            <p><strong>الإجمالي الكلي: ${total.toFixed(2)} ريال</strong></p>
-            ${invoice.notes ? `<p><strong>ملاحظات:</strong> ${invoice.notes}</p>` : ""}
-          </div>
+          <main class="sheet">
+            <div class="company-row">
+              <div class="company-ar"><strong>شركة لاكجري العياف</strong><br>8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة<br>الرقم الضريبي 314559705300003<br>السجل التجاري 7053358979</div>
+              <img src="${COMPANY_LOGO_URL}" class="company-logo" alt="شعار الشركة">
+              <div class="company-en"><strong>Luxury Al Ayaf Company</strong><br>8529 Sheikh Muhammad Ibn Jabeer, Mecca, KSA<br>VAT No. 314559705300003<br>CR No. 7053358979</div>
+            </div>
+            <div class="title">فاتورة مشتريات | Purchase Invoice</div>
+            <section class="meta"><div class="grid">
+              <div class="card"><span class="label">المورد / Vendor</span><span class="value">${escapeHtml(invoice.vendor || "-")}</span></div>
+              <div class="card"><span class="label">رقم الفاتورة / Invoice No.</span><span class="value">${escapeHtml(invoice.id)}</span></div>
+              <div class="card"><span class="label">تاريخ الفاتورة</span><span class="value">${escapeHtml(invoice.date || "-")}</span></div>
+              <div class="card"><span class="label">تاريخ الاستحقاق</span><span class="value">${escapeHtml(invoice.dueDate || "-")}</span></div>
+              <div class="card"><span class="label">رقم أمر الشراء</span><span class="value">${escapeHtml(invoice.poNumber || "-")}</span></div>
+              <div class="card"><span class="label">رقم المرجع</span><span class="value">${escapeHtml(invoice.referenceNo || "-")}</span></div>
+              <div class="card"><span class="label">مركز التكلفة</span><span class="value">${escapeHtml(invoice.costCenterName || invoice.costCenter || "-")}</span></div>
+              <div class="card"><span class="label">الحالة / Status</span><span class="value">${escapeHtml(invoice.status)}</span></div>
+            </div></section>
+            <table>
+              <thead><tr><th>وصف البند<br>Description</th><th>الوحدة<br>Unit</th><th>الكمية<br>Qty</th><th>سعر الوحدة<br>Price</th><th>الخصم<br>Discount</th><th>الضريبة<br>VAT</th><th>الإجمالي<br>Total</th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+            <div class="bottom">
+              <div class="notes"><strong>ملاحظات / Notes</strong><br>${escapeHtml(invoice.notes || "لا توجد ملاحظات")}</div>
+              <div class="totals">
+                <div class="totals-row"><span>الإجمالي الكلي</span><strong>${total.toFixed(2)} SAR</strong></div>
+                <div class="totals-row"><span>المدفوع</span><strong>${escapeHtml(invoice.paid)} SAR</strong></div>
+                <div class="totals-row final"><span>المتبقي</span><strong>${escapeHtml(invoice.remaining)} SAR</strong></div>
+              </div>
+            </div>
+            <div class="footer">شركة لاكجري العياف | Luxury Al Ayaf Company</div>
+          </main>
         </body>
       </html>
     `);
     printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    let printed = false;
+    const triggerPrint = () => {
+      if (printed) return;
+      printed = true;
+      printWindow.focus();
+      printWindow.print();
+    };
+    const logo = printWindow.document.querySelector(".company-logo") as HTMLImageElement | null;
+    if (logo && !logo.complete) {
+      logo.addEventListener("load", triggerPrint, { once: true });
+      logo.addEventListener("error", triggerPrint, { once: true });
+      window.setTimeout(triggerPrint, 3000);
+    } else {
+      window.setTimeout(triggerPrint, 150);
+    }
   };
 
   return (
@@ -436,6 +484,23 @@ function InvoiceDetails({
       </div>
 
       <div className="p-4 space-y-6">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-5">
+            <div className="text-right text-xs leading-6 text-slate-600">
+              <div className="text-base font-bold text-slate-900">شركة لاكجري العياف</div>
+              <div>8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة</div>
+              <div>الرقم الضريبي 314559705300003</div>
+            </div>
+            <img src={COMPANY_LOGO_URL} alt="شعار شركة لاكجري العياف" className="h-24 w-36 object-contain mx-auto" />
+            <div className="text-left text-xs leading-6 text-slate-600" dir="ltr">
+              <div className="text-base font-bold text-slate-900">Luxury Al Ayaf Company</div>
+              <div>Mecca, Kingdom of Saudi Arabia</div>
+              <div>VAT No. 314559705300003</div>
+            </div>
+          </div>
+          <h2 className="mt-3 text-center text-2xl font-bold text-slate-900">فاتورة مشتريات | Purchase Invoice</h2>
+        </div>
+
         {/* Header info */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-amber-400 px-4 py-2 text-right font-semibold text-slate-800">

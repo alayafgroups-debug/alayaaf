@@ -28,6 +28,9 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
+const COMPANY_LOGO_URL =
+  "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200";
+
 const statusColors: Record<string, string> = {
   "مدفوعة بالكامل": "bg-green-600 text-white",
   "مدفوعة جزئياً": "bg-yellow-500 text-white",
@@ -207,7 +210,7 @@ export default function SalesInvoices() {
             .company-ar, .company-en { font-size: 11px; line-height: 1.5; }
             .company-ar { text-align: right; }
             .company-en { text-align: left; }
-            .logo-box { width: 120px; height: 58px; border: 1px solid #9ca3af; background: #1f2937; color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; text-align: center; margin: 0 auto; }
+            .company-logo { width: 120px; height: 72px; object-fit: contain; display: block; margin: 0 auto; }
             .title { text-align: center; font-size: 24px; font-weight: 700; margin: 8px 0 10px; }
             .meta { border: 1px solid #d1d5db; font-size: 12px; }
             .meta-grid { display: grid; grid-template-columns: 1fr 1fr; }
@@ -241,7 +244,7 @@ export default function SalesInvoices() {
                   رقم التسجيل الضريبي 314559705300003<br />
                   رقم السجل التجاري 7053358979
                 </div>
-                <div class="logo-box">شعار<br/>شركة لاكجري العياف</div>
+                <img src="${COMPANY_LOGO_URL}" class="company-logo" alt="شعار الشركة" />
                 <div class="company-en">
                   <strong>Luxury Al Ayaf company</strong><br />
                   8529, Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca, 24351, Kingdom of Saudi Arabia<br />
@@ -571,9 +574,7 @@ function InvoiceDetails({
                 <p className="text-sm text-slate-600">رقم السجل التجاري 7053358979</p>
               </div>
               <div className="flex items-center justify-center">
-                <div className="h-24 w-32 border border-slate-200 rounded bg-slate-50 flex items-center justify-center text-xs text-slate-500">
-                  شعار الشركة
-                </div>
+                <img src={COMPANY_LOGO_URL} alt="شعار الشركة" className="h-24 w-32 object-contain" />
               </div>
               <div className="space-y-2 text-left md:text-right">
                 <h2 className="text-lg text-sm font-bold text-foreground">Luxury Al Ayaf Company</h2>

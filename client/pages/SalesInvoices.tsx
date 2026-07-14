@@ -201,10 +201,12 @@ export default function SalesInvoices() {
           <meta charset="utf-8" />
           <title>فاتورة ${escapeHtml(invoice.id)}</title>
           <style>
-            @page { size: A4; margin: 10mm; }
+            @page { size: A4 portrait; margin: 10mm; }
             * { box-sizing: border-box; }
+            html, body { width: 210mm; min-height: 297mm; }
             body { margin: 0; font-family: Arial, sans-serif; color: #111827; }
-            .sheet { width: 190mm; margin: 0 auto; background: #fff; }
+            .sheet { width: 190mm; max-width: 190mm; margin: 0 auto; background: #fff; }
+            @media print { html, body { width: 210mm; } .sheet { width: 190mm; max-width: 190mm; } }
             .head { border: 1px solid #d1d5db; padding: 10px 12px; }
             .company-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
             .company-ar, .company-en { font-size: 11px; line-height: 1.5; }
@@ -320,8 +322,22 @@ export default function SalesInvoices() {
     `);
 
     printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+
+    let hasPrinted = false;
+    const triggerPrint = () => {
+      if (hasPrinted) return;
+      hasPrinted = true;
+      printWindow.focus();
+      printWindow.print();
+    };
+    const logo = printWindow.document.querySelector(".company-logo") as HTMLImageElement | null;
+    if (logo && !logo.complete) {
+      logo.addEventListener("load", triggerPrint, { once: true });
+      logo.addEventListener("error", triggerPrint, { once: true });
+      window.setTimeout(triggerPrint, 3000);
+    } else {
+      window.setTimeout(triggerPrint, 150);
+    }
   };
 
   return (

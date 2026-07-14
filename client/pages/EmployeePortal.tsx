@@ -29,6 +29,12 @@ import { supabase } from "@/lib/supabaseClient";
 import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
 import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
+import EmployeeListPage from "@/components/portal/EmployeeListPage";
+import ProfilePage from "@/components/portal/ProfilePage";
+import PayrollPage from "@/components/portal/PayrollPage";
+import PenaltiesPage from "@/components/portal/PenaltiesPage";
+import ManagerRequestsPage from "@/components/portal/ManagerRequestsPage";
+import AttendanceReportPage from "@/components/portal/AttendanceReportPage";
 
 interface UserSession {
   id: string;
@@ -48,7 +54,7 @@ interface EmployeeRequest {
   adminNote: string;
 }
 
-type AppPage = "home" | "requests" | "send-request" | "more";
+type AppPage = "home" | "requests" | "send-request" | "more" | "employees" | "profile" | "payroll" | "payslip" | "penalties" | "schedule" | "my-reports" | "reports" | "manager-requests";
 
 // Map Arabic request name → schema ID used in DynamicRequestForm / LeaveRequestForm
 const REQUEST_NAME_TO_SCHEMA: Record<string, string> = {
@@ -401,11 +407,20 @@ export default function EmployeePortal() {
   };
 
   const handleMoreOption = (option: typeof MORE_OPTIONS[0]) => {
-    if (option.logout) {
-      handleLogout();
-    } else {
-      toast.info(`سيتم فتح ${option.name}`);
-    }
+    if (option.logout) { handleLogout(); return; }
+    const pageMap: Record<string, AppPage> = {
+      "الملف الشخصي": "profile",
+      "قائمة الموظفين": "employees",
+      "حساب الراتب": "payroll",
+      "قسيمة الراتب": "payslip",
+      "المساعلات والإنذارات": "penalties",
+      "دوامي": "schedule",
+      "تقاريري": "my-reports",
+      "التقارير": "reports",
+    };
+    const target = pageMap[option.name];
+    if (target) setCurrentPage(target);
+    else toast.info(`سيتم فتح ${option.name} قريباً`);
   };
 
   // Fetch employee permissions from DB to filter request types
@@ -544,7 +559,7 @@ export default function EmployeePortal() {
         {/* Mobile Content */}
         <div className="pb-32">
           {currentPage === "home" && (
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 pb-24">
               {/* Work Hours Report */}
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-gray-900 mb-5 text-center">تقرير ساعات العمل لهذا الشهر</h2>
@@ -621,6 +636,34 @@ export default function EmployeePortal() {
                     تسجيل الحضور
                   </Button>
                 </div>
+              </div>
+
+              {/* Quick Manager Link */}
+              <button onClick={() => setCurrentPage("manager-requests")} className="w-full bg-[#004e89] text-white rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                <ChevronLeft className="h-5 w-5" />
+                <div className="text-right">
+                  <p className="font-bold text-sm">طلبات تنتظر موافقتك</p>
+                  <p className="text-xs text-blue-200 mt-0.5">إجازات، رواتب، وغيرها</p>
+                </div>
+                <FileText className="h-6 w-6 text-white/80" />
+              </button>
+
+              {/* Services Grid */}
+              <h2 className="font-bold text-gray-900 text-base">الخدمات والخيارات</h2>
+              <div className="grid grid-cols-2 gap-3">
+                {MORE_OPTIONS.filter((o) => !o.logout).map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => handleMoreOption(option)}
+                    className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-start gap-3 hover:shadow-md transition text-right"
+                  >
+                    <span className="text-2xl flex-shrink-0">{option.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-xs truncate">{option.name}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{option.desc}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -722,7 +765,7 @@ export default function EmployeePortal() {
           )}
 
           {currentPage === "more" && (
-            <div className="p-4">
+            <div className="p-4 pb-24">
               {MORE_OPTIONS.map((option) => (
                 <button
                   key={option.id}
@@ -737,6 +780,38 @@ export default function EmployeePortal() {
                   <ChevronLeft className="h-5 w-5 text-gray-400" />
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* ===== SUB-PAGES ===== */}
+          {currentPage === "employees" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <EmployeeListPage onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "profile" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <ProfilePage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {(currentPage === "payroll" || currentPage === "payslip") && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <PayrollPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "penalties" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "schedule" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <AttendanceReportPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "manager-requests" && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <ManagerRequestsPage onBack={() => setCurrentPage("home")} />
             </div>
           )}
         </div>
@@ -843,9 +918,15 @@ export default function EmployeePortal() {
           {currentPage === "home" && (
             <>
               {/* Hero Section */}
-              <div className="bg-gradient-to-r from-[#004e89] to-[#003865] text-white rounded-xl p-8 mb-8">
-                <h2 className="text-3xl font-bold mb-2">لوحة تحكم الموظف</h2>
-                <p className="text-blue-100">مرحباً بك في نظام إدارة الموارد البشرية</p>
+              <div className="bg-gradient-to-r from-[#004e89] to-[#003865] text-white rounded-xl p-8 mb-8 flex items-center justify-between">
+                <div>
+                  <h2 className="text-3xl font-bold mb-2">لوحة تحكم المدير</h2>
+                  <p className="text-blue-100">مرحباً بك في نظام إدارة الموارد البشرية</p>
+                </div>
+                <button onClick={() => setCurrentPage("manager-requests")} className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-5 py-3 flex items-center gap-3 transition">
+                  <FileText className="h-5 w-5" />
+                  <div className="text-right"><p className="font-bold text-sm">الطلبات المعلقة</p><p className="text-xs text-blue-200">تنتظر موافقتك</p></div>
+                </button>
               </div>
 
               {/* Work Hours Summary */}
@@ -925,34 +1006,22 @@ export default function EmployeePortal() {
 
               {/* Quick Actions */}
               <div className="grid grid-cols-4 gap-4 mb-8">
-                <button
-                  onClick={() => setCurrentPage("requests")}
-                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center"
-                >
+                <button onClick={() => setCurrentPage("manager-requests")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
                   <FileText className="h-8 w-8 text-blue-500 mx-auto mb-3" />
                   <h3 className="font-semibold text-gray-900 mb-1">الطلبات</h3>
-                  <p className="text-sm text-gray-600">عرض الطلبات الواردة والمرسلة</p>
+                  <p className="text-sm text-gray-600">موافقة ورفض الطلبات</p>
                 </button>
-
-                <button
-                  onClick={() => setCurrentPage("send-request")}
-                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center"
-                >
+                <button onClick={() => setCurrentPage("send-request")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
                   <Plus className="h-8 w-8 text-green-500 mx-auto mb-3" />
                   <h3 className="font-semibold text-gray-900 mb-1">طلب جديد</h3>
                   <p className="text-sm text-gray-600">إرسال طلب جديد</p>
                 </button>
-
-                <button
-                  onClick={() => setCurrentPage("more")}
-                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center"
-                >
+                <button onClick={() => setCurrentPage("employees")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
                   <Briefcase className="h-8 w-8 text-purple-500 mx-auto mb-3" />
-                  <h3 className="font-semibold text-gray-900 mb-1">الخدمات</h3>
-                  <p className="text-sm text-gray-600">جميع الخدمات والخيارات</p>
+                  <h3 className="font-semibold text-gray-900 mb-1">الموظفون</h3>
+                  <p className="text-sm text-gray-600">قائمة الموظفين</p>
                 </button>
-
-                <button className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-center">
+                <button onClick={() => setCurrentPage("profile")} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-center border border-gray-100">
                   <User className="h-8 w-8 text-orange-500 mx-auto mb-3" />
                   <h3 className="font-semibold text-gray-900 mb-1">ملفي</h3>
                   <p className="text-sm text-gray-600">بيانات الملف الشخصي</p>
@@ -1112,18 +1181,18 @@ export default function EmployeePortal() {
           {currentPage === "more" && (
             <>
               <h2 className="text-3xl font-bold text-gray-900 mb-8">الخدمات والخيارات</h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 {MORE_OPTIONS.map((option) => (
                   <button
                     key={option.id}
                     onClick={() => handleMoreOption(option)}
-                    className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition text-right border border-gray-200"
+                    className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-right border border-gray-100"
                   >
                     <div className="flex items-start gap-4">
                       <span className="text-3xl">{option.icon}</span>
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 mb-1">{option.name}</h3>
-                        <p className="text-sm text-gray-600">{option.desc}</p>
+                        <p className="text-sm text-gray-500">{option.desc}</p>
                       </div>
                       <ChevronLeft className="h-5 w-5 text-gray-400 flex-shrink-0" />
                     </div>
@@ -1131,6 +1200,37 @@ export default function EmployeePortal() {
                 ))}
               </div>
             </>
+          )}
+
+          {currentPage === "employees" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "75vh" }}>
+              <EmployeeListPage onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "profile" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <ProfilePage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {(currentPage === "payroll" || currentPage === "payslip") && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <PayrollPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "penalties" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "schedule" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <AttendanceReportPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "manager-requests" && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "85vh" }}>
+              <ManagerRequestsPage onBack={() => setCurrentPage("home")} />
+            </div>
           )}
         </main>
       </div>

@@ -55,7 +55,7 @@ const navSubMenus: Record<string, { label: string; href: string; isHeader?: bool
     { label: "فواتير المبيعات", href: "/sales/invoices" },
     { label: "إشعار دائن", href: "/sales/credit-note" },
     { label: "إشعار تسليم", href: "/sales/delivery-note" },
-    { label: "سندات العملاء (قبض)", href: "/expenses/petty-cash" },
+    { label: "سندات القبض والصرف", href: "/expenses/petty-cash" },
   ],
   "/purchases": [
     { label: "فواتير المشتريات", href: "/purchases/invoices" },

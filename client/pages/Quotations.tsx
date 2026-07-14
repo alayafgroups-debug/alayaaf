@@ -797,7 +797,7 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
           <div className="flex justify-between font-bold"><span>{formatMoney(totals.total)}</span><span>المستحق (﷼)</span></div>
         </div>
 
-        <div className="pt-3 text-lg leading-8 flex items-start justify-between gap-6">
+        <div className="pt-3 text-lg leading-8">
           <div>
             <h4 className="font-bold">ملاحظة</h4>
             <p>{quotation.notes || "-"}</p>
@@ -807,7 +807,6 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
             <p>*رقم الحساب : {COMPANY_INFO.accountNo}</p>
             <p>*رقم الايبان : {COMPANY_INFO.iban}</p>
           </div>
-          <img src={COMPANY_BARCODE_URL} alt="barcode" className="w-40 h-40 object-contain border border-slate-200 p-1" />
         </div>
       </div>
     </div>

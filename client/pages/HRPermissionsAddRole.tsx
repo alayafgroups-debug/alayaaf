@@ -1,418 +1,206 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronRight, ChevronLeft, Save, X } from "lucide-react";
+import { Loader2, Save, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
-const PERMISSION_TABS = [
-  "قائمة الموظفين",
-  "قسم التقارير",
-  "حساب الدوام",
-  "حساب الراتب",
-  "قياس الأداء",
-  "إرسال الطلبات",
-  "الطلبات الواردة",
-  "التأمينات",
-  "المساءلات والإنذارات",
-  "قسم الإعلانات",
-  "قسم السلفيات",
-  "النظام المالي",
-  "تواصل مع الإدارة",
-  "الإجازات",
-  "عمولات الموظفين",
-  "إدارة المشاريع والمهام",
-  "إدارة التدريب"
+type Permission = { key: string; label: string };
+type PermissionGroup = { title: string; permissions: Permission[] };
+
+const crudPermissions = (prefix: string, item: string): Permission[] => [
+  { key: `${prefix}.view`, label: `استعراض ${item}` },
+  { key: `${prefix}.add`, label: `إضافة ${item}` },
+  { key: `${prefix}.edit`, label: `تعديل ${item}` },
+  { key: `${prefix}.delete`, label: `حذف ${item}` },
+  { key: `${prefix}.export`, label: `تصدير ${item}` },
 ];
+
+const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
+  "قائمة الموظفين": [
+    {
+      title: "نطاق عرض الموظفين",
+      permissions: [
+        { key: "employees.scope.all", label: "استعراض جميع الموظفين" },
+        { key: "employees.scope.management", label: "استعراض موظفي الإدارة" },
+        { key: "employees.scope.branch", label: "استعراض موظفي الفرع" },
+        { key: "employees.scope.department", label: "استعراض موظفي القسم" },
+        { key: "employees.scope.direct", label: "استعراض الموظفين تحت الإدارة المباشرة" },
+      ],
+    },
+    {
+      title: "إجراءات الموظفين",
+      permissions: [
+        { key: "add_employee", label: "إضافة موظف جديد" },
+        { key: "employees.edit", label: "تعديل بيانات موظف" },
+        { key: "employees.delete", label: "حذف موظف" },
+        { key: "employees.inactive", label: "استعراض الموظفين غير الفعالين" },
+        { key: "employees.movements", label: "عرض حركات الموظفين" },
+        { key: "employees.terminate", label: "إنهاء الخدمة" },
+        { key: "employees.link_account", label: "ربط حساب الموظف" },
+        { key: "employees.financial", label: "عرض البيانات المالية" },
+        { key: "employees.financial_edit", label: "تعديل البيانات المالية" },
+        { key: "employees.attendance", label: "عرض حالة الحضور" },
+      ],
+    },
+  ],
+  "قسم التقارير": [{ title: "صلاحيات التقارير", permissions: crudPermissions("reports", "التقارير") }],
+  "حساب الدوام": [{ title: "صلاحيات الدوام", permissions: crudPermissions("attendance", "سجلات الدوام") }],
+  "حساب الراتب": [{ title: "صلاحيات الرواتب", permissions: [...crudPermissions("payroll", "الرواتب"), { key: "payroll.approve", label: "اعتماد الرواتب" }] }],
+  "قياس الأداء": [{ title: "صلاحيات الأداء", permissions: crudPermissions("performance", "تقييمات الأداء") }],
+  "إرسال الطلبات": [{ title: "صلاحيات إرسال الطلبات", permissions: crudPermissions("requests.sent", "الطلبات المرسلة") }],
+  "الطلبات الواردة": [{ title: "صلاحيات الطلبات الواردة", permissions: [...crudPermissions("requests.incoming", "الطلبات الواردة"), { key: "requests.approve", label: "اعتماد أو رفض الطلبات" }] }],
+  "التأمينات": [{ title: "صلاحيات التأمينات", permissions: crudPermissions("insurance", "التأمينات") }],
+  "المساءلات والإنذارات": [{ title: "صلاحيات المساءلات والإنذارات", permissions: crudPermissions("penalties", "المساءلات والإنذارات") }],
+  "قسم الإعلانات": [{ title: "صلاحيات الإعلانات", permissions: crudPermissions("announcements", "الإعلانات") }],
+  "قسم السلفيات": [{ title: "صلاحيات السلف", permissions: [...crudPermissions("advances", "السلف"), { key: "advances.approve", label: "اعتماد السلف" }] }],
+  "النظام المالي": [{ title: "صلاحيات النظام المالي", permissions: crudPermissions("finance", "البيانات المالية") }],
+  "تواصل مع الإدارة": [{ title: "صلاحيات التواصل", permissions: crudPermissions("communication", "رسائل الإدارة") }],
+  "الإجازات": [{ title: "صلاحيات الإجازات", permissions: [...crudPermissions("leaves", "الإجازات"), { key: "leaves.approve", label: "اعتماد الإجازات" }] }],
+  "عمولات الموظفين": [{ title: "صلاحيات العمولات", permissions: crudPermissions("commissions", "العمولات") }],
+  "إدارة المشاريع والمهام": [{ title: "صلاحيات المشاريع والمهام", permissions: crudPermissions("projects", "المشاريع والمهام") }],
+  "إدارة التدريب": [{ title: "صلاحيات التدريب", permissions: crudPermissions("training", "الدورات التدريبية") }],
+};
+
+const PERMISSION_TABS = Object.keys(PERMISSION_GROUPS);
 
 export default function HRPermissionsAddRole() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("قائمة الموظفين");
+  const { roleId } = useParams();
+  const isEditing = Boolean(roleId);
+  const [activeTab, setActiveTab] = useState(PERMISSION_TABS[0]);
   const [loading, setLoading] = useState(false);
-
-  // Form state
+  const [loadingRole, setLoadingRole] = useState(isEditing);
   const [nameAr, setNameAr] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [status, setStatus] = useState("فعال");
-
-  // Permissions state
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!roleId) return;
+    let active = true;
+    async function loadRole() {
+      const { data, error } = await supabase.from("user_roles").select("*").eq("id", roleId).single();
+      if (!active) return;
+      if (error) {
+        toast.error(`تعذر تحميل الدور: ${error.message}`);
+        navigate("/hr/permissions/roles");
+      } else {
+        setNameAr(String(data.name_ar ?? ""));
+        setNameEn(String(data.name_en ?? ""));
+        setStatus(String(data.status ?? "فعال"));
+        setPermissions((data.permissions as Record<string, boolean>) ?? {});
+      }
+      setLoadingRole(false);
+    }
+    loadRole();
+    return () => { active = false; };
+  }, [roleId, navigate]);
+
+  const activePermissions = useMemo(
+    () => PERMISSION_GROUPS[activeTab].flatMap((group) => group.permissions),
+    [activeTab],
+  );
+  const allActiveSelected = activePermissions.length > 0 && activePermissions.every((permission) => permissions[permission.key]);
+
+  const handlePermissionChange = (key: string, value: boolean) => {
+    setPermissions((previous) => ({ ...previous, [key]: value }));
+  };
+
+  const toggleCurrentTab = (checked: boolean) => {
+    setPermissions((previous) => {
+      const next = { ...previous };
+      activePermissions.forEach((permission) => { next[permission.key] = checked; });
+      return next;
+    });
+  };
 
   const handleSave = async () => {
     if (!nameAr.trim() || !nameEn.trim()) {
-      toast.error("يجب ملء جميع الحقول المطلوبة");
+      toast.error("يجب ملء اسم الدور بالعربية والإنجليزية");
       return;
     }
-
     setLoading(true);
+    const payload = {
+      name_ar: nameAr.trim(),
+      name_en: nameEn.trim(),
+      status,
+      permissions,
+      updated_at: new Date().toISOString(),
+    };
     try {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .insert([
-          {
-            name_ar: nameAr,
-            name_en: nameEn,
-            status: status,
-            permissions: permissions,
-          },
-        ])
-        .select();
-
-      if (error) {
-        toast.error("خطأ في حفظ الدور");
-        return;
-      }
-
-      toast.success("تم حفظ الدور بنجاح");
+      const result = isEditing
+        ? await supabase.from("user_roles").update(payload).eq("id", roleId!).select("id").single()
+        : await supabase.from("user_roles").insert(payload).select("id").single();
+      if (result.error) throw result.error;
+      toast.success(isEditing ? "تم تحديث الدور والصلاحيات" : "تم إضافة الدور والصلاحيات");
       navigate("/hr/permissions/roles");
-    } catch (err) {
-      toast.error("حدث خطأ ما");
+    } catch (error) {
+      toast.error(`تعذر حفظ الدور: ${error instanceof Error ? error.message : "خطأ غير معروف"}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePermissionChange = (key: string, value: boolean) => {
-    setPermissions((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
+  if (loadingRole) {
+    return <Layout><div className="h-[60vh] flex items-center justify-center" dir="rtl"><Loader2 className="h-7 w-7 animate-spin text-[#004e89]" /><span className="mr-3">جاري تحميل الدور...</span></div></Layout>;
+  }
 
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
-        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-          <h2 className="text-xl font-bold text-[#004e89]">إضافة دور جديد</h2>
+        <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <h2 className="text-xl font-bold text-[#004e89]">{isEditing ? "تعديل الدور والصلاحيات" : "إضافة دور جديد"}</h2>
           <div className="flex items-center gap-3">
-            <Button
-              onClick={() => navigate("/hr/permissions/roles")}
-              variant="outline"
-              className="px-6"
-            >
-              <X className="h-4 w-4 ml-1" /> إلغاء
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={loading}
-              className="bg-[#004e89] hover:bg-[#003865] px-8"
-            >
-              <Save className="h-4 w-4 ml-1" /> {loading ? "جاري الحفظ..." : "حفظ"}
+            <Button onClick={() => navigate("/hr/permissions/roles")} variant="outline" className="px-6"><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+            <Button onClick={handleSave} disabled={loading} className="bg-[#004e89] hover:bg-[#003865] px-8">
+              {loading ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
+              {loading ? "جاري الحفظ..." : "حفظ"}
             </Button>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-6 space-y-8">
-          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">الاسم بالعربية <span className="text-red-500">*</span></Label>
-              <Input
-                value={nameAr}
-                onChange={(e) => setNameAr(e.target.value)}
-                placeholder="مثال: مدير الموارد البشرية"
-                className="h-10 border-gray-300"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">الاسم بالانجليزية <span className="text-red-500">*</span></Label>
-              <Input
-                value={nameEn}
-                onChange={(e) => setNameEn(e.target.value)}
-                placeholder="e.g. HR Manager"
-                className="h-10 border-gray-300"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">حالة الدور <span className="text-red-500">*</span></Label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              >
-                <option value="فعال">فعال</option>
-                <option value="غير فعال">غير فعال</option>
-              </select>
-            </div>
+            <div className="space-y-2"><Label>الاسم بالعربية <span className="text-red-500">*</span></Label><Input value={nameAr} onChange={(event) => setNameAr(event.target.value)} placeholder="مثال: مدير الموارد البشرية" /></div>
+            <div className="space-y-2"><Label>الاسم بالإنجليزية <span className="text-red-500">*</span></Label><Input value={nameEn} onChange={(event) => setNameEn(event.target.value)} placeholder="e.g. HR Manager" /></div>
+            <div className="space-y-2"><Label>حالة الدور</Label><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"><option value="فعال">فعال</option><option value="غير فعال">غير فعال</option></select></div>
           </div>
 
-          <div className="space-y-4">
-            {/* Tabs Scrollable Container */}
-            <div className="flex items-center gap-2 border-b border-gray-200 pb-2 overflow-x-auto whitespace-nowrap hide-scrollbar">
-              <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 text-gray-400">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              
-              {PERMISSION_TABS.map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                    activeTab === tab 
-                      ? "bg-[#004e89] text-white" 
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-
-              <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 text-gray-400">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+          <div className="space-y-5">
+            <div className="flex gap-2 border-b border-gray-200 pb-2 overflow-x-auto whitespace-nowrap">
+              {PERMISSION_TABS.map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={cnTab(activeTab === tab)}>{tab}</button>)}
             </div>
 
-            {/* Select All */}
-            <div className="flex justify-end">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="selectAll" className="text-sm font-medium cursor-pointer">اختيار الكل</Label>
-                <Checkbox id="selectAll" />
-              </div>
+            <div className="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-3">
+              <div><p className="font-semibold text-gray-800">صلاحيات {activeTab}</p><p className="text-xs text-gray-500">يتم حفظ جميع الخيارات المحددة مع الدور</p></div>
+              <div className="flex items-center gap-2"><Label htmlFor="selectAll" className="cursor-pointer">اختيار الكل</Label><Checkbox id="selectAll" checked={allActiveSelected} onCheckedChange={(value) => toggleCurrentTab(value === true)} /></div>
             </div>
 
-            {/* Permissions Content Area */}
-            {activeTab === "قائمة الموظفين" && (
-              <div className="space-y-6">
-                
-                {/* Section 1 */}
-                <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-                  <div className="flex items-center gap-2 mb-4 bg-gray-50 -mx-4 -mt-4 px-4 py-2 border-b border-gray-200 rounded-t-lg">
-                    <Checkbox id="group1" />
-                    <Label htmlFor="group1" className="font-bold text-gray-800">قائمة الموظفين</Label>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="p1">استعراض موظفي الإدارة فقط</Label>
-                      <input type="radio" name="emp_view" id="p1" className="h-4 w-4 text-[#004e89]" />
+            {PERMISSION_GROUPS[activeTab].map((group) => (
+              <div key={group.title} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-800">{group.title}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-0 p-4">
+                  {group.permissions.map((permission) => (
+                    <div key={permission.key} className="flex items-center justify-between border-b border-gray-100 py-3 gap-4">
+                      <Label htmlFor={permission.key} className="text-sm cursor-pointer">{permission.label}</Label>
+                      <Checkbox id={permission.key} checked={permissions[permission.key] ?? false} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
                     </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="p2">استعراض موظفي الفرع فقط</Label>
-                      <input type="radio" name="emp_view" id="p2" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="p3">استعراض موظفي القسم فقط</Label>
-                      <input type="radio" name="emp_view" id="p3" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="p4">استعراض موظفي ادارته المباشرة فقط</Label>
-                      <input type="radio" name="emp_view" id="p4" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="p5">كل الموظفين</Label>
-                      <input type="radio" name="emp_view" id="p5" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                  </div>
+                  ))}
                 </div>
-
-                {/* Section 2 */}
-                <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-                  <div className="flex items-center gap-2 mb-4 bg-gray-50 -mx-4 -mt-4 px-4 py-2 border-b border-gray-200 rounded-t-lg">
-                    <Checkbox id="group2" />
-                    <Label htmlFor="group2" className="font-bold text-gray-800">عرض</Label>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c1">إضافة موظف جديد</Label>
-                      <Checkbox
-                        id="c1"
-                        checked={permissions["add_employee"] || false}
-                        onCheckedChange={(val) => handlePermissionChange("add_employee", val as boolean)}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c2">تعديل بيانات موظف</Label>
-                      <Checkbox id="c2" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c3">استعراض الموظفين غير الفعالين</Label>
-                      <Checkbox id="c3" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c4">حركات الموظفين</Label>
-                      <Checkbox id="c4" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c5">عرض حركات السلف</Label>
-                      <Checkbox id="c5" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c6">إضافة حركة سلف</Label>
-                      <Checkbox id="c6" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c7">عرض حركات الإجازات</Label>
-                      <Checkbox id="c7" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c8">عرض حركات العهد</Label>
-                      <Checkbox id="c8" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c9">إضافة حركة عهدة</Label>
-                      <Checkbox id="c9" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c10">إضافة حركة صرف</Label>
-                      <Checkbox id="c10" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c11">عرض حركات الدورات التدريبية</Label>
-                      <Checkbox id="c11" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c12">إضافة حركة دورة تدريبية</Label>
-                      <Checkbox id="c12" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c13">إضافة حركة نقل</Label>
-                      <Checkbox id="c13" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c14">عرض حركة الشراء</Label>
-                      <Checkbox id="c14" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c15">إضافة حركة شراء</Label>
-                      <Checkbox id="c15" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c16">إضافة حركة ساعة إضافية</Label>
-                      <Checkbox id="c16" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c17">عرض حركة الاستئذان</Label>
-                      <Checkbox id="c17" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c18">إضافة حركة استئذان</Label>
-                      <Checkbox id="c18" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c19">إضافة حركة صيانة</Label>
-                      <Checkbox id="c19" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c20">عرض حركة مباشرة العمل</Label>
-                      <Checkbox id="c20" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c21">إضافة حركة مباشرة عمل</Label>
-                      <Checkbox id="c21" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c22">إضافة حركة الانتدابات</Label>
-                      <Checkbox id="c22" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c23">إلغاء التفعيل</Label>
-                      <Checkbox id="c23" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c24">تعديل بيانات التابعين</Label>
-                      <Checkbox id="c24" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c25">إيداع رصيد الإجازة</Label>
-                      <Checkbox id="c25" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c26">إنهاء الخدمة</Label>
-                      <Checkbox id="c26" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c27">تعديل</Label>
-                      <Checkbox id="c27" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c28">حذف</Label>
-                      <Checkbox id="c28" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c29">فرق العمل</Label>
-                      <Checkbox id="c29" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c30">ربط حساب الموظف</Label>
-                      <Checkbox id="c30" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="c31">إضافة</Label>
-                      <Checkbox id="c31" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3 */}
-                <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-                  <div className="flex items-center gap-2 mb-4 bg-gray-50 -mx-4 -mt-4 px-4 py-2 border-b border-gray-200 rounded-t-lg">
-                    <Checkbox id="group3" />
-                    <Label htmlFor="group3" className="font-bold text-gray-800">البيانات المالية</Label>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="f1">إضافة البيانات المالية</Label>
-                      <Checkbox id="f1" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="f2">تعديل البيانات المالية</Label>
-                      <Checkbox id="f2" />
-                    </div>
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <Label className="text-sm cursor-pointer" htmlFor="f3">حذف البيانات المالية</Label>
-                      <Checkbox id="f3" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 4 */}
-                <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-                  <div className="flex items-center gap-2 mb-4 bg-gray-50 -mx-4 -mt-4 px-4 py-2 border-b border-gray-200 rounded-t-lg">
-                    <Checkbox id="group4" />
-                    <Label htmlFor="group4" className="font-bold text-gray-800">السماح باستعراض حالة حضور الموظفين</Label>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="a1">استعراض حالة حضور موظفي الإدارة فقط</Label>
-                      <input type="radio" name="att_view" id="a1" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="a2">استعراض حالة حضور موظفي الفرع فقط</Label>
-                      <input type="radio" name="att_view" id="a2" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="a3">استعراض حالة حضور موظفي القسم فقط</Label>
-                      <input type="radio" name="att_view" id="a3" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="a4">استعراض حالة حضور الموظفين الذين تحت ادارته المباشرة فقط</Label>
-                      <input type="radio" name="att_view" id="a4" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                    <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-gray-50/50">
-                      <Label className="text-sm cursor-pointer" htmlFor="a5">استعراض حالة حضور جميع الموظفين</Label>
-                      <input type="radio" name="att_view" id="a5" className="h-4 w-4 text-[#004e89]" />
-                    </div>
-                  </div>
-                </div>
-
               </div>
-            )}
-            
-            {activeTab !== "قائمة الموظفين" && (
-              <div className="py-12 text-center text-gray-500">
-                محتوى {activeTab} سيظهر هنا
-              </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
     </Layout>
   );
+}
+
+function cnTab(active: boolean) {
+  return `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${active ? "bg-[#004e89] text-white" : "text-gray-600 hover:bg-gray-100"}`;
 }

@@ -127,18 +127,7 @@ export default function ExpenseManagement() {
   const [pettyCashForm, setPettyCashForm] = useState<PettyCashForm>(getEmptyPettyCashForm());
 
   useEffect(() => {
-    if (isReports) {
-      void Promise.allSettled([loadVouchers(), loadPettyCash()]);
-      return;
-    }
-
-    if (isVouchers) {
-      void loadVouchers();
-    }
-
-    if (isPettyCash) {
-      void loadPettyCash();
-    }
+    void Promise.allSettled([loadVouchers(), loadPettyCash()]);
   }, [isVouchers, isPettyCash, isReports]);
 
   const loadVouchers = async () => {
@@ -192,6 +181,26 @@ export default function ExpenseManagement() {
       accountCode: String(item.account_code ?? ""),
       amount: String(item.amount ?? "0"),
     }));
+  };
+
+  const handlePrintVoucher = async (row: VoucherRow) => {
+    const items = await loadVoucherItems(row.id);
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    const escHtml = (v: unknown) => String(v ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const total = items.reduce((s, i) => s + (Number.parseFloat(i.amount || "0") || 0), 0);
+    const rowsHtml = items.map((item, idx) => `<tr><td>${idx + 1}</td><td style="text-align:right">${escHtml(item.description || "-")}</td><td>${escHtml(item.accountCode || "-")}</td><td style="font-weight:700">${(Number.parseFloat(item.amount || "0") || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} SAR</td></tr>`).join("");
+    printWindow.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>\u0633\u0646\u062f \u0635\u0631\u0641 ${escHtml(row.voucherNumber)}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#111827;font-family:Arial,Tahoma,sans-serif}.voucher{width:100%;min-height:175mm;border:1px solid #d1d5db;padding:14mm 15mm 10mm;position:relative;background:#fff}.header{display:grid;grid-template-columns:150px 1fr 190px;align-items:start;gap:20px}.logo{width:135px;height:90px;object-fit:contain}.company{text-align:right}.company h2{margin:0;font-size:22px}.company p{margin:4px 0;color:#475569;font-size:11px;line-height:1.6}.voucher-title{text-align:center}.voucher-title h1{font-size:29px;margin:0}.en{font-size:14px;font-weight:700;letter-spacing:1.8px;border-bottom:2px solid #dc2626;padding:4px 12px;display:inline-block}.number{margin-top:10px;color:#dc2626;font-size:24px;font-weight:800;letter-spacing:2px}.date-row{display:flex;justify-content:space-between;margin:14px 0 6px;font-size:12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;margin-bottom:10px}.label{color:#64748b;font-size:11px}.line-val{font-weight:700;border-bottom:1px solid #94a3b8;padding-bottom:3px}.line{display:grid;grid-template-columns:165px 1fr 165px;gap:8px;align-items:end;margin:10px 0;font-size:13px}.label-ar{font-weight:700}.label-en{text-align:left;font-weight:700;direction:ltr}.vbox{min-height:25px;border-bottom:1px solid #64748b;padding:3px 8px;text-align:center;font-weight:700}table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:8px}th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:center}th{background:#f1f5f9;font-weight:700}.total-row{background:#fef2f2;font-weight:700;color:#dc2626}.amt-box{float:left;margin-top:8px;border:2px solid #dc2626;border-radius:6px;padding:9px 18px;color:#dc2626;font-size:18px;font-weight:800}.sigs{display:grid;grid-template-columns:repeat(4,1fr);gap:40px;margin-top:30px;text-align:center}.sig strong{display:block;font-size:13px}.sig small{display:block;color:#64748b}.sig .sl{border-bottom:1px solid #94a3b8;height:38px}.footer{position:absolute;bottom:0;left:0;right:0;height:10px;background:linear-gradient(90deg,#dc2626,#0f766e)}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.voucher{border:0}}</style></head><body><section class="voucher"><div class="header"><img class="logo" src="${COMPANY_LOGO_URL}" alt="logo"><div class="voucher-title"><h1>\u0633\u0646\u062f \u0635\u0631\u0641</h1><div class="en">PAYMENT VOUCHER</div><div class="number">${escHtml(row.voucherNumber)}</div></div><div class="company"><h2>\u0634\u0631\u0643\u0629 \u0644\u0627\u0643\u062c\u0631\u064a \u0627\u0644\u0639\u064a\u0627\u0641</h2><p>Luxury Al Ayaf Company<br>\u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064a\u0629 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629<br>VAT No. 314559705300003</p></div></div><div class="date-row"><span><b>\u0627\u0644\u062a\u0627\u0631\u064a\u062e / Date:</b> ${escHtml(row.voucherDate)}</span><span><b>\u0647\u0640 / H &nbsp; \u0631\u064a\u0627\u0644 / S.R. SAR</b></span></div><div class="meta"><div><div class="label">\u0635\u0631\u0641 \u0625\u0644\u0649 / Pay to (\u0642\u0633\u0645):</div><div class="line-val">${escHtml(row.department || "-")}</div></div><div><div class="label">\u0627\u0639\u062a\u0645\u062f \u0645\u0646 / Approved by:</div><div class="line-val">${escHtml(row.approvedBy || "-")}</div></div></div><div class="line"><span class="label-ar">\u0627\u0644\u0628\u064a\u0627\u0646 / Description:</span><div class="vbox">${escHtml(row.description || "-")}</div><span class="label-en">Being / Details</span></div><table><thead><tr><th>#</th><th style="text-align:right">\u0627\u0644\u0628\u0646\u062f / Item</th><th>\u0627\u0644\u062d\u0633\u0627\u0628 / Account</th><th>\u0627\u0644\u0645\u0628\u0644\u063a / Amount</th></tr></thead><tbody>${rowsHtml || "<tr><td colspan='4'>-</td></tr>"}<tr class='total-row'><td colspan='3'>\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a / Total</td><td>${total.toLocaleString("en-US", { minimumFractionDigits: 2 })} SAR</td></tr></tbody></table><div class="amt-box">${total.toLocaleString("en-US", { minimumFractionDigits: 2 })} SAR</div><div class="sigs"><div class="sig"><strong>\u0627\u0644\u0645\u062d\u0627\u0633\u0628</strong><small>Accountant</small><div class="sl"></div></div><div class="sig"><strong>\u0645\u062f\u064a\u0631 \u0645\u0627\u0644\u064a</strong><small>Finance Manager</small><div class="sl"></div></div><div class="sig"><strong>\u0645\u0639\u062a\u0645\u062f</strong><small>Approved</small><div class="sl"></div></div><div class="sig"><strong>\u0627\u0644\u0645\u0633\u062a\u0644\u0645</strong><small>Received by</small><div class="sl"></div></div></div><div class="footer"></div></section></body></html>`);
+    printWindow.document.close();
+    let printed = false;
+    const doPrint = () => { if (printed) return; printed = true; printWindow.focus(); printWindow.print(); };
+    const logo = printWindow.document.querySelector(".logo") as HTMLImageElement | null;
+    if (logo && !logo.complete) {
+      logo.addEventListener("load", doPrint, { once: true });
+      logo.addEventListener("error", doPrint, { once: true });
+      window.setTimeout(doPrint, 3000);
+    } else window.setTimeout(doPrint, 150);
   };
 
   const handleViewVoucher = async (row: VoucherRow) => {
@@ -459,6 +468,7 @@ export default function ExpenseManagement() {
             rows={voucherRows}
             onView={handleViewVoucher}
             onEdit={handleEditVoucher}
+            onPrint={handlePrintVoucher}
             onDelete={async (id) => {
               if (!confirm("هل متأكد من حذف السند؟")) return;
               setDeleting(true);
@@ -476,23 +486,63 @@ export default function ExpenseManagement() {
         )}
 
         {isPettyCash && !isFormOpen && (
-          <PettyCashList
-            rows={pettyCashRows}
-            onView={handleViewPettyCash}
-            onEdit={handleEditPettyCash}
-            onDelete={async (id) => {
-              if (!confirm("هل متأكد من حذف السند؟")) return;
-              setDeleting(true);
-              const result = await supabase.from("petty_cash_vouchers").delete().eq("id", id);
-              if (!result.error) {
-                await loadPettyCash();
-                toast({ title: "تم الحذف", description: "تم حذف السند بنجاح" });
-              } else {
-                toast({ title: "فشل الحذف", variant: "destructive" });
-              }
-              setDeleting(false);
-            }}
-          />
+          <>
+            <PettyCashList
+              rows={pettyCashRows}
+              onView={handleViewPettyCash}
+              onEdit={handleEditPettyCash}
+              onDelete={async (id) => {
+                if (!confirm("هل متأكد من حذف السند؟")) return;
+                setDeleting(true);
+                const result = await supabase.from("petty_cash_vouchers").delete().eq("id", id);
+                if (!result.error) {
+                  await loadPettyCash();
+                  toast({ title: "تم الحذف", description: "تم حذف السند بنجاح" });
+                } else {
+                  toast({ title: "فشل الحذف", variant: "destructive" });
+                }
+                setDeleting(false);
+              }}
+            />
+            <div className="mt-8 border-t border-border pt-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">سندات الصرف</h2>
+                  <p className="text-sm text-muted-foreground">سجلات الصرف والمصروفات المعتمدة</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    const voucherNumber = await generateVoucherNumber("expense_vouchers", "SRF");
+                    setVoucherForm({ ...getEmptyVoucherForm(), voucherNumber });
+                    setIsFormOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition"
+                >
+                  <Plus className="h-4 w-4" />
+                  إنشاء سند صرف جديد
+                </button>
+              </div>
+              <VouchersList
+                rows={voucherRows}
+                onView={handleViewVoucher}
+                onEdit={handleEditVoucher}
+                onPrint={handlePrintVoucher}
+                onDelete={async (id) => {
+                  if (!confirm("هل متأكد من حذف السند؟")) return;
+                  setDeleting(true);
+                  await supabase.from("expense_voucher_items").delete().eq("voucher_id", id);
+                  const result = await supabase.from("expense_vouchers").delete().eq("id", id);
+                  if (!result.error) {
+                    await loadVouchers();
+                    toast({ title: "تم الحذف", description: "تم حذف السند بنجاح" });
+                  } else {
+                    toast({ title: "فشل الحذف", variant: "destructive" });
+                  }
+                  setDeleting(false);
+                }}
+              />
+            </div>
+          </>
         )}
 
         {isReports && <ExpenseReportsList voucherRows={voucherRows} pettyCashRows={pettyCashRows} />}
@@ -565,13 +615,22 @@ export default function ExpenseManagement() {
 
               <div className="flex items-center justify-between pt-2">
                 <p className="text-sm font-semibold text-foreground">الإجمالي: {voucherView.totalAmount} ريال</p>
-                <button
-                  onClick={() => void handleEditVoucher(voucherView)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
-                >
-                  <Pencil className="h-4 w-4" />
-                  تعديل السند
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => void handlePrintVoucher(voucherView)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+                  >
+                    <Printer className="h-4 w-4" />
+                    طباعة سند الصرف
+                  </button>
+                  <button
+                    onClick={() => void handleEditVoucher(voucherView)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    تعديل السند
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -981,11 +1040,13 @@ function VouchersList({
   rows,
   onView,
   onEdit,
+  onPrint,
   onDelete,
 }: {
   rows: VoucherRow[];
   onView: (row: VoucherRow) => void;
   onEdit: (row: VoucherRow) => void;
+  onPrint?: (row: VoucherRow) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -1042,6 +1103,15 @@ function VouchersList({
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
+                    {onPrint && (
+                      <button
+                        onClick={() => void onPrint(row)}
+                        title="طباعة"
+                        className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-sky-600 transition"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => onDelete(row.id)}
                       title="حذف"

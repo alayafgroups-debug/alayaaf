@@ -287,7 +287,7 @@ export default function ExpenseManagement() {
   const title = isReports
     ? "تقرير المصروفات"
     : isPettyCash
-      ? "سندات القبض"
+      ? "سندات القبض والصرف"
       : isVouchers
         ? "سندات الصرف"
         : "المصرفات";
@@ -295,7 +295,7 @@ export default function ExpenseManagement() {
   const description = isReports
     ? "ملخصات وتقارير المصروفات والسندات."
     : isPettyCash
-      ? "إدارة سندات القبض وتتبع النقد الصغير."
+      ? "إدارة سندات القبض والصرف وتتبع جميع المعاملات."
       : isVouchers
         ? "إنشاء وإدارة سندات الصرف والمصروفات."
         : "إدارة المصرفات والسندات والتقارير.";

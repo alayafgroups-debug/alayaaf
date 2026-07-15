@@ -275,6 +275,25 @@ function HRSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const navRef = useRef<HTMLElement>(null);
+  const userSession = readUserSession();
+  const isFullAccess = hasFullAccess(userSession);
+  const allowedHRItems = useMemo(() => {
+    if (isFullAccess) return hrNavItems;
+    return hrNavItems
+      .filter((item) => {
+        if (item.isHeader) return true;
+        if (item.hasChildren && item.children) {
+          return item.children.some((c) => hasPermission(userSession, ...permissionForHRPath(c.href)));
+        }
+        return hasPermission(userSession, ...permissionForHRPath(item.href));
+      })
+      .map((item) =>
+        item.hasChildren && item.children
+          ? { ...item, children: item.children.filter((c) => hasPermission(userSession, ...permissionForHRPath(c.href))) }
+          : item,
+      );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullAccess, userSession?.role]);
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -397,7 +416,7 @@ function HRSidebar({
             أقسام الموارد البشرية
           </p>
         )}
-        {hrNavItems.map((item, index) => {
+        {allowedHRItems.map((item, index) => {
           if (item.isHeader) {
             if (!sidebarOpen) return null;
             return (
@@ -545,10 +564,19 @@ function HRSidebar({
           {sidebarOpen && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-white/90 truncate">مدير النظام</p>
-                <p className="text-[10px] text-emerald-300/30 truncate">admin@luxury-ayaf.com</p>
+                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || "مدير النظام"}</p>
+                <p className="text-[10px] text-emerald-300/30 truncate">{userSession?.role || ""}</p>
               </div>
-              <button className="rounded-lg p-1.5 text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all">
+              <button
+                onClick={async () => {
+                  localStorage.removeItem("user_session");
+                  const { supabase: sb } = await import("@/lib/supabaseClient");
+                  await sb.auth.signOut();
+                  navigate("/login");
+                }}
+                className="rounded-lg p-1.5 text-white/20 hover:text-red-400 hover:bg-white/[0.06] transition-all"
+                title="تسجيل الخروج"
+              >
                 <LogOut className="h-4 w-4" />
               </button>
             </>
@@ -576,6 +604,8 @@ function MainSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const navRef = useRef<HTMLElement>(null);
+  const userSession = readUserSession();
+  const isFullAccess = hasFullAccess(userSession);
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -601,7 +631,7 @@ function MainSidebar({
       : location.pathname === path ||
         (path !== "/" && location.pathname.startsWith(path));
 
-  const navItems = [
+  const allNavItems = [
     { icon: BarChart3, label: "لوحة التحكم", href: "/" },
     { icon: FileText, label: "المبيعات", href: "/sales", hasSubmenu: true },
     { icon: ShoppingCart, label: "المشتريات", href: "/purchases", hasSubmenu: true },
@@ -611,6 +641,14 @@ function MainSidebar({
     { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
+  const navItems = useMemo(() => {
+    if (isFullAccess) return allNavItems;
+    return allNavItems.filter((item) => {
+      const key = permissionForMainPath(item.href);
+      return key === null || hasPermission(userSession, key);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullAccess, userSession?.role]);
 
   const lastAutoExpandedPath = useRef<string | null>(null);
 
@@ -840,10 +878,19 @@ function MainSidebar({
           {sidebarOpen && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-white/90 truncate">مدير النظام</p>
-                <p className="text-[10px] text-white/30 truncate">admin@luxury-ayaf.com</p>
+                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || "مدير النظام"}</p>
+                <p className="text-[10px] text-white/30 truncate">{userSession?.role || ""}</p>
               </div>
-              <button className="rounded-lg p-1.5 text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all">
+              <button
+                onClick={async () => {
+                  localStorage.removeItem("user_session");
+                  const { supabase: sb } = await import("@/lib/supabaseClient");
+                  await sb.auth.signOut();
+                  navigate("/login");
+                }}
+                className="rounded-lg p-1.5 text-white/20 hover:text-red-400 hover:bg-white/[0.06] transition-all"
+                title="تسجيل الخروج"
+              >
                 <LogOut className="h-4 w-4" />
               </button>
             </>

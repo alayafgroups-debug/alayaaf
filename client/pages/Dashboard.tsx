@@ -1,7 +1,8 @@
 import Layout from "@/components/Layout";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { readUserSession, hasFullAccess, hasPermission } from "@/lib/authSession";
 import { supabase } from "@/lib/supabaseClient";
 import {
   TrendingUp,
@@ -41,11 +42,11 @@ type AlertData = {
   pendingLeaves: number;
 };
 
-const modules = [
-  { title: "المبيعات", description: "إدارة عروض الأسعار والفواتير والمردودات", href: "/sales", icon: FileText, gradient: "from-blue-500 to-indigo-600", shadow: "shadow-blue-500/20" },
-  { title: "المشتريات", description: "طلبات الشراء والفواتير والتقارير", href: "/purchases", icon: ShoppingCart, gradient: "from-violet-500 to-purple-600", shadow: "shadow-violet-500/20" },
-  { title: "الموارد البشرية", description: "إدارة الموظفين والرواتب والحضور", href: "/hr", icon: Users, gradient: "from-emerald-500 to-teal-600", shadow: "shadow-emerald-500/20" },
-  { title: "إدارة العملاء", description: "قاعدة بيانات العملاء والتفاعلات", href: "/crm", icon: Users, gradient: "from-amber-500 to-orange-600", shadow: "shadow-amber-500/20" },
+const ALL_MODULES = [
+  { title: "المبيعات", description: "إدارة عروض الأسعار والفواتير والمردودات", href: "/sales", permKey: "module.sales", icon: FileText, gradient: "from-blue-500 to-indigo-600", shadow: "shadow-blue-500/20" },
+  { title: "المشتريات", description: "طلبات الشراء والفواتير والتقارير", href: "/purchases", permKey: "module.purchases", icon: ShoppingCart, gradient: "from-violet-500 to-purple-600", shadow: "shadow-violet-500/20" },
+  { title: "الموارد البشرية", description: "إدارة الموظفين والرواتب والحضور", href: "/hr", permKey: "module.hr", icon: Users, gradient: "from-emerald-500 to-teal-600", shadow: "shadow-emerald-500/20" },
+  { title: "إدارة العملاء", description: "قاعدة بيانات العملاء والتفاعلات", href: "/crm", permKey: "module.crm", icon: Users, gradient: "from-amber-500 to-orange-600", shadow: "shadow-amber-500/20" },
 ];
 
 /* ── Status badge helper ── */
@@ -58,6 +59,13 @@ function statusClasses(status: string) {
 
 /* ── Component ── */
 export default function Dashboard() {
+  const userSession = readUserSession();
+  const modules = useMemo(() => {
+    if (hasFullAccess(userSession)) return ALL_MODULES;
+    return ALL_MODULES.filter((m) => hasPermission(userSession, m.permKey));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userSession?.role]);
+
   const [kpis, setKpis] = useState<KpiData>({ totalSales: 0, totalPurchases: 0, invoiceCount: 0, activeCustomers: 0 });
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [alerts, setAlerts] = useState<AlertData>({ pendingInvoices: 0, unpaidPurchases: 0, pendingLeaves: 0 });

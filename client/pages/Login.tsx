@@ -63,9 +63,9 @@ export default function Login() {
 
       toast.success(`مرحباً ${empData.name}`);
 
-      // Redirect based on role
+      // Redirect to main dashboard
       setTimeout(() => {
-        navigate("/hr/employee-dashboard");
+        navigate("/");
       }, 500);
     } catch (err) {
       console.error("Login error:", err);
@@ -172,10 +172,10 @@ export default function Login() {
 
           {/* Demo Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-gray-700 mb-2 font-medium">بيانات تجريبية:</p>
+            <p className="text-sm text-gray-700 mb-2 font-medium">حساب المدير:</p>
             <div className="space-y-1 text-xs text-gray-600">
-              <p>البريد: <span className="font-mono text-gray-800">employee@company.com</span></p>
-              <p>كلمة المرور: <span className="font-mono text-gray-800">password123</span></p>
+              <p>البريد: <span className="font-mono text-gray-800">saeed@alayaf.com</span></p>
+              <p>كلمة المرور: <span className="font-mono text-gray-800">Saeed@2026</span></p>
             </div>
           </div>
 

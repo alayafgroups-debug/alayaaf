@@ -106,6 +106,7 @@ import UsersPermissions from "./pages/UsersPermissions";
 import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import RequireAuth from "./components/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -122,6 +123,9 @@ const App = () => (
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/employee/login" element={<EmployeeLogin />} />
+
+          {/* Protected routes — require a Supabase Auth session */}
+          <Route element={<RequireAuth />}>
 
           {/* Employee Routes */}
           <Route path="/employee/dashboard" element={<EmployeePortal />} />
@@ -247,6 +251,8 @@ const App = () => (
           <Route path="/ai" element={<AIAssistant />} />
           <Route path="/ai/assistant" element={<AIAssistant />} />
           <Route path="/settings" element={<Settings />} />
+
+          </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

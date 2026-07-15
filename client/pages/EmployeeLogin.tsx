@@ -36,18 +36,17 @@ export default function EmployeeLogin() {
 
       // إذا كان تسجيل دخول برقم الموظف، ابحث عن بريده في قاعدة البيانات
       if (loginMethod === "empid") {
-        const { data: empData, error: empError } = await supabase
-          .from("employees")
-          .select("email")
-          .eq("emp_id", empId)
-          .single();
+        const { data: resolvedEmail, error: empError } = await supabase.rpc(
+          "get_employee_email_by_empid",
+          { p_emp_id: empId },
+        );
 
-        if (empError || !empData?.email) {
+        if (empError || !resolvedEmail) {
           toast.error("لم يتم العثور على موظف بهذا الرقم");
           setLoading(false);
           return;
         }
-        loginEmail = empData.email;
+        loginEmail = resolvedEmail as string;
       }
 
       // Sign in with Supabase Auth

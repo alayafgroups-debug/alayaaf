@@ -57,10 +57,10 @@ export default function HRRequestsSend() {
   const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
   const [employeeInfo, setEmployeeInfo] = useState({
-    empId: "EMP-001",
-    name: "زين أحمد الحربي",
-    department: "الإدارة العليا",
-    directManager: "الإدارة"
+    empId: "",
+    name: "",
+    department: "",
+    directManager: ""
   });
 
   useEffect(() => {
@@ -75,10 +75,10 @@ export default function HRRequestsSend() {
 
         if (data) {
           setEmployeeInfo({
-            empId: data.emp_id || "EMP-001",
-            name: data.name || "زين أحمد الحربي",
-            department: data.department || "الإدارة العليا",
-            directManager: data.direct_manager || "الإدارة"
+            empId: data.emp_id || "",
+            name: data.name || "",
+            department: data.department || "",
+            directManager: data.direct_manager || ""
           });
         }
       } catch (err) {

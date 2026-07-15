@@ -10,6 +10,7 @@ type MonthlyAttendance = {
   empId: string;
   empName: string;
   department: string;
+  section: string;
   attendance: Record<number, { status: string; notes: string }>;
 };
 
@@ -96,6 +97,7 @@ export default function HRAttendanceMonthlyReport() {
           empId: e.emp_id || "-",
           empName: e.name || "-",
           department: e.department || "-",
+          section: e.division || "-",
           attendance: {},
         };
 
@@ -121,7 +123,7 @@ export default function HRAttendanceMonthlyReport() {
       }
 
       if (sectionFilter !== "الكل") {
-        result = result.filter((r) => r.department === sectionFilter);
+        result = result.filter((r) => r.section === sectionFilter);
       }
 
       setData(result.sort((a, b) => a.empName.localeCompare(b.empName)));

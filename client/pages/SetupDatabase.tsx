@@ -15,20 +15,23 @@ export default function SetupDatabase() {
 
     try {
       // Step 1: Add employee to database
-      newResults.push({ step: "إضافة الموظف زين", status: "pending", message: "جاري الإضافة..." });
+      newResults.push({ step: "إضافة المدير سعيد الشودري", status: "pending", message: "جاري الإضافة..." });
       setResults([...newResults]);
 
       const { error: empError } = await supabase
         .from("employees")
         .upsert([
           {
-            id: "10000000-0000-0000-0000-000000000001",
-            emp_id: "EMP-001",
-            name: "زين أحمد الحربي",
-            email: "zain@company.com",
+            id: "20000000-0000-0000-0000-000000000001",
+            emp_id: "EMP-1001",
+            name: "سعيد الشودري",
+            email: "saeed@alayaf.com",
             department: "الإدارة العليا",
-            status: "نشط",
-            role: "employee",
+            job_title: "مدير عام",
+            branch: "الفرع الرئيسي",
+            base_salary: 22000,
+            total_salary: 22000,
+            status: "فعال",
             permissions: {
               view_attendance: true,
               view_payroll: true,
@@ -39,9 +42,9 @@ export default function SetupDatabase() {
         .select();
 
       if (empError) {
-        newResults[0] = { step: "إضافة الموظف زين", status: "error", message: `خطأ: ${empError.message}` };
+        newResults[0] = { step: "إضافة المدير سعيد الشودري", status: "error", message: `خطأ: ${empError.message}` };
       } else {
-        newResults[0] = { step: "إضافة الموظف زين", status: "success", message: "✅ تم إضافة الموظف بنجاح" };
+        newResults[0] = { step: "إضافة المدير سعيد الشودري", status: "success", message: "✅ تم إضافة المدير بنجاح" };
       }
 
       setResults([...newResults]);
@@ -52,12 +55,12 @@ export default function SetupDatabase() {
 
       try {
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: "zain@company.com",
+          email: "saeed@alayaf.com",
           password: "12345",
           email_confirm: true,
           user_metadata: {
-            emp_id: "EMP-001",
-            name: "زين أحمد الحربي",
+            emp_id: "EMP-1001",
+            name: "سعيد الشودري",
           },
         });
 
@@ -84,7 +87,7 @@ export default function SetupDatabase() {
       const { data: empData, error: verifyError } = await supabase
         .from("employees")
         .select("*")
-        .eq("emp_id", "EMP-001")
+        .eq("emp_id", "EMP-1001")
         .single();
 
       if (verifyError) {
@@ -115,7 +118,7 @@ export default function SetupDatabase() {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-md p-8 mb-6">
           <h1 className="text-3xl font-bold text-[#004e89] mb-2">إعداد قاعدة البيانات</h1>
-          <p className="text-gray-600">إضافة موظف تجريبي (زين أحمد الحربي) للاختبار</p>
+          <p className="text-gray-600">إضافة المدير التجريبي (سعيد الشودري) للاختبار</p>
         </div>
 
         {/* Setup Button */}
@@ -169,11 +172,11 @@ export default function SetupDatabase() {
 
         {/* Info Card */}
         <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-6 mt-6">
-          <h3 className="font-bold text-blue-900 mb-2">بيانات الموظف التجريبي:</h3>
+          <h3 className="font-bold text-blue-900 mb-2">بيانات المدير التجريبي:</h3>
           <div className="space-y-1 text-sm text-blue-800 font-mono">
-            <p>الاسم: زين أحمد الحربي</p>
-            <p>الرقم: EMP-001</p>
-            <p>البريد: zain@company.com</p>
+            <p>الاسم: سعيد الشودري</p>
+            <p>الرقم: EMP-1001</p>
+            <p>البريد: saeed@alayaf.com</p>
             <p>كلمة المرور: 12345</p>
           </div>
         </div>

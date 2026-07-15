@@ -103,42 +103,6 @@ const escapeHtml = (value: unknown) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
-const ZAIN_EXAMPLE_DEDUCTIONS: DeductionItem[] = [
-  { title: "خصم أيام الغياب", amount: 1500, reason: "الغياب دون عذر معتمد خلال 4 أيام عمل متفرقة", notification: "تم إشعاره كتابياً قبل اعتماد الخصم ومراجعته معه", acknowledgement: "أكد الموظف استلام الإشعار واطلاعه على السبب" },
-  { title: "عدم إكمال مهمة", amount: 900, reason: "عدم تسليم المهمة التشغيلية المكلف بها ضمن الموعد المحدد", notification: "تم تنبيهه مسبقاً ومنحه مهلة إضافية لإكمال المهمة", acknowledgement: "أكد الموظف علمه بالتكليف والمهلة الإضافية" },
-  { title: "الامتناع عن تنفيذ تعليمات العمل", amount: 700, reason: "الامتناع عن تنفيذ توجيه إداري موثق متعلق بسير العمل", notification: "تم إبلاغه بالتوجيه ونتيجة عدم الالتزام قبل تسجيل الخصم", acknowledgement: "أكد الموظف استلام التوجيه وفهم ما يترتب عليه" },
-  { title: "إنذار إداري", amount: 500, reason: "إنذار بسبب تكرار مخالفة إجراءات العمل الداخلية", notification: "تم تسليمه الإنذار ومناقشة المخالفة معه مسبقاً", acknowledgement: "وقع الموظف بما يفيد استلام الإنذار والعلم بمضمونه" },
-  { title: "التأخير وعدم استكمال ساعات الدوام", amount: 400, reason: "تأخر متكرر وعدم استكمال ساعات الدوام في 3 أيام", notification: "تم إرسال كشف التأخير إليه قبل إقفال مسير الراتب", acknowledgement: "أكد الموظف صحة أوقات الحضور المسجلة واطلاعه عليها" },
-];
-
-const createZainJuneAttendance = (employee: Employee, selectedMonth: string): Attendance[] => {
-  const [year, monthNumber] = selectedMonth.split("-").map(Number);
-  const daysInMonth = new Date(year, monthNumber, 0).getDate();
-  const workDays = Array.from({ length: daysInMonth }, (_, index) => index + 1)
-    .filter((day) => {
-      const weekday = new Date(year, monthNumber - 1, day).getDay();
-      return weekday !== 5 && weekday !== 6;
-    });
-  const absentDays = new Set([workDays[2], workDays[7], workDays[12], workDays[17]]);
-  const lateDays = new Set([workDays[4], workDays[9], workDays[15]]);
-
-  return workDays.map((day) => {
-    const dateValue = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-    const absent = absentDays.has(day);
-    const late = lateDays.has(day);
-    return {
-      id: `zain-example-${dateValue}`,
-      empId: employee.empId,
-      date: dateValue,
-      checkIn: absent ? "" : late ? "09:20" : "08:00",
-      checkOut: absent ? "" : late ? "16:30" : "17:00",
-      status: absent ? "غائب" : late ? "متأخر" : "حاضر",
-      lateMinutes: late ? 80 : 0,
-      notes: absent ? "غياب دون عذر معتمد" : late ? "تم إشعار الموظف بالتأخير" : "",
-    };
-  });
-};
-
 export default function HREmployeeFullReport() {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -289,34 +253,6 @@ export default function HREmployeeFullReport() {
 
       setReports(selectedEmployees.map((employee) => {
         const employeeKeys = new Set([employee.id, employee.empId]);
-        const normalizedName = employee.name.replace(/\s/g, "");
-        const isZainEmployee = employee.empId.toUpperCase() === "EMP-001"
-          || (normalizedName.includes("زين") && normalizedName.includes("الحربي"));
-        const isZainJuneExample = periodType === "month"
-          && month.endsWith("-06")
-          && isZainEmployee;
-
-        if (isZainJuneExample) {
-          return {
-            employee: { ...employee, baseSalary: 5000, totalSalary: 5000 },
-            attendance: createZainJuneAttendance(employee, month),
-            payroll: [{
-              id: `zain-example-payroll-${month}`,
-              empId: employee.empId,
-              month,
-              basicSalary: 5000,
-              allowances: 0,
-              overtime: 0,
-              bonus: 0,
-              deductions: 4000,
-              netSalary: 1000,
-              notes: "تم إبلاغ الموظف مسبقاً بجميع الخصومات وأسبابها، وأكد استلام الإشعارات والاطلاع عليها.",
-            }],
-            deductionItems: ZAIN_EXAMPLE_DEDUCTIONS,
-            isExample: true,
-          };
-        }
-
         return {
           employee,
           attendance: attendance.filter((record) => employeeKeys.has(record.empId)),

@@ -34,51 +34,20 @@ export default function EmployeeLogin() {
     try {
       let loginEmail = email;
 
-      // إذا كان تسجيل دخول برقم الموظف
+      // إذا كان تسجيل دخول برقم الموظف، ابحث عن بريده في قاعدة البيانات
       if (loginMethod === "empid") {
-        // للاختبار: استخدم بيانات الموظف الثابتة
-        if (empId === "EMP-001" && password === "12345") {
-          loginEmail = "zain@company.com";
-        } else {
-          // البحث عن الموظف برقمه
-          const { data: empData, error: empError } = await supabase
-            .from("employees")
-            .select("email")
-            .eq("emp_id", empId)
-            .single();
+        const { data: empData, error: empError } = await supabase
+          .from("employees")
+          .select("email")
+          .eq("emp_id", empId)
+          .single();
 
-          if (empError || !empData?.email) {
-            loginEmail = empId + "@test.local"; // fallback
-          } else {
-            loginEmail = empData.email;
-          }
+        if (empError || !empData?.email) {
+          toast.error("لم يتم العثور على موظف بهذا الرقم");
+          setLoading(false);
+          return;
         }
-      }
-
-      // للاختبار السريع: إذا كانت البيانات EMP-001 + 12345، استخدم بيانات ثابتة
-      if (empId === "EMP-001" && password === "12345") {
-        // بيانات الموظف الثابتة للاختبار
-        localStorage.setItem(
-          "user_session",
-          JSON.stringify({
-            id: "10000000-0000-0000-0000-000000000001",
-            email: "zain@company.com",
-            empId: "EMP-001",
-            name: "زين أحمد الحربي",
-            role: "employee",
-            permissions: {
-              view_attendance: true,
-              view_payroll: true,
-              request_leave: true,
-            },
-          })
-        );
-
-        toast.success("مرحباً زين أحمد الحربي");
-        setTimeout(() => {
-          navigate("/employee/dashboard");
-        }, 500);
-        return;
+        loginEmail = empData.email;
       }
 
       // Sign in with Supabase Auth
@@ -186,7 +155,7 @@ export default function EmployeeLogin() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="zain@company.com"
+                    placeholder="name@alayaf.com"
                     className="pr-10 h-11"
                     disabled={loading}
                   />
@@ -206,7 +175,7 @@ export default function EmployeeLogin() {
                     type="text"
                     value={empId}
                     onChange={(e) => setEmpId(e.target.value)}
-                    placeholder="EMP-001"
+                    placeholder="EMP-1001"
                     className="pr-10 h-11"
                     disabled={loading}
                   />
@@ -252,17 +221,6 @@ export default function EmployeeLogin() {
               {loading ? "جاري الدخول..." : "دخول"}
             </Button>
           </form>
-
-          {/* Demo Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-gray-700 mb-2 font-medium">بيانات الاختبار:</p>
-            <div className="space-y-1 text-xs text-gray-600">
-              <p><span className="font-medium">الموظف:</span> زين أحمد الحربي</p>
-              <p><span className="font-medium">رقم الموظف:</span> <span className="font-mono">EMP-001</span></p>
-              <p><span className="font-medium">البريد:</span> <span className="font-mono">zain@company.com</span></p>
-              <p><span className="font-medium">كلمة المرور:</span> <span className="font-mono">12345</span></p>
-            </div>
-          </div>
 
           {/* Footer */}
           <p className="text-center text-sm text-gray-500">

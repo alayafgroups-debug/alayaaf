@@ -81,7 +81,7 @@ export default function HRDashboard() {
         const { data: leaveData, error: leaveError } = await supabase
           .from("leave_requests")
           .select("id")
-          .eq("status", "معلقة");
+          .in("status", ["معلقة", "معلق"]);
 
         if (!leaveError && leaveData) {
           setLeaveAlert({ pendingLeaves: leaveData?.length ?? 0 });

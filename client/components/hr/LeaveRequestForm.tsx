@@ -58,8 +58,13 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
         return;
       }
 
-      const empId = employeeInfo?.empId || "EMP-001";
-      const empName = employeeInfo?.name || "موظف";
+      const empId = employeeInfo?.empId;
+      const empName = employeeInfo?.name;
+      if (!empId || !empName) {
+        alert("تعذر تحديد بيانات الموظف مقدم الطلب");
+        setLoading(false);
+        return;
+      }
 
       const leaveTypeMap: Record<string, string> = {
         annual: "إجازة سنوية",

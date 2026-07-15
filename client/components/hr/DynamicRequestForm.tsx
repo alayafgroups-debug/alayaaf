@@ -56,8 +56,12 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
       formData.last_day ||
       startDate;
 
-    const empId = employeeInfo?.empId || "EMP-001";
-    const empName = employeeInfo?.name || "موظف";
+    const empId = employeeInfo?.empId;
+    const empName = employeeInfo?.name;
+    if (!empId || !empName) {
+      toast.error("تعذر تحديد بيانات الموظف مقدم الطلب");
+      return;
+    }
 
     setLoading(true);
     try {

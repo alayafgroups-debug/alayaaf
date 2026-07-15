@@ -267,7 +267,6 @@ const BRANCHES = ["فرع التشغيل والصيانة", "الفرع الرئ
 const GENDERS = ["ذكر", "أنثى"];
 const MARITAL_STATUSES = ["أعزب", "متزوج", "مطلق", "أرمل"];
 const DEFAULT_JOBS = ["مدير عام", "مدير موارد بشرية", "مدير مالي", "محاسب", "مهندس", "فني صيانة", "مسؤول مبيعات", "مسؤول مشتريات", "أخصائي موارد بشرية", "موظف إداري"];
-const EMPLOYEE_ROLES = ["مدير", "محاسب", "مهندس", "فني", "موظف", "مشرف", "مدير قسم", "مدير عام"];
 const CURRENCIES = ["SAR - Saudi Riyal", "USD - US Dollar", "EUR - Euro", "AED - UAE Dirham"];
 const DEFAULT_WORK_SCHEDULES = ["جدول الشركة الأساسي", "جدول مرن", "عمل من المنزل", "نظام ورديات"];
 const DEFAULT_WORK_LOCATIONS = ["المقر الرئيسي", "فرع التشغيل والصيانة", "فرع المبيعات"];
@@ -338,12 +337,14 @@ export default function EmployeeForm({
   const [showPassword, setShowPassword] = useState(false);
   const [orgDepartments, setOrgDepartments] = useState<DeptOpt[]>([]);
   const [orgSections, setOrgSections] = useState<SectionOpt[]>([]);
+  const [employeeRoles, setEmployeeRoles] = useState<string[]>([]);
 
   useEffect(() => {
     (async () => {
-      const [d, s] = await Promise.all([
+      const [d, s, r] = await Promise.all([
         supabase.from("departments").select("id, name").order("name"),
         supabase.from("org_sections").select("id, name, department_id, department").order("name"),
+        supabase.from("user_roles").select("name_ar").eq("status", "فعال").order("name_ar"),
       ]);
       setOrgDepartments(
         ((d.data as Record<string, unknown>[]) ?? []).map((x) => ({ id: String(x.id), name: String(x.name ?? "") })),
@@ -355,6 +356,11 @@ export default function EmployeeForm({
           departmentId: x.department_id ? String(x.department_id) : "",
           department: String(x.department ?? ""),
         })),
+      );
+      setEmployeeRoles(
+        ((r.data as Record<string, unknown>[]) ?? [])
+          .map((x) => String(x.name_ar ?? ""))
+          .filter(Boolean),
       );
     })();
   }, []);
@@ -484,7 +490,7 @@ export default function EmployeeForm({
       <div dir="rtl" className="max-w-6xl mx-auto pb-10">
         {/* Page Title */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-gray-800">إقامة موظف</h1>
+          <h1 className="text-xl font-bold text-gray-800">{mode === "create" ? "إضافة موظف" : "تعديل موظف"}</h1>
           <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
             <X className="h-4 w-4" /> إغلاق
           </button>
@@ -501,7 +507,7 @@ export default function EmployeeForm({
           {step === 3 && <Step4Permissions form={form} togglePermission={togglePermission} />}
           {step === 4 && <Step5Insurance form={form} set={set} />}
           {step === 5 && <Step6Documents form={form} set={set} />}
-          {step === 6 && <Step7Account form={form} set={set} showPassword={showPassword} setShowPassword={setShowPassword} generatePassword={generatePassword} />}
+          {step === 6 && <Step7Account form={form} set={set} roles={employeeRoles} showPassword={showPassword} setShowPassword={setShowPassword} generatePassword={generatePassword} />}
           {step === 7 && <Step8Finish saving={saving} onSave={handleSave} />}
         </div>
 
@@ -1049,10 +1055,11 @@ function Step6Documents({ form, set }: { form: EmpFormData; set: <K extends keyo
 
 // ─── Step 7: Account Info ────────────────────────────────────────────────────
 function Step7Account({
-  form, set, showPassword, setShowPassword, generatePassword,
+  form, set, roles, showPassword, setShowPassword, generatePassword,
 }: {
   form: EmpFormData;
   set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void;
+  roles: string[];
   showPassword: boolean;
   setShowPassword: (v: boolean) => void;
   generatePassword: () => void;
@@ -1099,7 +1106,7 @@ function Step7Account({
 
       {/* Employee Role */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="صلاحية الموظف *" value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={EMPLOYEE_ROLES} placeholder="--" />
+        <FSelect label="صلاحية الموظف *" value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={roles} placeholder="--" />
         <div />
       </div>
       <p className="text-xs text-gray-400">سيتم إرسال بيانات الدخول (رقم الموظف + كلمة المرور) للموظف بعد الحفظ.</p>

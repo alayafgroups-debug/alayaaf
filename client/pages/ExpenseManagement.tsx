@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import ChartOfAccountsTree from "@/components/chart-of-accounts/ChartOfAccountsTree";
+import CostCenters from "@/components/chart-of-accounts/CostCenters";
 
 const COMPANY_LOGO_URL =
   "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200";
@@ -320,6 +321,7 @@ export default function ExpenseManagement() {
             </p>
           </div>
           <ChartOfAccountsTree />
+          <CostCenters />
         </div>
       </Layout>
     );

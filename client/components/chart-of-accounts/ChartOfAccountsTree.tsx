@@ -1,10 +1,31 @@
 import { Search, ChevronDown, ChevronLeft, Info } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { AccountNode } from "./accountData";
 import { defaultAccounts, CATEGORY_COLORS } from "./accountData";
 import AccountActionsMenu from "./AccountActionsMenu";
 import AccountEditPanel from "./AccountEditPanel";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
+
+const COMPANY_NAME = "شركة العياف التجارية";
+
+const toDatabaseAccount = (account: AccountNode) => ({
+  code: account.code,
+  company_name: COMPANY_NAME,
+  name_ar: account.nameAr,
+  name_en: account.nameEn,
+  parent_code: account.parentCode || null,
+  cash_flow_type: account.cashFlowType,
+  account_type: account.accountType,
+  level: account.level,
+  enable_payments: account.enablePayments,
+  show_expense_claims: account.showExpenseClaims,
+  is_main_category: Boolean(account.isMainCategory),
+  category_color: account.categoryColor ?? null,
+  currency_badge: account.currencyBadge ?? null,
+  is_system: Boolean(account.isSystem),
+  updated_at: new Date().toISOString(),
+});
 
 export default function ChartOfAccountsTree() {
   const [accounts, setAccounts] = useState<AccountNode[]>(defaultAccounts);
@@ -13,6 +34,45 @@ export default function ChartOfAccountsTree() {
   const [collapsedCodes, setCollapsedCodes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"tree" | "list">("tree");
   const [hoveredSystem, setHoveredSystem] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadAccounts = async () => {
+      await supabase
+        .from("accounting_accounts")
+        .upsert(defaultAccounts.map(toDatabaseAccount), { onConflict: "code", ignoreDuplicates: true });
+
+      const { data, error } = await supabase
+        .from("accounting_accounts")
+        .select("*")
+        .eq("company_name", COMPANY_NAME)
+        .order("code");
+
+      if (error) {
+        toast({ title: "تعذر تحميل الحسابات", description: error.message, variant: "destructive" });
+        return;
+      }
+
+      if (data?.length) {
+        setAccounts(data.map((row) => ({
+          code: row.code,
+          nameAr: row.name_ar,
+          nameEn: row.name_en,
+          cashFlowType: row.cash_flow_type,
+          enablePayments: row.enable_payments,
+          showExpenseClaims: row.show_expense_claims,
+          accountType: row.account_type,
+          level: row.level,
+          isMainCategory: row.is_main_category,
+          categoryColor: row.category_color ?? undefined,
+          currencyBadge: row.currency_badge ?? undefined,
+          isSystem: row.is_system,
+          parentCode: row.parent_code ?? "",
+        })));
+      }
+    };
+
+    void loadAccounts();
+  }, []);
 
   const hasChildren = (code: string) =>
     accounts.some((a) => a.parentCode === code);
@@ -65,15 +125,24 @@ export default function ChartOfAccountsTree() {
     return accounts.find((a) => a.code === rootCode && a.level === 0);
   };
 
-  const handleSaveAccount = (updated: AccountNode) => {
+  const handleSaveAccount = async (updated: AccountNode) => {
+    const { error } = await supabase
+      .from("accounting_accounts")
+      .upsert(toDatabaseAccount(updated), { onConflict: "code" });
+
+    if (error) {
+      toast({ title: "تعذر حفظ الحساب", description: error.message, variant: "destructive" });
+      return;
+    }
+
     setAccounts((prev) =>
       prev.map((a) => (a.code === updated.code ? updated : a))
     );
     setEditingAccount(null);
-    toast({ title: "تم الحفظ", description: "تم تحديث بيانات الحساب بنجاح" });
+    toast({ title: "تم الحفظ", description: "تم تحديث بيانات الحساب وربطه بقاعدة البيانات" });
   };
 
-  const handleDeleteAccount = (code: string) => {
+  const handleDeleteAccount = async (code: string) => {
     const account = accounts.find((a) => a.code === code);
     if (!account) return;
 
@@ -96,8 +165,14 @@ export default function ChartOfAccountsTree() {
       return;
     }
 
+    const { error } = await supabase.from("accounting_accounts").delete().eq("code", code);
+    if (error) {
+      toast({ title: "تعذر حذف الحساب", description: error.message, variant: "destructive" });
+      return;
+    }
+
     setAccounts((prev) => prev.filter((a) => a.code !== code));
-    toast({ title: "تم الحذف", description: "تم حذف الحساب بنجاح" });
+    toast({ title: "تم الحذف", description: "تم حذف الحساب من قاعدة البيانات" });
   };
 
   const handleAddSubAccount = (parentCode: string, isBank = false) => {

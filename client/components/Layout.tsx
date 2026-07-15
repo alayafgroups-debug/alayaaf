@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -39,8 +39,8 @@ import {
   Scale,
   MapPin,
 } from "lucide-react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { readUserSession, hasFullAccess, hasPermission, permissionForMainPath, permissionForHRPath } from "@/lib/authSession";
 
 interface LayoutProps {
   children: ReactNode;

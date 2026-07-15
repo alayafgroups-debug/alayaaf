@@ -69,19 +69,22 @@ export function permissionForMainPath(path: string): string | null {
 }
 
 export function permissionForHRPath(path: string): string[] {
+  // Each path maps to exactly ONE canonical key so that disabling that key
+  // in the role editor immediately hides the item.
   if (path === "/hr" || path === "/hr/dashboard") return ["module.hr"];
   if (path.startsWith("/hr/employees") || path.startsWith("/hr/user-logs")) return ["hr.employees"];
-  if (path.startsWith("/hr/requests")) return ["requests.sent.view", "requests.incoming.view"];
-  if (path.startsWith("/hr/attendance")) return ["hr.attendance", "attendance.view"];
-  if (path.startsWith("/hr/payroll")) return ["hr.payroll", "payroll.view"];
-  if (path.startsWith("/hr/reports")) return ["hr.reports", "reports.view"];
-  if (path.startsWith("/hr/penalties")) return ["hr.penalties", "penalties.view"];
-  if (path.startsWith("/hr/leaves")) return ["hr.leaves", "leaves.view"];
+  if (path.startsWith("/hr/requests")) return ["requests.sent.view"];
+  if (path.startsWith("/hr/attendance")) return ["hr.attendance"];
+  if (path.startsWith("/hr/payroll")) return ["hr.payroll"];
+  if (path.startsWith("/hr/reports")) return ["hr.reports"];
+  if (path.startsWith("/hr/penalties")) return ["hr.penalties"];
+  if (path.startsWith("/hr/leaves")) return ["hr.leaves"];
   if (path.startsWith("/hr/termination")) return ["hr.termination"];
   if (path.startsWith("/hr/insurance")) return ["insurance.view"];
-  if (path.startsWith("/hr/approvals")) return ["requests.incoming.view", "requests.approve"];
+  if (path.startsWith("/hr/approvals")) return ["requests.incoming.view"];
   if (path.startsWith("/hr/financial-setup")) return ["finance.view"];
-  if (path.startsWith("/hr/succession") || path.startsWith("/hr/certificates")) return ["module.hr"];
+  if (path.startsWith("/hr/succession")) return ["hr.succession"];
+  if (path.startsWith("/hr/certificates")) return ["hr.certificates"];
   if (path.startsWith("/hr/organization")) return ["hr.org"];
   if (path.startsWith("/hr/permissions")) return ["hr.permissions"];
   if (path.startsWith("/hr/settings")) return ["hr.settings"];

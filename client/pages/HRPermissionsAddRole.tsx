@@ -47,6 +47,8 @@ const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
         { key: "hr.penalties", label: "المساءلات والإنذارات" },
         { key: "hr.reports", label: "التقارير" },
         { key: "hr.termination", label: "إنهاء الخدمة" },
+        { key: "hr.succession", label: "التعاقب الوظيفي" },
+        { key: "hr.certificates", label: "شهادات الخبرة" },
         { key: "hr.settings", label: "إعدادات الموارد البشرية" },
         { key: "hr.permissions", label: "الأدوار والصلاحيات" },
         { key: "hr.org", label: "الهيكل التنظيمي" },

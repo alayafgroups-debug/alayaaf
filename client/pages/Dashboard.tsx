@@ -2,7 +2,8 @@ import Layout from "@/components/Layout";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useMemo } from "react";
-import { readUserSession, hasFullAccess, hasPermission } from "@/lib/authSession";
+import { checkPerm } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { supabase } from "@/lib/supabaseClient";
 import {
   TrendingUp,
@@ -59,12 +60,10 @@ function statusClasses(status: string) {
 
 /* ── Component ── */
 export default function Dashboard() {
-  const userSession = readUserSession();
+  const { permissions: livePerms } = useRolePermissions();
   const modules = useMemo(() => {
-    if (hasFullAccess(userSession)) return ALL_MODULES;
-    return ALL_MODULES.filter((m) => hasPermission(userSession, m.permKey));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userSession?.role]);
+    return ALL_MODULES.filter((m) => checkPerm(livePerms, m.permKey));
+  }, [livePerms]);
 
   const [kpis, setKpis] = useState<KpiData>({ totalSales: 0, totalPurchases: 0, invoiceCount: 0, activeCustomers: 0 });
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);

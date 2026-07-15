@@ -10,14 +10,6 @@ export type UserSession = {
   portal: "business" | "employee";
 };
 
-const FULL_ACCESS_ROLES = new Set([
-  "مدير النظام",
-  "مدير عام",
-  "system admin",
-  "general manager",
-  "admin",
-]);
-
 export function readUserSession(): UserSession | null {
   try {
     const value = localStorage.getItem("user_session");
@@ -38,17 +30,32 @@ export function readUserSession(): UserSession | null {
   }
 }
 
-export function hasFullAccess(session: UserSession | null) {
-  return Boolean(session && FULL_ACCESS_ROLES.has(session.role.trim().toLowerCase()));
+/**
+ * Check a permission key against a LIVE permissions map (fetched from DB).
+ * Returns true when the map is empty (no restrictions configured yet).
+ */
+export function checkPerm(liveMap: PermissionMap, ...keys: string[]): boolean {
+  const hasAnyKey = Object.keys(liveMap).length > 0;
+  if (!hasAnyKey) return true;          // no rules configured → show everything
+  return keys.some((k) => liveMap[k] === true);
 }
 
-export function hasPermission(session: UserSession | null, ...keys: string[]) {
+// ── Legacy helpers kept for non-sidebar code ─────────────────────────────────
+export function hasPermission(session: UserSession | null, ...keys: string[]): boolean {
   if (!session) return false;
-  if (hasFullAccess(session)) return true;
-  return keys.some((key) => session.permissions[key] === true);
+  return checkPerm(session.permissions, ...keys);
 }
 
-export function permissionForMainPath(path: string) {
+export function hasFullAccess(session: UserSession | null): boolean {
+  if (!session) return false;
+  const perms = session.permissions;
+  const keys = Object.keys(perms);
+  if (keys.length === 0) return true;
+  return keys.every((k) => perms[k] === true);
+}
+
+// ── Path → permission key helpers ────────────────────────────────────────────
+export function permissionForMainPath(path: string): string | null {
   if (path === "/") return null;
   if (path.startsWith("/sales")) return "module.sales";
   if (path.startsWith("/purchases")) return "module.purchases";
@@ -79,17 +86,4 @@ export function permissionForHRPath(path: string): string[] {
   if (path.startsWith("/hr/permissions")) return ["hr.permissions"];
   if (path.startsWith("/hr/settings")) return ["hr.settings"];
   return ["module.hr"];
-}
-
-export function canAccessPath(session: UserSession | null, path: string) {
-  if (!session || session.portal !== "business") return false;
-  if (hasFullAccess(session)) return true;
-  if (path.startsWith("/hr")) return hasPermission(session, ...permissionForHRPath(path));
-  const key = permissionForMainPath(path);
-  return key === null || hasPermission(session, key);
-}
-
-export function firstAllowedBusinessPath(session: UserSession | null) {
-  const candidates = ["/", "/sales", "/purchases", "/hr/dashboard", "/crm", "/expenses", "/users", "/ai", "/settings"];
-  return candidates.find((path) => canAccessPath(session, path)) ?? "/login";
 }

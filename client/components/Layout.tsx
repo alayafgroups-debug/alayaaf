@@ -40,7 +40,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { readUserSession, hasFullAccess, hasPermission, permissionForMainPath, permissionForHRPath } from "@/lib/authSession";
+import { readUserSession, checkPerm, permissionForMainPath, permissionForHRPath } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 
 interface LayoutProps {
   children: ReactNode;
@@ -276,24 +277,22 @@ function HRSidebar({
   const navigate = useNavigate();
   const navRef = useRef<HTMLElement>(null);
   const userSession = readUserSession();
-  const isFullAccess = hasFullAccess(userSession);
+  const { permissions: livePerms } = useRolePermissions();
   const allowedHRItems = useMemo(() => {
-    if (isFullAccess) return hrNavItems;
     return hrNavItems
       .filter((item) => {
         if (item.isHeader) return true;
         if (item.hasChildren && item.children) {
-          return item.children.some((c) => hasPermission(userSession, ...permissionForHRPath(c.href)));
+          return item.children.some((c) => checkPerm(livePerms, ...permissionForHRPath(c.href)));
         }
-        return hasPermission(userSession, ...permissionForHRPath(item.href));
+        return checkPerm(livePerms, ...permissionForHRPath(item.href));
       })
       .map((item) =>
         item.hasChildren && item.children
-          ? { ...item, children: item.children.filter((c) => hasPermission(userSession, ...permissionForHRPath(c.href))) }
+          ? { ...item, children: item.children.filter((c) => checkPerm(livePerms, ...permissionForHRPath(c.href))) }
           : item,
       );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFullAccess, userSession?.role]);
+  }, [livePerms]);
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -605,7 +604,7 @@ function MainSidebar({
   const navigate = useNavigate();
   const navRef = useRef<HTMLElement>(null);
   const userSession = readUserSession();
-  const isFullAccess = hasFullAccess(userSession);
+  const { permissions: livePerms } = useRolePermissions();
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -642,13 +641,11 @@ function MainSidebar({
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
   const navItems = useMemo(() => {
-    if (isFullAccess) return allNavItems;
     return allNavItems.filter((item) => {
       const key = permissionForMainPath(item.href);
-      return key === null || hasPermission(userSession, key);
+      return key === null || checkPerm(livePerms, key);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFullAccess, userSession?.role]);
+  }, [livePerms]);
 
   const lastAutoExpandedPath = useRef<string | null>(null);
 

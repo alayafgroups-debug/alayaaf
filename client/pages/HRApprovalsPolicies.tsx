@@ -1,38 +1,95 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/hooks/use-toast";
+
+const SETTING_KEY = "approval_policies";
+
+const flatRequestTypes = [
+  "الإجازات", "نقل", "صيانة", "التعريف بالراتب", "صرف رواتب الموظفين", "إعادة تقييم", "إخلاء طرف", "اعتماد مبيعات مندوب منطقة", "تجديد عهدة مالية", "اعتماد خطة تدريبية", "جوائز",
+  "السلف", "دورة تدريبية", "استئذان", "تصفية مستحقات", "وظيفة شاغرة", "استقالة", "مهمة عمل", "صرف عمولات المندوبين", "إغلاق عهدة مالية", "صرف مستحقات إدارة",
+  "صرف", "عمل إضافي", "انتداب", "أخرى", "إقالة موظف", "صرف إمتياز مالي", "صرف عمولة", "صرف عمولة مشرف", "إنهاء خدمة موظف", "صرف المستحقات",
+  "شراء", "مباشرة العمل", "الموافقة على تقييم", "اعتماد مخالفة", "تعديل راتب", "عهدة مالية", "مخالصة ذمة موظف",
+];
+
+type Policies = {
+  eSignature: string;
+  autoDelegation: string;
+  autoBypass: string;
+  relatedRequests: string[];
+};
+
+const defaults: Policies = {
+  eSignature: "yes",
+  autoDelegation: "no",
+  autoBypass: "no",
+  relatedRequests: [...flatRequestTypes],
+};
 
 export default function HRApprovalsPolicies() {
-  const requestTypes = [
-    ["الإجازات", "السلف", "صرف"],
-    ["نقل", "دورة تدريبية", "عمل إضافي"],
-    ["صيانة", "استئذان", "انتداب"],
-    ["التعريف بالراتب", "تصفية مستحقات", "أخرى"],
-    ["صرف رواتب الموظفين", "وظيفة شاغرة", "إقالة موظف"],
-    ["إعادة تقييم", "استقالة", "صرف إمتياز مالي"],
-    ["إخلاء طرف", "مهمة عمل", "صرف عمولة"],
-    ["اعتماد مبيعات مندوب منطقة", "صرف عمولات المندوبين", "صرف عمولة مشرف"],
-    ["تجديد عهدة مالية", "إغلاق عهدة مالية", "إنهاء خدمة موظف"],
-    ["اعتماد خطة تدريبية", "صرف مستحقات إدارة", "صرف المستحقات"],
-    ["جوائز", "", ""],
-    ["مباشرة العمل", "", ""],
-    ["الموافقة على تقييم", "", ""],
-    ["اعتماد مخالفة", "", ""],
-    ["تعديل راتب", "", ""],
-    ["عهدة مالية", "", ""],
-    ["مخالصة ذمة موظف", "", ""]
-  ];
+  const [policies, setPolicies] = useState<Policies>(defaults);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Flatten for easier mapping
-  const flatRequestTypes = [
-    "الإجازات", "نقل", "صيانة", "التعريف بالراتب", "صرف رواتب الموظفين", "إعادة تقييم", "إخلاء طرف", "اعتماد مبيعات مندوب منطقة", "تجديد عهدة مالية", "اعتماد خطة تدريبية", "جوائز",
-    "السلف", "دورة تدريبية", "استئذان", "تصفية مستحقات", "وظيفة شاغرة", "استقالة", "مهمة عمل", "صرف عمولات المندوبين", "إغلاق عهدة مالية", "صرف مستحقات إدارة",
-    "صرف", "عمل إضافي", "انتداب", "أخرى", "إقالة موظف", "صرف إمتياز مالي", "صرف عمولة", "صرف عمولة مشرف", "إنهاء خدمة موظف", "صرف المستحقات",
-    "شراء", "مباشرة العمل", "الموافقة على تقييم", "اعتماد مخالفة", "تعديل راتب", "عهدة مالية", "مخالصة ذمة موظف"
-  ];
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("hr_settings")
+        .select("setting_value")
+        .eq("setting_key", SETTING_KEY)
+        .maybeSingle();
+      if (data?.setting_value) {
+        setPolicies({ ...defaults, ...(data.setting_value as Partial<Policies>) });
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const toggleType = (type: string) => {
+    setPolicies((p) => ({
+      ...p,
+      relatedRequests: p.relatedRequests.includes(type)
+        ? p.relatedRequests.filter((t) => t !== type)
+        : [...p.relatedRequests, type],
+    }));
+  };
+
+  const toggleAll = (checked: boolean) => {
+    setPolicies((p) => ({ ...p, relatedRequests: checked ? [...flatRequestTypes] : [] }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("hr_settings")
+      .upsert(
+        { id: SETTING_KEY, setting_key: SETTING_KEY, setting_value: policies, updated_at: new Date().toISOString() },
+        { onConflict: "setting_key" },
+      );
+    setSaving(false);
+    if (error) {
+      toast({ title: "تعذّر الحفظ", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تم حفظ سياسات الموافقات بنجاح" });
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="p-6 flex items-center justify-center h-64" dir="rtl">
+          <Loader2 className="h-8 w-8 animate-spin text-[#004e89]" />
+        </div>
+      </Layout>
+    );
+  }
+
+  const allSelected = policies.relatedRequests.length === flatRequestTypes.length;
 
   return (
     <Layout>
@@ -43,10 +100,13 @@ export default function HRApprovalsPolicies() {
           </div>
 
           <div className="space-y-8">
-            {/* Electronic Signature Section */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">تفعيل التوقيع الالكتروني في معالجة الطلبات</Label>
-              <RadioGroup defaultValue="yes" className="flex gap-6 mt-2">
+              <RadioGroup
+                value={policies.eSignature}
+                onValueChange={(v) => setPolicies((p) => ({ ...p, eSignature: v }))}
+                className="flex gap-6 mt-2"
+              >
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="yes" id="e_sig_yes" />
                   <Label htmlFor="e_sig_yes" className="font-normal cursor-pointer">نعم</Label>
@@ -61,29 +121,35 @@ export default function HRApprovalsPolicies() {
               </div>
             </div>
 
-            {/* Related Requests Selection */}
             <div className="space-y-4">
               <Label className="text-sm font-bold text-gray-800 border-b pb-2 block">الطلبات المرتبطة</Label>
-              
+
               <div className="flex items-center space-x-2 space-x-reverse mb-4">
-                <Checkbox id="select_all" />
+                <Checkbox id="select_all" checked={allSelected} onCheckedChange={(c) => toggleAll(Boolean(c))} />
                 <Label htmlFor="select_all" className="font-medium cursor-pointer">اختيار الكل</Label>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-y-3 gap-x-8">
                 {flatRequestTypes.map((type, index) => (
                   <div key={index} className="flex items-center space-x-2 space-x-reverse">
-                    <Checkbox id={`type_${index}`} defaultChecked />
+                    <Checkbox
+                      id={`type_${index}`}
+                      checked={policies.relatedRequests.includes(type)}
+                      onCheckedChange={() => toggleType(type)}
+                    />
                     <Label htmlFor={`type_${index}`} className="font-normal cursor-pointer text-sm">{type}</Label>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Auto Delegation Section */}
             <div className="space-y-3 pt-4 border-t">
               <Label className="text-sm font-medium">تفعيل التفويض التلقائي للموظف البديل لمعالجة الطلبات</Label>
-              <RadioGroup defaultValue="no" className="flex gap-6 mt-2">
+              <RadioGroup
+                value={policies.autoDelegation}
+                onValueChange={(v) => setPolicies((p) => ({ ...p, autoDelegation: v }))}
+                className="flex gap-6 mt-2"
+              >
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="yes" id="auto_del_yes" />
                   <Label htmlFor="auto_del_yes" className="font-normal cursor-pointer">نعم</Label>
@@ -98,10 +164,13 @@ export default function HRApprovalsPolicies() {
               </div>
             </div>
 
-            {/* Auto Bypass Section */}
             <div className="space-y-3 pt-4 border-t">
               <Label className="text-sm font-medium">تفعيل تجاوز معالجة الطلب التلقائي على الطلب</Label>
-              <RadioGroup defaultValue="no" className="flex gap-6 mt-2">
+              <RadioGroup
+                value={policies.autoBypass}
+                onValueChange={(v) => setPolicies((p) => ({ ...p, autoBypass: v }))}
+                className="flex gap-6 mt-2"
+              >
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="yes" id="bypass_yes" />
                   <Label htmlFor="bypass_yes" className="font-normal cursor-pointer">نعم</Label>
@@ -117,7 +186,9 @@ export default function HRApprovalsPolicies() {
             </div>
 
             <div className="flex justify-end pt-6">
-              <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">حفظ</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">
+                {saving ? "جاري الحفظ..." : "حفظ"}
+              </Button>
             </div>
           </div>
         </div>

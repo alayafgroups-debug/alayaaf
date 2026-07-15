@@ -65,15 +65,15 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("leave_requests").insert([
+      const { error } = await supabase.from("hr_requests").insert([
         {
           emp_id: empId,
           emp_name: empName,
-          leave_type: schema.title,
+          request_type: schema.title,
           start_date: startDate,
           end_date: endDate,
           status: "معلق",
-          notes: JSON.stringify(formData),
+          details: formData,
         },
       ]);
 

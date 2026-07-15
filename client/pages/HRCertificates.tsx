@@ -144,7 +144,7 @@ export default function HRCertificates() {
       supabase
         .from("employees")
         .select("id, emp_id, name, job_title, hire_date")
-        .eq("status", "نشط")
+        .in("status", ["نشط", "فعال"])
         .order("name", { ascending: true }),
     ]);
 

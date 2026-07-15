@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 
 type EmpLite = {
   id: string;
+  empId: string;
   name: string;
   jobTitle: string;
   department: string;
@@ -19,6 +20,29 @@ type EmpLite = {
   status: string;
   baseSalary: number;
 };
+
+type PayrollCalc = {
+  workDays: number;
+  presentDays: number;
+  absentDays: number;
+  basic: number;
+  allowances: number;
+  overtime: number;
+  deductions: number;
+  net: number;
+};
+
+// عدد أيام العمل في الشهر باستثناء الجمعة والسبت
+function workingDaysInMonth(period: string): number {
+  const [year, month] = period.split("-").map(Number);
+  const days = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= days; d++) {
+    const weekday = new Date(year, month - 1, d).getDay();
+    if (weekday !== 5 && weekday !== 6) count++;
+  }
+  return count;
+}
 
 const monthNames: Record<string, string> = {
   "01": "يناير",
@@ -72,8 +96,8 @@ export default function HRPayrollStatement() {
       try {
         const { data, error } = await supabase
           .from("employees")
-          .select("id, name, job_title, department, branch, work_location, employment_type, status, base_salary")
-          .order("name");
+          .select("id, emp_id, name, job_title, department, branch, work_location, employment_type, status, base_salary")
+        .order("name");
 
         if (error) {
           toast({ title: "تعذر تحميل الموظفين", description: error.message });
@@ -84,6 +108,7 @@ export default function HRPayrollStatement() {
           setEmployees(
             data.map((r) => ({
               id: String(r.id ?? ""),
+              empId: String(r.emp_id ?? r.id ?? ""),
               name: String(r.name ?? ""),
               jobTitle: String(r.job_title ?? ""),
               department: String(r.department ?? ""),
@@ -162,6 +187,68 @@ export default function HRPayrollStatement() {
 
   const selectedEmployees = useMemo(() => filtered.filter((e) => selected.has(e.id)), [filtered, selected]);
 
+  const [calc, setCalc] = useState<Record<string, PayrollCalc>>({});
+
+  // حساب الراتب فعلياً من الحضور والجزاءات والعمل الإضافي
+  const computePayroll = async (targetEmployees: EmpLite[]): Promise<Record<string, PayrollCalc>> => {
+    const [year, month] = period.split("-").map(Number);
+    const startDate = `${period}-01`;
+    const endDate = `${period}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+    const workDays = workingDaysInMonth(period);
+
+    const empIds = targetEmployees.map((e) => e.empId).filter(Boolean);
+    const empUuids = targetEmployees.map((e) => e.id).filter(Boolean);
+
+    const [attRes, penRes, otRes] = await Promise.all([
+      supabase.from("attendance").select("emp_id, status, late_minutes, date").gte("date", startDate).lte("date", endDate).in("emp_id", empIds.length ? empIds : ["__none__"]),
+      supabase.from("penalties").select("employee_id, amount, date").gte("date", startDate).lte("date", endDate).in("employee_id", empUuids.length ? empUuids : ["__none__"]),
+      supabase.from("overtime_records").select("employee_id, amount, date, status").gte("date", startDate).lte("date", endDate).in("employee_id", empUuids.length ? empUuids : ["__none__"]),
+    ]);
+
+    const attByEmp: Record<string, { present: number; absent: number }> = {};
+    (attRes.data ?? []).forEach((r: any) => {
+      const key = String(r.emp_id);
+      if (!attByEmp[key]) attByEmp[key] = { present: 0, absent: 0 };
+      if (String(r.status).includes("غائب")) attByEmp[key].absent++;
+      else attByEmp[key].present++;
+    });
+
+    const penByEmp: Record<string, number> = {};
+    (penRes.data ?? []).forEach((r: any) => {
+      const key = String(r.employee_id);
+      penByEmp[key] = (penByEmp[key] ?? 0) + Number(r.amount ?? 0);
+    });
+
+    const otByEmp: Record<string, number> = {};
+    (otRes.data ?? []).forEach((r: any) => {
+      if (String(r.status ?? "").includes("مرفوض")) return;
+      const key = String(r.employee_id);
+      otByEmp[key] = (otByEmp[key] ?? 0) + Number(r.amount ?? 0);
+    });
+
+    const result: Record<string, PayrollCalc> = {};
+    targetEmployees.forEach((e) => {
+      const att = attByEmp[e.empId] ?? { present: 0, absent: 0 };
+      const dailyRate = e.baseSalary / 30;
+      const absenceDeduction = att.absent * dailyRate;
+      const penalties = penByEmp[e.id] ?? 0;
+      const overtime = otByEmp[e.id] ?? 0;
+      const deductions = Math.round((absenceDeduction + penalties) * 100) / 100;
+      const net = Math.round((e.baseSalary + overtime - deductions) * 100) / 100;
+      result[e.id] = {
+        workDays,
+        presentDays: att.present,
+        absentDays: att.absent,
+        basic: e.baseSalary,
+        allowances: 0,
+        overtime,
+        deductions,
+        net,
+      };
+    });
+    return result;
+  };
+
   const createPayrollRecords = async (targetEmployees: EmpLite[]) => {
     const { data: existing } = await supabase
       .from("payroll")
@@ -169,20 +256,25 @@ export default function HRPayrollStatement() {
       .eq("month", period);
 
     const existingIds = new Set((existing || []).map((r) => String(r.emp_id)));
+    const computed = await computePayroll(targetEmployees);
 
     const payload = targetEmployees
-      .filter((e) => !existingIds.has(e.id))
-      .map((e) => ({
-        emp_id: e.id,
-        emp_name: e.name,
-        department: e.department,
-        month: period,
-        basic_salary: e.baseSalary,
-        allowances: 0,
-        deductions: 0,
-        net_salary: e.baseSalary,
-        status: "معلق",
-      }));
+      .filter((e) => !existingIds.has(e.empId))
+      .map((e) => {
+        const c = computed[e.id];
+        return {
+          emp_id: e.empId,
+          emp_name: e.name,
+          department: e.department,
+          month: period,
+          basic_salary: c.basic,
+          allowances: c.allowances + c.overtime,
+          deductions: c.deductions,
+          net_salary: c.net,
+          status: "معلق",
+          notes: `أيام العمل ${c.workDays} - حضور ${c.presentDays} - غياب ${c.absentDays}`,
+        };
+      });
 
     if (payload.length === 0) {
       toast({ title: "موجود مسبقاً", description: "تم إنشاء مسير هؤلاء الموظفين مسبقاً" });
@@ -218,11 +310,13 @@ export default function HRPayrollStatement() {
     }
   };
 
-  const handleFullReport = () => {
+  const handleFullReport = async () => {
     if (selectedEmployees.length === 0) {
       toast({ title: "تنبيه", description: "اختر الموظفين أولاً لعرض التقرير الكامل", variant: "destructive" });
       return;
     }
+    const computed = await computePayroll(selectedEmployees);
+    setCalc(computed);
     setPageMode("report");
   };
 
@@ -286,27 +380,32 @@ export default function HRPayrollStatement() {
       if (existingError) throw existingError;
 
       const existingIds = new Set((existing || []).map((row) => String(row.emp_id)));
+      const computed = await computePayroll(target);
       const missingPayload = target
-        .filter((employee) => !existingIds.has(employee.id))
-        .map((employee) => ({
-          emp_id: employee.id,
-          emp_name: employee.name,
-          department: employee.department,
-          month: period,
-          basic_salary: employee.baseSalary,
-          allowances: 0,
-          deductions: 0,
-          net_salary: employee.baseSalary,
-          status: stoppedEmployeeIds.has(employee.id) ? "موقوف" : "معلق",
-        }));
+        .filter((employee) => !existingIds.has(employee.empId))
+        .map((employee) => {
+          const c = computed[employee.id];
+          return {
+            emp_id: employee.empId,
+            emp_name: employee.name,
+            department: employee.department,
+            month: period,
+            basic_salary: c.basic,
+            allowances: c.allowances + c.overtime,
+            deductions: c.deductions,
+            net_salary: c.net,
+            status: stoppedEmployeeIds.has(employee.id) ? "موقوف" : "معلق",
+            notes: `أيام العمل ${c.workDays} - حضور ${c.presentDays} - غياب ${c.absentDays}`,
+          };
+        });
 
       if (missingPayload.length > 0) {
         const { error } = await supabase.from("payroll").insert(missingPayload);
         if (error) throw error;
       }
 
-      const stoppedIds = target.filter((employee) => stoppedEmployeeIds.has(employee.id)).map((employee) => employee.id);
-      const activeIds = target.filter((employee) => !stoppedEmployeeIds.has(employee.id)).map((employee) => employee.id);
+      const stoppedIds = target.filter((employee) => stoppedEmployeeIds.has(employee.id)).map((employee) => employee.empId);
+      const activeIds = target.filter((employee) => !stoppedEmployeeIds.has(employee.id)).map((employee) => employee.empId);
 
       if (stoppedIds.length > 0) {
         const { error } = await supabase.from("payroll").update({ status: "موقوف" }).eq("month", period).in("emp_id", stoppedIds);
@@ -477,21 +576,24 @@ export default function HRPayrollStatement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {selectedEmployees.map((emp, idx) => (
+                  {selectedEmployees.map((emp, idx) => {
+                    const c = calc[emp.id];
+                    return (
                     <tr key={emp.id} className="hover:bg-gray-50">
                       <td className="py-2 px-2">{idx + 1}</td>
                       <td className="py-2 px-2 font-medium">{emp.name}</td>
                       <td className="py-2 px-2">{emp.department || "-"}</td>
                       <td className="py-2 px-2">{emp.branch || "-"}</td>
-                      <td className="py-2 px-2">30</td>
-                      <td className="py-2 px-2">{emp.baseSalary.toFixed(2)}</td>
+                      <td className="py-2 px-2">{c ? `${c.presentDays}/${c.workDays}` : "-"}</td>
+                      <td className="py-2 px-2">{(c?.basic ?? emp.baseSalary).toFixed(2)}</td>
+                      <td className="py-2 px-2">{(c?.allowances ?? 0).toFixed(2)}</td>
+                      <td className="py-2 px-2">{(c?.overtime ?? 0).toFixed(2)}</td>
                       <td className="py-2 px-2">0.00</td>
-                      <td className="py-2 px-2">0.00</td>
-                      <td className="py-2 px-2">0.00</td>
-                      <td className="py-2 px-2 text-red-600">0.00</td>
-                      <td className="py-2 px-2 font-semibold text-emerald-700">{emp.baseSalary.toFixed(2)}</td>
+                      <td className="py-2 px-2 text-red-600">{(c?.deductions ?? 0).toFixed(2)}</td>
+                      <td className="py-2 px-2 font-semibold text-emerald-700">{(c?.net ?? emp.baseSalary).toFixed(2)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

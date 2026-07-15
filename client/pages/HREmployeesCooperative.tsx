@@ -30,7 +30,7 @@ function getCooperativeInitialData(): EmpFormData {
   return {
     ...data,
     employmentType: "متعاون",
-    status: "نشط",
+    status: "فعال",
   };
 }
 
@@ -181,8 +181,8 @@ export default function HREmployeesCooperative() {
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
             >
               <option value="">جميع الحالات</option>
-              <option value="نشط">نشط</option>
-              <option value="غير نشط">غير نشط</option>
+              <option value="فعال">فعال</option>
+              <option value="غير فعال">غير فعال</option>
               <option value="إجازة">إجازة</option>
               <option value="منتهي">منتهي</option>
             </select>

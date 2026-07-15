@@ -60,8 +60,8 @@ export default function AdminEmployeeRegistration() {
             email: formData.email.toLowerCase(),
             emp_id: formData.empId,
             name: formData.name,
-            role: formData.role,
-            status: "نشط",
+            employee_role: formData.role,
+            status: "فعال",
             permissions: {
               view_attendance: true,
               view_payroll: true,

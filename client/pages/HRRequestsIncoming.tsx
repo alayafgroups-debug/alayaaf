@@ -9,8 +9,17 @@ import { toast } from "@/hooks/use-toast";
 type RequestRow = {
   id: string; requestDate: string; empId: string; empName: string;
   moveType: string; requestType: string; status: string; lastUpdate: string;
-  adminNote: string;
+  adminNote: string; source: "leave" | "request";
 };
+
+const normalizeStatus = (raw: string) =>
+  ["معلق", "معلقة", "pending"].includes(raw)
+    ? "معلق"
+    : ["موافق", "معتمدة", "approved"].includes(raw)
+    ? "موافق"
+    : ["مرفوض", "مرفوضة", "rejected"].includes(raw)
+    ? "مرفوض"
+    : (raw || "معلق");
 
 export default function HRRequestsIncoming() {
   const [items, setItems] = useState<RequestRow[]>([]);
@@ -22,26 +31,30 @@ export default function HRRequestsIncoming() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false });
-      if (data) setItems(data.map((r: any) => {
-        const rawStatus = String(r.status ?? "").trim();
-        const status = ["معلق", "معلقة", "pending"].includes(rawStatus)
-          ? "معلق"
-          : ["موافق", "معتمدة", "approved"].includes(rawStatus)
-          ? "موافق"
-          : ["مرفوض", "مرفوضة", "rejected"].includes(rawStatus)
-          ? "مرفوض"
-          : (rawStatus || "معلق");
+      const [leaveRes, reqRes] = await Promise.all([
+        supabase.from("leave_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("hr_requests").select("*").order("created_at", { ascending: false }),
+      ]);
 
-        return {
-          id: String(r.id), requestDate: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
-          empId: r.emp_id ?? "", empName: r.emp_name ?? "",
-          moveType: "إجازة", requestType: r.leave_type ?? "-",
-          status,
-          lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
-          adminNote: r.admin_note ?? "",
-        };
+      const leaveRows: RequestRow[] = (leaveRes.data ?? []).map((r: any) => ({
+        id: String(r.id), requestDate: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
+        empId: r.emp_id ?? "", empName: r.emp_name ?? "",
+        moveType: "إجازة", requestType: r.leave_type ?? "-",
+        status: normalizeStatus(String(r.status ?? "").trim()),
+        lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
+        adminNote: r.admin_note ?? "", source: "leave",
       }));
+
+      const reqRows: RequestRow[] = (reqRes.data ?? []).map((r: any) => ({
+        id: String(r.id), requestDate: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
+        empId: r.emp_id ?? "", empName: r.emp_name ?? "",
+        moveType: "طلب", requestType: r.request_type ?? "-",
+        status: normalizeStatus(String(r.status ?? "").trim()),
+        lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
+        adminNote: r.admin_note ?? "", source: "request",
+      }));
+
+      setItems([...leaveRows, ...reqRows].sort((a, b) => b.requestDate.localeCompare(a.requestDate)));
     } catch { setItems([]); } finally { setLoading(false); }
   };
 
@@ -54,7 +67,7 @@ export default function HRRequestsIncoming() {
   const updateRequestStatus = async (item: RequestRow, status: "موافق" | "مرفوض") => {
     setUpdatingId(item.id);
     const { error } = await supabase
-      .from("leave_requests")
+      .from(item.source === "leave" ? "leave_requests" : "hr_requests")
       .update({
         status,
         admin_note: reviewNotes[item.id]?.trim() || item.adminNote || null,

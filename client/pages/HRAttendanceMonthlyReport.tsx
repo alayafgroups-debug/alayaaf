@@ -39,7 +39,7 @@ export default function HRAttendanceMonthlyReport() {
       const { data: emps } = await supabase
         .from("employees")
         .select("department, division")
-        .eq("status", "نشط");
+        .in("status", ["نشط", "فعال"]);
 
       if (emps) {
         const depts = [...new Set(emps.map((e: any) => e.department).filter(Boolean))];
@@ -59,7 +59,7 @@ export default function HRAttendanceMonthlyReport() {
       let empQuery = supabase
         .from("employees")
         .select("id, emp_id, name, department, division")
-        .eq("status", "نشط");
+        .in("status", ["نشط", "فعال"]);
 
       const { data: emps } = await empQuery;
 

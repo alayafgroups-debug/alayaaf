@@ -5,7 +5,16 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 
-type Request = { id: string; type: string; date: string; status: string; notes: string; approver: string };
+type Request = { id: string; type: string; date: string; status: string; notes: string; approver: string; source: "leave" | "request" };
+
+const normalizeStatus = (raw: string) =>
+  ["معلق", "معلقة", "pending"].includes(raw)
+    ? "معلق"
+    : ["موافق", "معتمدة", "approved"].includes(raw)
+    ? "موافق"
+    : ["مرفوض", "مرفوضة", "rejected"].includes(raw)
+    ? "مرفوض"
+    : (raw || "معلق");
 
 const STATUS_STYLE: Record<string, string> = {
   "معلق": "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -22,24 +31,27 @@ export default function HRRequestsSent() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false });
-      if (data) setItems(data.map((r: any) => {
-        const rawStatus = String(r.status ?? "").trim();
-        const status = ["معلق", "معلقة", "pending"].includes(rawStatus)
-          ? "معلق"
-          : ["موافق", "معتمدة", "approved"].includes(rawStatus)
-          ? "موافق"
-          : ["مرفوض", "مرفوضة", "rejected"].includes(rawStatus)
-          ? "مرفوض"
-          : (rawStatus || "معلق");
+      const [leaveRes, reqRes] = await Promise.all([
+        supabase.from("leave_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("hr_requests").select("*").order("created_at", { ascending: false }),
+      ]);
 
-        return {
-          id: String(r.id), type: r.leave_type ?? "إجازة",
-          date: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
-          status, notes: r.notes ?? "-",
-          approver: "مدير الموارد البشرية",
-        };
+      const leaveRows: Request[] = (leaveRes.data ?? []).map((r: any) => ({
+        id: String(r.id), type: r.leave_type ?? "إجازة",
+        date: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
+        status: normalizeStatus(String(r.status ?? "").trim()), notes: r.notes ?? "-",
+        approver: "مدير الموارد البشرية", source: "leave",
       }));
+
+      const reqRows: Request[] = (reqRes.data ?? []).map((r: any) => ({
+        id: String(r.id), type: r.request_type ?? "طلب",
+        date: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
+        status: normalizeStatus(String(r.status ?? "").trim()),
+        notes: r.details ? JSON.stringify(r.details) : "-",
+        approver: "مدير الموارد البشرية", source: "request",
+      }));
+
+      setItems([...leaveRows, ...reqRows].sort((a, b) => b.date.localeCompare(a.date)));
     } catch { setItems([]); } finally { setLoading(false); }
   };
 
@@ -51,7 +63,7 @@ export default function HRRequestsSent() {
 
   const handleDelete = async (item: Request) => {
     if (!confirm("حذف هذا الطلب؟")) return;
-    await supabase.from("leave_requests").delete().eq("id", item.id);
+    await supabase.from(item.source === "leave" ? "leave_requests" : "hr_requests").delete().eq("id", item.id);
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: "تم الحذف" });
   };

@@ -53,7 +53,7 @@ export default function HRDashboard() {
           setEmpData(mapped);
           setStats({
             total: mapped.length,
-            active: mapped.filter((e) => e.status === "نشط").length,
+            active: mapped.filter((e) => e.status === "نشط" || e.status === "فعال").length,
             saudi: mapped.filter((e) => e.nationality === "المملكة العربية السعودية").length,
             totalSalary: mapped.reduce((s, e) => s + e.totalSalary, 0),
           });

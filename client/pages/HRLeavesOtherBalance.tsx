@@ -15,7 +15,7 @@ export default function HRLeavesOtherBalance() {
     (async () => {
       setLoading(true);
       try {
-        const { data: emps } = await supabase.from("employees").select("id, employee_id, name, hire_date, gender").eq("status", "نشط").order("name");
+        const { data: emps } = await supabase.from("employees").select("id, emp_id, name, hire_date, gender").in("status", ["نشط", "فعال"]).order("name");
         const { data: types } = await supabase.from("leave_types").select("*").neq("name", "إجازة سنوية");
         if (!emps || !types) { setLoading(false); return; }
 
@@ -25,7 +25,7 @@ export default function HRLeavesOtherBalance() {
             if (t.gender === "female" && e.gender !== "أنثى") return;
             if (t.gender === "male" && e.gender !== "ذكر") return;
             rows.push({
-              id: `${e.id}-${t.id}`, empId: e.employee_id ?? "", name: e.name ?? "",
+              id: `${e.id}-${t.id}`, empId: e.emp_id ?? "", name: e.name ?? "",
               type: t.name ?? "", annualBalance: String(t.max_days ?? 0) + ".00",
               remainingBalance: String(t.max_days ?? 0) + ".00",
               joinDate: e.hire_date ?? "-", contractDate: e.hire_date ?? "-",

@@ -172,7 +172,7 @@ export const emptyForm = (): EmpFormData => ({
   accountTitle: "",
   employeeRole: "",
   password: "",
-  status: "نشط",
+  status: "فعال",
   empId: "",
   costCenter: "",
   notes: "",

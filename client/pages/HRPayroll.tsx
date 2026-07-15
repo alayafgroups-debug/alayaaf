@@ -243,7 +243,7 @@ export default function HRPayroll() {
       const { data: employees, error: employeesError } = await supabase
         .from("employees")
         .select("id, emp_id, name, department, total_salary, status")
-        .eq("status", "نشط");
+        .in("status", ["نشط", "فعال"]);
 
       if (employeesError) throw employeesError;
 

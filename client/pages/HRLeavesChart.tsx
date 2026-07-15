@@ -18,7 +18,7 @@ export default function HRLeavesChart() {
     (async () => {
       setLoading(true);
       try {
-        const { data: emps } = await supabase.from("employees").select("id, employee_id, name").eq("status", "نشط").order("name");
+        const { data: emps } = await supabase.from("employees").select("id, emp_id, name").in("status", ["نشط", "فعال"]).order("name");
         const { data: leaves } = await supabase.from("leave_requests").select("emp_id, start_date, days, status").eq("status", "موافق");
         if (!emps) { setLoading(false); return; }
 
@@ -33,9 +33,9 @@ export default function HRLeavesChart() {
         });
 
         setItems(emps.map((e: any) => {
-          const empLeaveMonths = leaveMap[e.id] ?? new Set();
+          const empLeaveMonths = leaveMap[e.emp_id] ?? new Set();
           const months = Array.from({ length: 12 }, (_, i) => empLeaveMonths.has(i) ? "إجازة" : "-");
-          return { id: e.id, empId: e.employee_id ?? "", name: e.name ?? "", months };
+          return { id: e.id, empId: e.emp_id ?? "", name: e.name ?? "", months };
         }));
       } catch {} finally { setLoading(false); }
     })();

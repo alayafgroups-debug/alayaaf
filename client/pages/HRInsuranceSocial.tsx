@@ -15,9 +15,9 @@ export default function HRInsuranceSocial() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("employees").select("id, employee_id, name, base_salary, hire_date").eq("status", "نشط").order("name");
+      const { data } = await supabase.from("employees").select("id, emp_id, name, base_salary, hire_date").in("status", ["نشط", "فعال"]).order("name");
       if (data) setItems(data.map((e: any) => ({
-        id: String(e.id), jobId: e.employee_id ?? "", name: e.name ?? "",
+        id: String(e.id), jobId: e.emp_id ?? "", name: e.name ?? "",
         employeeShare: "9.75%", companyShare: "11.75%",
         total: ((e.base_salary ?? 0) * 0.2150).toFixed(2),
         subscriptionNumber: "-", subscriptionDate: e.hire_date ?? "-",

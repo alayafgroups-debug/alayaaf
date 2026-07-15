@@ -65,7 +65,7 @@ export default function EmployeeLogin() {
       // Get user role from employees table
       const { data: empData, error: empError } = await supabase
         .from("employees")
-        .select("id, emp_id, name, role, permissions")
+        .select("id, emp_id, name, employee_role, permissions")
         .eq("email", loginEmail.toLowerCase())
         .single();
 
@@ -83,7 +83,7 @@ export default function EmployeeLogin() {
           email: authData.user.email,
           empId: empData.emp_id,
           name: empData.name,
-          role: empData.role || "employee",
+          role: empData.employee_role || "employee",
           permissions: empData.permissions || {},
         })
       );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
@@ -33,6 +33,9 @@ export type InsuranceItem = {
   notes: string;
 };
 
+export type DeptOpt = { id: string; name: string };
+export type SectionOpt = { id: string; name: string; departmentId: string; department: string };
+
 export type EmpFormData = {
   id: string;
   // Step 1: Personal
@@ -61,7 +64,9 @@ export type EmpFormData = {
   branch: string;
   employmentType: string;
   directorate: string;
+  departmentId: string;
   department: string;
+  sectionId: string;
   otherWorkLocations: string;
   workLocation: string;
   directManager: string;
@@ -136,7 +141,9 @@ export const emptyForm = (): EmpFormData => ({
   branch: "",
   employmentType: "أساسي",
   directorate: "",
+  departmentId: "",
   department: "",
+  sectionId: "",
   otherWorkLocations: "",
   workLocation: "",
   directManager: "",
@@ -205,7 +212,9 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
   branch: String(r.branch ?? ""),
   employmentType: String(r.employment_type ?? "أساسي"),
   directorate: String(r.directorate ?? ""),
+  departmentId: String(r.department_id ?? ""),
   department: String(r.department ?? ""),
+  sectionId: String(r.section_id ?? ""),
   otherWorkLocations: String(r.other_work_locations ?? ""),
   workLocation: String(r.work_location ?? ""),
   directManager: String(r.direct_manager ?? ""),
@@ -327,6 +336,28 @@ export default function EmployeeForm({
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [orgDepartments, setOrgDepartments] = useState<DeptOpt[]>([]);
+  const [orgSections, setOrgSections] = useState<SectionOpt[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const [d, s] = await Promise.all([
+        supabase.from("departments").select("id, name").order("name"),
+        supabase.from("org_sections").select("id, name, department_id, department").order("name"),
+      ]);
+      setOrgDepartments(
+        ((d.data as Record<string, unknown>[]) ?? []).map((x) => ({ id: String(x.id), name: String(x.name ?? "") })),
+      );
+      setOrgSections(
+        ((s.data as Record<string, unknown>[]) ?? []).map((x) => ({
+          id: String(x.id),
+          name: String(x.name ?? ""),
+          departmentId: x.department_id ? String(x.department_id) : "",
+          department: String(x.department ?? ""),
+        })),
+      );
+    })();
+  }, []);
 
   const set = <K extends keyof EmpFormData>(key: K, value: EmpFormData[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -388,7 +419,9 @@ export default function EmployeeForm({
         branch: form.branch,
         employment_type: form.employmentType,
         directorate: form.directorate,
+        department_id: form.departmentId || null,
         department: form.department,
+        section_id: form.sectionId || null,
         other_work_locations: form.otherWorkLocations,
         work_location: form.workLocation,
         direct_manager: form.directManager,
@@ -463,7 +496,7 @@ export default function EmployeeForm({
         {/* Step Content */}
         <div className="bg-white border border-gray-200 rounded-b-xl shadow-sm p-6 mt-0">
           {step === 0 && <Step1Personal form={form} set={set} />}
-          {step === 1 && <Step2Job form={form} set={set} />}
+          {step === 1 && <Step2Job form={form} set={set} departments={orgDepartments} sections={orgSections} />}
           {step === 2 && <Step3Financial form={form} set={set} />}
           {step === 3 && <Step4Permissions form={form} togglePermission={togglePermission} />}
           {step === 4 && <Step5Insurance form={form} set={set} />}
@@ -631,7 +664,23 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
 }
 
 // ─── Step 2: Job Data ────────────────────────────────────────────────────────
-function Step2Job({ form, set }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void }) {
+function Step2Job({ form, set, departments, sections }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[] }) {
+  const availableSections = form.departmentId
+    ? sections.filter((s) => s.departmentId === form.departmentId)
+    : sections;
+
+  const onDirectorateChange = (deptId: string) => {
+    set("departmentId", deptId);
+    set("directorate", departments.find((d) => d.id === deptId)?.name ?? "");
+    set("sectionId", "");
+    set("department", "");
+  };
+
+  const onSectionChange = (sectionId: string) => {
+    set("sectionId", sectionId);
+    set("department", sections.find((s) => s.id === sectionId)?.name ?? "");
+  };
+
   return (
     <div className="space-y-5">
       {/* Row 1: Division / Job Title */}
@@ -652,10 +701,26 @@ function Step2Job({ form, set }: { form: EmpFormData; set: <K extends keyof EmpF
         <div />
       </div>
 
-      {/* Row 3: Directorate / Department */}
+      {/* Row 3: Directorate / Department (real FK links) */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الإدارة *" value={form.directorate} onChange={(v) => set("directorate", v)} options={DEFAULT_DEPARTMENTS} placeholder="--" />
-        <FSelect label="القسم *" value={form.department} onChange={(v) => set("department", v)} options={DEFAULT_SECTIONS} placeholder="--" />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">الإدارة *</label>
+          <select value={form.departmentId} onChange={(e) => onDirectorateChange(e.target.value)} className={inputCls}>
+            <option value="">{departments.length ? "--" : "أضف الإدارات من الهيكل التنظيمي"}</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">القسم *</label>
+          <select value={form.sectionId} onChange={(e) => onSectionChange(e.target.value)} className={inputCls}>
+            <option value="">{availableSections.length ? "--" : "لا توجد أقسام لهذه الإدارة"}</option>
+            {availableSections.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Row 4: Other Locations / Work Location */}

@@ -68,7 +68,7 @@ export default function HRApprovalsPolicies() {
     const { error } = await supabase
       .from("hr_settings")
       .upsert(
-        { id: SETTING_KEY, setting_key: SETTING_KEY, setting_value: policies, updated_at: new Date().toISOString() },
+        [{ setting_key: SETTING_KEY, setting_value: policies, updated_at: new Date().toISOString() }],
         { onConflict: "setting_key" },
       );
     setSaving(false);

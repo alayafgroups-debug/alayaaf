@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 
-type Section = { id: string; name: string; department: string; manager: string; description: string };
+type Section = { id: string; name: string; department: string; departmentId: string; manager: string; description: string };
 
 export default function HROrgSections() {
   const [items, setItems] = useState<Section[]>([]);
@@ -16,6 +16,7 @@ export default function HROrgSections() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
   const [formDept, setFormDept] = useState("");
+  const [formDeptId, setFormDeptId] = useState("");
   const [formManager, setFormManager] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [saving, setSaving] = useState(false);
@@ -27,6 +28,7 @@ export default function HROrgSections() {
       const { data } = await supabase.from("org_sections").select("*").order("id", { ascending: false });
       if (data) setItems(data.map((r: any) => ({
         id: String(r.id), name: r.name ?? "", department: r.department ?? "",
+        departmentId: r.department_id ? String(r.department_id) : "",
         manager: r.manager ?? "", description: r.description ?? "",
       })));
       const { data: depts } = await supabase.from("departments").select("id, name").order("name");
@@ -36,18 +38,24 @@ export default function HROrgSections() {
 
   useEffect(() => { loadData(); }, []);
 
-  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormDept(""); setFormManager(""); setFormDesc(""); };
+  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormDept(""); setFormDeptId(""); setFormManager(""); setFormDesc(""); };
 
   const startEdit = (item: Section) => {
     setEditingId(item.id); setFormName(item.name); setFormDept(item.department);
+    setFormDeptId(item.departmentId);
     setFormManager(item.manager); setFormDesc(item.description); setShowForm(true);
+  };
+
+  const onDeptChange = (id: string) => {
+    setFormDeptId(id);
+    setFormDept(departments.find((d) => d.id === id)?.name ?? "");
   };
 
   const handleSave = async () => {
     if (!formName.trim()) { toast({ title: "خطأ", description: "اسم القسم مطلوب", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const payload = { name: formName, department: formDept, manager: formManager, description: formDesc };
+      const payload = { name: formName, department: formDept, department_id: formDeptId || null, manager: formManager, description: formDesc };
       if (editingId) {
         await supabase.from("org_sections").update(payload).eq("id", editingId);
         toast({ title: "تم التعديل" });
@@ -85,9 +93,9 @@ export default function HROrgSections() {
               <div><label className="block text-sm font-medium mb-1">اسم القسم *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
               <div>
                 <label className="block text-sm font-medium mb-1">الإدارة</label>
-                <select value={formDept} onChange={(e) => setFormDept(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
+                <select value={formDeptId} onChange={(e) => onDeptChange(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
                   <option value="">اختر الإدارة</option>
-                  {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
               <div><label className="block text-sm font-medium mb-1">المدير</label><Input value={formManager} onChange={(e) => setFormManager(e.target.value)} /></div>

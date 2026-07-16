@@ -142,6 +142,19 @@ const formatRequestReason = (requestType: string, rawReason: unknown) => {
 const getLocalDate = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
+const EMPLOYEE_MORE_OPTION_NAMES = new Set([
+  "الملف الشخصي",
+  "تقييم الأداء",
+  "دوامي",
+  "تقاريري",
+  "قسيمة الراتب",
+  "الإعدادات",
+  "من نحن",
+  "سياسة الخصوصية",
+]);
+
+const FULL_MORE_ACCESS_ROLES = new Set(["مدير النظام", "مدير عام", "المدير العام"]);
+
 const MORE_OPTIONS = [
   { id: 1, name: "الملف الشخصي", desc: "المعلومات الشخصية، تعديل البيانات الشخصية", icon: "👤" },
   { id: 2, name: "تقييم الأداء", desc: "تقييماتي لزملائي الخزين، إرشيف التقييم", icon: "⭐" },
@@ -491,6 +504,11 @@ export default function EmployeePortal() {
     return matchesSearch;
   });
 
+  const hasFullMoreAccess = FULL_MORE_ACCESS_ROLES.has(String(user?.role ?? "").trim());
+  const visibleMoreOptions = hasFullMoreAccess
+    ? MORE_OPTIONS
+    : MORE_OPTIONS.filter((option) => EMPLOYEE_MORE_OPTION_NAMES.has(option.name));
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -708,7 +726,7 @@ export default function EmployeePortal() {
 
           {currentPage === "more" && (
             <div className="p-4 pb-24">
-              {MORE_OPTIONS.map((option) => (
+              {visibleMoreOptions.map((option) => (
                 <button
                   key={option.id}
                   onClick={() => handleMoreOption(option)}
@@ -1097,7 +1115,7 @@ export default function EmployeePortal() {
             <>
               <h2 className="text-3xl font-bold text-gray-900 mb-8">الخدمات والخيارات</h2>
               <div className="grid grid-cols-3 gap-4">
-                {MORE_OPTIONS.map((option) => (
+                {visibleMoreOptions.map((option) => (
                   <button
                     key={option.id}
                     onClick={() => handleMoreOption(option)}

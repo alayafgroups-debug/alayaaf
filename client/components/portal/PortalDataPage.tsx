@@ -127,15 +127,21 @@ export default function PortalDataPage({ mode, empId, employeeName, isManager, o
             status: String(row.status ?? "معلق"),
           }));
         } else {
-          const configTypes = mode === "circulars" ? ["circular", "circulars", "تعميم", "التعاميم"] : ["announcement", "announcements", "إعلان", "الإعلانات"];
+          const announcementType = mode === "circulars" ? "تعميم" : "إعلان";
           const { data, error: queryError } = await supabase
-            .from("hr_config_items")
-            .select("id, name_ar, description, value, status, created_at")
-            .in("config_type", configTypes)
-            .in("status", ["فعال", "نشط", "active"])
+            .from("hr_announcements")
+            .select("id, type, title, content, created_by, status, created_at")
+            .eq("type", announcementType)
+            .eq("status", "منشور")
             .order("created_at", { ascending: false });
           if (queryError) throw queryError;
-          next = (data ?? []).map((row: any) => ({ id: String(row.id), title: String(row.name_ar), subtitle: String(row.description || row.value || ""), meta: new Date(row.created_at).toLocaleDateString("ar-SA"), status: "منشور" }));
+          next = (data ?? []).map((row: any) => ({
+            id: String(row.id),
+            title: String(row.title),
+            subtitle: String(row.content || ""),
+            meta: `${new Date(row.created_at).toLocaleDateString("ar-SA")} • ${row.created_by || ""}`,
+            status: String(row.status),
+          }));
         }
 
         if (!cancelled) setCards(next);

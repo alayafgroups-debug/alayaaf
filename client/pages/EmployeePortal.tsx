@@ -816,7 +816,7 @@ export default function EmployeePortal() {
           )}
           {currentPage === "settings" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <EmployeeSettingsPage empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
+              <EmployeeSettingsPage empId={user.empId} empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
             </div>
           )}
           {currentPage === "about" && (
@@ -1250,7 +1250,7 @@ export default function EmployeePortal() {
           )}
           {currentPage === "settings" && user && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <EmployeeSettingsPage empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
+              <EmployeeSettingsPage empId={user.empId} empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
             </div>
           )}
           {currentPage === "about" && (

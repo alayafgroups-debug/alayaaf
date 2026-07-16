@@ -219,6 +219,14 @@ export default function EmployeePortal() {
   };
 
   const openCamera = async (mode: "in" | "out") => {
+    if (mode === "out" && !checkInTime) {
+      toast.error("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف");
+      return;
+    }
+    if (mode === "in" && checkInTime) {
+      toast.info("تم تسجيل حضورك مسبقاً لهذا اليوم");
+      return;
+    }
     setCameraMode(mode);
     setVerifyStatus("idle");
     setCameraOpen(true);
@@ -250,26 +258,40 @@ export default function EmployeePortal() {
     try {
       const { data: existing, error: lookupError } = await supabase
         .from("attendance")
-        .select("id")
+        .select("id, check_in, check_out")
         .eq("emp_id", user.empId)
         .eq("date", date)
         .order("created_at", { ascending: false })
         .limit(1);
       if (lookupError) throw lookupError;
 
-      const attendanceData = {
-        emp_id: user.empId,
-        emp_name: user.name,
-        department: employeeDepartment || null,
-        date,
-        status: "حاضر",
-        ...(mode === "in" ? { check_in: time } : { check_out: time }),
-      };
+      const rec = (existing ?? [])[0] as
+        | { id: string; check_in: string | null; check_out: string | null }
+        | undefined;
 
-      const { error } = existing?.length
-        ? await supabase.from("attendance").update(attendanceData).eq("id", existing[0].id)
-        : await supabase.from("attendance").insert([attendanceData]);
-      if (error) throw error;
+      if (mode === "in") {
+        if (rec) {
+          const { error } = await supabase.from("attendance")
+            .update({ check_in: time, status: "حاضر", emp_name: user.name, department: employeeDepartment || null })
+            .eq("id", rec.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("attendance").insert([{
+            emp_id: user.empId, emp_name: user.name,
+            department: employeeDepartment || null,
+            date, status: "حاضر", check_in: time,
+          }]);
+          if (error) throw error;
+        }
+      } else {
+        if (!rec?.check_in) {
+          toast.error("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف");
+          return false;
+        }
+        const { error } = await supabase.from("attendance")
+          .update({ check_out: time }).eq("id", rec.id);
+        if (error) throw error;
+      }
       return true;
     } catch (error: any) {
       console.error("Attendance save failed:", error);

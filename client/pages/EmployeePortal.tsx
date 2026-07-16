@@ -570,10 +570,10 @@ export default function EmployeePortal() {
         {/* Header */}
         <div className="sticky top-0 z-20">
           {currentPage === "home" ? (
-            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pt-5 pb-0">
+            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pb-0" style={{ paddingTop: "max(20px, env(safe-area-inset-top, 20px))" }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setCurrentPage("notifications")} className="relative w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("notifications"); }} className="relative w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
                     <Bell className="h-4.5 w-4.5 text-white" />
                     {notificationCount > 0 && (
                       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
@@ -581,7 +581,7 @@ export default function EmployeePortal() {
                       </span>
                     )}
                   </button>
-                  <button onClick={() => setCurrentPage("settings")} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("settings"); }} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
                     <Settings className="h-4.5 w-4.5 text-white" />
                   </button>
                 </div>
@@ -597,9 +597,10 @@ export default function EmployeePortal() {
               </div>
             </div>
           ) : (
-            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-4 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-4 flex items-center justify-between" style={{ paddingTop: "max(16px, env(safe-area-inset-top, 16px))", paddingBottom: "16px" }}>
               <button
-                onClick={() => setCurrentPage("home")}
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("home"); }}
                 className="flex items-center gap-1 text-white/80 hover:text-white transition"
               >
                 <ChevronLeft className="h-5 w-5 rotate-180" />
@@ -923,7 +924,7 @@ export default function EmployeePortal() {
 
         {/* Mobile Bottom Navigation */}
         <div className="fixed bottom-0 left-0 right-0 z-30">
-          <div className="mx-3 mb-3 bg-[#0a1628]/95 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl shadow-black/50 px-4 py-3 flex items-center justify-between">
+          <div className="mx-3 bg-[#0a1628]/95 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl shadow-black/50 px-4 py-3 flex items-center justify-between" style={{ marginBottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}>
             <button
               onClick={() => setCurrentPage("home")}
               className={`flex flex-col items-center gap-1 w-14 transition-all ${currentPage === "home" ? "text-cyan-400" : "text-white/40"}`}

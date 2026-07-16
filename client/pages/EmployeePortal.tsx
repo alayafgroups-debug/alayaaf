@@ -35,6 +35,12 @@ import PayrollPage from "@/components/portal/PayrollPage";
 import PenaltiesPage from "@/components/portal/PenaltiesPage";
 import ManagerRequestsPage from "@/components/portal/ManagerRequestsPage";
 import AttendanceReportPage from "@/components/portal/AttendanceReportPage";
+import PortalDataPage from "@/components/portal/PortalDataPage";
+import ContactManagementPage from "@/components/portal/ContactManagementPage";
+import ComplaintsPage from "@/components/portal/ComplaintsPage";
+import EmployeeSettingsPage from "@/components/portal/EmployeeSettingsPage";
+import AboutPage from "@/components/portal/AboutPage";
+import PrivacyPage from "@/components/portal/PrivacyPage";
 
 interface UserSession {
   id: string;
@@ -54,7 +60,7 @@ interface EmployeeRequest {
   adminNote: string;
 }
 
-type AppPage = "home" | "requests" | "send-request" | "more" | "employees" | "profile" | "payroll" | "payslip" | "penalties" | "schedule" | "my-reports" | "reports" | "manager-requests";
+type AppPage = "home" | "requests" | "send-request" | "more" | "employees" | "profile" | "payroll" | "payslip" | "penalties" | "schedule" | "my-reports" | "reports" | "manager-requests" | "team" | "attendance" | "performance" | "commissions" | "circulars" | "announcements" | "complaints" | "contact" | "settings" | "about" | "privacy" | "notifications";
 
 // Map Arabic request name → schema ID used in DynamicRequestForm / LeaveRequestForm
 const REQUEST_NAME_TO_SCHEMA: Record<string, string> = {
@@ -168,7 +174,7 @@ const MORE_OPTIONS = [
   { id: 10, name: "الشكاوي", desc: "إضافة شكاوي، إعدادات الشكاوي", icon: "⚠️" },
   { id: 11, name: "التعاميم", desc: "إضافة تعميم، تعديل تعميم", icon: "📢" },
   { id: 12, name: "المساعلات والإنذارات", desc: "إرشيف الإنذارات، الجزاءات", icon: "📋" },
-  { id: 13, name: "عموالت الموظفين", desc: "بيعات المندوبين، بيعات المشرفين، عمو...", icon: "💰" },
+  { id: 13, name: "عمولات الموظفين", desc: "بيعات المندوبين، بيعات المشرفين، عمو...", icon: "💰" },
   { id: 14, name: "الإعلانات", desc: "إضافة إعلان، تعديل إعلان، نشر الإعلان", icon: "📣" },
   { id: 15, name: "قسيمة الراتب", desc: "قسيمة الراتب، إجمالي البدلات، إجمالي ...", icon: "🧾" },
   { id: 16, name: "التواصل مع الإدارة", desc: "المقترحات والشكاوي", icon: "💬" },
@@ -430,6 +436,17 @@ export default function EmployeePortal() {
       "دوامي": "schedule",
       "تقاريري": "my-reports",
       "التقارير": "reports",
+      "فريق العمل": "team",
+      "الحضور": "attendance",
+      "تقييم الأداء": "performance",
+      "عموالت الموظفين": "commissions",
+      "التعاميم": "circulars",
+      "الإعلانات": "announcements",
+      "الشكاوي": "complaints",
+      "التواصل مع الإدارة": "contact",
+      "الإعدادات": "settings",
+      "من نحن": "about",
+      "سياسة الخصوصية": "privacy",
     };
     const target = pageMap[option.name];
     if (target) setCurrentPage(target);
@@ -534,15 +551,17 @@ export default function EmployeePortal() {
             {currentPage === "home" ? (
               <>
                 <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Bell className="h-6 w-6 text-white cursor-pointer" />
+                  <button onClick={() => setCurrentPage("notifications")} className="relative">
+                    <Bell className="h-6 w-6 text-white" />
                     {notificationCount > 0 && (
                       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                         {notificationCount}
                       </span>
                     )}
-                  </div>
-                  <Settings className="h-6 w-6 text-white cursor-pointer" />
+                  </button>
+                  <button onClick={() => setCurrentPage("settings")}>
+                    <Settings className="h-6 w-6 text-white" />
+                  </button>
                 </div>
                 <div className="text-center">
                   <h1 className="text-base font-bold text-white">{user.name}</h1>
@@ -774,6 +793,47 @@ export default function EmployeePortal() {
               <ManagerRequestsPage onBack={() => setCurrentPage("home")} />
             </div>
           )}
+          {user && ["team","attendance","performance","my-reports","reports","circulars","announcements","commissions"].includes(currentPage) && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <PortalDataPage
+                mode={currentPage as any}
+                empId={user.empId}
+                employeeName={user.name}
+                isManager={hasFullMoreAccess}
+                onBack={() => setCurrentPage("more")}
+              />
+            </div>
+          )}
+          {currentPage === "complaints" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <ComplaintsPage empId={user.empId} empName={user.name} isManager={hasFullMoreAccess} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "contact" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <ContactManagementPage empId={user.empId} empName={user.name} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "settings" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <EmployeeSettingsPage empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "about" && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <AboutPage onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "privacy" && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <PrivacyPage onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "notifications" && user && (
+            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("home")} />
+            </div>
+          )}
         </div>
 
         {/* Mobile Bottom Navigation */}
@@ -836,15 +896,17 @@ export default function EmployeePortal() {
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="relative">
-                <Bell className="h-6 w-6 text-gray-700 cursor-pointer" />
+              <button onClick={() => setCurrentPage("notifications")} className="relative">
+                <Bell className="h-6 w-6 text-gray-700" />
                 {notificationCount > 0 && (
                   <span className="absolute -top-1 -left-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                     {notificationCount}
                   </span>
                 )}
-              </div>
-              <Settings className="h-6 w-6 text-gray-700 cursor-pointer" />
+              </button>
+              <button onClick={() => setCurrentPage("settings")}>
+                <Settings className="h-6 w-6 text-gray-700" />
+              </button>
             </div>
             <h1 className="text-2xl font-bold text-[#004e89]">مرحباً {user.name}</h1>
             <div className="flex items-center gap-4">
@@ -1163,6 +1225,47 @@ export default function EmployeePortal() {
           {currentPage === "manager-requests" && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "85vh" }}>
               <ManagerRequestsPage onBack={() => setCurrentPage("home")} />
+            </div>
+          )}
+          {user && ["team","attendance","performance","my-reports","reports","circulars","announcements","commissions"].includes(currentPage) && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <PortalDataPage
+                mode={currentPage as any}
+                empId={user.empId}
+                employeeName={user.name}
+                isManager={hasFullMoreAccess}
+                onBack={() => setCurrentPage("more")}
+              />
+            </div>
+          )}
+          {currentPage === "complaints" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <ComplaintsPage empId={user.empId} empName={user.name} isManager={hasFullMoreAccess} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "contact" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <ContactManagementPage empId={user.empId} empName={user.name} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "settings" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <EmployeeSettingsPage empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "about" && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <AboutPage onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "privacy" && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <PrivacyPage onBack={() => setCurrentPage("more")} />
+            </div>
+          )}
+          {currentPage === "notifications" && user && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("home")} />
             </div>
           )}
         </main>

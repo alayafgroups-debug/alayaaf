@@ -568,103 +568,155 @@ export default function EmployeePortal() {
       {/* ===== MOBILE VIEW ===== */}
       <div className="md:hidden">
         {/* Header */}
-        <div className="bg-gradient-to-l from-[#004e89] to-[#0066b3] shadow-md sticky top-0 z-10">
-          <div className="flex items-center justify-between px-4 py-4">
-            {currentPage === "home" ? (
-              <>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setCurrentPage("notifications")} className="relative">
-                    <Bell className="h-6 w-6 text-white" />
+        <div className="sticky top-0 z-20">
+          {currentPage === "home" ? (
+            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pt-5 pb-0">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setCurrentPage("notifications")} className="relative w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                    <Bell className="h-4.5 w-4.5 text-white" />
                     {notificationCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
                         {notificationCount}
                       </span>
                     )}
                   </button>
-                  <button onClick={() => setCurrentPage("settings")}>
-                    <Settings className="h-6 w-6 text-white" />
+                  <button onClick={() => setCurrentPage("settings")} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                    <Settings className="h-4.5 w-4.5 text-white" />
                   </button>
                 </div>
-                <div className="text-center">
-                  <h1 className="text-base font-bold text-white">{user.name}</h1>
-                  <p className="text-xs text-blue-100">{user.role}</p>
+                <div className="flex items-center gap-2.5">
+                  <div className="text-right">
+                    <p className="text-white font-bold text-sm leading-tight">{user.name}</p>
+                    <p className="text-blue-300 text-[11px]">{user.role}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white font-bold text-base shadow-lg">
+                    {user.name.charAt(0)}
+                  </div>
                 </div>
-                <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
-                  <User className="h-5 w-5 text-white" />
-                </div>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setCurrentPage("home")}
-                  className="flex items-center gap-1 text-white"
-                >
-                  <ChevronLeft className="h-6 w-6 rotate-180" />
-                  <span className="text-sm">رجوع</span>
-                </button>
-                <h1 className="text-base font-bold text-white">
-                  {currentPage === "requests" && "الطلبات"}
-                  {currentPage === "send-request" && "طلب جديد"}
-                  {currentPage === "more" && "المزيد"}
-                </h1>
-                <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
-                  <User className="h-5 w-5 text-white" />
-                </div>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-4 py-4 flex items-center justify-between">
+              <button
+                onClick={() => setCurrentPage("home")}
+                className="flex items-center gap-1 text-white/80 hover:text-white transition"
+              >
+                <ChevronLeft className="h-5 w-5 rotate-180" />
+                <span className="text-sm font-medium">رجوع</span>
+              </button>
+              <h1 className="text-base font-bold text-white">
+                {currentPage === "requests" && "الطلبات"}
+                {currentPage === "send-request" && "طلب جديد"}
+                {currentPage === "more" && "المزيد"}
+              </h1>
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                <User className="h-4.5 w-4.5 text-white" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Mobile Content */}
         <div className="pb-32">
           {currentPage === "home" && (
-            <div className="pb-28">
-              {/* ── Attendance banner (inside header gradient) ── */}
-              <div className="bg-gradient-to-l from-[#004e89] to-[#0066b3] px-4 pt-4 pb-6">
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="text-center bg-white/10 rounded-xl p-3">
-                    <p className="text-white/70 text-[10px] mb-1">تسجيل الحضور</p>
-                    <p className="font-mono text-sm font-bold text-white">{checkInTime ? checkInTime.split(" ")[0] : "--:--:--"}</p>
-                    <p className="font-mono text-[10px] text-white/60">{checkInTime ? checkInTime.split(" ")[1] : "لم يسجل"}</p>
+            <div className="pb-32">
+              {/* Hero attendance card */}
+              <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pt-1 pb-7">
+                {/* Greeting strip */}
+                <div className="mb-4 bg-white/5 rounded-2xl px-4 py-2.5 flex items-center justify-between backdrop-blur-sm border border-white/10">
+                  <div>
+                    <p className="text-white/50 text-[10px] uppercase tracking-widest">جلسة اليوم</p>
+                    <p className="text-white/80 text-xs font-medium mt-0.5">{new Date().toLocaleDateString("ar-SA", { weekday:"long", day:"numeric", month:"long" })}</p>
                   </div>
-                  <div className="text-center bg-white/10 rounded-xl p-3">
-                    <p className="text-white/70 text-[10px] mb-1">تسجيل الانصراف</p>
-                    <p className="font-mono text-sm font-bold text-white">{checkOutTime ? checkOutTime.split(" ")[0] : "--:--:--"}</p>
-                    <p className="font-mono text-[10px] text-white/60">{checkOutTime ? checkOutTime.split(" ")[1] : "لم يسجل"}</p>
+                  <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${checkInTime && !checkOutTime ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30" : checkOutTime ? "bg-blue-400/20 text-blue-300 border border-blue-400/30" : "bg-white/10 text-white/50 border border-white/10"}`}>
+                    {checkInTime && !checkOutTime ? "جاري العمل" : checkOutTime ? "منصرف" : "خارج الدوام"}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => openCamera("out")} variant="outline" className="w-full bg-white/10 border-white/30 text-white rounded-xl gap-1 text-xs h-9">
-                    <ScanFace className="h-3.5 w-3.5" /> تسجيل الانصراف
-                  </Button>
-                  <Button onClick={() => openCamera("in")} className="w-full bg-white text-[#004e89] font-bold rounded-xl gap-1 text-xs h-9 hover:bg-white/90">
-                    <ScanFace className="h-3.5 w-3.5" /> تسجيل الحضور
-                  </Button>
+
+                {/* Punch times */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-white/8 backdrop-blur-sm rounded-2xl p-4 border border-white/10 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400/0 via-emerald-400/60 to-emerald-400/0" />
+                    <p className="text-emerald-300/70 text-[9px] font-semibold uppercase tracking-wider mb-2">تسجيل الحضور</p>
+                    <p className="font-mono text-xl font-bold text-white leading-none">{checkInTime ? checkInTime.split(" ")[0] : "--:--"}</p>
+                    <p className="font-mono text-[10px] text-white/40 mt-1">{checkInTime ? checkInTime.split(" ")[1] : "لم يُسجّل بعد"}</p>
+                  </div>
+                  <div className="bg-white/8 backdrop-blur-sm rounded-2xl p-4 border border-white/10 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-orange-400/0 via-orange-400/60 to-orange-400/0" />
+                    <p className="text-orange-300/70 text-[9px] font-semibold uppercase tracking-wider mb-2">تسجيل الانصراف</p>
+                    <p className="font-mono text-xl font-bold text-white leading-none">{checkOutTime ? checkOutTime.split(" ")[0] : "--:--"}</p>
+                    <p className="font-mono text-[10px] text-white/40 mt-1">{checkOutTime ? checkOutTime.split(" ")[1] : "لم يُسجّل بعد"}</p>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    onClick={() => openCamera("out")}
+                    disabled={!checkInTime}
+                    className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-all bg-white/10 text-white/70 border border-white/15 disabled:opacity-40"
+                  >
+                    <ScanFace className="h-4 w-4" />
+                    <span>تسجيل الانصراف</span>
+                  </button>
+                  <button
+                    onClick={() => openCamera("in")}
+                    disabled={!!checkInTime}
+                    className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-bold transition-all bg-gradient-to-l from-emerald-400 to-cyan-400 text-white shadow-lg shadow-emerald-500/25 disabled:opacity-50"
+                  >
+                    <ScanFace className="h-4 w-4" />
+                    <span>تسجيل الحضور</span>
+                  </button>
                 </div>
               </div>
 
-              {/* ── 4-card quick actions row (same as desktop) ── */}
-              <div className="p-4 grid grid-cols-2 gap-3">
-                <button onClick={() => setCurrentPage("requests")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
-                  <FileText className="h-7 w-7 text-[#004e89]" />
-                  <p className="font-semibold text-gray-900 text-xs">الطلبات</p>
-                  <p className="text-[10px] text-gray-500 text-center">عرض الطلبات الواردة والمرسلة</p>
-                </button>
-                <button onClick={() => setCurrentPage("send-request")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
-                  <Plus className="h-7 w-7 text-green-500" />
-                  <p className="font-semibold text-gray-900 text-xs">طلب جديد</p>
-                  <p className="text-[10px] text-gray-500 text-center">إرسال طلب جديد</p>
-                </button>
-                <button onClick={() => setCurrentPage("more")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
-                  <Briefcase className="h-7 w-7 text-purple-500" />
-                  <p className="font-semibold text-gray-900 text-xs">الخدمات</p>
-                  <p className="text-[10px] text-gray-500 text-center">جميع الخدمات والخيارات</p>
-                </button>
-                <button onClick={() => setCurrentPage("profile")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center gap-2 hover:shadow-md transition">
-                  <User className="h-7 w-7 text-orange-500" />
-                  <p className="font-semibold text-gray-900 text-xs">ملفي</p>
-                  <p className="text-[10px] text-gray-500 text-center">بيانات الملف الشخصي</p>
-                </button>
+              {/* Quick actions */}
+              <div className="px-4 -mt-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setCurrentPage("requests")} className="group relative overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-100/80 p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="w-11 h-11 rounded-xl bg-[#0d2444]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <FileText className="h-5 w-5 text-[#0d2444]" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">الطلبات</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">طلباتك الواردة والمرسلة</p>
+                    </div>
+                    {notificationCount > 0 && (
+                      <span className="absolute top-3 left-3 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{notificationCount}</span>
+                    )}
+                  </button>
+
+                  <button onClick={() => setCurrentPage("send-request")} className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Plus className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-white text-sm">طلب جديد</p>
+                      <p className="text-[10px] text-white/70 mt-0.5">إرسال طلب جديد للإدارة</p>
+                    </div>
+                  </button>
+
+                  <button onClick={() => setCurrentPage("more")} className="group relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl shadow-sm p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Briefcase className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-white text-sm">الخدمات</p>
+                      <p className="text-[10px] text-white/70 mt-0.5">جميع الخدمات والخيارات</p>
+                    </div>
+                  </button>
+
+                  <button onClick={() => setCurrentPage("profile")} className="group relative overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-100/80 p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <User className="h-5 w-5 text-orange-500" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">ملفي</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">بيانات الملف الشخصي</p>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -766,19 +818,30 @@ export default function EmployeePortal() {
           )}
 
           {currentPage === "more" && (
-            <div className="p-4 pb-24">
-              {visibleMoreOptions.map((option) => (
+            <div className="p-4 pb-32 bg-gray-50">
+              <div className="grid grid-cols-3 gap-2.5 mb-4">
+                {visibleMoreOptions.filter(o => !o.logout).map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => handleMoreOption(option)}
+                    className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 text-center"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center text-2xl shadow-inner">
+                      {option.icon}
+                    </div>
+                    <p className="text-[10px] font-semibold text-gray-800 leading-tight">{option.name}</p>
+                  </button>
+                ))}
+              </div>
+              {/* Logout row */}
+              {visibleMoreOptions.filter(o => o.logout).map((option) => (
                 <button
                   key={option.id}
                   onClick={() => handleMoreOption(option)}
-                  className="w-full bg-white rounded-lg p-4 mb-3 flex items-center gap-3 hover:shadow-md transition border border-gray-200"
+                  className="w-full bg-red-50 rounded-2xl p-4 flex items-center justify-center gap-2 border border-red-100 text-red-600 font-semibold text-sm hover:bg-red-100 transition-colors"
                 >
-                  <span className="text-2xl">{option.icon}</span>
-                  <div className="flex-1 text-right">
-                    <p className="font-semibold text-gray-900 text-sm">{option.name}</p>
-                    <p className="text-xs text-gray-600">{option.desc}</p>
-                  </div>
-                  <ChevronLeft className="h-5 w-5 text-gray-400" />
+                  <LogOut className="h-4 w-4" />
+                  {option.name}
                 </button>
               ))}
             </div>
@@ -859,54 +922,57 @@ export default function EmployeePortal() {
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-          {/* Centered FAB */}
-          <button
-            onClick={() => setCurrentPage("send-request")}
-            className="absolute -top-6 left-1/2 -translate-x-1/2 bg-yellow-500 rounded-full p-4 text-white shadow-lg hover:bg-yellow-600 border-4 border-white"
-          >
-            <Plus className="h-6 w-6" />
-          </button>
-
-          <div className="flex items-center justify-between px-6 py-3">
+        <div className="fixed bottom-0 left-0 right-0 z-30">
+          <div className="mx-3 mb-3 bg-[#0a1628]/95 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl shadow-black/50 px-4 py-3 flex items-center justify-between">
             <button
               onClick={() => setCurrentPage("home")}
-              className={`flex flex-col items-center gap-1 w-16 ${currentPage === "home" ? "text-blue-600" : "text-gray-500"}`}
+              className={`flex flex-col items-center gap-1 w-14 transition-all ${currentPage === "home" ? "text-cyan-400" : "text-white/40"}`}
             >
-              <Home className="h-5 w-5" />
-              <span className="text-xs">الرئيسية</span>
+              <div className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${currentPage === "home" ? "bg-cyan-400/20" : ""}`}>
+                <Home className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[9px] font-medium">الرئيسية</span>
             </button>
             <button
               onClick={() => setCurrentPage("requests")}
-              className={`flex flex-col items-center gap-1 w-16 relative ${currentPage === "requests" ? "text-blue-600" : "text-gray-500"}`}
+              className={`flex flex-col items-center gap-1 w-14 relative transition-all ${currentPage === "requests" ? "text-cyan-400" : "text-white/40"}`}
             >
-              <div className="relative">
-                <FileText className="h-5 w-5" />
+              <div className={`w-8 h-8 flex items-center justify-center rounded-xl relative transition-all ${currentPage === "requests" ? "bg-cyan-400/20" : ""}`}>
+                <FileText className="h-4.5 w-4.5" />
                 {notificationCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-yellow-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
                     {notificationCount}
                   </span>
                 )}
               </div>
-              <span className="text-xs">الطلبات</span>
+              <span className="text-[9px] font-medium">الطلبات</span>
             </button>
 
-            {/* Spacer for FAB */}
-            <div className="w-16"></div>
+            {/* FAB */}
+            <button
+              onClick={() => setCurrentPage("send-request")}
+              className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/40 hover:scale-105 transition-transform -mt-5"
+            >
+              <Plus className="h-6 w-6 text-white" />
+            </button>
 
             <button
               onClick={() => setCurrentPage("more")}
-              className={`flex flex-col items-center gap-1 w-16 ${currentPage === "more" ? "text-blue-600" : "text-gray-500"}`}
+              className={`flex flex-col items-center gap-1 w-14 transition-all ${currentPage === "more" ? "text-cyan-400" : "text-white/40"}`}
             >
-              <MoreHorizontal className="h-5 w-5" />
-              <span className="text-xs">المزيد</span>
+              <div className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${currentPage === "more" ? "bg-cyan-400/20" : ""}`}>
+                <MoreHorizontal className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[9px] font-medium">المزيد</span>
             </button>
             <button
               onClick={handleLogout}
-              className="flex flex-col items-center gap-1 w-16 text-gray-500"
+              className="flex flex-col items-center gap-1 w-14 text-white/30 hover:text-red-400 transition-colors"
             >
-              <LogOut className="h-5 w-5" />
-              <span className="text-xs">خروج</span>
+              <div className="w-8 h-8 flex items-center justify-center rounded-xl">
+                <LogOut className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[9px] font-medium">خروج</span>
             </button>
           </div>
         </div>

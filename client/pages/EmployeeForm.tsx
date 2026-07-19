@@ -475,6 +475,50 @@ export default function EmployeeForm({
         const { error: updateError } = await supabase.from("employees").update(payload).eq("id", form.id);
         if (updateError) throw updateError;
       }
+
+      // إنشاء / تحديث حساب Supabase Auth إذا تم إدخال كلمة سر
+      if (form.password && form.email) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData?.session?.access_token;
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+          if (accessToken && supabaseUrl) {
+            // للتعديل: نحاول إيجاد معرف المستخدم أولاً
+            let authUserId: string | undefined;
+            if (mode === "edit") {
+              const { data: empRow } = await supabase
+                .from("employees").select("id").eq("email", form.email.toLowerCase()).maybeSingle();
+              // المعرف سيحدده ال**Edge Function** خلال بحث email
+            }
+
+            const fnRes = await fetch(
+              `${supabaseUrl}/functions/v1/manage-employee-auth`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                  action: mode === "create" ? "create" : "create", // create handles both (upserts)
+                  email: form.email.toLowerCase(),
+                  password: form.password,
+                  authUserId,
+                }),
+              }
+            );
+            const fnData = await fnRes.json();
+            if (!fnRes.ok) {
+              console.warn("Auth account warning:", fnData.error);
+              // لا نوقف الحفظ بسبب خطأ Auth - البيانات حفظت بالفعل
+            }
+          }
+        } catch (authErr) {
+          console.warn("Auth creation skipped:", authErr);
+        }
+      }
+
       toast({ title: mode === "create" ? "تم إضافة الموظف" : "تم تحديث البيانات", description: `بيانات ${form.name} تم حفظها بنجاح` });
       onSaved();
     } catch (e: unknown) {
@@ -507,7 +551,7 @@ export default function EmployeeForm({
           {step === 3 && <Step4Permissions form={form} togglePermission={togglePermission} />}
           {step === 4 && <Step5Insurance form={form} set={set} />}
           {step === 5 && <Step6Documents form={form} set={set} />}
-          {step === 6 && <Step7Account form={form} set={set} roles={employeeRoles} showPassword={showPassword} setShowPassword={setShowPassword} generatePassword={generatePassword} />}
+          {step === 6 && <Step7Account form={form} set={set} roles={employeeRoles} mode={mode} showPassword={showPassword} setShowPassword={setShowPassword} generatePassword={generatePassword} />}
           {step === 7 && <Step8Finish saving={saving} onSave={handleSave} />}
         </div>
 
@@ -1055,11 +1099,12 @@ function Step6Documents({ form, set }: { form: EmpFormData; set: <K extends keyo
 
 // ─── Step 7: Account Info ────────────────────────────────────────────────────
 function Step7Account({
-  form, set, roles, showPassword, setShowPassword, generatePassword,
+  form, set, roles, mode, showPassword, setShowPassword, generatePassword,
 }: {
   form: EmpFormData;
   set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void;
   roles: string[];
+  mode: "create" | "edit";
   showPassword: boolean;
   setShowPassword: (v: boolean) => void;
   generatePassword: () => void;
@@ -1074,7 +1119,10 @@ function Step7Account({
 
       {/* Password */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">كلمة المرور</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          كلمة المرور
+          {mode === "edit" && <span className="text-xs text-amber-600 mr-2">(اتركها فارغة إذا لم تريد تغييرها)</span>}
+        </label>
         <div className="flex items-center gap-2">
           <div className="flex-1 relative">
             <input
@@ -1082,7 +1130,7 @@ function Step7Account({
               value={form.password}
               onChange={(e) => set("password", e.target.value)}
               className={cn(inputCls, "pl-10")}
-              placeholder="••••••••••••"
+              placeholder={mode === "edit" ? "اتركها فارغة للإبقاء على كلمة المرور الحالية" : "أدخل كلمة مرور قوية"}
             />
             <button
               type="button"
@@ -1102,6 +1150,9 @@ function Step7Account({
             توليد تلقائي
           </button>
         </div>
+        {mode === "create" && form.password && (
+          <p className="text-xs text-emerald-600 mt-1">سيتم إنشاء حساب دخول للموظف بهذه كلمة المرور تلقائياً.</p>
+        )}
       </div>
 
       {/* Employee Role */}
@@ -1109,7 +1160,11 @@ function Step7Account({
         <FSelect label="صلاحية الموظف *" value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={roles} placeholder="--" />
         <div />
       </div>
-      <p className="text-xs text-gray-400">سيتم إرسال بيانات الدخول (رقم الموظف + كلمة المرور) للموظف بعد الحفظ.</p>
+      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+        <p className="text-xs text-blue-800 font-medium mb-1">بيانات الدخول للموظف:</p>
+        <p className="text-xs text-blue-700">الرقم الوظيفي: <span className="font-mono font-bold">{form.accountTitle || form.empId || "—"}</span></p>
+        <p className="text-xs text-blue-700 mt-0.5">يدخل الموظف بالرقم الوظيفي + كلمة المرور من بوابة الموظفين.</p>
+      </div>
     </div>
   );
 }

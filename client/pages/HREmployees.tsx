@@ -326,7 +326,12 @@ export default function HREmployees() {
                         className="rounded"
                       />
                     </td>
-                    <td className="px-3 py-2 font-mono text-blue-800 font-semibold whitespace-nowrap">{emp.empId || "—"}</td>
+                    <td className="px-3 py-2 font-mono text-blue-800 font-semibold whitespace-nowrap">
+                      {emp.accountTitle || emp.empId || "—"}
+                      {emp.accountTitle && emp.empId && emp.accountTitle !== emp.empId && (
+                        <span className="text-[10px] text-gray-400 font-normal block">{emp.empId}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">{emp.name || emp.firstName || "—"}</td>
                     {visibleColumns.englishName && <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.firstName || "—"}</td>}
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || "—"}</td>

@@ -112,14 +112,14 @@ export default function EmployeeLogin() {
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Employee ID */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-white/70">رقم الموظف</label>
+              <label className="block text-sm font-medium text-white/70">الرقم الوظيفي</label>
               <div className="relative">
                 <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <Input
                   type="text"
                   value={empId}
                   onChange={(e) => setEmpId(e.target.value)}
-                  placeholder="EMP-1001"
+                  placeholder="مثال: 1002 أو EMP-002"
                   className="pr-10 h-11 bg-white/[0.06] border-white/10 text-white placeholder:text-white/25 focus:border-emerald-500/60 focus:ring-emerald-500/20"
                   disabled={loading}
                   autoComplete="username"

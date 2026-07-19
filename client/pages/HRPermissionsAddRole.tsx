@@ -4,13 +4,60 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Save, X } from "lucide-react";
+import { ChevronDown, Loader2, Save, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import type { PermissionLevel, PermissionMap } from "@/lib/authSession";
+import AccessSelector from "@/components/permissions/AccessSelector";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 type Permission = { key: string; label: string };
 type PermissionGroup = { title: string; permissions: Permission[] };
+type ModuleNode = { key: string; label: string; children: Permission[] };
+type AccessLevel = "none" | "read" | "manage";
+
+const MODULE_TREE: ModuleNode[] = [
+  { key: "module.sales", label: "المبيعات", children: [
+    { key: "sales.quotations", label: "عروض الأسعار" }, { key: "sales.orders", label: "أوامر البيع" },
+    { key: "sales.invoices", label: "فواتير المبيعات" }, { key: "sales.credit_notes", label: "الإشعارات الدائنة" },
+    { key: "sales.delivery_notes", label: "إشعارات التسليم" }, { key: "sales.receipts", label: "سندات القبض والصرف" },
+  ] },
+  { key: "module.purchases", label: "المشتريات", children: [
+    { key: "purchases.invoices", label: "فواتير المشتريات" }, { key: "purchases.cash_expenses", label: "المصروفات النقدية" },
+    { key: "purchases.debit_notes", label: "الإشعارات المدينة" }, { key: "purchases.orders", label: "أوامر الشراء" },
+    { key: "purchases.reports", label: "تقارير المشتريات الشاملة" }, { key: "purchases.returns", label: "مرتجعات المشتريات" },
+  ] },
+  { key: "module.hr", label: "الموارد البشرية", children: [
+    { key: "hr.employees", label: "الموظفون" }, { key: "hr.requests", label: "الطلبات" },
+    { key: "hr.attendance", label: "الحضور والانصراف" }, { key: "hr.payroll", label: "الرواتب" },
+    { key: "hr.reports", label: "تقارير الموارد البشرية" }, { key: "hr.penalties", label: "المساءلات والإنذارات" },
+    { key: "hr.leaves", label: "الإجازات" }, { key: "hr.termination", label: "إنهاء الخدمة" },
+    { key: "hr.insurance", label: "التأمينات" }, { key: "hr.approvals", label: "الموافقات" },
+    { key: "hr.finance_setup", label: "تهيئة المعلومات المالية" }, { key: "hr.succession", label: "التعاقب الوظيفي" },
+    { key: "hr.certificates", label: "شهادات الخبرة" }, { key: "hr.org", label: "الهيكل التنظيمي" },
+    { key: "hr.permissions", label: "الأدوار والصلاحيات" }, { key: "hr.settings", label: "إعدادات الموارد البشرية" },
+  ] },
+  { key: "module.crm", label: "العملاء والموردون", children: [
+    { key: "crm.customers", label: "العملاء" }, { key: "crm.vendors", label: "الموردون" }, { key: "crm.reports", label: "تقارير العملاء والموردين" },
+  ] },
+  { key: "module.accounting", label: "المحاسبة والمالية", children: [
+    { key: "accounting.accounts", label: "شجرة الحسابات" }, { key: "accounting.tax", label: "حساب الضرائب" },
+    { key: "accounting.tax_reports", label: "التقارير الضريبية" }, { key: "accounting.expenses", label: "المصروفات" },
+  ] },
+  { key: "module.inventory", label: "المستودعات والمخازن", children: [
+    { key: "inventory.items", label: "الأصناف" }, { key: "inventory.warehouses", label: "المستودعات" },
+    { key: "inventory.movements", label: "حركات المخزون" }, { key: "inventory.reports", label: "تقارير المخزون" },
+  ] },
+  { key: "module.users", label: "المستخدمون والصلاحيات", children: [
+    { key: "users.list", label: "المستخدمون" }, { key: "users.roles", label: "الأدوار والصلاحيات" }, { key: "users.audit", label: "سجل النشاط" },
+  ] },
+  { key: "module.ai", label: "الذكاء الاصطناعي", children: [{ key: "ai.assistant", label: "المساعد الذكي" }] },
+  { key: "module.settings", label: "الإعدادات", children: [
+    { key: "settings.company", label: "إعدادات الشركة" }, { key: "settings.system", label: "إعدادات النظام" }, { key: "settings.integrations", label: "التكاملات" },
+  ] },
+];
+
+const levelOf = (value: PermissionLevel | undefined): AccessLevel => value === "read" ? "read" : value === true || value === "manage" ? "manage" : "none";
 
 const crudPermissions = (prefix: string, item: string): Permission[] => [
   { key: `${prefix}.view`, label: `استعراض ${item}` },
@@ -132,7 +179,8 @@ export default function HRPermissionsAddRole() {
   const [nameAr, setNameAr] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [status, setStatus] = useState("فعال");
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+  const [permissions, setPermissions] = useState<PermissionMap>({});
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(() => new Set(["module.sales"]));
 
   useEffect(() => {
     if (!roleId) return;
@@ -147,7 +195,7 @@ export default function HRPermissionsAddRole() {
         setNameAr(String(data.name_ar ?? ""));
         setNameEn(String(data.name_en ?? ""));
         setStatus(String(data.status ?? "فعال"));
-        setPermissions((data.permissions as Record<string, boolean>) ?? {});
+        setPermissions((data.permissions as PermissionMap) ?? {});
       }
       setLoadingRole(false);
     }
@@ -156,19 +204,36 @@ export default function HRPermissionsAddRole() {
   }, [roleId, navigate]);
 
   const activePermissions = useMemo(
-    () => PERMISSION_GROUPS[activeTab].flatMap((group) => group.permissions),
+    () => activeTab === "الوصول للأقسام"
+      ? MODULE_TREE.flatMap((module) => [{ key: module.key, label: module.label }, ...module.children])
+      : PERMISSION_GROUPS[activeTab].flatMap((group) => group.permissions),
     [activeTab],
   );
-  const allActiveSelected = activePermissions.length > 0 && activePermissions.every((permission) => permissions[permission.key]);
+  const allActiveSelected = activePermissions.length > 0 && activePermissions.every((permission) => levelOf(permissions[permission.key]) === "manage");
 
   const handlePermissionChange = (key: string, value: boolean) => {
     setPermissions((previous) => ({ ...previous, [key]: value }));
   };
 
+  const setAccessLevel = (node: ModuleNode, key: string, level: AccessLevel, cascade = false) => {
+    setPermissions((previous) => {
+      const next = { ...previous };
+      next[key] = level === "none" ? false : level;
+      if (cascade) node.children.forEach((child) => { next[child.key] = level === "none" ? false : level; });
+      return next;
+    });
+  };
+
+  const toggleModule = (key: string) => setExpandedModules((previous) => {
+    const next = new Set(previous);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
   const toggleCurrentTab = (checked: boolean) => {
     setPermissions((previous) => {
       const next = { ...previous };
-      activePermissions.forEach((permission) => { next[permission.key] = checked; });
+      activePermissions.forEach((permission) => { next[permission.key] = checked ? "manage" : false; });
       return next;
     });
   };
@@ -184,6 +249,7 @@ export default function HRPermissionsAddRole() {
       name_en: nameEn.trim(),
       status,
       permissions,
+      permissions_version: 2,
       updated_at: new Date().toISOString(),
     };
     try {
@@ -248,27 +314,47 @@ export default function HRPermissionsAddRole() {
               <div className="flex items-center gap-2"><Label htmlFor="selectAll" className="cursor-pointer">اختيار الكل</Label><Checkbox id="selectAll" checked={allActiveSelected} onCheckedChange={(value) => toggleCurrentTab(value === true)} /></div>
             </div>
 
-            {PERMISSION_GROUPS[activeTab].map((group) => (
-              <div key={group.title} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className={`px-4 py-3 border-b font-bold ${activeTab === "الوصول للأقسام" ? "bg-emerald-50 text-emerald-800" : "bg-gray-50 text-gray-800"}`}>
-                  {group.title}
+            {activeTab === "الوصول للأقسام" ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  <strong>قراءة فقط:</strong> يسمح بعرض البيانات والبحث والطباعة دون الإضافة أو التعديل أو الحذف. <strong>إدارة كاملة:</strong> تسمح بجميع العمليات.
                 </div>
-                <div className={`p-4 ${activeTab === "الوصول للأقسام" ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-0"}`}>
-                  {group.permissions.map((permission) => (
-                    activeTab === "الوصول للأقسام" ? (
-                      <label key={permission.key} htmlFor={permission.key} className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${permissions[permission.key] ? "border-emerald-500 bg-emerald-50" : "border-gray-200 bg-gray-50 hover:border-gray-300"}`}>
-                        <span className="font-medium text-sm text-gray-800">{permission.label}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-semibold ${permissions[permission.key] ? "text-emerald-600" : "text-gray-400"}`}>{permissions[permission.key] ? "مفعّل" : "معطّل"}</span>
-                          <Checkbox id={permission.key} checked={permissions[permission.key] ?? false} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
-                        </div>
-                      </label>
-                    ) : (
-                      <div key={permission.key} className="flex items-center justify-between border-b border-gray-100 py-3 gap-4">
-                        <Label htmlFor={permission.key} className="text-sm cursor-pointer">{permission.label}</Label>
-                        <Checkbox id={permission.key} checked={permissions[permission.key] ?? false} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
+                {MODULE_TREE.map((module) => {
+                  const expanded = expandedModules.has(module.key);
+                  const moduleLevel = levelOf(permissions[module.key]);
+                  return (
+                    <div key={module.key} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="flex flex-wrap items-center gap-3 bg-gradient-to-l from-emerald-50 to-white p-3">
+                        <button type="button" onClick={() => toggleModule(module.key)} className="flex min-w-[220px] flex-1 items-center gap-3 text-right">
+                          <ChevronDown className={`h-5 w-5 text-emerald-700 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                          <span className="font-bold text-gray-900">{module.label}</span>
+                          <span className="rounded-full bg-white px-2 py-0.5 text-xs text-gray-500">{module.children.length} قسم</span>
+                        </button>
+                        <AccessSelector value={moduleLevel} onChange={(level) => setAccessLevel(module, module.key, level, true)} />
                       </div>
-                    )
+                      {expanded && (
+                        <div className="grid grid-cols-1 gap-3 border-t border-emerald-100 bg-gray-50/60 p-4 lg:grid-cols-2">
+                          {module.children.map((child) => (
+                            <div key={child.key} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3">
+                              <span className="text-sm font-medium text-gray-800">{child.label}</span>
+                              <AccessSelector value={levelOf(permissions[child.key] ?? permissions[module.key])} onChange={(level) => setAccessLevel(module, child.key, level)} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : PERMISSION_GROUPS[activeTab].map((group) => (
+              <div key={group.title} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b font-bold bg-gray-50 text-gray-800">{group.title}</div>
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-0">
+                  {group.permissions.map((permission) => (
+                    <div key={permission.key} className="flex items-center justify-between border-b border-gray-100 py-3 gap-4">
+                      <Label htmlFor={permission.key} className="text-sm cursor-pointer">{permission.label}</Label>
+                      <Checkbox id={permission.key} checked={levelOf(permissions[permission.key]) === "manage"} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
+                    </div>
                   ))}
                 </div>
               </div>

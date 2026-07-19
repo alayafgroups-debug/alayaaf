@@ -1,4 +1,5 @@
-export type PermissionMap = Record<string, boolean>;
+export type PermissionLevel = boolean | "read" | "manage";
+export type PermissionMap = Record<string, PermissionLevel>;
 
 export type UserSession = {
   id: string;
@@ -35,9 +36,28 @@ export function readUserSession(): UserSession | null {
  * Returns true when the map is empty (no restrictions configured yet).
  */
 export function checkPerm(liveMap: PermissionMap, ...keys: string[]): boolean {
-  const hasAnyKey = Object.keys(liveMap).length > 0;
-  if (!hasAnyKey) return true;          // no rules configured → show everything
-  return keys.some((k) => liveMap[k] === true);
+  if (Object.keys(liveMap).length === 0) return true;
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(liveMap, key)) continue;
+    const value = liveMap[key];
+    return value === true || value === "read" || value === "manage";
+  }
+  return false;
+}
+
+export function canManagePerm(liveMap: PermissionMap, ...keys: string[]): boolean {
+  if (Object.keys(liveMap).length === 0) return true;
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(liveMap, key)) continue;
+    const value = liveMap[key];
+    return value === true || value === "manage";
+  }
+  return false;
+}
+
+export function permissionLevel(liveMap: PermissionMap, ...keys: string[]): "none" | "read" | "manage" {
+  if (!checkPerm(liveMap, ...keys)) return "none";
+  return canManagePerm(liveMap, ...keys) ? "manage" : "read";
 }
 
 // ── Legacy helpers kept for non-sidebar code ─────────────────────────────────
@@ -51,7 +71,7 @@ export function hasFullAccess(session: UserSession | null): boolean {
   const perms = session.permissions;
   const keys = Object.keys(perms);
   if (keys.length === 0) return true;
-  return keys.every((k) => perms[k] === true);
+  return keys.every((k) => perms[k] === true || perms[k] === "manage");
 }
 
 // ── Path → permission key helpers ────────────────────────────────────────────
@@ -68,25 +88,34 @@ export function permissionForMainPath(path: string): string | null {
   return null;
 }
 
+export function permissionForMainSubPath(path: string): string[] {
+  const rules: Array<[string, string, string]> = [
+    ["/sales/quotations", "sales.quotations", "module.sales"], ["/sales/orders", "sales.orders", "module.sales"],
+    ["/sales/invoices", "sales.invoices", "module.sales"], ["/sales/credit-note", "sales.credit_notes", "module.sales"],
+    ["/sales/delivery-note", "sales.delivery_notes", "module.sales"], ["/purchases/invoices", "purchases.invoices", "module.purchases"],
+    ["/purchases/cash-expenses", "purchases.cash_expenses", "module.purchases"], ["/purchases/debit-notes", "purchases.debit_notes", "module.purchases"],
+    ["/purchases/orders", "purchases.orders", "module.purchases"], ["/purchases/reports", "purchases.reports", "module.purchases"],
+    ["/crm/customers", "crm.customers", "module.crm"], ["/crm/vendors", "crm.vendors", "module.crm"], ["/crm/reports", "crm.reports", "module.crm"],
+    ["/expenses/tax-reports", "accounting.tax_reports", "module.accounting"], ["/expenses/tax", "accounting.tax", "module.accounting"],
+    ["/expenses", "accounting.accounts", "module.accounting"], ["/users/roles", "users.roles", "module.users"],
+    ["/users/audit", "users.audit", "module.users"], ["/users", "users.list", "module.users"], ["/ai", "ai.assistant", "module.ai"],
+  ];
+  const match = rules.find(([prefix]) => path.startsWith(prefix));
+  return match ? [match[1], match[2]] : [permissionForMainPath(path) ?? ""];
+}
+
 export function permissionForHRPath(path: string): string[] {
-  // Each path maps to exactly ONE canonical key so that disabling that key
-  // in the role editor immediately hides the item.
   if (path === "/hr" || path === "/hr/dashboard") return ["module.hr"];
-  if (path.startsWith("/hr/employees") || path.startsWith("/hr/user-logs")) return ["hr.employees"];
-  if (path.startsWith("/hr/requests")) return ["requests.sent.view"];
-  if (path.startsWith("/hr/attendance")) return ["hr.attendance"];
-  if (path.startsWith("/hr/payroll")) return ["hr.payroll"];
-  if (path.startsWith("/hr/reports")) return ["hr.reports"];
-  if (path.startsWith("/hr/penalties")) return ["hr.penalties"];
-  if (path.startsWith("/hr/leaves")) return ["hr.leaves"];
-  if (path.startsWith("/hr/termination")) return ["hr.termination"];
-  if (path.startsWith("/hr/insurance")) return ["insurance.view"];
-  if (path.startsWith("/hr/approvals")) return ["requests.incoming.view"];
-  if (path.startsWith("/hr/financial-setup")) return ["finance.view"];
-  if (path.startsWith("/hr/succession")) return ["hr.succession"];
-  if (path.startsWith("/hr/certificates")) return ["hr.certificates"];
-  if (path.startsWith("/hr/organization")) return ["hr.org"];
-  if (path.startsWith("/hr/permissions")) return ["hr.permissions"];
-  if (path.startsWith("/hr/settings")) return ["hr.settings"];
-  return ["module.hr"];
+  const groups: Array<[string, string]> = [
+    ["/hr/employees", "hr.employees"], ["/hr/user-logs", "hr.employees"], ["/hr/requests", "hr.requests"],
+    ["/hr/attendance", "hr.attendance"], ["/hr/payroll", "hr.payroll"], ["/hr/reports", "hr.reports"],
+    ["/hr/penalties", "hr.penalties"], ["/hr/leaves", "hr.leaves"], ["/hr/termination", "hr.termination"],
+    ["/hr/insurance", "hr.insurance"], ["/hr/approvals", "hr.approvals"], ["/hr/financial-setup", "hr.finance_setup"],
+    ["/hr/succession", "hr.succession"], ["/hr/certificates", "hr.certificates"], ["/hr/organization", "hr.org"],
+    ["/hr/permissions", "hr.permissions"], ["/hr/settings", "hr.settings"],
+  ];
+  const group = groups.find(([prefix]) => path.startsWith(prefix));
+  if (!group) return ["module.hr"];
+  const suffix = path.slice(group[0].length).replace(/^\//, "").replace(/\//g, ".");
+  return suffix ? [`${group[1]}.${suffix}`, group[1], "module.hr"] : [group[1], "module.hr"];
 }

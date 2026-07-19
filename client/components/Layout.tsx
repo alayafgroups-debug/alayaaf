@@ -40,8 +40,9 @@ import {
   MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { readUserSession, checkPerm, permissionForMainPath, permissionForHRPath } from "@/lib/authSession";
+import { readUserSession, checkPerm, canManagePerm, permissionForMainPath, permissionForMainSubPath, permissionForHRPath } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
+import ReadOnlyBoundary from "@/components/permissions/ReadOnlyBoundary";
 
 interface LayoutProps {
   children: ReactNode;
@@ -731,7 +732,7 @@ function MainSidebar({
           const Icon = item.icon;
           const isItemActive = isActive(item.href);
           const isExpanded = expandedMenu === item.href && item.hasSubmenu;
-          const subItems = navSubMenus[item.href];
+          const subItems = navSubMenus[item.href]?.filter((subItem) => subItem.isHeader || checkPerm(livePerms, ...permissionForMainSubPath(subItem.href)));
           const colors = itemColors[item.href] || itemColors["/"];
 
           // HR item navigates to /hr/dashboard directly
@@ -903,6 +904,7 @@ function MainSidebar({
    ═══════════════════════════════════════════════════════ */
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const { permissions: livePerms } = useRolePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedHRMenus, setExpandedHRMenus] = useState<Set<string>>(() => {
     const parent = getActiveHRParent(location.pathname);
@@ -911,6 +913,8 @@ export default function Layout({ children }: LayoutProps) {
   const [expandedMainMenu, setExpandedMainMenu] = useState<string | null>(null);
 
   const isHRSection = location.pathname.startsWith("/hr");
+  const currentPermissionKeys = isHRSection ? permissionForHRPath(location.pathname) : permissionForMainSubPath(location.pathname);
+  const readOnly = checkPerm(livePerms, ...currentPermissionKeys) && !canManagePerm(livePerms, ...currentPermissionKeys);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -967,7 +971,7 @@ export default function Layout({ children }: LayoutProps) {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-auto p-4">{children}</div>
+        <div className="flex-1 overflow-auto p-4"><ReadOnlyBoundary readOnly={readOnly}>{children}</ReadOnlyBoundary></div>
       </main>
     </div>
   );

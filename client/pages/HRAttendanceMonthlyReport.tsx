@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 
 type MonthlyAttendance = {
   empId: string;
@@ -143,34 +144,28 @@ export default function HRAttendanceMonthlyReport() {
     loadData();
   }, [year, month, departmentFilter, sectionFilter]);
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleExport = () => {
-    const rows = [
-      [
-        "رقم الموظف",
-        "اسم الموظف",
-        "الإدارة",
-        ...days.map((d) => String(d)),
-      ],
-      ...data.map((emp) => [
-        emp.empId,
-        emp.empName,
-        emp.department,
-        ...days.map((d) => emp.attendance[d]?.status || "-"),
-      ]),
-    ];
-
-    const csv = rows.map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `attendance_monthly_${year}_${month}.csv`;
-    a.click();
-  };
+  const reportColumns: ReportColumn[] = [
+    { key: "empId", label: "رقم الموظف", width: 15 },
+    { key: "empName", label: "اسم الموظف", width: 24 },
+    { key: "department", label: "الإدارة", width: 18 },
+    { key: "section", label: "القسم", width: 18 },
+    ...days.map((day) => ({ key: `day${day}`, label: String(day), width: 8 })),
+  ];
+  const reportRows = data.map((employee) => ({
+    empId: employee.empId,
+    empName: employee.empName,
+    department: employee.department,
+    section: employee.section,
+    ...Object.fromEntries(days.map((day) => [`day${day}`, employee.attendance[day]?.status || "-"])),
+  }));
+  const monthLabel = new Date(year, month - 1).toLocaleString("ar-SA", { month: "long", year: "numeric" });
+  const reportSummary = [
+    { label: "عدد الموظفين", value: data.length },
+    { label: "إجمالي الحضور", value: data.reduce((total, employee) => total + days.filter((day) => employee.attendance[day]?.status === "حاضر").length, 0) },
+    { label: "إجمالي الغياب", value: data.reduce((total, employee) => total + days.filter((day) => employee.attendance[day]?.status === "غياب").length, 0) },
+  ];
+  const handlePrint = () => printReport({ title: "تقرير الحضور الشهري", subtitle: monthLabel, columns: reportColumns, rows: reportRows, fileName: `attendance-monthly-${year}-${month}`, landscape: true, summary: reportSummary });
+  const handleExport = () => exportReportExcel({ title: "تقرير الحضور الشهري", subtitle: monthLabel, columns: reportColumns, rows: reportRows, fileName: `تقرير-الحضور-الشهري-${year}-${month}`, summary: reportSummary });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -205,10 +200,10 @@ export default function HRAttendanceMonthlyReport() {
             <Button variant="outline" size="icon" onClick={loadData} title="تحديث">
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={handlePrint} title="طباعة">
+            <Button variant="outline" size="icon" onClick={handlePrint} disabled={reportRows.length === 0} title="طباعة / PDF">
               <Printer className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={handleExport} title="تحميل">
+            <Button variant="outline" size="icon" onClick={handleExport} disabled={reportRows.length === 0} title="تحميل Excel">
               <Download className="h-4 w-4" />
             </Button>
           </div>

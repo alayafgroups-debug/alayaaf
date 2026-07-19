@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { ArrowRight, Search, Send, X } from "lucide-react";
+import { ArrowRight, Download, Printer, Search, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 
 type EmpLite = {
   id: string;
@@ -320,6 +321,22 @@ export default function HRPayrollStatement() {
     setPageMode("report");
   };
 
+  const payrollColumns: ReportColumn[] = [
+    { key: "empId", label: "رقم الموظف", width: 15 }, { key: "name", label: "الموظف", width: 25 },
+    { key: "department", label: "القسم", width: 20 }, { key: "branch", label: "الفرع", width: 18 },
+    { key: "workDays", label: "أيام العمل", width: 14 }, { key: "basic", label: "الراتب الأساسي", width: 16 },
+    { key: "allowances", label: "البدلات", width: 14 }, { key: "overtime", label: "الإضافي", width: 14 },
+    { key: "deductions", label: "الاستقطاعات", width: 14 }, { key: "net", label: "صافي الراتب", width: 16 },
+  ];
+  const payrollRows = selectedEmployees.map((employee) => {
+    const computed = calc[employee.id];
+    return { empId: employee.empId, name: employee.name, department: employee.department || "-", branch: employee.branch || "-", workDays: computed ? `${computed.presentDays}/${computed.workDays}` : "-", basic: (computed?.basic ?? employee.baseSalary).toFixed(2), allowances: (computed?.allowances ?? 0).toFixed(2), overtime: (computed?.overtime ?? 0).toFixed(2), deductions: (computed?.deductions ?? 0).toFixed(2), net: (computed?.net ?? employee.baseSalary).toFixed(2) };
+  });
+  const payrollTotal = selectedEmployees.reduce((total, employee) => total + (calc[employee.id]?.net ?? employee.baseSalary), 0);
+  const payrollSubtitle = `كشف رواتب ${monthNames[monthFilter]} ${yearFilter}`;
+  const printPayroll = () => printReport({ title: "كشف الرواتب", subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: [{ label: "عدد الموظفين", value: payrollRows.length }, { label: "إجمالي صافي الرواتب", value: `${payrollTotal.toFixed(2)} ر.س` }] });
+  const exportPayroll = () => exportReportExcel({ title: "كشف الرواتب", subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `كشف-الرواتب-${period}`, summary: [{ label: "إجمالي صافي الرواتب", value: payrollTotal.toFixed(2) }] });
+
   const handleOpenApproval = () => {
     setApprovalScope("all");
     setApprovalStep(1);
@@ -549,9 +566,13 @@ export default function HRPayrollStatement() {
                 </Button>
                 <h2 className="text-lg font-bold text-gray-800">النتائج (تقرير شامل)</h2>
               </div>
-              <Button onClick={handleOpenApproval} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                <Send className="h-4 w-4" /> إرسال طلب اعتماد رواتب الموظفين
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={printPayroll} disabled={payrollRows.length === 0}><Printer className="h-4 w-4" /> طباعة / PDF</Button>
+                <Button variant="outline" onClick={exportPayroll} disabled={payrollRows.length === 0}><Download className="h-4 w-4" /> Excel</Button>
+                <Button onClick={handleOpenApproval} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
+                  <Send className="h-4 w-4" /> إرسال طلب اعتماد رواتب الموظفين
+                </Button>
+              </div>
             </div>
 
             <div className="p-4 border-b border-gray-100 text-sm text-gray-700">

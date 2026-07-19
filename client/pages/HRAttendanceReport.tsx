@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
-import { ArrowRight, Download, Eye, RefreshCw, Search, Users } from "lucide-react";
+import { ArrowRight, Download, Eye, Printer, RefreshCw, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 
 type Employee = {
   id: string;
@@ -230,24 +231,26 @@ export default function HRAttendanceReport() {
       )
     : [];
 
-  const exportCsv = () => {
-    const rows = selectedSchedule
-      ? [
-          ["اسم الموظف", "رقم الموظف", "التاريخ", "وقت الحضور الفعلي", "وقت الانصراف الفعلي", "وقت العمل", "جدول العمل", "الإدارة", "القسم"],
-          ...detailRows.map((row) => [row.employee.name, row.employee.empId, row.date, row.checkIn || "-", row.checkOut || "-", row.employee.workTime, row.employee.workSchedule, row.employee.administration, row.employee.department]),
-        ]
-      : [
-          ["نوع العمل", "جدول العمل", "عدد الموظفين", "وقت البداية", "وقت النهاية", "الساعات"],
-          ...summaryRows.map((row) => [row.workType, row.schedule, String(row.employees.length), row.startTime || "-", row.endTime || "-", row.hours]),
-        ];
-    const csv = `\uFEFF${rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n")}`;
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = selectedSchedule ? `attendance_details_${dateFrom}_${dateTo}.csv` : `attendance_schedules_${dateFrom}_${dateTo}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  const reportColumns: ReportColumn[] = selectedSchedule
+    ? [
+        { key: "name", label: "اسم الموظف", width: 25 }, { key: "empId", label: "رقم الموظف", width: 15 },
+        { key: "date", label: "التاريخ", width: 15 }, { key: "checkIn", label: "الحضور", width: 13 },
+        { key: "checkOut", label: "الانصراف", width: 13 }, { key: "workTime", label: "وقت العمل", width: 18 },
+        { key: "schedule", label: "جدول العمل", width: 22 }, { key: "administration", label: "الإدارة", width: 20 },
+        { key: "department", label: "القسم", width: 20 },
+      ]
+    : [
+        { key: "workType", label: "نوع العمل", width: 18 }, { key: "schedule", label: "جدول العمل", width: 24 },
+        { key: "employees", label: "عدد الموظفين", width: 14 }, { key: "startTime", label: "وقت البداية", width: 14 },
+        { key: "endTime", label: "وقت النهاية", width: 14 }, { key: "hours", label: "الساعات", width: 14 },
+      ];
+  const reportRows = selectedSchedule
+    ? detailRows.map((row) => ({ name: row.employee.name, empId: row.employee.empId, date: row.date, checkIn: row.checkIn || "-", checkOut: row.checkOut || "-", workTime: row.employee.workTime, schedule: row.employee.workSchedule, administration: row.employee.administration, department: row.employee.department }))
+    : summaryRows.map((row) => ({ workType: row.workType, schedule: row.schedule, employees: row.employees.length, startTime: row.startTime || "-", endTime: row.endTime || "-", hours: row.hours }));
+  const reportTitle = selectedSchedule ? "تفاصيل الحضور والانصراف" : "تقرير الحضور والانصراف";
+  const reportSubtitle = `الفترة من ${dateFrom} إلى ${dateTo}`;
+  const printAttendanceReport = () => printReport({ title: reportTitle, subtitle: reportSubtitle, columns: reportColumns, rows: reportRows, fileName: "attendance-report", landscape: true, summary: [{ label: "عدد السجلات", value: reportRows.length }] });
+  const exportAttendanceReport = () => exportReportExcel({ title: reportTitle, subtitle: reportSubtitle, columns: reportColumns, rows: reportRows, fileName: `${reportTitle}-${dateFrom}-${dateTo}` });
 
   const filterPanel = (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
@@ -294,7 +297,8 @@ export default function HRAttendanceReport() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="icon" onClick={loadData} title="تحديث"><RefreshCw className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" onClick={exportCsv} title="تحميل"><Download className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" onClick={printAttendanceReport} disabled={reportRows.length === 0} title="طباعة / PDF"><Printer className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" onClick={exportAttendanceReport} disabled={reportRows.length === 0} title="تحميل Excel"><Download className="h-4 w-4" /></Button>
           </div>
         </div>
 

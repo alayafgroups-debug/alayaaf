@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/lib/supabaseClient";
+import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 
 type AttendanceDay = { day: number; status: "present" | "absent" | "future" };
-type EmpRow = { id: string; name: string; attendance: AttendanceDay[] };
+type EmpRow = { id: string; empId: string; name: string; attendance: AttendanceDay[] };
 
 export default function HRAttendanceCalculate() {
   const [data, setData] = useState<EmpRow[]>([]);
@@ -66,7 +67,7 @@ export default function HRAttendanceCalculate() {
           if (date > today) return { day, status: "future" as const };
           return { day, status: "absent" as const };
         });
-        return { id: e.id, name: e.name ?? "", attendance };
+        return { id: e.id, empId: e.emp_id ?? e.id, name: e.name ?? "", attendance };
       }));
     } catch (error) {
       console.error("Error loading attendance calculation:", error);
@@ -78,6 +79,22 @@ export default function HRAttendanceCalculate() {
 
   const days = data.length > 0 ? data[0].attendance.map((a) => a.day) : Array.from({ length: 31 }, (_, i) => i + 1);
   const filtered = data.filter((e) => !search || e.name.includes(search));
+  const reportColumns: ReportColumn[] = [
+    { key: "empId", label: "رقم الموظف", width: 15 },
+    { key: "name", label: "اسم الموظف", width: 26 },
+    ...days.map((day) => ({ key: `day${day}`, label: String(day), width: 8 })),
+    { key: "present", label: "حضور", width: 10 },
+    { key: "absent", label: "غياب", width: 10 },
+  ];
+  const reportRows = filtered.map((employee) => ({
+    empId: employee.empId,
+    name: employee.name,
+    ...Object.fromEntries(employee.attendance.map((item) => [`day${item.day}`, item.status === "present" ? "حاضر" : item.status === "absent" ? "غائب" : "قادم"])),
+    present: employee.attendance.filter((item) => item.status === "present").length,
+    absent: employee.attendance.filter((item) => item.status === "absent").length,
+  }));
+  const printAttendance = () => printReport({ title: "حساب الدوام", subtitle: `سجل الدوام الشهري للفترة ${month}`, columns: reportColumns, rows: reportRows, fileName: `attendance-${month}`, landscape: true, summary: [{ label: "عدد الموظفين", value: reportRows.length }] });
+  const exportAttendance = () => exportReportExcel({ title: "حساب الدوام", subtitle: `سجل الدوام الشهري للفترة ${month}`, columns: reportColumns, rows: reportRows, fileName: `حساب-الدوام-${month}` });
 
   return (
     <Layout>
@@ -87,8 +104,8 @@ export default function HRAttendanceCalculate() {
           <div className="flex items-center gap-3">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44 text-right" />
             <Button variant="outline" size="icon" onClick={loadData} title="تحديث"><RefreshCw className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" title="طباعة"><Printer className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" title="تحميل"><Download className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" onClick={printAttendance} disabled={reportRows.length === 0} title="طباعة / PDF"><Printer className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" onClick={exportAttendance} disabled={reportRows.length === 0} title="تحميل Excel"><Download className="h-4 w-4" /></Button>
           </div>
         </div>
 

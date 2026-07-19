@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Loader2, Search, UserCheck, Users } from "lucide-react";
+import { Calendar, FileSpreadsheet, Loader2, Printer, Search, UserCheck, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 import { ReportFilter, ReportSchema } from "./reportSchemas";
 
 type Employee = {
@@ -249,16 +250,47 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     setFilterValues((previous) => ({ ...previous, [id]: value }));
   };
 
-  const exportCsv = () => {
-    const headers = ["الرقم الوظيفي", ...schema.tableColumns, "عدد السجلات", "تفاصيل التقرير"];
-    const lines = rows.map((row) => [row.emp_id, row.name, row.job_title, row.department, row.directorate, row.branch, row.recordCount, row.details]);
-    const csv = [headers, ...lines].map((line) => line.map((cell) => `"${String(cell ?? "-").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
-    link.download = `${schema.title}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
+  const reportColumns: ReportColumn[] = [
+    { key: "empId", label: "الرقم الوظيفي", width: 16 },
+    { key: "name", label: schema.tableColumns[0] || "اسم الموظف", width: 26 },
+    { key: "jobTitle", label: schema.tableColumns[1] || "المسمى الوظيفي", width: 22 },
+    { key: "department", label: schema.tableColumns[2] || "القسم", width: 20 },
+    { key: "directorate", label: schema.tableColumns[3] || "الإدارة", width: 20 },
+    { key: "branch", label: schema.tableColumns[4] || "الفرع", width: 18 },
+    { key: "recordCount", label: "عدد السجلات", width: 14 },
+    { key: "details", label: "تفاصيل التقرير", width: 38 },
+  ];
+
+  const exportedRows = (selectionMode === "custom" ? rows.filter((row) => selectedIds.has(row.id)) : rows).map((row) => ({
+    empId: row.emp_id || "-",
+    name: row.name,
+    jobTitle: row.job_title || "-",
+    department: row.department || "-",
+    directorate: row.directorate || "-",
+    branch: row.branch || "-",
+    recordCount: row.recordCount,
+    details: row.details || "-",
+  }));
+
+  const reportSubtitle = `تقرير مفلتر حسب البيانات المحددة — ${exportedRows.length} موظف`;
+
+  const handlePrint = () => printReport({
+    title: schema.title,
+    subtitle: reportSubtitle,
+    columns: reportColumns,
+    rows: exportedRows,
+    fileName: schema.id,
+    landscape: true,
+    summary: [{ label: "إجمالي الموظفين", value: exportedRows.length }],
+  });
+
+  const handleExcel = () => exportReportExcel({
+    title: schema.title,
+    subtitle: reportSubtitle,
+    columns: reportColumns,
+    rows: exportedRows,
+    fileName: schema.title,
+  });
 
   const renderFilter = (filter: ReportFilter) => {
     if (filter.type === "select") {
@@ -294,8 +326,8 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center sticky top-0 z-10">
         <h2 className="text-xl font-bold text-gray-800">{schema.title}</h2>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm">تصدير PDF</button>
-          <button onClick={exportCsv} disabled={rows.length === 0} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm disabled:opacity-50">تصدير Excel</button>
+          <button onClick={handlePrint} disabled={exportedRows.length === 0} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm disabled:opacity-50 flex items-center gap-2"><Printer className="h-4 w-4" />طباعة / PDF</button>
+          <button onClick={handleExcel} disabled={exportedRows.length === 0} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm disabled:opacity-50 flex items-center gap-2"><FileSpreadsheet className="h-4 w-4" />تصدير Excel</button>
         </div>
       </div>
 

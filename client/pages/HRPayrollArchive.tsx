@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 
 type ArchiveRow = {
   id: string;
@@ -138,6 +139,21 @@ export default function HRPayrollArchive() {
   const pageData = filtered.slice(pageStart, pageStart + pageSize);
 
   const totalNet = filtered.reduce((sum, r) => sum + r.netSalary, 0);
+  const archiveColumns: ReportColumn[] = [
+    { key: "month", label: "الشهر", width: 14 }, { key: "empName", label: "الموظف", width: 25 },
+    { key: "department", label: "الإدارة", width: 20 }, { key: "basic", label: "الراتب الأساسي", width: 16 },
+    { key: "allowances", label: "البدلات", width: 14 }, { key: "overtime", label: "إضافي", width: 12 },
+    { key: "bonus", label: "مكافآت", width: 12 }, { key: "entitlements", label: "الاستحقاقات", width: 16 },
+    { key: "deductions", label: "الاستقطاعات", width: 14 }, { key: "net", label: "صافي الراتب", width: 16 },
+    { key: "status", label: "الحالة", width: 12 }, { key: "paidDate", label: "تاريخ الصرف", width: 16 },
+  ];
+  const toArchiveRow = (record: ArchiveRow) => ({
+    month: record.month, empName: record.empName, department: record.department,
+    basic: record.basicSalary.toFixed(2), allowances: record.allowances.toFixed(2), overtime: record.overtime.toFixed(2), bonus: record.bonus.toFixed(2),
+    entitlements: (record.basicSalary + record.allowances + record.overtime + record.bonus).toFixed(2), deductions: record.deductions.toFixed(2), net: record.netSalary.toFixed(2), status: record.status, paidDate: record.paidDate || "-",
+  });
+  const archiveRows = filtered.map(toArchiveRow);
+  const archiveSummary = [{ label: "عدد السجلات", value: filtered.length }, { label: "إجمالي صافي الرواتب", value: `${totalNet.toFixed(2)} ر.س` }];
 
   const exportCsv = () => {
     if (filtered.length === 0) {
@@ -145,164 +161,16 @@ export default function HRPayrollArchive() {
       return;
     }
 
-    const header = [
-      "الشهر",
-      "الموظف",
-      "الإدارة",
-      "الراتب الأساسي",
-      "البدلات",
-      "ساعات إضافية",
-      "مكافآت",
-      "إجمالي الاستحقاقات",
-      "الاستقطاعات",
-      "صافي الراتب",
-      "الحالة",
-      "تاريخ الصرف",
-      "ملاحظات",
-    ];
-
-    const rows = filtered.map((r) => {
-      const entitlements = r.basicSalary + r.allowances + r.overtime + r.bonus;
-      return [
-        r.month,
-        r.empName,
-        r.department,
-        r.basicSalary.toFixed(2),
-        r.allowances.toFixed(2),
-        r.overtime.toFixed(2),
-        r.bonus.toFixed(2),
-        entitlements.toFixed(2),
-        r.deductions.toFixed(2),
-        r.netSalary.toFixed(2),
-        r.status,
-        r.paidDate || "-",
-        r.notes || "-",
-      ];
-    });
-
-    const csv = [header, ...rows]
-      .map((line) =>
-        line
-          .map((cell) => {
-            const value = String(cell ?? "").replace(/"/g, '""');
-            return `"${value}"`;
-          })
-          .join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `payroll-archive-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    toast({ title: "تم تصدير الملف" });
+    exportReportExcel({ title: "أرشيف الرواتب", subtitle: "السجلات المطابقة لخيارات البحث والتصفية", columns: archiveColumns, rows: archiveRows, fileName: `أرشيف-الرواتب-${new Date().toISOString().slice(0, 10)}`, summary: archiveSummary });
+    toast({ title: "تم تصدير ملف Excel" });
   };
 
   const printArchive = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    const rowsHtml = filtered
-      .map((r, idx) => {
-        const entitlements = r.basicSalary + r.allowances + r.overtime + r.bonus;
-        return `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${r.month}</td>
-            <td>${r.empName}</td>
-            <td>${r.department}</td>
-            <td>${r.basicSalary.toFixed(2)}</td>
-            <td>${r.allowances.toFixed(2)}</td>
-            <td>${r.overtime.toFixed(2)}</td>
-            <td>${r.bonus.toFixed(2)}</td>
-            <td>${entitlements.toFixed(2)}</td>
-            <td>${r.deductions.toFixed(2)}</td>
-            <td>${r.netSalary.toFixed(2)}</td>
-            <td>${r.status}</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    printWindow.document.write(`
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="utf-8" />
-        <title>أرشيف الرواتب</title>
-        <style>
-          body{font-family:Arial,sans-serif;padding:20px;color:#0f172a}
-          h1{margin:0 0 12px;font-size:22px}
-          table{width:100%;border-collapse:collapse;font-size:12px}
-          th,td{border:1px solid #cbd5e1;padding:6px;text-align:center}
-          th{background:#f1f5f9}
-          .summary{margin-top:10px;font-weight:700}
-        </style>
-      </head>
-      <body>
-        <h1>أرشيف الرواتب</h1>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th><th>الشهر</th><th>الموظف</th><th>الإدارة</th><th>الأساسي</th><th>البدلات</th>
-              <th>إضافي</th><th>مكافآت</th><th>الاستحقاقات</th><th>الاستقطاعات</th><th>الصافي</th><th>الحالة</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-        <div class="summary">إجمالي صافي الرواتب: ${totalNet.toFixed(2)} ريال</div>
-      </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    if (archiveRows.length === 0) return;
+    printReport({ title: "أرشيف الرواتب", subtitle: "السجلات المطابقة لخيارات البحث والتصفية", columns: archiveColumns, rows: archiveRows, fileName: "payroll-archive", landscape: true, summary: archiveSummary });
   };
 
-  const printSingle = (rec: ArchiveRow) => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    const entitlements = rec.basicSalary + rec.allowances + rec.overtime + rec.bonus;
-
-    printWindow.document.write(`
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="utf-8" />
-        <title>سجل راتب - ${rec.empName}</title>
-        <style>
-          body{font-family:Arial,sans-serif;padding:24px;color:#0f172a}
-          h2{margin:0 0 14px}
-          .row{display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding:8px 0}
-          .label{color:#64748b}
-          .val{font-weight:700}
-        </style>
-      </head>
-      <body>
-        <h2>تفاصيل سجل الراتب</h2>
-        <div class="row"><span class="label">الموظف</span><span class="val">${rec.empName}</span></div>
-        <div class="row"><span class="label">الشهر</span><span class="val">${rec.month}</span></div>
-        <div class="row"><span class="label">الإدارة</span><span class="val">${rec.department}</span></div>
-        <div class="row"><span class="label">الراتب الأساسي</span><span class="val">${rec.basicSalary.toFixed(2)}</span></div>
-        <div class="row"><span class="label">البدلات</span><span class="val">${rec.allowances.toFixed(2)}</span></div>
-        <div class="row"><span class="label">الساعات الإضافية</span><span class="val">${rec.overtime.toFixed(2)}</span></div>
-        <div class="row"><span class="label">المكافآت</span><span class="val">${rec.bonus.toFixed(2)}</span></div>
-        <div class="row"><span class="label">إجمالي الاستحقاقات</span><span class="val">${entitlements.toFixed(2)}</span></div>
-        <div class="row"><span class="label">الاستقطاعات</span><span class="val">${rec.deductions.toFixed(2)}</span></div>
-        <div class="row"><span class="label">صافي الراتب</span><span class="val">${rec.netSalary.toFixed(2)}</span></div>
-        <div class="row"><span class="label">الحالة</span><span class="val">${rec.status}</span></div>
-      </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  };
+  const printSingle = (rec: ArchiveRow) => printReport({ title: `سجل راتب — ${rec.empName}`, subtitle: `تفاصيل راتب شهر ${rec.month}`, columns: archiveColumns, rows: [toArchiveRow(rec)], fileName: `payroll-${rec.month}`, landscape: true, summary: [{ label: "صافي الراتب", value: `${rec.netSalary.toFixed(2)} ر.س` }] });
 
   const handleDelete = async (rec: ArchiveRow) => {
     if (!confirm(`حذف سجل ${rec.empName}؟`)) return;
@@ -371,7 +239,7 @@ export default function HRPayrollArchive() {
               <button
                 onClick={exportCsv}
                 className="p-1.5 hover:bg-white/15 rounded"
-                title="تصدير CSV"
+                title="تصدير Excel"
               >
                 <Download className="h-4 w-4" />
               </button>

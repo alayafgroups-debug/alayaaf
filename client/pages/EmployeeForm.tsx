@@ -405,7 +405,7 @@ export default function EmployeeForm({
         first_name: form.firstName,
         birth_date: form.birthDate || null,
         gender: form.gender,
-        email: form.email,
+        email: form.email ? form.email.toLowerCase() : null,
         phone: form.phone,
         nationality: form.nationality,
         address2: form.address2,

@@ -42,12 +42,12 @@ export default function EmployeeLogin() {
         return;
       }
 
-      // Fetch employee profile
+      // Fetch employee profile (case-insensitive email match)
       const { data: empData, error: profileError } = await supabase
         .from("employees")
-        .select("id, emp_id, name, employee_role, permissions")
-        .eq("email", (resolvedEmail as string).toLowerCase())
-        .single();
+        .select("id, emp_id, account_title, name, employee_role, permissions")
+        .ilike("email", (resolvedEmail as string))
+        .maybeSingle();
 
       if (profileError || !empData) {
         toast.error("لم يتم العثور على بيانات الموظف");
@@ -58,7 +58,7 @@ export default function EmployeeLogin() {
       const session: UserSession = {
         id: authData.user.id,
         email: authData.user.email ?? (resolvedEmail as string).toLowerCase(),
-        empId: empData.emp_id ?? empId,
+        empId: (empData as any).account_title || empData.emp_id || empId,
         name: empData.name,
         role: empData.employee_role ?? "موظف",
         permissions: (Array.isArray(empData.permissions) ? {} : empData.permissions ?? {}) as Record<string, boolean>,

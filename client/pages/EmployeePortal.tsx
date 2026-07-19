@@ -355,6 +355,19 @@ export default function EmployeePortal() {
     }
   }, [navigate]);
 
+  // Intercept hardware/browser back button - prevent full exit on sub-pages
+  useEffect(() => {
+    window.history.pushState({ portal: true }, "");
+    const handlePop = () => {
+      if (currentPage !== "home") {
+        setCurrentPage("home");
+        window.history.pushState({ portal: true }, "");
+      }
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, [currentPage]);
+
   const handleLogout = () => {
     localStorage.removeItem("user_session");
     toast.success("تم تسجيل الخروج بنجاح");
@@ -570,7 +583,7 @@ export default function EmployeePortal() {
         {/* Header */}
         <div className="sticky top-0 z-20">
           {currentPage === "home" ? (
-            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pb-0" style={{ paddingTop: "max(20px, env(safe-area-inset-top, 20px))" }}>
+            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pb-0" style={{ paddingTop: "max(52px, calc(env(safe-area-inset-top, 0px) + 20px))" }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("notifications"); }} className="relative w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
@@ -597,7 +610,7 @@ export default function EmployeePortal() {
               </div>
             </div>
           ) : (
-            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-4 flex items-center justify-between" style={{ paddingTop: "max(16px, env(safe-area-inset-top, 16px))", paddingBottom: "16px" }}>
+            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-4 flex items-center justify-between" style={{ paddingTop: "max(52px, calc(env(safe-area-inset-top, 0px) + 16px))", paddingBottom: "14px" }}>
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("home"); }}
@@ -723,19 +736,18 @@ export default function EmployeePortal() {
           )}
 
           {currentPage === "send-request" && (
-            <div className="p-4">
-              <h2 className="text-lg font-bold text-gray-900 mb-6">إرسال طلب جديد</h2>
-              <div className="grid grid-cols-3 gap-4">
+            <div className="p-4 pb-32">
+              <div className="grid grid-cols-3 gap-2.5">
                 {visibleRequestTypes.length === 0 ? (
                   <p className="col-span-3 text-center text-gray-400 py-10">لا توجد طلبات متاحة لك</p>
                 ) : visibleRequestTypes.map((type) => (
                   <button
                     key={type.id}
                     onClick={() => handleSendRequest(type)}
-                    className={`${type.color} rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:shadow-md transition`}
+                    className={`${type.color} rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 hover:shadow-md active:scale-95 transition min-h-[90px]`}
                   >
-                    <span className="text-2xl">{type.icon}</span>
-                    <span className="text-xs font-semibold text-center text-gray-700">{type.name}</span>
+                    <span className="text-[26px] leading-none">{type.icon}</span>
+                    <span className="text-[11px] font-bold text-center text-gray-800 leading-tight mt-0.5">{type.name}</span>
                   </button>
                 ))}
               </div>
@@ -746,21 +758,21 @@ export default function EmployeePortal() {
             <div>
               {/* Requests Tab Navigation */}
               <div className="bg-white border-b border-gray-200">
-                <div className="flex overflow-x-auto gap-0">
+                <div className="flex gap-0">
                   {["received", "draft", "sent", "attached"].map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setRequestsTab(tab as any)}
-                      className={`flex-1 px-4 py-3 font-semibold text-sm whitespace-nowrap border-b-2 transition ${
+                      className={`flex-1 px-1 py-3 font-semibold text-[11px] text-center border-b-2 transition ${
                         requestsTab === tab
                           ? "border-blue-600 text-blue-600"
-                          : "border-transparent text-gray-600"
+                          : "border-transparent text-gray-500"
                       }`}
                     >
                       {tab === "received" && "الواردة"}
                       {tab === "draft" && "المسودة"}
                       {tab === "sent" && "المرسلة"}
-                      {tab === "attached" && "المملحقة"}
+                      {tab === "attached" && "الملحقة"}
                     </button>
                   ))}
                 </div>

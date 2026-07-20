@@ -72,11 +72,10 @@ export default function ProfilePage({ empId, onBack }: Props) {
   ];
 
   const bankFields = [
-    { key: "bank_name", label: "اسم البنك" },
-    { key: "bank_branch", label: "فرع البنك" },
+    { key: "bank_name", label: "اسم الحساب البنكي" },
+    { key: "bank_branch", label: "اسم الفرع" },
     { key: "bank_account", label: "رقم الحساب" },
-    { key: "bank_name2", label: "بنك ثانوي" },
-    { key: "bank_account2", label: "حساب ثانوي" },
+    { key: "iban", label: "رقم الآيبان" },
   ];
 
   const activeFields = activeTab === "المعلومات الشخصية" ? personalFields : activeTab === "العقد" ? contractFields : bankFields;

@@ -282,6 +282,7 @@ export default function HREmployees() {
                     />
                   </th>
                   <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الرقم الوظيفي</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
                   {visibleColumns.englishName && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم بالإنجليزية</th>}
                   <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الفرع</th>
@@ -295,7 +296,6 @@ export default function HREmployees() {
                   {visibleColumns.email && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">البريد الإلكتروني</th>}
                   <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">وضع العمل</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الحالة</th>
-                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
@@ -332,6 +332,13 @@ export default function HREmployees() {
                         <span className="text-[10px] text-gray-400 font-normal block">{emp.empId}</span>
                       )}
                     </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-center gap-0.5">
+                        <button onClick={() => { setSelected(emp); setMode("view"); }} className="p-1 text-blue-600 hover:bg-blue-100 rounded" title="عرض"><Eye className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { setSelected(emp); setMode("edit"); }} className="p-1 text-emerald-600 hover:bg-emerald-100 rounded" title="تعديل"><Edit className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => handleDelete(emp)} className="p-1 text-rose-600 hover:bg-rose-100 rounded" title="حذف"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
                     <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">{emp.name || emp.firstName || "—"}</td>
                     {visibleColumns.englishName && <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.firstName || "—"}</td>}
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || "—"}</td>
@@ -348,13 +355,6 @@ export default function HREmployees() {
                       <span className={cn("inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600 border-gray-200")}>
                         {emp.status || "—"}
                       </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-center gap-0.5">
-                        <button onClick={() => { setSelected(emp); setMode("view"); }} className="p-1 text-blue-600 hover:bg-blue-100 rounded" title="عرض"><Eye className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => { setSelected(emp); setMode("edit"); }} className="p-1 text-emerald-600 hover:bg-emerald-100 rounded" title="تعديل"><Edit className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => handleDelete(emp)} className="p-1 text-rose-600 hover:bg-rose-100 rounded" title="حذف"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </div>
                     </td>
                   </tr>
                 ))}

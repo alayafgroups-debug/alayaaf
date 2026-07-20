@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Layout from "@/components/Layout";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, BriefcaseBusiness, CalendarClock, MapPin, Save, Settings2 } from "lucide-react";
+import { ArrowRight, CalendarClock, MapPin, Save, Settings2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import JobTitlesManager from "@/components/hr/JobTitlesManager";
 import { toast } from "@/hooks/use-toast";
 
 type TabKey = "general" | "recruitment" | "payroll" | "leaves" | "attendance";
@@ -302,13 +303,6 @@ export default function HRSettings() {
             ))}
             <span className="hidden sm:block w-px bg-gray-200 mx-1" />
             <button
-              onClick={() => navigate("/hr/organization/jobs")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition"
-            >
-              <BriefcaseBusiness className="h-4 w-4" />
-              الوظائف
-            </button>
-            <button
               onClick={() => navigate("/hr/organization/work-locations")}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition"
             >
@@ -328,10 +322,13 @@ export default function HRSettings() {
             {loading ? <div className="text-center text-gray-500 py-6">جاري تحميل الإعدادات...</div> : null}
 
             {!loading && activeTab === "general" ? (
-              <GeneralSettingsTab
-                value={settings.general}
-                onChange={(next) => setSettings((prev) => ({ ...prev, general: next }))}
-              />
+              <>
+                <GeneralSettingsTab
+                  value={settings.general}
+                  onChange={(next) => setSettings((prev) => ({ ...prev, general: next }))}
+                />
+                <JobTitlesManager embedded />
+              </>
             ) : null}
 
             {!loading && activeTab === "recruitment" ? (

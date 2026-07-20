@@ -93,9 +93,7 @@ export type EmpFormData = {
   bankName: string;
   bankBranch: string;
   bankAccount: string;
-  bankName2: string;
-  bankBranch2: string;
-  bankAccount2: string;
+  iban: string;
   // Step 4: Permissions
   permissions: string[];
   // Step 5: Insurance
@@ -169,9 +167,7 @@ export const emptyForm = (): EmpFormData => ({
   bankName: "",
   bankBranch: "",
   bankAccount: "",
-  bankName2: "",
-  bankBranch2: "",
-  bankAccount2: "",
+  iban: "",
   permissions: [],
   insuranceItems: [],
   documents: {},
@@ -240,9 +236,7 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
   bankName: String(r.bank_name ?? ""),
   bankBranch: String(r.bank_branch ?? ""),
   bankAccount: String(r.bank_account ?? ""),
-  bankName2: String(r.bank_name2 ?? ""),
-  bankBranch2: String(r.bank_branch2 ?? ""),
-  bankAccount2: String(r.bank_account2 ?? ""),
+  iban: String(r.iban ?? ""),
   permissions: Array.isArray(r.permissions) ? (r.permissions as string[]) : [],
   insuranceItems: Array.isArray(r.insurance_items)
     ? (r.insurance_items as InsuranceItem[])
@@ -260,13 +254,23 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
 });
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-const NATIONALITIES = ["المملكة العربية السعودية", "مصر", "سوريا", "باكستان", "الهند", "الفلبين", "اليمن", "السودان", "الأردن", "لبنان", "بنغلاديش", "إثيوبيا", "نيجيريا", "أخرى"];
+const NATIONALITIES = [
+  "المملكة العربية السعودية", "الإمارات العربية المتحدة", "البحرين", "الكويت", "عُمان", "قطر",
+  "مصر", "السودان", "جنوب السودان", "ليبيا", "تونس", "الجزائر", "المغرب", "موريتانيا", "الصومال", "جيبوتي", "جزر القمر",
+  "سوريا", "الأردن", "لبنان", "فلسطين", "العراق", "اليمن",
+  "الهند", "باكستان", "بنغلاديش", "سريلانكا", "نيبال", "بوتان", "أفغانستان", "المالديف",
+  "الفلبين", "إندونيسيا", "ماليزيا", "تايلاند", "فيتنام", "ميانمار", "الصين", "اليابان", "كوريا الجنوبية",
+  "إثيوبيا", "إريتريا", "كينيا", "أوغندا", "تنزانيا", "نيجيريا", "غانا", "السنغال", "الكاميرون", "جنوب أفريقيا",
+  "تركيا", "إيران", "أذربيجان", "أوزبكستان", "كازاخستان", "روسيا", "أوكرانيا",
+  "المملكة المتحدة", "فرنسا", "ألمانيا", "إيطاليا", "إسبانيا", "هولندا", "السويد", "اليونان",
+  "الولايات المتحدة", "كندا", "المكسيك", "البرازيل", "الأرجنتين", "أستراليا", "نيوزيلندا", "أخرى",
+];
 const DEFAULT_DEPARTMENTS = ["الإدارة العليا", "إدارة الموارد البشرية", "إدارة المالية", "إدارة التشغيل", "إدارة المبيعات"];
 const DEFAULT_SECTIONS = ["الموارد البشرية", "المحاسبة", "الصيانة والتشغيل", "المبيعات", "تقنية المعلومات"];
 const BRANCHES = ["فرع التشغيل والصيانة", "الفرع الرئيسي", "فرع المبيعات"];
 const GENDERS = ["ذكر", "أنثى"];
 const MARITAL_STATUSES = ["أعزب", "متزوج", "مطلق", "أرمل"];
-const DEFAULT_JOBS = ["مدير عام", "مدير موارد بشرية", "مدير مالي", "محاسب", "مهندس", "فني صيانة", "مسؤول مبيعات", "مسؤول مشتريات", "أخصائي موارد بشرية", "موظف إداري"];
+const DEFAULT_JOBS = ["مدير عام", "مدير موارد بشرية", "مدير مالي", "محاسب", "مهندس", "فني صيانة", "مسؤول مبيعات", "مسؤول مشتريات", "أخصائي موارد بشرية", "موظف إداري", "عامل نظافة"];
 const CURRENCIES = ["SAR - Saudi Riyal", "USD - US Dollar", "EUR - Euro", "AED - UAE Dirham"];
 const DEFAULT_WORK_SCHEDULES = ["جدول الشركة الأساسي", "جدول مرن", "عمل من المنزل", "نظام ورديات"];
 const DEFAULT_WORK_LOCATIONS = ["المقر الرئيسي", "فرع التشغيل والصيانة", "فرع المبيعات"];
@@ -338,13 +342,15 @@ export default function EmployeeForm({
   const [orgDepartments, setOrgDepartments] = useState<DeptOpt[]>([]);
   const [orgSections, setOrgSections] = useState<SectionOpt[]>([]);
   const [employeeRoles, setEmployeeRoles] = useState<string[]>([]);
+  const [jobTitles, setJobTitles] = useState<string[]>(DEFAULT_JOBS);
 
   useEffect(() => {
     (async () => {
-      const [d, s, r] = await Promise.all([
+      const [d, s, r, j] = await Promise.all([
         supabase.from("departments").select("id, name").order("name"),
         supabase.from("org_sections").select("id, name, department_id, department").order("name"),
         supabase.from("user_roles").select("name_ar").eq("status", "فعال").order("name_ar"),
+        supabase.from("hr_jobs").select("name").eq("status", "فعال").order("name"),
       ]);
       setOrgDepartments(
         ((d.data as Record<string, unknown>[]) ?? []).map((x) => ({ id: String(x.id), name: String(x.name ?? "") })),
@@ -362,6 +368,8 @@ export default function EmployeeForm({
           .map((x) => String(x.name_ar ?? ""))
           .filter(Boolean),
       );
+      const databaseJobs = ((j.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
+      setJobTitles(databaseJobs.length ? databaseJobs : DEFAULT_JOBS);
     })();
   }, []);
 
@@ -454,9 +462,7 @@ export default function EmployeeForm({
         bank_name: form.bankName,
         bank_branch: form.bankBranch,
         bank_account: form.bankAccount,
-        bank_name2: form.bankName2,
-        bank_branch2: form.bankBranch2,
-        bank_account2: form.bankAccount2,
+        iban: form.iban,
         permissions: form.permissions,
         insurance_items: form.insuranceItems,
         documents: form.documents,
@@ -546,7 +552,7 @@ export default function EmployeeForm({
         {/* Step Content */}
         <div className="bg-white border border-gray-200 rounded-b-xl shadow-sm p-6 mt-0">
           {step === 0 && <Step1Personal form={form} set={set} />}
-          {step === 1 && <Step2Job form={form} set={set} departments={orgDepartments} sections={orgSections} />}
+          {step === 1 && <Step2Job form={form} set={set} departments={orgDepartments} sections={orgSections} jobs={jobTitles} />}
           {step === 2 && <Step3Financial form={form} set={set} />}
           {step === 3 && <Step4Permissions form={form} togglePermission={togglePermission} />}
           {step === 4 && <Step5Insurance form={form} set={set} />}
@@ -714,7 +720,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
 }
 
 // ─── Step 2: Job Data ────────────────────────────────────────────────────────
-function Step2Job({ form, set, departments, sections }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[] }) {
+function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[]; jobs: string[] }) {
   const availableSections = form.departmentId
     ? sections.filter((s) => s.departmentId === form.departmentId)
     : sections;
@@ -736,7 +742,7 @@ function Step2Job({ form, set, departments, sections }: { form: EmpFormData; set
       {/* Row 1: Division / Job Title */}
       <div className="grid grid-cols-2 gap-4">
         <FSelect label="الشعبة *" value={form.division} onChange={(v) => set("division", v)} options={DEFAULT_DEPARTMENTS} placeholder="--" />
-        <FSelect label="المسمى الوظيفي *" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={DEFAULT_JOBS} placeholder="--" />
+        <FSelect label="المسمى الوظيفي *" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={jobs} placeholder="--" />
       </div>
 
       {/* Row 2: Branch / Employment Type */}
@@ -983,20 +989,14 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
         </div>
       </div>
 
-      {/* Bank Info (Two Banks) */}
+      {/* Bank Info */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">معلومات عن البنك</h3>
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <FInput label="اسم البنك" value={form.bankName} onChange={(v) => set("bankName", v)} />
-            <FInput label="اسم الفرع" value={form.bankBranch} onChange={(v) => set("bankBranch", v)} />
-            <FInput label="رقم الحساب" value={form.bankAccount} onChange={(v) => set("bankAccount", v)} />
-          </div>
-          <div className="space-y-3">
-            <FInput label="اسم البنك" value={form.bankName2} onChange={(v) => set("bankName2", v)} />
-            <FInput label="اسم الفرع" value={form.bankBranch2} onChange={(v) => set("bankBranch2", v)} />
-            <FInput label="رقم الحساب" value={form.bankAccount2} onChange={(v) => set("bankAccount2", v)} />
-          </div>
+        <h3 className="text-sm font-semibold text-gray-800 mb-3">معلومات البنك</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FInput label="اسم الحساب البنكي" value={form.bankName} onChange={(v) => set("bankName", v)} />
+          <FInput label="اسم الفرع" value={form.bankBranch} onChange={(v) => set("bankBranch", v)} />
+          <FInput label="رقم الحساب" value={form.bankAccount} onChange={(v) => set("bankAccount", v)} />
+          <FInput label="رقم الآيبان" value={form.iban} onChange={(v) => set("iban", v.toUpperCase().replace(/\s/g, ""))} placeholder="SA0000000000000000000000" />
         </div>
       </div>
     </div>

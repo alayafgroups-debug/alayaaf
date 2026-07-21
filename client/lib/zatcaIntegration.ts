@@ -24,11 +24,24 @@ export interface ZATCAConfig {
   
   // الشهادات
   ccsid?: string; // Compliance Cryptographic Stamp Identifier
-  csid?: string;  // Compliance Stamp ID
-  
+  csid?: string;  // Production/Compliance CSID (username في Basic Auth)
+  secret?: string; // Secret المرافق للـ CSID (password في Basic Auth)
+
   // مفاتيح التشفير
   privateKey?: string;
   publicCert?: string;
+}
+
+/**
+ * نتيجة الإبلاغ عن الفاتورة وفق Reporting API الرسمي
+ */
+export interface ZATCAReportingResult {
+  success: boolean;
+  status?: number;
+  reportingStatus?: string; // REPORTED | NOT_REPORTED
+  validationResults?: unknown;
+  raw?: unknown;
+  error?: string;
 }
 
 export interface InvoiceLineItem {
@@ -325,37 +338,128 @@ export class ZATCAService {
   }
 
   /**
-   * الإبلاغ عن الفاتورة المبسطة (B2C - Reporting)
-   * يتم إرسالها خلال 24 ساعة من الإصدار
+   * بناء ترويسة المصادقة Basic Auth من CSID والـ Secret
+   * وفق مواصفات ZATCA: base64("{CSID}:{Secret}")
    */
-  async reportSimplifiedInvoice(invoiceXML: string): Promise<{
-    success: boolean;
-    error?: string;
-  }> {
-    try {
-      const response = await fetch(`${this.config.apiUrl}/invoices/reporting`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/xml",
-          "Authorization": `Bearer ${this.config.ccsid || "sandbox-token"}`,
-        },
-        body: invoiceXML,
-      });
+  private buildAuthHeader(): string {
+    const username = this.config.csid || this.config.ccsid || "";
+    const password = this.config.secret || "";
+    const token =
+      typeof btoa !== "undefined"
+        ? btoa(`${username}:${password}`)
+        : Buffer.from(`${username}:${password}`).toString("base64");
+    return `Basic ${token}`;
+  }
 
-      if (!response.ok) {
-        return {
-          success: false,
-          error: `ZATCA API Error: ${response.status}`,
-        };
+  /**
+   * الإبلاغ عن الفاتورة المبسطة (B2C - Reporting API الرسمي)
+   * POST {apiUrl}/invoices/reporting/single
+   *
+   * @param invoiceHash هاش الفاتورة (base64 SHA-256)
+   * @param uuid معرف الفاتورة الفريد
+   * @param invoiceBase64 محتوى XML للفاتورة مُرمّز base64
+   */
+  async reportInvoice(
+    invoiceHash: string,
+    uuid: string,
+    invoiceBase64: string,
+    options?: { clearanceStatus?: string; language?: string },
+  ): Promise<ZATCAReportingResult> {
+    try {
+      const response = await fetch(
+        `${this.config.apiUrl}/invoices/reporting/single`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "Accept-Version": "V2",
+            "accept-language": options?.language || "ar",
+            "Clearance-Status": options?.clearanceStatus || "0",
+            Authorization: this.buildAuthHeader(),
+          },
+          body: JSON.stringify({
+            invoiceHash,
+            uuid,
+            invoice: invoiceBase64,
+          }),
+        },
+      );
+
+      const status = response.status;
+      let payload: any = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
       }
 
-      return { success: true };
+      // 200 = مقبولة، 202 = مقبولة مع تحذيرات
+      const success = status === 200 || status === 202;
+
+      return {
+        success,
+        status,
+        reportingStatus: payload?.reportingStatus,
+        validationResults: payload?.validationResults,
+        raw: payload,
+        error: success
+          ? undefined
+          : this.mapReportingError(status, payload),
+      };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
+  }
+
+  /**
+   * ترجمة رموز أخطاء Reporting API إلى رسائل عربية مفهومة
+   */
+  private mapReportingError(status: number, payload: any): string {
+    const detail =
+      payload?.validationResults?.errorMessages
+        ?.map((e: any) => e.message)
+        .join("، ") || payload?.message;
+    switch (status) {
+      case 400:
+        return `طلب غير صالح (400): ${detail || "تحقق من بيانات الفاتورة"}`;
+      case 401:
+        return "فشل المصادقة (401): تحقق من CSID والـ Secret";
+      case 406:
+        return "صيغة غير مقبولة (406): تحقق من الترويسات";
+      case 409:
+        return "تعارض (409): الفاتورة مُبلّغ عنها مسبقاً";
+      case 500:
+        return "خطأ في خادم ZATCA (500): أعد المحاولة لاحقاً";
+      default:
+        return `خطأ ZATCA (${status}): ${detail || "غير معروف"}`;
+    }
+  }
+
+  /**
+   * توافقية مؤقتة: الإبلاغ باستخدام XML مباشرة (يحسب الهاش ويرمّز base64)
+   * @deprecated استخدم reportInvoice مع الهاش والـ UUID الصحيحين
+   */
+  async reportSimplifiedInvoice(
+    invoiceXML: string,
+    uuid?: string,
+  ): Promise<ZATCAReportingResult> {
+    const invoiceHash = crypto
+      .createHash("sha256")
+      .update(invoiceXML)
+      .digest("base64");
+    const invoiceBase64 =
+      typeof btoa !== "undefined"
+        ? btoa(unescape(encodeURIComponent(invoiceXML)))
+        : Buffer.from(invoiceXML, "utf-8").toString("base64");
+    return this.reportInvoice(
+      invoiceHash,
+      uuid || this.generateUUID(),
+      invoiceBase64,
+    );
   }
 
   /**

@@ -32,9 +32,10 @@ export function useZATCA() {
         if (data) {
           const zatcaConfig: ZATCAConfig = {
             mode: data.sandbox_mode ? "sandbox" : "production",
+            // Reporting API الرسمي — بوابة Fatoora
             apiUrl: data.sandbox_mode
-              ? "https://gw-apic-sandbox.zatca.gov.sa"
-              : "https://gw-apic.zatca.gov.sa",
+              ? "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal"
+              : "https://gw-fatoora.zatca.gov.sa/e-invoicing/core",
             companyVAT: "", // سيتم ملؤها من بيانات المنظمة
             companyName: "",
             companyNameAr: "",
@@ -43,6 +44,7 @@ export function useZATCA() {
             companyPhone: "",
             ccsid: data.ccsid,
             csid: data.csid,
+            secret: data.secret,
           };
 
           setConfig(zatcaConfig);
@@ -136,22 +138,36 @@ export function useZATCA() {
         // توليد XML
         const invoiceXML = service.generateInvoiceXML(invoice);
 
-        // إرسال للإبلاغ
-        const result = await service.reportSimplifiedInvoice(invoiceXML);
+        // إرسال للإبلاغ عبر Reporting API الرسمي
+        const result = await service.reportSimplifiedInvoice(
+          invoiceXML,
+          invoice.uuid,
+        );
+
+        // حفظ نتيجة الإبلاغ (نجاح أو فشل) للمراجعة
+        await supabase
+          .from("sales_invoices")
+          .update({
+            uuid: invoice.uuid,
+            zatca_status: result.success
+              ? result.reportingStatus === "REPORTED"
+                ? "reported"
+                : "reported_with_warnings"
+              : "reporting_failed",
+            zatca_response: result.raw ?? result,
+            zatca_reported_at: result.success
+              ? new Date().toISOString()
+              : null,
+          })
+          .eq("invoice_number", invoice.invoiceNumber);
 
         if (result.success) {
-          // حفظ حالة الإبلاغ
-          await supabase
-            .from("sales_invoices")
-            .update({
-              zatca_status: "reported",
-              zatca_reported_at: new Date().toISOString(),
-            })
-            .eq("invoice_number", invoice.invoiceNumber);
-
           return {
             success: true,
-            message: "تم الإبلاغ بنجاح",
+            message:
+              result.reportingStatus === "REPORTED"
+                ? "تم الإبلاغ بنجاح"
+                : "تم الإبلاغ مع وجود تحذيرات",
           };
         }
 

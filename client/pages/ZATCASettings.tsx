@@ -11,6 +11,7 @@ interface ZATCASetup {
   mode: "sandbox" | "production";
   csid?: string;
   ccsid?: string;
+  secret?: string;
   sandbox_tested: boolean;
   production_ready: boolean;
   api_key?: string;
@@ -63,6 +64,7 @@ export default function ZATCASettings() {
             mode: setup.mode,
             csid: setup.csid,
             ccsid: setup.ccsid,
+            secret: setup.secret,
             api_key: setup.api_key,
             sandbox_tested: setup.sandbox_tested,
             production_ready: setup.production_ready,
@@ -289,6 +291,31 @@ export default function ZATCASettings() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Secret */}
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Secret (المفتاح السري المرافق للـ CSID)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type={showApiKey ? "text" : "password"}
+              value={setup.secret || ""}
+              onChange={(e) => setSetup({ ...setup, secret: e.target.value })}
+              placeholder="الحصول عليه من ZATCA مع الـ CSID"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+            />
+            <button
+              onClick={() => setShowApiKey(!showApiKey)}
+              className="px-3 py-2 text-gray-600 hover:text-gray-900"
+            >
+              {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            يُستخدم مع الـ CSID لبناء مصادقة Basic Auth عند الإبلاغ عن الفواتير
+          </p>
         </div>
 
         {/* API Key */}

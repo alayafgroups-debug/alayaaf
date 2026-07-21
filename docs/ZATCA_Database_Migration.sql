@@ -12,8 +12,9 @@ CREATE TABLE IF NOT EXISTS zatca_integration (
   api_url VARCHAR(255),
   
   -- الشهادات والمفاتيح
-  csid VARCHAR(100) COMMENT 'Compliance Stamp ID',
+  csid VARCHAR(100) COMMENT 'Compliance/Production Stamp ID (username في Basic Auth)',
   ccsid VARCHAR(100) COMMENT 'Compliance Cryptographic Stamp ID',
+  secret VARCHAR(255) COMMENT 'Secret المرافق للـ CSID (password في Basic Auth)',
   api_key VARCHAR(255) ENCRYPTED COMMENT 'مفتاح API مشفر',
   
   -- حالة الاختبار والإنتاج

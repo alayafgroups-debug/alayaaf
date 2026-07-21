@@ -89,25 +89,38 @@ export function useZATCA() {
         // توليد XML
         const invoiceXML = service.generateInvoiceXML(invoice);
 
-        // إرسال للمسح
-        const result = await service.clearInvoice(invoiceXML);
+        const uuid = invoice.uuid || crypto.randomUUID();
 
-        if (result.success) {
+        // المسح عبر الخادم (يتجنب CORS ويُبقي المفاتيح على السيرفر)
+        const res = await fetch("/api/zatca/clear", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: config?.mode || "sandbox",
+            csid: config?.csid,
+            secret: config?.secret,
+            invoiceXml: invoiceXML,
+            uuid,
+          }),
+        });
+        const result = await res.json();
+
+        if (result.ok) {
           // حفظ نتائج ZATCA في قاعدة البيانات
           await supabase
             .from("sales_invoices")
             .update({
-              uuid: result.uuid,
-              cryptographic_stamp: result.cryptographicStamp,
-              qr_code: result.qrCode,
+              uuid,
+              icv: result?.invoiceHash,
+              cryptographic_stamp: result?.data?.clearedInvoice,
               zatca_status: "cleared",
-              zatca_response: result,
+              zatca_response: result?.data ?? result,
             })
             .eq("invoice_number", invoice.invoiceNumber);
 
           return {
             success: true,
-            uuid: result.uuid,
+            uuid,
             message: "تم المسح والموافقة بنجاح",
           };
         }
@@ -137,35 +150,45 @@ export function useZATCA() {
       try {
         // توليد XML
         const invoiceXML = service.generateInvoiceXML(invoice);
+        const uuid = invoice.uuid || crypto.randomUUID();
 
-        // إرسال للإبلاغ عبر Reporting API الرسمي
-        const result = await service.reportSimplifiedInvoice(
-          invoiceXML,
-          invoice.uuid,
-        );
+        // الإبلاغ عبر الخادم (يتجنب CORS ويُبقي المفاتيح على السيرفر)
+        const res = await fetch("/api/zatca/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: config?.mode || "sandbox",
+            csid: config?.csid,
+            secret: config?.secret,
+            invoiceXml: invoiceXML,
+            uuid,
+          }),
+        });
+        const result = await res.json();
+        const reportingStatus = result?.data?.reportingStatus;
 
         // حفظ نتيجة الإبلاغ (نجاح أو فشل) للمراجعة
         await supabase
           .from("sales_invoices")
           .update({
-            uuid: invoice.uuid,
-            zatca_status: result.success
-              ? result.reportingStatus === "REPORTED"
+            uuid,
+            icv: result?.invoiceHash,
+            zatca_status: result.ok
+              ? reportingStatus === "REPORTED"
                 ? "reported"
                 : "reported_with_warnings"
               : "reporting_failed",
-            zatca_response: result.raw ?? result,
-            zatca_reported_at: result.success
-              ? new Date().toISOString()
-              : null,
+            zatca_response: result?.data ?? result,
+            zatca_reported_at: result.ok ? new Date().toISOString() : null,
           })
           .eq("invoice_number", invoice.invoiceNumber);
 
-        if (result.success) {
+        if (result.ok) {
           return {
             success: true,
+            uuid,
             message:
-              result.reportingStatus === "REPORTED"
+              reportingStatus === "REPORTED"
                 ? "تم الإبلاغ بنجاح"
                 : "تم الإبلاغ مع وجود تحذيرات",
           };

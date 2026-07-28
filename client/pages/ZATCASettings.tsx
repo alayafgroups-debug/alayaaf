@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
-import { AlertCircle, Check, Copy, Eye, EyeOff, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Copy, Eye, EyeOff, RefreshCw, Settings, Trash2, Play } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { useZATCA } from "@/hooks/useZATCA";
+import { useZATCA, ComplianceTestResult } from "@/hooks/useZATCA";
 
 interface ZATCASetup {
   id?: string;
@@ -29,7 +29,9 @@ export default function ZATCASettings() {
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "connected" | "failed">("idle");
-  const { testConnection } = useZATCA();
+  const [complianceResults, setComplianceResults] = useState<ComplianceTestResult[]>([]);
+  const [isRunningCompliance, setIsRunningCompliance] = useState(false);
+  const { testConnection, runFullComplianceTest } = useZATCA();
 
   // تحميل الإعدادات الحالية
   useEffect(() => {
@@ -123,6 +125,56 @@ export default function ZATCASettings() {
         description: "فشل اختبار الاتصال",
         variant: "destructive",
       });
+    }
+  };
+
+  // تشغيل فحص التوافق الكامل
+  const handleRunCompliance = async () => {
+    if (!setup.csid || !setup.secret) {
+      toast({
+        title: "خطأ",
+        description: "يجب إدخال CSID والـ Secret أولاً",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRunningCompliance(true);
+    setComplianceResults([]);
+
+    try {
+      const results = await runFullComplianceTest((results) => {
+        setComplianceResults(results);
+      });
+
+      const passedCount = results.filter((r) => r.status === "passed").length;
+      const totalCount = results.length;
+
+      toast({
+        title:
+          passedCount === totalCount
+            ? "نجح الاختبار!"
+            : "الاختبار مكتمل",
+        description: `${passedCount} من ${totalCount} اختبارات نجحت`,
+        variant:
+          passedCount === totalCount ? "default" : "destructive",
+      });
+
+      setSetup((prev) => ({
+        ...prev,
+        sandbox_tested: passedCount === totalCount,
+      }));
+    } catch (error) {
+      toast({
+        title: "خطأ",
+        description:
+          error instanceof Error
+            ? error.message
+            : "فشل تشغيل الاختبارات",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRunningCompliance(false);
     }
   };
 
@@ -383,6 +435,46 @@ export default function ZATCASettings() {
               <li>احتفظ بسجل لجميع الفواتير المرسلة</li>
             </ul>
           </div>
+        </div>
+
+        {/* فحص التوافق الكامل */}
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="font-semibold text-gray-900 mb-3">فحص التوافق (الأنواع الستة)</h3>
+          <p className="text-sm text-gray-700 mb-4">
+            اختبر نظامك على جميع أنواع الوثائق الستة المطلوبة من ZATCA:
+          </p>
+          {complianceResults.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {complianceResults.map((result) => (
+                <div
+                  key={result.documentType}
+                  className={`p-3 rounded-lg ${
+                    result.status === "passed"
+                      ? "bg-green-100 text-green-800"
+                      : result.status === "failed"
+                      ? "bg-red-100 text-red-800"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{result.label}</span>
+                    {result.status === "passed" && <Check size={18} />}
+                    {result.status === "failed" && (
+                      <span className="text-xs">{result.error}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={handleRunCompliance}
+            disabled={isRunningCompliance || !setup.csid}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Play size={18} />
+            {isRunningCompliance ? "جاري الاختبار..." : "تشغيل فحص التوافق"}
+          </button>
         </div>
 
         {/* الأزرار */}

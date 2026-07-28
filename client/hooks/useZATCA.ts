@@ -1,5 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
-import { createZATCAService, ZATCAService, ZATCAConfig, ZATCAInvoice } from "@/lib/zatcaIntegration";
+import {
+  createZATCAService,
+  ZATCAService,
+  ZATCAConfig,
+  ZATCAInvoice,
+  COMPLIANCE_DOCUMENT_TYPES,
+  DOCUMENT_TYPE_LABELS,
+} from "@/lib/zatcaIntegration";
 import { supabase } from "@/lib/supabaseClient";
 
 interface ZATCAResult {
@@ -7,6 +14,14 @@ interface ZATCAResult {
   uuid?: string;
   error?: string;
   message?: string;
+}
+
+export interface ComplianceTestResult {
+  documentType: string;
+  label: string;
+  status: "pending" | "testing" | "passed" | "failed";
+  message?: string;
+  error?: string;
 }
 
 export function useZATCA() {
@@ -225,6 +240,7 @@ export function useZATCA() {
         // تحويل بيانات قاعدة البيانات إلى نموذج ZATCA
         return {
           invoiceNumber: data.invoice_number || data.id,
+          documentType: "invoice" as const, // افتراضي: فاتورة عادية
           invoiceType: data.buyer_vat ? "standard" : "simplified",
           issueDate: new Date(data.date),
           dueDate: data.due_date ? new Date(data.due_date) : undefined,
@@ -249,6 +265,120 @@ export function useZATCA() {
     [config]
   );
 
+  // تشغيل فحص التوافق الكامل (الأنواع الستة)
+  const runFullComplianceTest = useCallback(
+    async (
+      onProgress: (results: ComplianceTestResult[]) => void
+    ): Promise<ComplianceTestResult[]> => {
+      if (!service || !config)
+        return [
+          {
+            documentType: "all",
+            label: "جميع الأنواع",
+            status: "failed",
+            error: "خدمة ZATCA غير مهيأة",
+          },
+        ];
+
+      const results: ComplianceTestResult[] = [];
+
+      // بيانات اختبار ثابتة (سيتم إضافة documentType و invoiceType لكل نوع)
+      const baseInvoice = {
+        invoiceNumber: `TEST-${Date.now()}`,
+        issueDate: new Date(),
+        buyerName: "العميل التجريبي",
+        buyerNameAr: "العميل التجريبي",
+        buyerAddress: "الرياض",
+        sellerVAT: config.companyVAT || "300000000000003",
+        sellerName: config.companyName || "شركة تجريبية",
+        sellerNameAr: config.companyNameAr || "شركة تجريبية",
+        sellerAddress: config.companyAddress || "الرياض",
+        lineItems: [
+          {
+            description: "Test Item",
+            descriptionAr: "عنصر تجريبي",
+            quantity: 1,
+            unitPrice: 100,
+            taxCategory: "S" as const,
+            taxPercent: 15,
+            total: 115,
+          },
+        ],
+        subtotal: 100,
+        totalTax: 15,
+        total: 115,
+      };
+
+      // تشغيل الاختبار لكل نوع
+      for (const docType of COMPLIANCE_DOCUMENT_TYPES) {
+        const label = DOCUMENT_TYPE_LABELS[
+          `${docType.documentType}-${docType.invoiceType}`
+        ] as string;
+
+        const testResult: ComplianceTestResult = {
+          documentType: `${docType.documentType}-${docType.invoiceType}`,
+          label,
+          status: "testing",
+        };
+
+        results.push(testResult);
+        onProgress(results);
+
+        try {
+          // بناء الفاتورة التجريبية
+          const invoice: ZATCAInvoice = {
+            ...baseInvoice,
+            documentType: docType.documentType,
+            invoiceType: docType.invoiceType,
+            uuid: crypto.randomUUID(),
+            originalInvoiceNumber:
+              docType.documentType !== "invoice"
+                ? `ORIG-${Date.now()}`
+                : undefined,
+          };
+
+          // توليد XML
+          const invoiceXML = service.generateInvoiceXML(invoice);
+
+          // فحص التوافق عبر الخادم
+          const res = await fetch("/api/zatca/compliance-check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: config.mode || "sandbox",
+              csid: config.csid,
+              secret: config.secret,
+              invoiceXml: invoiceXML,
+              uuid: invoice.uuid,
+            }),
+          });
+
+          const result = await res.json();
+
+          if (result.ok) {
+            testResult.status = "passed";
+            testResult.message = "✓ نجح الاختبار";
+          } else {
+            testResult.status = "failed";
+            testResult.error = result.error || "فشل الاختبار";
+          }
+        } catch (error) {
+          testResult.status = "failed";
+          testResult.error =
+            error instanceof Error
+              ? error.message
+              : "خطأ غير معروف";
+        }
+
+        // تحديث التقدم
+        onProgress([...results]);
+      }
+
+      return results;
+    },
+    [service, config]
+  );
+
   return {
     service,
     config,
@@ -258,5 +388,6 @@ export function useZATCA() {
     submitInvoiceForClearance,
     submitSimplifiedInvoice,
     buildInvoiceFromData,
+    runFullComplianceTest,
   };
 }

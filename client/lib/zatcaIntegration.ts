@@ -57,28 +57,34 @@ export interface InvoiceLineItem {
 export interface ZATCAInvoice {
   // بيانات أساسية
   invoiceNumber: string;
-  invoiceType: "standard" | "simplified"; // معيارية أم مبسطة
+  // documentType: الوثيقة (invoice/creditNote/debitNote)
+  // invoiceType: الفئة (standard/simplified)
+  documentType: "invoice" | "creditNote" | "debitNote";
+  invoiceType: "standard" | "simplified";
   issueDate: Date;
   dueDate?: Date;
-  
+
+  // للإشعارات: مرجع للفاتورة الأصلية
+  originalInvoiceNumber?: string; // رقم الفاتورة المرجعية (للدائن والمدين)
+
   // المشتري
   buyerName: string;
   buyerNameAr: string;
   buyerVAT?: string; // اختياري للأفراد
   buyerAddress: string;
-  
+
   // البائع (الشركة)
   sellerVAT: string;
   sellerName: string;
   sellerNameAr: string;
   sellerAddress: string;
-  
+
   // البيانات المالية
   lineItems: InvoiceLineItem[];
   subtotal: number;
   totalTax: number;
   total: number;
-  
+
   // بيانات ZATCA (يتم ملؤها بعد المعالجة)
   uuid?: string;
   icv?: string; // Invoice Cryptographic Value
@@ -170,21 +176,43 @@ export class ZATCAService {
     const uuid = invoice.uuid || this.generateUUID();
     const qrData = this.generateQRData(invoice);
 
+    // حساب رمز النوع والعنصر الجذر
+    const invoiceTypeCode = this.getInvoiceTypeCode(
+      invoice.documentType,
+      invoice.invoiceType
+    );
+    const rootElement = this.getRootElement(invoice.documentType);
+    const namespaceUri = `urn:oasis:names:specification:ubl:schema:xsd:${rootElement}-2`;
+
     // بناء XML وفقاً لمواصفات ZATCA UBL 2.1
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+<${rootElement} xmlns="${namespaceUri}"
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
-  
-  <!-- معرف الفاتورة -->
+
+  <!-- معرف الوثيقة -->
   <cbc:ID>${invoice.invoiceNumber}</cbc:ID>
   <cbc:UUID>${uuid}</cbc:UUID>
   <cbc:IssueDate>${invoice.issueDate.toISOString().split("T")[0]}</cbc:IssueDate>
   <cbc:IssueTime>${issueDateTime.split("T")[1]}</cbc:IssueTime>
   ${invoice.dueDate ? `<cbc:DueDate>${invoice.dueDate.toISOString().split("T")[0]}</cbc:DueDate>` : ""}
-  
-  <!-- نوع الفاتورة -->
-  <cbc:InvoiceTypeCode>${invoice.invoiceType === "simplified" ? "0200003" : "0100000"}</cbc:InvoiceTypeCode>
+
+  <!-- نوع الوثيقة -->
+  <cbc:InvoiceTypeCode>${invoiceTypeCode}</cbc:InvoiceTypeCode>
+
+  ${
+    (invoice.documentType === "creditNote" ||
+      invoice.documentType === "debitNote") &&
+    invoice.originalInvoiceNumber
+      ? `<!-- مرجع الفاتورة الأصلية -->
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>${invoice.originalInvoiceNumber}</cbc:ID>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
+  `
+      : ""
+  }
   
   <!-- المنطقة النقدية -->
   <cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>
@@ -273,10 +301,55 @@ export class ZATCAService {
   <!-- البيانات التشفيرية -->
   <cbc:ICV>${icv}</cbc:ICV>
   <cbc:QRCode>${qrData}</cbc:QRCode>
-  
-</Invoice>`;
+
+</${rootElement}>`;
 
     return xml;
+  }
+
+  /**
+   * الحصول على رمز نوع الفاتورة الصحيح
+   * معياري: 388, 381, 383
+   * مبسط: 0200003, 0200002, 0200001
+   */
+  private getInvoiceTypeCode(
+    documentType: string,
+    invoiceType: string
+  ): string {
+    if (invoiceType === "simplified") {
+      switch (documentType) {
+        case "creditNote":
+          return "0200002";
+        case "debitNote":
+          return "0200001";
+        default:
+          return "0200003"; // invoice
+      }
+    } else {
+      // standard
+      switch (documentType) {
+        case "creditNote":
+          return "381";
+        case "debitNote":
+          return "383";
+        default:
+          return "388"; // invoice
+      }
+    }
+  }
+
+  /**
+   * الحصول على العنصر الجذر للـ XML
+   */
+  private getRootElement(documentType: string): string {
+    switch (documentType) {
+      case "creditNote":
+        return "CreditNote";
+      case "debitNote":
+        return "DebitNote";
+      default:
+        return "Invoice";
+    }
   }
 
   /**
@@ -493,6 +566,28 @@ export class ZATCAService {
     }
   }
 }
+
+// Six compliance test document types
+export const COMPLIANCE_DOCUMENT_TYPES: Array<{
+  documentType: "invoice" | "creditNote" | "debitNote";
+  invoiceType: "standard" | "simplified";
+}> = [
+  { documentType: "invoice", invoiceType: "standard" },
+  { documentType: "creditNote", invoiceType: "standard" },
+  { documentType: "debitNote", invoiceType: "standard" },
+  { documentType: "invoice", invoiceType: "simplified" },
+  { documentType: "creditNote", invoiceType: "simplified" },
+  { documentType: "debitNote", invoiceType: "simplified" },
+];
+
+export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  "invoice-standard": "فاتورة معيارية (388)",
+  "creditNote-standard": "إشعار دائن معياري (381)",
+  "debitNote-standard": "إشعار مدين معياري (383)",
+  "invoice-simplified": "فاتورة مبسطة (0200003)",
+  "creditNote-simplified": "إشعار دائن مبسط (0200002)",
+  "debitNote-simplified": "إشعار مدين مبسط (0200001)",
+};
 
 // Export helper functions
 export function createZATCAService(config: ZATCAConfig): ZATCAService {

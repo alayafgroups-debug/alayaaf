@@ -105,6 +105,7 @@ import Tax from "./pages/Tax";
 import UsersPermissions from "./pages/UsersPermissions";
 import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
+import ZATCASettings from "./pages/ZATCASettings";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 
@@ -251,6 +252,7 @@ const App = () => (
           <Route path="/ai" element={<AIAssistant />} />
           <Route path="/ai/assistant" element={<AIAssistant />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/zatca/settings" element={<ZATCASettings />} />
 
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

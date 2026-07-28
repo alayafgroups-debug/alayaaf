@@ -33,6 +33,9 @@ export default function Settings() {
           <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
             الإعدادات الضريبية
           </button>
+          <a href="/zatca/settings" className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors inline-flex">
+            إعدادات ZATCA
+          </a>
           <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
             إعدادات إضافية
           </button>

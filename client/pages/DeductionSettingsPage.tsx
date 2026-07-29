@@ -32,8 +32,20 @@ interface EmailSchedule {
   description: string;
 }
 
+interface MailMessage {
+  id: string;
+  emp_id: string;
+  emp_name: string;
+  from_email: string;
+  to_email: string;
+  subject: string;
+  body: string;
+  message_kind: "deduction_notice" | "employee_reply";
+  created_at: string;
+}
+
 export default function DeductionSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"reasons" | "schedule" | "generate">("reasons");
+  const [activeTab, setActiveTab] = useState<"reasons" | "schedule" | "generate" | "agent">("reasons");
   const [deductions, setDeductions] = useState<DeductionReason[]>([]);
   const [generatedEmails, setGeneratedEmails] = useState<GeneratedEmail[]>([]);
   const [emailSchedules, setEmailSchedules] = useState<EmailSchedule[]>([]);
@@ -44,6 +56,11 @@ export default function DeductionSettingsPage() {
   const [primaryEmail, setPrimaryEmail] = useState("hr.alayaf.com");
   const [primaryConfigId, setPrimaryConfigId] = useState<string | null>(null);
   const [generatedDraft, setGeneratedDraft] = useState("");
+  const [mailMessages, setMailMessages] = useState<MailMessage[]>([]);
+  const [showAdminMailbox, setShowAdminMailbox] = useState(false);
+  const [adminFolder, setAdminFolder] = useState<"inbox" | "sent">("inbox");
+  const [agentEmployeeEmailId, setAgentEmployeeEmailId] = useState("");
+  const [agentScheduleId, setAgentScheduleId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   // تحميل أسباب الخصومات
@@ -53,6 +70,7 @@ export default function DeductionSettingsPage() {
     loadSaudiEmployees();
     loadPrimaryEmail();
     loadGeneratedEmails();
+    loadMailMessages();
   }, []);
 
   const loadDeductions = async () => {
@@ -157,6 +175,77 @@ export default function DeductionSettingsPage() {
       .select("id, emp_id, emp_name, generated_email, created_at")
       .order("created_at", { ascending: false });
     if (!error && data) setGeneratedEmails(data as GeneratedEmail[]);
+  };
+
+  const loadMailMessages = async () => {
+    const { data, error } = await supabase
+      .from("employee_mail_messages")
+      .select("id, emp_id, emp_name, from_email, to_email, subject, body, message_kind, created_at")
+      .order("created_at", { ascending: false });
+    if (!error && data) setMailMessages(data as MailMessage[]);
+  };
+
+  const runMockAgent = async () => {
+    const employeeEmail = generatedEmails.find((email) => email.id === agentEmployeeEmailId);
+    const schedule = emailSchedules.find((item) => item.id === agentScheduleId);
+    if (!employeeEmail || !schedule) {
+      toast.error("اختر الموظف وفترة الإرسال");
+      return;
+    }
+    if (deductions.length === 0) {
+      toast.error("أضف سبب خصم محفوظ أولاً");
+      return;
+    }
+
+    const reasonIndex = (schedule.day_of_month + employeeEmail.emp_id.length) % deductions.length;
+    const reason = deductions[reasonIndex];
+    const noticeBody = `مرحباً ${employeeEmail.emp_name}،\n\nتم اختيار سبب الخصم التالي حسب فترة الإرسال المحددة: ${reason.name}.\n${reason.description || "يرجى مراجعة إدارة الموارد البشرية عند الحاجة إلى تفاصيل إضافية."}\n\nهذه رسالة تجريبية أنشأها الوكيل الذكي.`;
+
+    setIsLoading(true);
+    const noticeResult = await supabase
+      .from("employee_mail_messages")
+      .insert([{
+        emp_id: employeeEmail.emp_id,
+        emp_name: employeeEmail.emp_name,
+        from_email: primaryEmail,
+        to_email: employeeEmail.generated_email,
+        subject: `إشعار خصم: ${reason.name}`,
+        body: noticeBody,
+        message_kind: "deduction_notice",
+        deduction_reason_id: String(reason.id),
+        schedule_id: String(schedule.id),
+      }])
+      .select("id")
+      .single();
+
+    if (noticeResult.error) {
+      setIsLoading(false);
+      toast.error("تعذر تشغيل المثال. تأكد من إنشاء جدول الرسائل");
+      return;
+    }
+
+    const replyBody = `السلام عليكم،\n\nتم استلام إشعار الخصم الخاص بسبب: ${reason.name}. أفيدكم بقبول الخصم وتسجيل اطلاعي على السبب.\n\nمع التحية،\n${employeeEmail.emp_name}\n\nرد تجريبي أنشأه الوكيل الذكي.`;
+    const replyResult = await supabase.from("employee_mail_messages").insert([{
+      emp_id: employeeEmail.emp_id,
+      emp_name: employeeEmail.emp_name,
+      from_email: employeeEmail.generated_email,
+      to_email: primaryEmail,
+      subject: `رد: إشعار خصم ${reason.name}`,
+      body: replyBody,
+      message_kind: "employee_reply",
+      deduction_reason_id: String(reason.id),
+      schedule_id: String(schedule.id),
+      parent_message_id: noticeResult.data.id,
+    }]);
+    setIsLoading(false);
+
+    if (replyResult.error) {
+      toast.error("أُرسل الإشعار ولكن تعذر إنشاء الرد التجريبي");
+      return;
+    }
+
+    await loadMailMessages();
+    toast.success("أرسل الوكيل الإشعار وأنشأ رد القبول التجريبي");
   };
 
   const addDeduction = async () => {
@@ -272,6 +361,55 @@ export default function DeductionSettingsPage() {
           إعدادات الخصومات والإيميلات
         </h1>
 
+        <button
+          onClick={() => {
+            setShowAdminMailbox((current) => !current);
+            loadMailMessages();
+          }}
+          className="w-full mb-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl p-4 flex items-center justify-between transition"
+        >
+          <span className="flex items-center gap-3 font-bold">
+            <span className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center">
+              <Mail className="h-5 w-5" />
+            </span>
+            بريد الخصومات
+          </span>
+          <span className="text-xs text-gray-300">الوارد والمرسل حسب الموظف</span>
+        </button>
+
+        {showAdminMailbox && (
+          <div className="bg-gray-800 rounded-xl p-5 mb-4 text-white">
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setAdminFolder("inbox")} className={`flex-1 py-2 rounded-lg ${adminFolder === "inbox" ? "bg-blue-600" : "bg-gray-700"}`}>
+                الوارد ({mailMessages.filter((message) => message.to_email === primaryEmail).length})
+              </button>
+              <button onClick={() => setAdminFolder("sent")} className={`flex-1 py-2 rounded-lg ${adminFolder === "sent" ? "bg-blue-600" : "bg-gray-700"}`}>
+                المرسل ({mailMessages.filter((message) => message.from_email === primaryEmail).length})
+              </button>
+            </div>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {mailMessages
+                .filter((message) => adminFolder === "inbox" ? message.to_email === primaryEmail : message.from_email === primaryEmail)
+                .map((message) => (
+                  <div key={message.id} className="bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-bold">{message.emp_name}</p>
+                      <span className="text-xs text-gray-400">{new Date(message.created_at).toLocaleString("ar-SA")}</span>
+                    </div>
+                    <p dir="ltr" className="text-xs text-blue-300 text-left mt-1">
+                      {adminFolder === "inbox" ? `من: ${message.from_email}` : `إلى: ${message.to_email}`}
+                    </p>
+                    <p className="font-semibold mt-2">{message.subject}</p>
+                    <p className="text-sm text-gray-300 mt-1 whitespace-pre-line">{message.body}</p>
+                  </div>
+                ))}
+              {mailMessages.filter((message) => adminFolder === "inbox" ? message.to_email === primaryEmail : message.from_email === primaryEmail).length === 0 && (
+                <p className="text-center text-gray-400 py-5">لا توجد رسائل</p>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="bg-gray-800 rounded-xl p-5 mb-6 text-white">
           <label className="block text-sm font-semibold mb-2">الإيميل الرئيسي</label>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -324,6 +462,16 @@ export default function DeductionSettingsPage() {
             }`}
           >
             توليد الإيميلات
+          </button>
+          <button
+            onClick={() => setActiveTab("agent")}
+            className={`flex-1 py-2 px-4 rounded-md font-medium transition ${
+              activeTab === "agent"
+                ? "bg-blue-600 text-white"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            مثال الوكيل
           </button>
         </div>
 
@@ -416,6 +564,45 @@ export default function DeductionSettingsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {activeTab === "agent" && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-xl font-bold">مثال الوكيل الذكي</h2>
+                <p className="text-sm text-gray-400 mt-1">محاكاة جاهزة لحين إضافة مفتاح مزود الذكاء الاصطناعي.</p>
+              </div>
+              <select
+                value={agentEmployeeEmailId}
+                onChange={(event) => setAgentEmployeeEmailId(event.target.value)}
+                className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white"
+              >
+                <option value="">اختر موظفاً لديه إيميل محفوظ</option>
+                {generatedEmails.map((email) => (
+                  <option key={email.id} value={email.id}>{email.emp_name} — {email.generated_email}</option>
+                ))}
+              </select>
+              <select
+                value={agentScheduleId}
+                onChange={(event) => setAgentScheduleId(event.target.value)}
+                className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white"
+              >
+                <option value="">اختر فترة الإرسال</option>
+                {emailSchedules.map((schedule) => (
+                  <option key={schedule.id} value={schedule.id}>اليوم {schedule.day_of_month} — {schedule.description}</option>
+                ))}
+              </select>
+              <div className="bg-blue-950/50 border border-blue-800 rounded-lg p-4 text-sm text-blue-100">
+                يختار المثال سبباً محفوظاً، يرسل إشعار الخصم إلى بريد الموظف، ثم ينشئ رداً مناسباً بقبول الخصم ويرسله إلى الإيميل الرئيسي.
+              </div>
+              <button
+                onClick={runMockAgent}
+                disabled={isLoading}
+                className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 py-3 rounded-lg font-bold"
+              >
+                {isLoading ? "جاري تشغيل المثال..." : "تشغيل المثال الآن"}
+              </button>
             </div>
           )}
 

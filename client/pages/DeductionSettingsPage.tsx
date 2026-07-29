@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Mail, Settings } from "lucide-react";
+import { Plus, Trash2, Mail, Settings, Save } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 
@@ -11,10 +11,19 @@ interface DeductionReason {
 }
 
 interface GeneratedEmail {
+  id: string;
   emp_id: string;
   emp_name: string;
   generated_email: string;
   created_at: string;
+}
+
+interface SaudiEmployee {
+  id: string;
+  emp_id: string;
+  name: string;
+  first_name?: string | null;
+  nationality: string;
 }
 
 interface EmailSchedule {
@@ -31,7 +40,10 @@ export default function DeductionSettingsPage() {
   const [newDeduction, setNewDeduction] = useState({ name: "", description: "" });
   const [newSchedule, setNewSchedule] = useState({ day: 15, description: "" });
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
-  const [saudiEmployees, setSaudiEmployees] = useState<any[]>([]);
+  const [saudiEmployees, setSaudiEmployees] = useState<SaudiEmployee[]>([]);
+  const [primaryEmail, setPrimaryEmail] = useState("hr.alayaf.com");
+  const [primaryConfigId, setPrimaryConfigId] = useState<string | null>(null);
+  const [generatedDraft, setGeneratedDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   // تحميل أسباب الخصومات
@@ -39,6 +51,8 @@ export default function DeductionSettingsPage() {
     loadDeductions();
     loadSchedules();
     loadSaudiEmployees();
+    loadPrimaryEmail();
+    loadGeneratedEmails();
   }, []);
 
   const loadDeductions = async () => {
@@ -84,7 +98,7 @@ export default function DeductionSettingsPage() {
     try {
       const { data, error } = await supabase
         .from("employees")
-        .select("id, emp_id, name, nationality")
+        .select("id, emp_id, name, first_name, nationality")
         .eq("nationality", "سعودي");
       
       if (!error && data) {
@@ -93,6 +107,56 @@ export default function DeductionSettingsPage() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const loadPrimaryEmail = async () => {
+    const { data, error } = await supabase
+      .from("hr_config_items")
+      .select("id, value")
+      .eq("config_type", "primary_email_domain")
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) {
+      setPrimaryConfigId(String(data.id));
+      setPrimaryEmail(String(data.value || "hr.alayaf.com"));
+    }
+  };
+
+  const savePrimaryEmail = async () => {
+    const value = primaryEmail.trim().replace(/^https?:\/\//, "").replace(/^@/, "").replace(/\/$/, "");
+    if (!value) {
+      toast.error("أدخل الإيميل الرئيسي");
+      return;
+    }
+
+    setIsLoading(true);
+    const payload = {
+      config_type: "primary_email_domain",
+      name_ar: "الإيميل الرئيسي",
+      value,
+      status: "فعال",
+    };
+    const result = primaryConfigId
+      ? await supabase.from("hr_config_items").update(payload).eq("id", primaryConfigId).select("id").single()
+      : await supabase.from("hr_config_items").insert([payload]).select("id").single();
+    setIsLoading(false);
+
+    if (result.error) {
+      toast.error("تعذر حفظ الإيميل الرئيسي");
+      return;
+    }
+    setPrimaryConfigId(String(result.data.id));
+    setPrimaryEmail(value);
+    toast.success("تم حفظ الإيميل الرئيسي");
+  };
+
+  const loadGeneratedEmails = async () => {
+    const { data, error } = await supabase
+      .from("employee_emails")
+      .select("id, emp_id, emp_name, generated_email, created_at")
+      .order("created_at", { ascending: false });
+    if (!error && data) setGeneratedEmails(data as GeneratedEmail[]);
   };
 
   const addDeduction = async () => {
@@ -158,36 +222,46 @@ export default function DeductionSettingsPage() {
     }
   };
 
-  const generateEmailForEmployee = async () => {
-    if (!selectedEmployee) {
-      toast.error("اختر موظف");
+  const generateEmailForEmployee = () => {
+    const emp = saudiEmployees.find((employee) => employee.id === selectedEmployee);
+    if (!emp) {
+      toast.error("اختر موظفاً سعودياً");
       return;
     }
 
-    try {
-      const emp = saudiEmployees.find(e => e.id === selectedEmployee);
-      if (!emp) return;
-
-      const email = `${emp.name.replace(/\s+/g, ".").toLowerCase()}@alayaf.com`;
-
-      // حفظ الإيميل المولد
-      const { error } = await supabase
-        .from("employee_emails")
-        .insert([{
-          emp_id: emp.emp_id,
-          emp_name: emp.name,
-          generated_email: email,
-          status: "active"
-        }]);
-
-      if (!error) {
-        toast.success(`تم توليد الإيميل: ${email}`);
-        setSelectedEmployee("");
-        loadSaudiEmployees();
-      }
-    } catch (err) {
-      toast.error("حدث خطأ في توليد الإيميل");
+    const englishFirstName = String(emp.first_name || "").trim().split(/\s+/)[0];
+    const safeFirstName = englishFirstName.toLowerCase().replace(/[^a-z0-9._-]/g, "");
+    if (!safeFirstName) {
+      toast.error("يجب إضافة الاسم الأول بالإنجليزية للموظف أولاً");
+      return;
     }
+
+    const domain = primaryEmail.trim().replace(/^https?:\/\//, "").replace(/^@/, "").replace(/\/$/, "");
+    setGeneratedDraft(`${safeFirstName}@${domain}`);
+  };
+
+  const saveGeneratedEmail = async () => {
+    const emp = saudiEmployees.find((employee) => employee.id === selectedEmployee);
+    if (!emp || !generatedDraft) return;
+
+    setIsLoading(true);
+    const { error } = await supabase.from("employee_emails").insert([{
+      emp_id: emp.emp_id,
+      emp_name: emp.name,
+      generated_email: generatedDraft,
+      status: "active",
+    }]);
+    setIsLoading(false);
+
+    if (error) {
+      toast.error(error.code === "23505" ? "هذا الإيميل محفوظ مسبقاً" : "تعذر حفظ الإيميل");
+      return;
+    }
+
+    toast.success("تم حفظ إيميل الموظف");
+    setSelectedEmployee("");
+    setGeneratedDraft("");
+    loadGeneratedEmails();
   };
 
   return (
@@ -197,6 +271,27 @@ export default function DeductionSettingsPage() {
           <Settings className="h-8 w-8 text-blue-400" />
           إعدادات الخصومات والإيميلات
         </h1>
+
+        <div className="bg-gray-800 rounded-xl p-5 mb-6 text-white">
+          <label className="block text-sm font-semibold mb-2">الإيميل الرئيسي</label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              dir="ltr"
+              value={primaryEmail}
+              onChange={(event) => setPrimaryEmail(event.target.value)}
+              placeholder="hr.alayaf.com"
+              className="flex-1 px-4 py-2.5 bg-gray-700 rounded-lg text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={savePrimaryEmail}
+              disabled={isLoading}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg font-semibold flex items-center justify-center gap-2"
+            >
+              <Save className="h-4 w-4" />
+              تغيير وحفظ
+            </button>
+          </div>
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 bg-gray-800 rounded-lg p-1">
@@ -334,7 +429,10 @@ export default function DeductionSettingsPage() {
               
               <select
                 value={selectedEmployee}
-                onChange={(e) => setSelectedEmployee(e.target.value)}
+                onChange={(e) => {
+                  setSelectedEmployee(e.target.value);
+                  setGeneratedDraft("");
+                }}
                 className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white"
               >
                 <option value="">اختر موظف سعودي</option>
@@ -354,17 +452,30 @@ export default function DeductionSettingsPage() {
                 توليد إيميل
               </button>
 
+              {generatedDraft && (
+                <div className="bg-gray-700 p-4 rounded-lg space-y-3">
+                  <p dir="ltr" className="text-green-400 font-mono text-left">{generatedDraft}</p>
+                  <button
+                    onClick={saveGeneratedEmail}
+                    disabled={isLoading}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 py-2 rounded-lg font-semibold flex items-center justify-center gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    حفظ
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-2 mt-6">
-                {saudiEmployees
-                  .filter(emp => emp.id === selectedEmployee)
-                  .map((emp) => (
-                    <div key={emp.id} className="bg-gray-700 p-4 rounded-lg">
-                      <p className="font-semibold">{emp.name}</p>
-                      <p className="text-sm text-green-400 font-mono">
-                        {emp.name.replace(/\s+/g, ".").toLowerCase()}@alayaf.com
-                      </p>
-                    </div>
-                  ))}
+                <h3 className="font-bold">الإيميلات المحفوظة</h3>
+                {generatedEmails.length === 0 ? (
+                  <p className="text-sm text-gray-400">لا توجد إيميلات محفوظة</p>
+                ) : generatedEmails.map((email) => (
+                  <div key={email.id} className="bg-gray-700 p-4 rounded-lg">
+                    <p className="font-semibold">{email.emp_name}</p>
+                    <p dir="ltr" className="text-sm text-green-400 font-mono text-left">{email.generated_email}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}

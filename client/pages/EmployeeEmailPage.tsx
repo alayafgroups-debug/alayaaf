@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Mail, Trash2, Send, Settings as SettingsIcon, ChevronLeft } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Email {
   id: string;
@@ -10,8 +11,17 @@ interface Email {
   read: boolean;
 }
 
-export default function EmployeeEmailPage({ onBack }: { onBack: () => void }) {
+export default function EmployeeEmailPage({
+  onBack,
+  empId,
+  employeeName,
+}: {
+  onBack: () => void;
+  empId?: string;
+  employeeName?: string;
+}) {
   const [activeFolder, setActiveFolder] = useState<"inbox" | "sent" | "trash" | "settings">("inbox");
+  const [employeeEmail, setEmployeeEmail] = useState("");
   const [emails, setEmails] = useState<Email[]>([
     {
       id: "1",
@@ -23,6 +33,40 @@ export default function EmployeeEmailPage({ onBack }: { onBack: () => void }) {
     },
   ]);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+
+  useEffect(() => {
+    async function loadEmployeeEmail() {
+      if (!empId && !employeeName) return;
+
+      let query = supabase
+        .from("employee_emails")
+        .select("generated_email")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (empId) query = query.eq("emp_id", empId);
+      const firstResult = await query.maybeSingle();
+      if (firstResult.data?.generated_email) {
+        setEmployeeEmail(String(firstResult.data.generated_email));
+        return;
+      }
+
+      if (employeeName) {
+        const fallback = await supabase
+          .from("employee_emails")
+          .select("generated_email")
+          .eq("status", "active")
+          .eq("emp_name", employeeName)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (fallback.data?.generated_email) setEmployeeEmail(String(fallback.data.generated_email));
+      }
+    }
+
+    loadEmployeeEmail();
+  }, [empId, employeeName]);
 
   const folders = [
     { id: "inbox", label: "صندوق الوارد", count: emails.filter(e => e.read === false).length },
@@ -79,10 +123,15 @@ export default function EmployeeEmailPage({ onBack }: { onBack: () => void }) {
               <ChevronLeft className="h-6 w-6 rotate-180" />
             </button>
           </div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Mail className="h-5 w-5 text-blue-400" />
-            المراسلات
-          </h1>
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <Mail className="h-5 w-5 text-blue-400" />
+              المراسلات
+            </h1>
+            {employeeEmail && (
+              <p dir="ltr" className="text-xs text-blue-300 font-mono mt-1 text-left">{employeeEmail}</p>
+            )}
+          </div>
           <div className="md:hidden ml-auto">
             <button className="text-gray-400 hover:text-white">
               <SettingsIcon className="h-5 w-5" />
@@ -138,7 +187,9 @@ export default function EmployeeEmailPage({ onBack }: { onBack: () => void }) {
                   <div className="space-y-3">
                     <div className="bg-gray-800 p-4 rounded-lg">
                       <label className="text-sm text-gray-400">عنوانك البريدي</label>
-                      <p className="text-white font-mono mt-1">employee@alayaf.com</p>
+                      <p dir="ltr" className="text-white font-mono mt-1 text-left">
+                        {employeeEmail || "لم يتم إنشاء إيميل لهذا الموظف"}
+                      </p>
                     </div>
                     <div className="bg-gray-800 p-4 rounded-lg">
                       <label className="flex items-center gap-2 text-white cursor-pointer">

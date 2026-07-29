@@ -1381,7 +1381,13 @@ export default function EmployeePortal() {
       </div>
 
       {/* Email Page */}
-      {currentPage === "email" && user && <EmployeeEmailPage onBack={() => setCurrentPage("home")} />}
+      {currentPage === "email" && user && (
+        <EmployeeEmailPage
+          onBack={() => setCurrentPage("home")}
+          empId={user.empId}
+          employeeName={user.name}
+        />
+      )}
 
       {/* ===== FACE VERIFICATION CAMERA MODAL ===== */}
       {cameraOpen && (

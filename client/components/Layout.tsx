@@ -367,7 +367,7 @@ function HRSidebar({
               <Users className="h-5 w-5" />
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/20 to-transparent opacity-60" />
             </div>
-            {sidebarOpen && location.pathname !== "/hr/deductions-emails" && (
+            {sidebarOpen && (
               <div className="flex flex-col">
                 <span className="text-[14px] font-extrabold text-white tracking-tight leading-tight">
                   الموارد البشرية
@@ -433,6 +433,7 @@ function HRSidebar({
           }
 
           const Icon = item.icon;
+          const isToolsIcon = item.href === "/hr/deductions-emails";
           const isExpanded = expandedMenus.has(item.href);
           const hasChildActive = item.hasChildren && item.children?.some(c => location.pathname === c.href);
           const isItemActive = item.hasChildren
@@ -463,7 +464,10 @@ function HRSidebar({
                       navigateKeepingScroll(item.href);
                     }
                   }}
-                  className="flex items-center gap-3 flex-1 min-w-0"
+                  className={cn(
+                    "flex items-center gap-3 min-w-0",
+                    isToolsIcon ? "flex-none" : "flex-1"
+                  )}
                   title={item.label}
                 >
                   <div
@@ -476,7 +480,7 @@ function HRSidebar({
                   >
                     <Icon className="h-4 w-4" />
                   </div>
-                  {sidebarOpen && (
+                  {sidebarOpen && !isToolsIcon && (
                     <span className={cn("flex-1 text-right truncate", isItemActive && "font-semibold")}>
                       {item.label}
                     </span>
@@ -503,7 +507,7 @@ function HRSidebar({
                       )}
                     />
                   </button>
-                ) : sidebarOpen && isItemActive ? (
+                ) : sidebarOpen && isItemActive && !isToolsIcon ? (
                   <span className="h-1 w-5 rounded-full bg-gradient-to-l from-emerald-400 to-teal-500 opacity-60 flex-shrink-0" />
                 ) : null}
               </div>

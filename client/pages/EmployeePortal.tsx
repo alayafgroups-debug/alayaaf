@@ -596,6 +596,9 @@ export default function EmployeePortal() {
                       </span>
                     )}
                   </button>
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("email"); }} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 transition" title="المراسلات">
+                    <Mail className="h-4.5 w-4.5 text-white" />
+                  </button>
                   <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("settings"); }} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
                     <Settings className="h-4.5 w-4.5 text-white" />
                   </button>

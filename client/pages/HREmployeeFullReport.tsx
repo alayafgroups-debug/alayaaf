@@ -26,6 +26,7 @@ type Employee = {
   branch: string;
   baseSalary: number;
   totalSalary: number;
+  nationality: string;
 };
 
 type Attendance = {
@@ -65,6 +66,8 @@ type EmployeeReport = {
   attendance: Attendance[];
   payroll: Payroll[];
   deductionItems: DeductionItem[];
+  generatedEmail: string;
+  finalNet: number;
   isExample: boolean;
 };
 
@@ -113,18 +116,14 @@ export default function HREmployeeFullReport() {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("الكل");
   const [administration, setAdministration] = useState("الكل");
-  const [periodType, setPeriodType] = useState<"month" | "range">("month");
   const [month, setMonth] = useState(defaultMonth);
-  const initialRange = monthRange(defaultMonth);
-  const [dateFrom, setDateFrom] = useState(initialRange.from);
-  const [dateTo, setDateTo] = useState(initialRange.to);
 
   useEffect(() => {
     const loadEmployees = async () => {
       setLoading(true);
       const { data, error } = await supabase
         .from("employees")
-        .select("id, emp_id, name, job_title, department, directorate, division, branch, base_salary, total_salary")
+        .select("id, emp_id, name, job_title, department, directorate, division, branch, base_salary, total_salary, nationality")
         .order("name");
 
       if (error) {
@@ -140,6 +139,7 @@ export default function HREmployeeFullReport() {
           branch: String(row.branch ?? "غير محدد"),
           baseSalary: Number(row.base_salary ?? 0),
           totalSalary: Number(row.total_salary ?? row.base_salary ?? 0),
+          nationality: String(row.nationality ?? ""),
         })));
       }
       setLoading(false);
@@ -190,15 +190,15 @@ export default function HREmployeeFullReport() {
   };
 
   const selectedEmployees = employees.filter((employee) => selectedIds.has(employee.id));
-  const range = periodType === "month" ? monthRange(month) : { from: dateFrom, to: dateTo };
+  const range = monthRange(month);
 
   const generateReport = async () => {
     if (selectedEmployees.length === 0) {
       toast({ title: "اختر موظفاً واحداً على الأقل", variant: "destructive" });
       return;
     }
-    if (!range.from || !range.to || range.from > range.to) {
-      toast({ title: "الفترة المحددة غير صحيحة", variant: "destructive" });
+    if (!month) {
+      toast({ title: "اختر شهراً للتقرير", variant: "destructive" });
       return;
     }
 
@@ -208,7 +208,7 @@ export default function HREmployeeFullReport() {
       const fromMonth = range.from.slice(0, 7);
       const toMonth = range.to.slice(0, 7);
 
-      const [attendanceResult, payrollResult] = await Promise.all([
+      const [attendanceResult, payrollResult, reasonsResult, primaryEmailResult] = await Promise.all([
         supabase
           .from("attendance")
           .select("id, emp_id, date, check_in, check_out, status, late_minutes, notes")
@@ -223,10 +223,22 @@ export default function HREmployeeFullReport() {
           .gte("month", fromMonth)
           .lte("month", toMonth)
           .order("month"),
+        supabase
+          .from("hr_config_items")
+          .select("id, name_ar, description")
+          .eq("config_type", "deduction_reason")
+          .eq("status", "فعال"),
+        supabase
+          .from("hr_config_items")
+          .select("value")
+          .eq("config_type", "primary_email_domain")
+          .limit(1)
+          .maybeSingle(),
       ]);
 
       if (attendanceResult.error) throw attendanceResult.error;
       if (payrollResult.error) throw payrollResult.error;
+      if (reasonsResult.error) throw reasonsResult.error;
 
       const attendance: Attendance[] = (attendanceResult.data ?? []).map((row: any) => ({
         id: String(row.id ?? ""),
@@ -251,16 +263,154 @@ export default function HREmployeeFullReport() {
         notes: String(row.notes ?? ""),
       }));
 
-      setReports(selectedEmployees.map((employee) => {
+      const savedReasons = (reasonsResult.data ?? []).map((row: any) => ({
+        id: String(row.id),
+        name: String(row.name_ar || "سبب خصم"),
+        description: String(row.description || ""),
+      }));
+      const primaryEmail = String(primaryEmailResult.data?.value || "hr.alayaf.com");
+      const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+
+      const generatedReports = await Promise.all(selectedEmployees.map(async (employee) => {
         const employeeKeys = new Set([employee.id, employee.empId]);
+        const employeeAttendance = attendance.filter((record) => employeeKeys.has(record.empId));
+        let employeePayroll = payroll.filter((record) => employeeKeys.has(record.empId));
+        if (employeePayroll.length === 0) {
+          employeePayroll = [{
+            id: `generated-${employee.id}-${month}`,
+            empId: employee.empId,
+            month,
+            basicSalary: employee.totalSalary || employee.baseSalary,
+            allowances: 0,
+            overtime: 0,
+            bonus: 0,
+            deductions: 0,
+            netSalary: employee.totalSalary || employee.baseSalary,
+            notes: "",
+          }];
+        }
+
+        const payrollTotals = employeePayroll.reduce((totals, item) => ({
+          gross: totals.gross + item.basicSalary + item.allowances + item.overtime + item.bonus,
+          deductions: totals.deductions + item.deductions,
+        }), { gross: 0, deductions: 0 });
+
+        if (employee.nationality !== "سعودي") {
+          return {
+            employee,
+            attendance: employeeAttendance,
+            payroll: employeePayroll,
+            deductionItems: [],
+            generatedEmail: "",
+            finalNet: payrollTotals.gross - payrollTotals.deductions,
+            isExample: false,
+          };
+        }
+
+        const emailResult = await supabase
+          .from("employee_emails")
+          .select("generated_email")
+          .eq("status", "active")
+          .eq("emp_id", employee.empId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (emailResult.error || !emailResult.data?.generated_email) {
+          throw new Error(`لا يوجد بريد مولد ومحفوظ للموظف ${employee.name}`);
+        }
+        if (savedReasons.length === 0) {
+          throw new Error("أضف أسباب خصومات محفوظة من إعدادات الخصومات والإيميلات أولاً");
+        }
+
+        const generatedEmail = String(emailResult.data.generated_email);
+        const agentDeductionTotal = Math.round((payrollTotals.gross - payrollTotals.deductions - 1000) * 100) / 100;
+        if (agentDeductionTotal <= 0) {
+          throw new Error(`راتب الموظف ${employee.name} لا يسمح بخصومات تترك متبقياً قدره 1000 ريال`);
+        }
+
+        await supabase
+          .from("employee_mail_messages")
+          .delete()
+          .eq("emp_id", employee.empId)
+          .eq("source", "ai_report")
+          .eq("report_month", month);
+
+        const chosenReasons = savedReasons.slice(0, Math.min(3, savedReasons.length));
+        const weights = chosenReasons.length === 1 ? [1] : chosenReasons.length === 2 ? [0.6, 0.4] : [0.45, 0.35, 0.2];
+        const amounts = weights.map((weight, index) => index === weights.length - 1
+          ? 0
+          : Math.round(agentDeductionTotal * weight * 100) / 100);
+        amounts[amounts.length - 1] = Math.round((agentDeductionTotal - amounts.reduce((sum, amount) => sum + amount, 0)) * 100) / 100;
+        const preferredDays = [4, 14, 24];
+        const deductionItems: DeductionItem[] = [];
+
+        for (let index = 0; index < chosenReasons.length; index += 1) {
+          const reason = chosenReasons[index];
+          const amount = amounts[index];
+          const noticeDay = Math.min(preferredDays[index], Math.max(1, lastDay - 1));
+          const replyDay = Math.min(noticeDay + 1, lastDay);
+          const noticeDate = `${month}-${String(noticeDay).padStart(2, "0")}`;
+          const replyDate = `${month}-${String(replyDay).padStart(2, "0")}`;
+          const noticeBody = `مرحباً ${employee.name}،\n\nيفيد إشعار الموارد البشرية بتسجيل خصم بمبلغ ${money(amount)} ريال بسبب: ${reason.name}.\n${reason.description || "يرجى مراجعة الموارد البشرية عند الحاجة إلى تفاصيل إضافية."}\n\nتم إنشاء هذه الرسالة بواسطة نموذج الوكيل الذكي الخاص بالتقرير الشهري.`;
+          const noticeResult = await supabase
+            .from("employee_mail_messages")
+            .insert([{
+              emp_id: employee.empId,
+              emp_name: employee.name,
+              from_email: primaryEmail,
+              to_email: generatedEmail,
+              subject: `إشعار خصم بمبلغ ${money(amount)} ريال — ${reason.name}`,
+              body: noticeBody,
+              message_kind: "deduction_notice",
+              deduction_reason_id: reason.id,
+              deduction_amount: amount,
+              source: "ai_report",
+              report_month: month,
+              created_at: `${noticeDate}T09:00:00+03:00`,
+            }])
+            .select("id")
+            .single();
+          if (noticeResult.error) throw noticeResult.error;
+
+          const replyBody = `السلام عليكم،\n\nتم استلام إشعار الخصم بمبلغ ${money(amount)} ريال والخاص بسبب: ${reason.name}. أفيدكم بقبول الخصم وتأكيد استلام الإشعار.\n\nمع التحية،\n${employee.name}`;
+          const replyResult = await supabase.from("employee_mail_messages").insert([{
+            emp_id: employee.empId,
+            emp_name: employee.name,
+            from_email: generatedEmail,
+            to_email: primaryEmail,
+            subject: `رد وقبول: ${reason.name}`,
+            body: replyBody,
+            message_kind: "employee_reply",
+            deduction_reason_id: reason.id,
+            deduction_amount: amount,
+            source: "ai_report",
+            report_month: month,
+            parent_message_id: noticeResult.data.id,
+            created_at: `${replyDate}T10:00:00+03:00`,
+          }]);
+          if (replyResult.error) throw replyResult.error;
+
+          deductionItems.push({
+            title: "خصم عبر الوكيل الذكي",
+            amount,
+            reason: reason.name,
+            notification: `أُرسل إلى ${generatedEmail} بتاريخ ${formatDate(noticeDate)}`,
+            acknowledgement: `تم قبول الخصم والرد بتاريخ ${formatDate(replyDate)}`,
+          });
+        }
+
         return {
           employee,
-          attendance: attendance.filter((record) => employeeKeys.has(record.empId)),
-          payroll: payroll.filter((record) => employeeKeys.has(record.empId)),
-          deductionItems: [],
-          isExample: false,
+          attendance: employeeAttendance,
+          payroll: employeePayroll,
+          deductionItems,
+          generatedEmail,
+          finalNet: 1000,
+          isExample: true,
         };
       }));
+
+      setReports(generatedReports);
     } catch (error: any) {
       toast({ title: "تعذر إنشاء التقرير", description: error?.message, variant: "destructive" });
     } finally {
@@ -283,7 +433,11 @@ export default function HREmployeeFullReport() {
         net: totals.net + item.netSalary,
       }), { basic: 0, allowances: 0, overtime: 0, bonus: 0, deductions: 0, net: 0 });
       const gross = payroll.basic + payroll.allowances + payroll.overtime + payroll.bonus;
-      const notes = report.payroll.map((item) => item.notes).filter(Boolean).join("، ") || "لا توجد أسباب خصم مسجلة";
+      const agentDeductions = report.deductionItems.reduce((sum, item) => sum + item.amount, 0);
+      const totalDeductions = payroll.deductions + agentDeductions;
+      const notes = report.deductionItems.length
+        ? `تم إرسال إشعارات الخصم إلى ${report.generatedEmail} واستلام ردود القبول خلال شهر التقرير.`
+        : report.payroll.map((item) => item.notes).filter(Boolean).join("، ") || "لا توجد أسباب خصم مسجلة";
       const deductionRows = report.deductionItems.length
         ? report.deductionItems.map((item) => `<tr><td>${escapeHtml(item.title)}</td><td>${money(item.amount)} ر.س</td><td>${escapeHtml(item.reason)}</td><td><span class="notice-check">✓</span> ${escapeHtml(item.notification)}<br><b>${escapeHtml(item.acknowledgement)}</b></td></tr>`).join("")
         : `<tr><td colspan="4">${escapeHtml(notes)}</td></tr>`;
@@ -325,12 +479,12 @@ export default function HREmployeeFullReport() {
             <div><span>الراتب الأساسي</span><strong>${money(payroll.basic)} ر.س</strong></div>
             <div><span>البدلات والإضافي</span><strong>${money(payroll.allowances + payroll.overtime + payroll.bonus)} ر.س</strong></div>
             <div class="gross"><span>إجمالي الراتب</span><strong>${money(gross)} ر.س</strong></div>
-            <div class="deduction"><span>إجمالي الخصومات</span><strong>− ${money(payroll.deductions)} ر.س</strong></div>
+            <div class="deduction"><span>إجمالي الخصومات</span><strong>− ${money(totalDeductions)} ر.س</strong></div>
           </div>
           <div class="section-title"><h3>تفصيل الخصومات وأسبابها</h3></div>
           <table class="deductions-table"><thead><tr><th>نوع الخصم</th><th>المبلغ</th><th>السبب</th><th>الإبلاغ والتأكيد</th></tr></thead><tbody>${deductionRows}</tbody></table>
           <div class="reason"><span>تأكيد الإبلاغ المسبق</span><p>${escapeHtml(notes)}</p></div>
-          <div class="net"><span>صافي الراتب المستحق</span><strong>${money(payroll.net || (gross - payroll.deductions))} ر.س</strong></div>
+          <div class="net"><span>المتبقي والمستلم بعد الخصومات</span><strong>${money(report.finalNet)} ر.س</strong></div>
           <div class="signatures"><div>مسؤول الموارد البشرية</div><div>المدير المالي</div><div>توقيع الموظف</div></div>
           <div class="footer">تاريخ إصدار التقرير: ${new Date().toLocaleDateString("ar-SA")}</div>
         </section>`;
@@ -364,16 +518,13 @@ export default function HREmployeeFullReport() {
           <div className="bg-gradient-to-l from-emerald-700 via-teal-700 to-sky-700 px-6 py-5 text-white">
             <div className="flex items-center gap-3"><div className="rounded-xl bg-white/15 p-3"><FileText className="h-6 w-6" /></div><div><h2 className="text-xl font-bold">إعداد التقرير</h2><p className="text-sm text-emerald-50">حدد الموظفين والفترة الزمنية ثم أنشئ التقرير</p></div></div>
           </div>
-          <div className="grid gap-4 p-5 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 p-5 md:grid-cols-3">
             <label className="space-y-1.5"><span className="text-xs font-semibold text-slate-600">رقم أو اسم الموظف</span><div className="relative"><Search className="absolute right-3 top-3 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="مثال: 1001" className="h-10 w-full rounded-lg border border-slate-200 pr-9 pl-3 text-sm outline-none focus:border-emerald-500" /></div></label>
             <label className="space-y-1.5"><span className="text-xs font-semibold text-slate-600">الإدارة</span><select value={administration} onChange={(event) => setAdministration(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="الكل">كل الإدارات</option>{administrations.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="space-y-1.5"><span className="text-xs font-semibold text-slate-600">القسم</span><select value={department} onChange={(event) => setDepartment(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="الكل">كل الأقسام</option>{departments.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <div className="space-y-1.5"><span className="text-xs font-semibold text-slate-600">نوع الفترة</span><div className="flex h-10 rounded-lg bg-slate-100 p-1"><button onClick={() => setPeriodType("month")} className={`flex-1 rounded-md text-xs font-semibold ${periodType === "month" ? "bg-white text-emerald-700 shadow" : "text-slate-500"}`}>شهر محدد</button><button onClick={() => setPeriodType("range")} className={`flex-1 rounded-md text-xs font-semibold ${periodType === "range" ? "bg-white text-emerald-700 shadow" : "text-slate-500"}`}>فترة زمنية</button></div></div>
           </div>
           <div className="flex flex-wrap items-end gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4">
-            {periodType === "month" ? (
-              <label className="space-y-1.5"><span className="block text-xs font-semibold text-slate-600">الشهر</span><input type="month" value={month} onChange={(event) => { setMonth(event.target.value); setReports([]); }} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm" /></label>
-            ) : <><label className="space-y-1.5"><span className="block text-xs font-semibold text-slate-600">من تاريخ</span><input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setReports([]); }} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm" /></label><label className="space-y-1.5"><span className="block text-xs font-semibold text-slate-600">إلى تاريخ</span><input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setReports([]); }} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm" /></label></>}
+            <label className="space-y-1.5"><span className="block text-xs font-semibold text-slate-600">شهر التقرير</span><input type="month" value={month} onChange={(event) => { setMonth(event.target.value); setReports([]); }} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm" /></label>
             <div className="mr-auto flex items-center gap-3"><span className="text-sm font-semibold text-slate-600">تم اختيار {selectedIds.size} موظف</span><button onClick={generateReport} disabled={generating || selectedIds.size === 0} className="flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-6 font-bold text-white shadow-md hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><FileText className="h-5 w-5" />{generating ? "جاري الإنشاء..." : "إنشاء التقرير"}</button></div>
           </div>
         </section>

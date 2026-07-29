@@ -26,12 +26,6 @@ interface SaudiEmployee {
   nationality: string;
 }
 
-interface EmailSchedule {
-  id: string;
-  day_of_month: number;
-  description: string;
-}
-
 interface MailMessage {
   id: string;
   emp_id: string;
@@ -45,12 +39,10 @@ interface MailMessage {
 }
 
 export default function DeductionSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"reasons" | "schedule" | "generate" | "agent">("reasons");
+  const [activeTab, setActiveTab] = useState<"reasons" | "generate">("reasons");
   const [deductions, setDeductions] = useState<DeductionReason[]>([]);
   const [generatedEmails, setGeneratedEmails] = useState<GeneratedEmail[]>([]);
-  const [emailSchedules, setEmailSchedules] = useState<EmailSchedule[]>([]);
   const [newDeduction, setNewDeduction] = useState({ name: "", description: "" });
-  const [newSchedule, setNewSchedule] = useState({ day: 15, description: "" });
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [saudiEmployees, setSaudiEmployees] = useState<SaudiEmployee[]>([]);
   const [primaryEmail, setPrimaryEmail] = useState("hr.alayaf.com");
@@ -59,14 +51,11 @@ export default function DeductionSettingsPage() {
   const [mailMessages, setMailMessages] = useState<MailMessage[]>([]);
   const [showAdminMailbox, setShowAdminMailbox] = useState(false);
   const [adminFolder, setAdminFolder] = useState<"inbox" | "sent">("inbox");
-  const [agentEmployeeEmailId, setAgentEmployeeEmailId] = useState("");
-  const [agentScheduleId, setAgentScheduleId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   // تحميل أسباب الخصومات
   useEffect(() => {
     loadDeductions();
-    loadSchedules();
     loadSaudiEmployees();
     loadPrimaryEmail();
     loadGeneratedEmails();
@@ -86,25 +75,6 @@ export default function DeductionSettingsPage() {
           name: d.name_ar,
           description: d.description,
           created_at: d.created_at
-        })));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const loadSchedules = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("hr_config_items")
-        .select("*")
-        .eq("config_type", "email_schedule");
-      
-      if (!error && data) {
-        setEmailSchedules(data.map((s: any) => ({
-          id: s.id,
-          day_of_month: s.sort_order || 15,
-          description: s.description
         })));
       }
     } catch (err) {
@@ -185,69 +155,6 @@ export default function DeductionSettingsPage() {
     if (!error && data) setMailMessages(data as MailMessage[]);
   };
 
-  const runMockAgent = async () => {
-    const employeeEmail = generatedEmails.find((email) => email.id === agentEmployeeEmailId);
-    const schedule = emailSchedules.find((item) => item.id === agentScheduleId);
-    if (!employeeEmail || !schedule) {
-      toast.error("اختر الموظف وفترة الإرسال");
-      return;
-    }
-    if (deductions.length === 0) {
-      toast.error("أضف سبب خصم محفوظ أولاً");
-      return;
-    }
-
-    const reasonIndex = (schedule.day_of_month + employeeEmail.emp_id.length) % deductions.length;
-    const reason = deductions[reasonIndex];
-    const noticeBody = `مرحباً ${employeeEmail.emp_name}،\n\nتم اختيار سبب الخصم التالي حسب فترة الإرسال المحددة: ${reason.name}.\n${reason.description || "يرجى مراجعة إدارة الموارد البشرية عند الحاجة إلى تفاصيل إضافية."}\n\nهذه رسالة تجريبية أنشأها الوكيل الذكي.`;
-
-    setIsLoading(true);
-    const noticeResult = await supabase
-      .from("employee_mail_messages")
-      .insert([{
-        emp_id: employeeEmail.emp_id,
-        emp_name: employeeEmail.emp_name,
-        from_email: primaryEmail,
-        to_email: employeeEmail.generated_email,
-        subject: `إشعار خصم: ${reason.name}`,
-        body: noticeBody,
-        message_kind: "deduction_notice",
-        deduction_reason_id: String(reason.id),
-        schedule_id: String(schedule.id),
-      }])
-      .select("id")
-      .single();
-
-    if (noticeResult.error) {
-      setIsLoading(false);
-      toast.error("تعذر تشغيل المثال. تأكد من إنشاء جدول الرسائل");
-      return;
-    }
-
-    const replyBody = `السلام عليكم،\n\nتم استلام إشعار الخصم الخاص بسبب: ${reason.name}. أفيدكم بقبول الخصم وتسجيل اطلاعي على السبب.\n\nمع التحية،\n${employeeEmail.emp_name}\n\nرد تجريبي أنشأه الوكيل الذكي.`;
-    const replyResult = await supabase.from("employee_mail_messages").insert([{
-      emp_id: employeeEmail.emp_id,
-      emp_name: employeeEmail.emp_name,
-      from_email: employeeEmail.generated_email,
-      to_email: primaryEmail,
-      subject: `رد: إشعار خصم ${reason.name}`,
-      body: replyBody,
-      message_kind: "employee_reply",
-      deduction_reason_id: String(reason.id),
-      schedule_id: String(schedule.id),
-      parent_message_id: noticeResult.data.id,
-    }]);
-    setIsLoading(false);
-
-    if (replyResult.error) {
-      toast.error("أُرسل الإشعار ولكن تعذر إنشاء الرد التجريبي");
-      return;
-    }
-
-    await loadMailMessages();
-    toast.success("أرسل الوكيل الإشعار وأنشأ رد القبول التجريبي");
-  };
-
   const addDeduction = async () => {
     if (!newDeduction.name) {
       toast.error("أدخل اسم السبب");
@@ -279,33 +186,6 @@ export default function DeductionSettingsPage() {
       await supabase.from("hr_config_items").delete().eq("id", id);
       toast.success("تم الحذف");
       loadDeductions();
-    } catch (err) {
-      toast.error("حدث خطأ");
-    }
-  };
-
-  const addSchedule = async () => {
-    if (!newSchedule.description) {
-      toast.error("أدخل الوصف");
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from("hr_config_items")
-        .insert([{
-          config_type: "email_schedule",
-          name_ar: `إرسال في اليوم ${newSchedule.day}`,
-          description: newSchedule.description,
-          sort_order: newSchedule.day,
-          status: "فعال"
-        }]);
-
-      if (!error) {
-        toast.success("تم إضافة الفترة");
-        setNewSchedule({ day: 15, description: "" });
-        loadSchedules();
-      }
     } catch (err) {
       toast.error("حدث خطأ");
     }
@@ -444,16 +324,6 @@ export default function DeductionSettingsPage() {
             أسباب الخصومات
           </button>
           <button
-            onClick={() => setActiveTab("schedule")}
-            className={`flex-1 py-2 px-4 rounded-md font-medium transition ${
-              activeTab === "schedule"
-                ? "bg-blue-600 text-white"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            فترات الإرسال
-          </button>
-          <button
             onClick={() => setActiveTab("generate")}
             className={`flex-1 py-2 px-4 rounded-md font-medium transition ${
               activeTab === "generate"
@@ -462,16 +332,6 @@ export default function DeductionSettingsPage() {
             }`}
           >
             توليد الإيميلات
-          </button>
-          <button
-            onClick={() => setActiveTab("agent")}
-            className={`flex-1 py-2 px-4 rounded-md font-medium transition ${
-              activeTab === "agent"
-                ? "bg-blue-600 text-white"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            مثال الوكيل
           </button>
         </div>
 
@@ -522,87 +382,6 @@ export default function DeductionSettingsPage() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* فترات الإرسال */}
-          {activeTab === "schedule" && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold mb-4">فترات إرسال الإيميلات</h2>
-              
-              <div className="space-y-3">
-                <input
-                  type="number"
-                  placeholder="اليوم من الشهر"
-                  value={newSchedule.day}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, day: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white placeholder-gray-400"
-                  min="1"
-                  max="28"
-                />
-                <input
-                  type="text"
-                  placeholder="الوصف"
-                  value={newSchedule.description}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, description: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white placeholder-gray-400"
-                />
-                <button
-                  onClick={addSchedule}
-                  className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg font-semibold flex items-center justify-center gap-2"
-                >
-                  <Plus className="h-5 w-5" />
-                  إضافة فترة
-                </button>
-              </div>
-
-              <div className="space-y-2 mt-6">
-                {emailSchedules.map((s) => (
-                  <div key={s.id} className="bg-gray-700 p-4 rounded-lg">
-                    <p className="font-semibold">اليوم {s.day_of_month}</p>
-                    <p className="text-sm text-gray-400">{s.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "agent" && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-xl font-bold">مثال الوكيل الذكي</h2>
-                <p className="text-sm text-gray-400 mt-1">محاكاة جاهزة لحين إضافة مفتاح مزود الذكاء الاصطناعي.</p>
-              </div>
-              <select
-                value={agentEmployeeEmailId}
-                onChange={(event) => setAgentEmployeeEmailId(event.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white"
-              >
-                <option value="">اختر موظفاً لديه إيميل محفوظ</option>
-                {generatedEmails.map((email) => (
-                  <option key={email.id} value={email.id}>{email.emp_name} — {email.generated_email}</option>
-                ))}
-              </select>
-              <select
-                value={agentScheduleId}
-                onChange={(event) => setAgentScheduleId(event.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white"
-              >
-                <option value="">اختر فترة الإرسال</option>
-                {emailSchedules.map((schedule) => (
-                  <option key={schedule.id} value={schedule.id}>اليوم {schedule.day_of_month} — {schedule.description}</option>
-                ))}
-              </select>
-              <div className="bg-blue-950/50 border border-blue-800 rounded-lg p-4 text-sm text-blue-100">
-                يختار المثال سبباً محفوظاً، يرسل إشعار الخصم إلى بريد الموظف، ثم ينشئ رداً مناسباً بقبول الخصم ويرسله إلى الإيميل الرئيسي.
-              </div>
-              <button
-                onClick={runMockAgent}
-                disabled={isLoading}
-                className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 py-3 rounded-lg font-bold"
-              >
-                {isLoading ? "جاري تشغيل المثال..." : "تشغيل المثال الآن"}
-              </button>
             </div>
           )}
 

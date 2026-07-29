@@ -367,7 +367,7 @@ function HRSidebar({
               <Users className="h-5 w-5" />
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/20 to-transparent opacity-60" />
             </div>
-            {sidebarOpen && (
+            {sidebarOpen && location.pathname !== "/hr/deductions-emails" && (
               <div className="flex flex-col">
                 <span className="text-[14px] font-extrabold text-white tracking-tight leading-tight">
                   الموارد البشرية

@@ -38,6 +38,7 @@ import {
   Coins,
   Scale,
   MapPin,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { readUserSession, checkPerm, canManagePerm, permissionForMainPath, permissionForMainSubPath, permissionForHRPath } from "@/lib/authSession";
@@ -232,6 +233,9 @@ const hrNavItems: HRNavItem[] = [
       { icon: ShieldCheck, label: "قائمة أدوار المستخدمين", href: "/hr/permissions/roles" },
       { icon: Plus, label: "إضافة دور جديد", href: "/hr/permissions/add-role" },
     ],
+  },
+  {
+    icon: Wrench, label: "أدوات الخصومات والإيميلات", href: "/hr/deductions-emails", hasChildren: false,
   },
 ];
 

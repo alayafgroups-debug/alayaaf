@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Layout from "@/components/Layout";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarClock, MapPin, Save, Settings2, Wrench } from "lucide-react";
+import { ArrowRight, CalendarClock, MapPin, Save, Settings2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import JobTitlesManager from "@/components/hr/JobTitlesManager";
 import { toast } from "@/hooks/use-toast";
-import DeductionSettingsPage from "@/pages/DeductionSettingsPage";
-import EmployeeEmailPage from "@/pages/EmployeeEmailPage";
 
 type TabKey = "general" | "recruitment" | "payroll" | "leaves" | "attendance";
-type ToolsPage = "deductions" | "emails" | null;
 
 type HRSettingsState = {
   general: {
@@ -160,7 +157,6 @@ function mergeTab<T extends Record<string, unknown>>(defaults: T, incoming: unkn
 export default function HRSettings() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>("general");
-  const [toolsPage, setToolsPage] = useState<ToolsPage>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<HRSettingsState>(defaultSettings);
@@ -273,46 +269,6 @@ export default function HRSettings() {
     setSaving(false);
   }
 
-  // عرض صفحات الأدوات
-  if (toolsPage === "deductions") {
-    return (
-      <Layout>
-        <div className="space-y-5">
-          <button
-            onClick={() => setToolsPage(null)}
-            className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm hover:bg-gray-50"
-          >
-            <ArrowRight className="h-4 w-4" />
-            العودة للإعدادات
-          </button>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h2 className="text-xl font-bold mb-4">أسباب الخصومات والإيميلات</h2>
-              <DeductionSettingsPage />
-            </div>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (toolsPage === "emails") {
-    return (
-      <Layout>
-        <div>
-          <button
-            onClick={() => setToolsPage(null)}
-            className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm hover:bg-gray-50 mb-4"
-          >
-            <ArrowRight className="h-4 w-4" />
-            العودة للإعدادات
-          </button>
-          <EmployeeEmailPage onBack={() => setToolsPage(null)} />
-        </div>
-      </Layout>
-    );
-  }
-
   return (
     <Layout>
       <div dir="rtl" className="space-y-5">
@@ -359,13 +315,6 @@ export default function HRSettings() {
             >
               <CalendarClock className="h-4 w-4" />
               جداول العمل والشركات
-            </button>
-            <button
-              onClick={() => setToolsPage("deductions")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-orange-50 text-orange-700 text-sm font-medium hover:bg-orange-100 transition"
-            >
-              <Wrench className="h-4 w-4" />
-              أدوات الخصومات والإيميلات
             </button>
           </div>
 

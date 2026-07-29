@@ -27,6 +27,7 @@ import HRCertificates from "./pages/HRCertificates";
 import HRReports from "./pages/HRReports";
 import HREmployeeFullReport from "./pages/HREmployeeFullReport";
 import HRSettings from "./pages/HRSettings";
+import HRDeductionsEmails from "./pages/HRDeductionsEmails";
 import HREmployeesCooperative from "./pages/HREmployeesCooperative";
 import HREmployeesInactive from "./pages/HREmployeesInactive";
 import HRUserLogs from "./pages/HRUserLogs";
@@ -231,6 +232,7 @@ const App = () => (
           <Route path="/hr/permissions/roles" element={<HRPermissionsRoles />} />
           <Route path="/hr/permissions/add-role" element={<HRPermissionsAddRole />} />
           <Route path="/hr/permissions/edit-role/:roleId" element={<HRPermissionsAddRole />} />
+          <Route path="/hr/deductions-emails" element={<HRDeductionsEmails />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />
           <Route path="/hr/reports" element={<HRReports />} />

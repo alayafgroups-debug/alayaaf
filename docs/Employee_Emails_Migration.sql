@@ -5,8 +5,7 @@ CREATE TABLE IF NOT EXISTS public.employee_emails (
   generated_email TEXT NOT NULL UNIQUE,
   status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'archived')),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (emp_id) REFERENCES public.employees(emp_id) ON DELETE CASCADE
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_employee_emails_emp_id ON public.employee_emails(emp_id);

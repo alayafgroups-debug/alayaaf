@@ -1014,6 +1014,9 @@ export default function EmployeePortal() {
                   </span>
                 )}
               </button>
+              <button onClick={() => setShowPasswordModal(true)} className="hover:text-blue-600 transition">
+                <Mail className="h-6 w-6 text-gray-700" />
+              </button>
               <button onClick={() => setCurrentPage("settings")}>
                 <Settings className="h-6 w-6 text-gray-700" />
               </button>

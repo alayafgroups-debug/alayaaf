@@ -42,7 +42,6 @@ import ComplaintsPage from "@/components/portal/ComplaintsPage";
 import EmployeeSettingsPage from "@/components/portal/EmployeeSettingsPage";
 import AboutPage from "@/components/portal/AboutPage";
 import PrivacyPage from "@/components/portal/PrivacyPage";
-import DeductionSettingsPage from "./DeductionSettingsPage";
 import EmployeeEmailPage from "./EmployeeEmailPage";
 
 interface UserSession {
@@ -63,7 +62,7 @@ interface EmployeeRequest {
   adminNote: string;
 }
 
-type AppPage = "home" | "requests" | "send-request" | "more" | "employees" | "profile" | "payroll" | "payslip" | "penalties" | "schedule" | "my-reports" | "reports" | "manager-requests" | "team" | "attendance" | "performance" | "commissions" | "circulars" | "announcements" | "complaints" | "contact" | "settings" | "about" | "privacy" | "notifications" | "email" | "deduction-settings";
+type AppPage = "home" | "requests" | "send-request" | "more" | "employees" | "profile" | "payroll" | "payslip" | "penalties" | "schedule" | "my-reports" | "reports" | "manager-requests" | "team" | "attendance" | "performance" | "commissions" | "circulars" | "announcements" | "complaints" | "contact" | "settings" | "about" | "privacy" | "notifications" | "email";
 
 // Map Arabic request name → schema ID used in DynamicRequestForm / LeaveRequestForm
 const REQUEST_NAME_TO_SCHEMA: Record<string, string> = {
@@ -199,9 +198,6 @@ export default function EmployeePortal() {
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [allowedRequests, setAllowedRequests] = useState<string[]>([]);
   const [employeeDepartment, setEmployeeDepartment] = useState("");
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState("");
 
   // Form state for request dialogs
   const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
@@ -599,9 +595,6 @@ export default function EmployeePortal() {
                         {notificationCount}
                       </span>
                     )}
-                  </button>
-                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPasswordModal(true); }} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 transition">
-                    <Mail className="h-4.5 w-4.5 text-white" />
                   </button>
                   <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("settings"); }} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
                     <Settings className="h-4.5 w-4.5 text-white" />
@@ -1014,7 +1007,7 @@ export default function EmployeePortal() {
                   </span>
                 )}
               </button>
-              <button onClick={() => setShowPasswordModal(true)} className="hover:text-blue-600 transition">
+              <button onClick={() => setCurrentPage("email")}>
                 <Mail className="h-6 w-6 text-gray-700" />
               </button>
               <button onClick={() => setCurrentPage("settings")}>
@@ -1384,60 +1377,8 @@ export default function EmployeePortal() {
         </main>
       </div>
 
-      {/* PASSWORD MODAL FOR SETTINGS */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">إدارة الإعدادات</h2>
-            <p className="text-sm text-gray-600 mb-4">أدخل كلمة المرور للمتابعة</p>
-            <input
-              type="password"
-              placeholder="كلمة المرور"
-              value={passwordInput}
-              onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(""); }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2"
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  if (passwordInput === "1234") {
-                    setCurrentPage("deduction-settings");
-                    setShowPasswordModal(false);
-                    setPasswordInput("");
-                  } else {
-                    setPasswordError("كلمة المرور غير صحيحة");
-                  }
-                }
-              }}
-            />
-            {passwordError && <p className="text-sm text-red-600 mb-4">{passwordError}</p>}
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  if (passwordInput === "1234") {
-                    setCurrentPage("deduction-settings");
-                    setShowPasswordModal(false);
-                    setPasswordInput("");
-                  } else {
-                    setPasswordError("كلمة المرور غير صحيحة");
-                  }
-                }}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg"
-              >
-                دخول
-              </button>
-              <button
-                onClick={() => { setShowPasswordModal(false); setPasswordInput(""); setPasswordError(""); }}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Email & Deduction Pages */}
+      {/* Email Page */}
       {currentPage === "email" && user && <EmployeeEmailPage onBack={() => setCurrentPage("home")} />}
-      {currentPage === "deduction-settings" && <DeductionSettingsPage />}
 
       {/* ===== FACE VERIFICATION CAMERA MODAL ===== */}
       {cameraOpen && (

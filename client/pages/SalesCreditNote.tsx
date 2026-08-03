@@ -3,6 +3,7 @@ import { salesFeatures } from "./Sales";
 import { Plus, Save, Trash2, ArrowRight } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 type CreditNoteItem = {
   id: string;
@@ -15,6 +16,8 @@ type CreditNoteItem = {
 type SavedCreditNote = {
   id: string;
   noteNumber: string;
+  noteType: "sales_credit" | "sales_debit";
+  originalInvoiceId: string;
   customer: string;
   currency: string;
   date: string;
@@ -25,11 +28,22 @@ type SavedCreditNote = {
   subtotal: number;
   tax: number;
   total: number;
+  balanceBefore: number;
+  balanceAfter: number;
   items: CreditNoteItem[];
+};
+
+type OriginalInvoice = {
+  id: string;
+  customer: string;
+  total: number;
+  adjustedTotal: number;
 };
 
 type CreditNoteForm = {
   noteNumber: string;
+  noteType: "sales_credit" | "sales_debit";
+  originalInvoiceId: string;
   customer: string;
   currency: string;
   date: string;
@@ -60,6 +74,8 @@ const extractSequence = (noteNumber: string) => {
 
 const createEmptyForm = (sequence: number): CreditNoteForm => ({
   noteNumber: buildNoteNumber(sequence),
+  noteType: "sales_credit",
+  originalInvoiceId: "",
   customer: "",
   currency: "SAR",
   date: new Date().toISOString().split("T")[0],
@@ -72,32 +88,61 @@ const createEmptyForm = (sequence: number): CreditNoteForm => ({
 
 export default function SalesCreditNote() {
   const [savedNotes, setSavedNotes] = useState<SavedCreditNote[]>([]);
+  const [invoices, setInvoices] = useState<OriginalInvoice[]>([]);
   const [nextSequence, setNextSequence] = useState(START_NUMBER);
   const [mode, setMode] = useState<"list" | "create">("list");
   const [form, setForm] = useState<CreditNoteForm>(() => createEmptyForm(START_NUMBER));
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return;
-    }
+    const load = async () => {
+      const [notesResult, invoicesResult] = await Promise.all([
+        supabase
+          .from("invoice_adjustment_notes")
+          .select("id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items")
+          .in("note_type", ["sales_credit", "sales_debit"])
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("sales_invoices")
+          .select("id, customer, total, adjusted_total")
+          .order("date", { ascending: false }),
+      ]);
 
-    try {
-      const parsed = JSON.parse(raw) as SavedCreditNote[];
-      setSavedNotes(parsed);
+      if (!notesResult.error) {
+        const parsed = (notesResult.data ?? []).map((row: any) => ({
+          id: String(row.id),
+          noteNumber: String(row.note_number),
+          noteType: row.note_type as "sales_credit" | "sales_debit",
+          originalInvoiceId: String(row.original_invoice_id),
+          customer: String(row.counterparty),
+          currency: String(row.currency),
+          date: String(row.issue_date),
+          orderRef: "",
+          reference: String(row.original_invoice_id),
+          project: "",
+          warehouse: "",
+          subtotal: Number(row.subtotal),
+          tax: Number(row.tax),
+          total: Number(row.total),
+          balanceBefore: Number(row.balance_before),
+          balanceAfter: Number(row.balance_after),
+          items: Array.isArray(row.items) ? row.items : [],
+        }));
+        setSavedNotes(parsed);
+        const sequence = parsed.reduce((max, note) => Math.max(max, extractSequence(note.noteNumber)), START_NUMBER - 1) + 1;
+        setNextSequence(sequence);
+        setForm(createEmptyForm(sequence));
+      }
 
-      const maxSequence = parsed.reduce(
-        (max, note) => Math.max(max, extractSequence(note.noteNumber)),
-        START_NUMBER - 1
-      );
-      const sequence = maxSequence + 1;
-      setNextSequence(sequence);
-      setForm(createEmptyForm(sequence));
-    } catch {
-      setSavedNotes([]);
-      setNextSequence(START_NUMBER);
-      setForm(createEmptyForm(START_NUMBER));
-    }
+      if (!invoicesResult.error) {
+        setInvoices((invoicesResult.data ?? []).map((row: any) => ({
+          id: String(row.id),
+          customer: String(row.customer || ""),
+          total: Number(String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
+          adjustedTotal: Number(row.adjusted_total ?? String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
+        })));
+      }
+    };
+    load();
   }, []);
 
   const subtotal = useMemo(
@@ -127,9 +172,17 @@ export default function SalesCreditNote() {
     setMode("create");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!form.originalInvoiceId) {
+      toast({ title: "الفاتورة الأصلية مطلوبة", description: "كل إشعار يجب أن يكون مرتبطاً بفاتورة مبيعات" });
+      return;
+    }
     if (!form.customer.trim()) {
-      toast({ title: "العميل مطلوب", description: "يرجى إدخال اسم العميل قبل الحفظ" });
+      toast({ title: "العميل مطلوب", description: "اختر الفاتورة الأصلية أولاً" });
+      return;
+    }
+    if (total <= 0) {
+      toast({ title: "مبلغ الإشعار غير صحيح", description: "أضف بنداً بقيمة أكبر من صفر" });
       return;
     }
 
@@ -137,34 +190,45 @@ export default function SalesCreditNote() {
       (item) => item.description.trim() || item.account.trim() || item.unitPrice > 0
     );
 
+    const { data, error } = await supabase.rpc("post_invoice_adjustment_note", {
+      p_note_number: form.noteNumber,
+      p_note_type: form.noteType,
+      p_original_invoice_id: form.originalInvoiceId,
+      p_counterparty: form.customer,
+      p_currency: form.currency,
+      p_issue_date: form.date,
+      p_subtotal: subtotal,
+      p_tax: tax,
+      p_total: total,
+      p_items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
+    });
+
+    if (error) {
+      toast({ title: "تعذر ترحيل الإشعار", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    const invoice = invoices.find((item) => item.id === form.originalInvoiceId)!;
+    const signedAmount = form.noteType === "sales_credit" ? -total : total;
     const payload: SavedCreditNote = {
-      id: crypto.randomUUID(),
-      noteNumber: form.noteNumber,
-      customer: form.customer,
-      currency: form.currency,
-      date: form.date,
-      orderRef: form.orderRef,
-      reference: form.reference,
-      project: form.project,
-      warehouse: form.warehouse,
-      subtotal,
-      tax,
-      total,
+      id: String(data), noteNumber: form.noteNumber, noteType: form.noteType,
+      originalInvoiceId: form.originalInvoiceId, customer: form.customer,
+      currency: form.currency, date: form.date, orderRef: form.orderRef,
+      reference: form.originalInvoiceId, project: form.project, warehouse: form.warehouse,
+      subtotal, tax, total, balanceBefore: invoice.adjustedTotal,
+      balanceAfter: invoice.adjustedTotal + signedAmount,
       items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
     };
-
-    const updated = [payload, ...savedNotes];
-    setSavedNotes(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setSavedNotes((current) => [payload, ...current]);
+    setInvoices((current) => current.map((item) => item.id === form.originalInvoiceId ? { ...item, adjustedTotal: payload.balanceAfter } : item));
 
     const sequence = extractSequence(form.noteNumber) + 1;
     setNextSequence(sequence);
     setForm(createEmptyForm(sequence));
     setMode("list");
-
     toast({
-      title: "تم حفظ إشعار دائن",
-      description: `تم حفظ الإشعار ${payload.noteNumber} بنجاح`,
+      title: form.noteType === "sales_credit" ? "تم ترحيل الإشعار الدائن" : "تم ترحيل الإشعار المدين",
+      description: `تم ربط ${payload.noteNumber} بالفاتورة ${payload.originalInvoiceId} وتسجيل القيد المحاسبي`,
     });
   };
 
@@ -173,9 +237,9 @@ export default function SalesCreditNote() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">إشعار دائن</h1>
+            <h1 className="text-3xl font-bold text-foreground">إشعارات تعديل المبيعات</h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list" ? "عرض الإشعارات الدائنة" : "إنشاء إشعار دائن جديد"}
+              {mode === "list" ? "إشعارات دائنة ومدينة مرتبطة بالفواتير" : "إنشاء إشعار مرتبط بفاتورة مبيعات"}
             </p>
           </div>
 
@@ -186,7 +250,7 @@ export default function SalesCreditNote() {
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
               >
                 <Plus className="h-4 w-4" />
-                إنشاء إشعار دائن جديد
+                إنشاء إشعار جديد
               </button>
             ) : (
               <>
@@ -212,7 +276,7 @@ export default function SalesCreditNote() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              عدد الإشعارات المحفوظة: <span className="font-semibold text-foreground">{savedNotes.length}</span>
+              عدد الإشعارات المرحلة: <span className="font-semibold text-foreground">{savedNotes.length}</span>
             </p>
 
             {savedNotes.length === 0 ? (
@@ -223,20 +287,24 @@ export default function SalesCreditNote() {
                   <thead>
                     <tr className="bg-muted/40">
                       <th className="px-3 py-2">رقم الإشعار</th>
+                      <th className="px-3 py-2">النوع</th>
+                      <th className="px-3 py-2">الفاتورة الأصلية</th>
                       <th className="px-3 py-2">العميل</th>
                       <th className="px-3 py-2">التاريخ</th>
-                      <th className="px-3 py-2">العملة</th>
                       <th className="px-3 py-2">الإجمالي</th>
+                      <th className="px-3 py-2">الرصيد بعد الإشعار</th>
                     </tr>
                   </thead>
                   <tbody>
                     {savedNotes.map((note) => (
                       <tr key={note.id} className="border-t border-border">
                         <td className="px-3 py-2 font-semibold text-primary">{note.noteNumber}</td>
+                        <td className="px-3 py-2">{note.noteType === "sales_credit" ? "دائن −" : "مدين +"}</td>
+                        <td className="px-3 py-2 font-medium">{note.originalInvoiceId}</td>
                         <td className="px-3 py-2">{note.customer}</td>
                         <td className="px-3 py-2">{note.date}</td>
-                        <td className="px-3 py-2">{note.currency}</td>
-                        <td className="px-3 py-2">{note.total.toFixed(2)} ﷼</td>
+                        <td className="px-3 py-2">{note.total.toFixed(2)} {note.currency}</td>
+                        <td className="px-3 py-2 font-semibold">{note.balanceAfter.toFixed(2)} {note.currency}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -267,12 +335,40 @@ export default function SalesCreditNote() {
                   />
                 </Field>
 
-                <Field label="العميل*">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="نوع الإشعار*">
+                    <select
+                      value={form.noteType}
+                      onChange={(e) => setForm({ ...form, noteType: e.target.value as "sales_credit" | "sales_debit" })}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    >
+                      <option value="sales_credit">إشعار دائن — يخفض رصيد الفاتورة</option>
+                      <option value="sales_debit">إشعار مدين — يزيد رصيد الفاتورة</option>
+                    </select>
+                  </Field>
+                  <Field label="الفاتورة الأصلية*">
+                    <select
+                      value={form.originalInvoiceId}
+                      onChange={(e) => {
+                        const invoice = invoices.find((item) => item.id === e.target.value);
+                        setForm({ ...form, originalInvoiceId: e.target.value, customer: invoice?.customer || "", reference: e.target.value });
+                      }}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    >
+                      <option value="">اختر الفاتورة</option>
+                      {invoices.map((invoice) => (
+                        <option key={invoice.id} value={invoice.id}>{invoice.id} — {invoice.customer} — الرصيد {invoice.adjustedTotal.toFixed(2)} SAR</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <Field label="العميل المرتبط بالفاتورة">
                   <input
                     value={form.customer}
-                    onChange={(e) => setForm({ ...form, customer: e.target.value })}
-                    placeholder="مطلوب"
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    readOnly
+                    placeholder="يُحدد تلقائياً من الفاتورة"
+                    className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                   />
                 </Field>
 
@@ -303,12 +399,12 @@ export default function SalesCreditNote() {
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
-                  <Field label="المرجع">
+                  <Field label="مرجع الفاتورة">
                     <input
                       value={form.reference}
-                      onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                      placeholder="اختياري"
-                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                      readOnly
+                      placeholder="يُحدد من الفاتورة الأصلية"
+                      className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                     />
                   </Field>
                 </div>

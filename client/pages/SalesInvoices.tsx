@@ -74,9 +74,9 @@ export default function SalesInvoices() {
           dueDate: row.due_date ?? row.dueDate ?? "",
           customer: row.customer ?? "",
           customerAddress: String(row.customer_address ?? localStorage.getItem(`sales-invoice-address-${row.id}`) ?? ""),
-          total: row.total ?? "",
+          total: row.adjusted_total != null ? `ريال ${Number(row.adjusted_total).toFixed(2)}` : row.total ?? "",
           paid: row.paid ?? "",
-          remaining: row.remaining ?? "",
+          remaining: row.adjusted_remaining != null ? `ريال ${Number(row.adjusted_remaining).toFixed(2)}` : row.remaining ?? "",
           status: row.status ?? "مفتوحة",
           statusColor: statusColors[row.status ?? "مفتوحة"] ??
             "bg-slate-500 text-white",

@@ -84,9 +84,9 @@ function mapRow(row: Record<string, unknown>): PurchaseInvoice {
     costCenterName: (row.cost_center_name as string) ?? "",
     status,
     statusColor: statusColors[status] ?? "bg-slate-500 text-white",
-    total: (row.total as string) ?? "0.00",
+    total: row.adjusted_total != null ? Number(row.adjusted_total).toFixed(2) : (row.total as string) ?? "0.00",
     paid: (row.paid as string) ?? "0.00",
-    remaining: (row.remaining as string) ?? "0.00",
+    remaining: row.adjusted_remaining != null ? Number(row.adjusted_remaining).toFixed(2) : (row.remaining as string) ?? "0.00",
     items: Array.isArray(row.items)
       ? (row.items as Record<string, unknown>[]).map((it) => ({
           id: Number(it.id) || 0,

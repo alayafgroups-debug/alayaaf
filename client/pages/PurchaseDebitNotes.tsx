@@ -3,6 +3,7 @@ import { purchasesFeatures } from "./Purchases";
 import { ArrowRight, Plus, Save, Trash2 } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 type DebitNoteItem = {
   id: string;
@@ -15,6 +16,7 @@ type DebitNoteItem = {
 type DebitNote = {
   id: string;
   noteNumber: string;
+  originalInvoiceId: string;
   supplier: string;
   currency: string;
   date: string;
@@ -23,10 +25,18 @@ type DebitNote = {
   subtotal: number;
   tax: number;
   total: number;
+  balanceBefore: number;
+  balanceAfter: number;
   items: DebitNoteItem[];
 };
 
-type DebitNoteForm = Omit<DebitNote, "id" | "subtotal" | "tax" | "total">;
+type PurchaseInvoiceOption = {
+  id: string;
+  supplier: string;
+  adjustedTotal: number;
+};
+
+type DebitNoteForm = Omit<DebitNote, "id" | "subtotal" | "tax" | "total" | "balanceBefore" | "balanceAfter">;
 
 const STORAGE_KEY = "purchase-debit-notes";
 const START_NUMBER = 100;
@@ -44,6 +54,7 @@ const extractNumber = (noteNumber: string) => Number(noteNumber.split("-")[1] ||
 
 const createEmptyForm = (num: number): DebitNoteForm => ({
   noteNumber: buildNumber(num),
+  originalInvoiceId: "",
   supplier: "",
   currency: "SAR",
   date: new Date().toISOString().split("T")[0],
@@ -55,25 +66,47 @@ const createEmptyForm = (num: number): DebitNoteForm => ({
 export default function PurchaseDebitNotes() {
   const [mode, setMode] = useState<"list" | "create">("list");
   const [rows, setRows] = useState<DebitNote[]>([]);
+  const [invoices, setInvoices] = useState<PurchaseInvoiceOption[]>([]);
   const [nextNumber, setNextNumber] = useState(START_NUMBER);
   const [form, setForm] = useState<DebitNoteForm>(() => createEmptyForm(START_NUMBER));
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    const load = async () => {
+      const [notesResult, invoicesResult] = await Promise.all([
+        supabase
+          .from("invoice_adjustment_notes")
+          .select("id, note_number, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items")
+          .eq("note_type", "purchase_debit")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("purchase_invoices")
+          .select("id, vendor, total, adjusted_total")
+          .order("date", { ascending: false }),
+      ]);
 
-    try {
-      const parsed = JSON.parse(raw) as DebitNote[];
-      setRows(parsed);
-      const max = parsed.reduce((acc, cur) => Math.max(acc, extractNumber(cur.noteNumber)), START_NUMBER - 1);
-      const sequence = max + 1;
-      setNextNumber(sequence);
-      setForm(createEmptyForm(sequence));
-    } catch {
-      setRows([]);
-      setNextNumber(START_NUMBER);
-      setForm(createEmptyForm(START_NUMBER));
-    }
+      if (!notesResult.error) {
+        const parsed = (notesResult.data ?? []).map((row: any) => ({
+          id: String(row.id), noteNumber: String(row.note_number),
+          originalInvoiceId: String(row.original_invoice_id), supplier: String(row.counterparty),
+          currency: String(row.currency), date: String(row.issue_date), orderRef: "", project: "",
+          subtotal: Number(row.subtotal), tax: Number(row.tax), total: Number(row.total),
+          balanceBefore: Number(row.balance_before), balanceAfter: Number(row.balance_after),
+          items: Array.isArray(row.items) ? row.items : [],
+        }));
+        setRows(parsed);
+        const sequence = parsed.reduce((max, note) => Math.max(max, extractNumber(note.noteNumber)), START_NUMBER - 1) + 1;
+        setNextNumber(sequence);
+        setForm(createEmptyForm(sequence));
+      }
+
+      if (!invoicesResult.error) {
+        setInvoices((invoicesResult.data ?? []).map((row: any) => ({
+          id: String(row.id), supplier: String(row.vendor || ""),
+          adjustedTotal: Number(row.adjusted_total ?? String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
+        })));
+      }
+    };
+    load();
   }, []);
 
   const subtotal = useMemo(
@@ -103,30 +136,53 @@ export default function PurchaseDebitNotes() {
     setMode("create");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!form.originalInvoiceId) {
+      toast({ title: "الفاتورة الأصلية مطلوبة", description: "كل إشعار مدين يجب أن يرتبط بفاتورة مشتريات" });
+      return;
+    }
     if (!form.supplier.trim()) {
-      toast({ title: "المورد مطلوب", description: "يرجى إدخال المورد قبل الحفظ" });
+      toast({ title: "المورد مطلوب", description: "اختر الفاتورة الأصلية أولاً" });
+      return;
+    }
+    if (total <= 0) {
+      toast({ title: "مبلغ الإشعار غير صحيح", description: "أضف بنداً بقيمة أكبر من صفر" });
       return;
     }
 
-    const payload: DebitNote = {
-      id: crypto.randomUUID(),
-      ...form,
-      subtotal,
-      tax,
-      total,
-    };
+    const cleanedItems = form.items.filter((item) => item.description.trim() || item.account.trim() || item.unitPrice > 0);
+    const { data, error } = await supabase.rpc("post_invoice_adjustment_note", {
+      p_note_number: form.noteNumber,
+      p_note_type: "purchase_debit",
+      p_original_invoice_id: form.originalInvoiceId,
+      p_counterparty: form.supplier,
+      p_currency: form.currency,
+      p_issue_date: form.date,
+      p_subtotal: subtotal,
+      p_tax: tax,
+      p_total: total,
+      p_items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
+    });
+    if (error) {
+      toast({ title: "تعذر ترحيل الإشعار", description: error.message, variant: "destructive" });
+      return;
+    }
 
-    const updated = [payload, ...rows];
-    setRows(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const invoice = invoices.find((item) => item.id === form.originalInvoiceId)!;
+    const payload: DebitNote = {
+      id: String(data), ...form, subtotal, tax, total,
+      balanceBefore: invoice.adjustedTotal,
+      balanceAfter: invoice.adjustedTotal - total,
+      items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
+    };
+    setRows((current) => [payload, ...current]);
+    setInvoices((current) => current.map((item) => item.id === form.originalInvoiceId ? { ...item, adjustedTotal: payload.balanceAfter } : item));
 
     const sequence = extractNumber(form.noteNumber) + 1;
     setNextNumber(sequence);
     setForm(createEmptyForm(sequence));
     setMode("list");
-
-    toast({ title: "تم حفظ إشعار مدين", description: `تم حفظ ${payload.noteNumber}` });
+    toast({ title: "تم ترحيل إشعار مدين", description: `تم ربط ${payload.noteNumber} بالفاتورة ${payload.originalInvoiceId} وتسجيل القيد المحاسبي` });
   };
 
   return (
@@ -183,20 +239,22 @@ export default function PurchaseDebitNotes() {
                   <thead>
                     <tr className="bg-muted/40">
                       <th className="px-3 py-2">رقم الإشعار</th>
+                      <th className="px-3 py-2">الفاتورة الأصلية</th>
                       <th className="px-3 py-2">المورد</th>
                       <th className="px-3 py-2">التاريخ</th>
-                      <th className="px-3 py-2">العملة</th>
                       <th className="px-3 py-2">الإجمالي</th>
+                      <th className="px-3 py-2">الرصيد بعد الإشعار</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((row) => (
                       <tr key={row.id} className="border-t border-border">
                         <td className="px-3 py-2 font-semibold text-primary">{row.noteNumber}</td>
+                        <td className="px-3 py-2 font-medium">{row.originalInvoiceId}</td>
                         <td className="px-3 py-2">{row.supplier}</td>
                         <td className="px-3 py-2">{row.date}</td>
-                        <td className="px-3 py-2">{row.currency}</td>
-                        <td className="px-3 py-2">{row.total.toFixed(2)} ﷼</td>
+                        <td className="px-3 py-2">{row.total.toFixed(2)} {row.currency}</td>
+                        <td className="px-3 py-2 font-semibold">{row.balanceAfter.toFixed(2)} {row.currency}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -222,12 +280,27 @@ export default function PurchaseDebitNotes() {
                 <Field label="رقم الإشعار">
                   <input value={form.noteNumber} readOnly className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm" />
                 </Field>
-                <Field label="المورد*">
+                <Field label="الفاتورة الأصلية*">
+                  <select
+                    value={form.originalInvoiceId}
+                    onChange={(e) => {
+                      const invoice = invoices.find((item) => item.id === e.target.value);
+                      setForm({ ...form, originalInvoiceId: e.target.value, supplier: invoice?.supplier || "" });
+                    }}
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  >
+                    <option value="">اختر فاتورة مشتريات</option>
+                    {invoices.map((invoice) => (
+                      <option key={invoice.id} value={invoice.id}>{invoice.id} — {invoice.supplier} — الرصيد {invoice.adjustedTotal.toFixed(2)} SAR</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="المورد المرتبط بالفاتورة">
                   <input
                     value={form.supplier}
-                    onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                    placeholder="مطلوب"
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    readOnly
+                    placeholder="يُحدد تلقائياً من الفاتورة"
+                    className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                   />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">

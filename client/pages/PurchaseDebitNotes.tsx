@@ -33,6 +33,7 @@ type DebitNote = {
 type PurchaseInvoiceOption = {
   id: string;
   supplier: string;
+  purchaseOrder: string;
   adjustedTotal: number;
 };
 
@@ -80,7 +81,7 @@ export default function PurchaseDebitNotes() {
           .order("created_at", { ascending: false }),
         supabase
           .from("purchase_invoices")
-          .select("id, vendor, total, adjusted_total")
+          .select("id, vendor, po_number, total, adjusted_total")
           .order("date", { ascending: false }),
       ]);
 
@@ -101,7 +102,9 @@ export default function PurchaseDebitNotes() {
 
       if (!invoicesResult.error) {
         setInvoices((invoicesResult.data ?? []).map((row: any) => ({
-          id: String(row.id), supplier: String(row.vendor || ""),
+          id: String(row.id),
+          supplier: String(row.vendor || "مورد غير محدد"),
+          purchaseOrder: String(row.po_number || ""),
           adjustedTotal: Number(row.adjusted_total ?? String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
         })));
       }
@@ -289,9 +292,11 @@ export default function PurchaseDebitNotes() {
                     }}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   >
-                    <option value="">اختر فاتورة مشتريات</option>
+                    <option value="">اختر رقم الفاتورة واسم المورد</option>
                     {invoices.map((invoice) => (
-                      <option key={invoice.id} value={invoice.id}>{invoice.id} — {invoice.supplier} — الرصيد {invoice.adjustedTotal.toFixed(2)} SAR</option>
+                      <option key={invoice.id} value={invoice.id}>
+                        فاتورة {invoice.id} — المورد: {invoice.supplier}{invoice.purchaseOrder ? ` — أمر الشراء: ${invoice.purchaseOrder}` : ""} — الرصيد: {invoice.adjustedTotal.toFixed(2)} SAR
+                      </option>
                     ))}
                   </select>
                 </Field>

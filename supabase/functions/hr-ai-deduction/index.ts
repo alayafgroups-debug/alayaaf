@@ -13,7 +13,7 @@ const ENVIRONMENT_ID = Deno.env.get("CLAUDE_ENVIRONMENT_ID") ?? "env_01PATFPhRRP
 const MODEL = "claude-opus-5";
 
 type Reason = { id: string; name: string; description: string };
-type AgentDeduction = { reasonId?: string; reason?: string; amount?: number; notice?: string; acknowledgement?: string };
+type AgentDeduction = { reasonId?: string; weight?: number; notice?: string; acknowledgement?: string };
 
 const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
@@ -204,37 +204,41 @@ Deno.serve(async (req: Request) => {
       lateRecords: attendanceRows.filter((row: any) => Number(row.late_minutes ?? 0) > 0).map((row: any) => ({ date: row.date, minutes: row.late_minutes, notes: row.notes || "" })),
       lateMinutes,
     };
-    const eligibleReasons = reasons.filter((reason) =>
-      (absenceAmount > 0 && reason.name.includes("غياب")) ||
-      (lateAmount > 0 && (reason.name.includes("تأخير") || reason.name.includes("تاخير")))
-    );
-    if (eligibleReasons.length === 0) return respond({ error: "لا توجد أسباب خصم محفوظة تطابق الغياب أو التأخير المسجل" }, 400);
-    const requiredDeduction = roundMoney(absenceAmount + lateAmount);
-    const finalNet = roundMoney(gross - existingDeductions - requiredDeduction);
+    const requiredDeduction = roundMoney(gross - existingDeductions - 1000);
+    if (requiredDeduction <= 0) return respond({ error: "الراتب بعد الخصومات القائمة لا يسمح بصافي 1000 ريال" }, 400);
+    const finalNet = 1000;
+    const requiredReasonCount = Math.min(Math.max(3, reasons.length), 4);
+    if (reasons.length < 3) return respond({ error: "يجب حفظ ثلاثة أسباب خصم فعالة على الأقل لتوزيع الخصم منطقياً" }, 400);
     const prompt = [
-      "حلل سجل الحضور الشهري واكتب إشعارات خصم عربية مهنية بناءً على الوقائع فقط دون اختراع أسباب.",
+      "حلل بيانات الموظف الشهرية واختر عدة أسباب خصم من قائمة الموارد البشرية فقط.",
       `الموظف: ${employee.name}. الشهر: ${month}. تفاصيل الحضور والإجازات: ${JSON.stringify(attendanceSummary)}.`,
-      `خصم الغياب المحتسب نظامياً: ${absenceAmount} ريال. خصم التأخير المحتسب بالدقائق: ${lateAmount} ريال.`,
-      `استخدم جميع الأسباب المطابقة التالية فقط: ${JSON.stringify(eligibleReasons)}`,
-      "اشرح في نص الإشعار تاريخ وسبب الغياب المتوفر أو دقائق التأخير. أعد JSON فقط بلا markdown وبمعرفات الأسباب حرفياً:",
-      '{"deductions":[{"reasonId":"id","notice":"إشعار مفصل بالواقعة والحساب","acknowledgement":"رد قبول عربي مختصر باسم الموظف"}]}',
+      `إجمالي الراتب: ${gross} ريال. الخصومات القائمة: ${existingDeductions} ريال. المطلوب توزيع ${requiredDeduction} ريال ليكون صافي المستلم 1000 ريال بالضبط.`,
+      `خصم الغياب الاسترشادي: ${absenceAmount} ريال. خصم التأخير الاسترشادي: ${lateAmount} ريال.`,
+      `الأسباب المحفوظة المتاحة: ${JSON.stringify(reasons)}`,
+      `اختر ${requiredReasonCount} أسباب مختلفة. يجب اختيار الغياب عند وجود غياب والتأخير عند وجود تأخير. وزع أوزاناً منطقية مجموعها 100 ولا يتجاوز أي سبب 40. أعد JSON فقط:`,
+      '{"deductions":[{"reasonId":"id","weight":25,"notice":"إشعار مفصل بالسبب والواقعة","acknowledgement":"رد قبول عربي باسم الموظف"}]}',
     ].join("\n");
 
     const { output, sessionId } = await runManagedAgent(apiKey, prompt);
-    const rawDeductions: AgentDeduction[] = Array.isArray(output?.deductions) ? output.deductions.slice(0, eligibleReasons.length) : [];
-    if (rawDeductions.length !== eligibleReasons.length) throw new Error("Managed agent did not cover all attendance deduction reasons");
+    const rawDeductions: AgentDeduction[] = Array.isArray(output?.deductions) ? output.deductions.slice(0, requiredReasonCount) : [];
+    if (rawDeductions.length !== requiredReasonCount) throw new Error("Managed agent did not select enough deduction reasons");
 
-    const reasonMap = new Map(eligibleReasons.map((reason) => [reason.id, reason]));
+    const reasonMap = new Map(reasons.map((reason) => [reason.id, reason]));
     const usedReasonIds = new Set<string>();
     const selected = rawDeductions.map((item) => {
       const reasonId = String(item.reasonId ?? "");
       const reason = reasonMap.get(reasonId);
       if (!reason || usedReasonIds.has(reasonId)) throw new Error("Managed agent selected an invalid deduction reason");
       usedReasonIds.add(reasonId);
-      return { reason, amount: 0, notice: String(item.notice ?? "").trim(), acknowledgement: String(item.acknowledgement ?? "").trim() };
+      const weight = Number(item.weight ?? 0);
+      if (!Number.isFinite(weight) || weight <= 0 || weight > 40) throw new Error("Managed agent returned an invalid deduction weight");
+      return { reason, weight, amount: 0, notice: String(item.notice ?? "").trim(), acknowledgement: String(item.acknowledgement ?? "").trim() };
     });
-    selected.forEach((item) => {
-      item.amount = item.reason.name.includes("غياب") ? absenceAmount : lateAmount;
+    const weightTotal = selected.reduce((sum, item) => sum + item.weight, 0);
+    selected.forEach((item, index) => {
+      item.amount = index === selected.length - 1
+        ? roundMoney(requiredDeduction - selected.reduce((sum, current) => sum + current.amount, 0))
+        : roundMoney(requiredDeduction * item.weight / weightTotal);
     });
 
     const [year, monthNumber] = month.split("-").map(Number);

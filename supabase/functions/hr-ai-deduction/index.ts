@@ -51,6 +51,24 @@ const anthropicRequest = async (path: string, apiKey: string, init?: RequestInit
   return data;
 };
 
+const readAgentOutput = (events: any) => {
+  const list = Array.isArray(events?.data) ? events.data : Array.isArray(events?.events) ? events.events : [];
+  for (const event of list) {
+    if (!String(event?.type ?? "").startsWith("agent.") || !Array.isArray(event?.content)) continue;
+    const text = event.content
+      .filter((block: any) => block?.type === "text" && block?.text)
+      .map((block: any) => String(block.text))
+      .join("\n");
+    if (!text) continue;
+    try {
+      return extractJson(text);
+    } catch {
+      // The agent may still be streaming an incomplete JSON response.
+    }
+  }
+  return null;
+};
+
 const runManagedAgent = async (apiKey: string, prompt: string) => {
   const session = await anthropicRequest("/sessions", apiKey, {
     method: "POST",
@@ -62,33 +80,30 @@ const runManagedAgent = async (apiKey: string, prompt: string) => {
   });
   if (!session?.id) throw new Error("Anthropic did not return a session ID");
 
-  const deadline = Date.now() + 50_000;
+  const deadline = Date.now() + 52_000;
   let status = String(session.status ?? "running");
-  while (Date.now() < deadline && ["running", "in_progress", "rescheduling"].includes(status)) {
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    const current = await anthropicRequest(`/sessions/${session.id}`, apiKey);
-    status = String(current.status ?? status);
-  }
-  if (["failed", "terminated", "aborted", "canceled", "interrupted"].includes(status)) {
-    throw new Error(`Managed agent session ended with status: ${status}`);
-  }
-  if (["running", "in_progress", "rescheduling"].includes(status)) {
-    throw new Error("Managed agent response timed out");
+  let iteration = 0;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const events = await anthropicRequest(`/sessions/${session.id}/events?limit=30&order=desc`, apiKey);
+    const output = readAgentOutput(events);
+    if (output) return { output, sessionId: String(session.id) };
+
+    iteration += 1;
+    if (iteration % 4 === 0) {
+      const current = await anthropicRequest(`/sessions/${session.id}`, apiKey);
+      status = String(current.status ?? status);
+      if (["failed", "terminated", "aborted", "canceled", "interrupted"].includes(status)) {
+        throw new Error(`Managed agent session ended with status: ${status}`);
+      }
+      if (["idle", "completed"].includes(status)) break;
+    }
   }
 
-  const events = await anthropicRequest(`/sessions/${session.id}/events?limit=100&order=desc`, apiKey);
-  const list = Array.isArray(events?.data) ? events.data : Array.isArray(events?.events) ? events.events : [];
-  const agentEvent = list.find((event: any) =>
-    String(event?.type ?? "").startsWith("agent.") &&
-    Array.isArray(event?.content) &&
-    event.content.some((block: any) => block?.type === "text" && block?.text)
-  );
-  const text = agentEvent?.content
-    ?.filter((block: any) => block?.type === "text")
-    .map((block: any) => String(block.text ?? ""))
-    .join("\n");
-  if (!text) throw new Error("Managed agent returned no text response");
-  return { output: extractJson(text), sessionId: String(session.id) };
+  const finalEvents = await anthropicRequest(`/sessions/${session.id}/events?limit=100&order=desc`, apiKey);
+  const output = readAgentOutput(finalEvents);
+  if (output) return { output, sessionId: String(session.id) };
+  throw new Error(status === "idle" ? "Managed agent returned no valid JSON" : "Managed agent response timed out");
 };
 
 Deno.serve(async (req: Request) => {
@@ -166,15 +181,20 @@ Deno.serve(async (req: Request) => {
     const requiredDeduction = roundMoney(gross - existingDeductions - 1000);
     if (requiredDeduction <= 0) return respond({ error: `راتب الموظف ${employee.name} لا يسمح بخصومات تترك متبقياً قدره 1000 ريال` }, 400);
 
+    const attendanceRows = attendanceResult.data ?? [];
+    const attendanceSummary = {
+      records: attendanceRows.length,
+      absent: attendanceRows.filter((row: any) => ["غائب", "absent"].includes(String(row.status))).length,
+      lateRecords: attendanceRows.filter((row: any) => Number(row.late_minutes ?? 0) > 0).length,
+      lateMinutes: attendanceRows.reduce((sum: number, row: any) => sum + Number(row.late_minutes ?? 0), 0),
+    };
     const prompt = [
-      "أنت وكيل موارد بشرية سعودي. أنشئ توزيع خصومات شهري مهني وقابل للتدقيق.",
-      `الموظف: ${employee.name} (${employee.emp_id})، الوظيفة: ${employee.job_title ?? "غير محدد"}، القسم: ${employee.department ?? "غير محدد"}.`,
-      `الشهر: ${month}. إجمالي الراتب قبل الخصم: ${gross}. الخصومات القائمة: ${existingDeductions}.`,
-      `يجب أن يكون مجموع الخصومات الجديدة بالضبط ${requiredDeduction} ريال ليكون صافي الراتب النهائي 1000 ريال.`,
-      `سجلات الحضور: ${JSON.stringify(attendanceResult.data ?? [])}`,
-      `الأسباب المسموحة فقط: ${JSON.stringify(reasons)}`,
-      "اختر من سبب واحد إلى ثلاثة أسباب فقط. لا تخترع سبباً أو معرفاً. أعد JSON فقط دون markdown بالشكل:",
-      '{"deductions":[{"reasonId":"id","amount":0,"notice":"نص إشعار عربي مهني","acknowledgement":"نص رد قبول عربي باسم الموظف"}]}',
+      "أنشئ إشعارات خصم موارد بشرية عربية مختصرة لموظف سعودي.",
+      `الموظف: ${employee.name}. الشهر: ${month}. ملخص الحضور: ${JSON.stringify(attendanceSummary)}.`,
+      `قيمة الخصم التي سيطبقها النظام: ${requiredDeduction} ريال وصافي الراتب الإلزامي: 1000 ريال.`,
+      `اختر سبباً واحداً أو سببين مختلفين فقط من هذه القائمة: ${JSON.stringify(reasons)}`,
+      "أعد JSON فقط بلا markdown. لا تحسب المبالغ؛ النظام يحسبها. استخدم معرفات القائمة حرفياً:",
+      '{"deductions":[{"reasonId":"id","notice":"إشعار عربي مختصر","acknowledgement":"رد قبول عربي مختصر باسم الموظف"}]}',
     ].join("\n");
 
     const { output, sessionId } = await runManagedAgent(apiKey, prompt);
@@ -182,15 +202,20 @@ Deno.serve(async (req: Request) => {
     if (rawDeductions.length === 0) throw new Error("Managed agent returned no deductions");
 
     const reasonMap = new Map(reasons.map((reason) => [reason.id, reason]));
+    const usedReasonIds = new Set<string>();
     const selected = rawDeductions.map((item) => {
-      const reason = reasonMap.get(String(item.reasonId ?? ""));
-      if (!reason) throw new Error("Managed agent selected an invalid deduction reason");
-      const amount = roundMoney(Number(item.amount));
-      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Managed agent returned an invalid deduction amount");
-      return { reason, amount, notice: String(item.notice ?? "").trim(), acknowledgement: String(item.acknowledgement ?? "").trim() };
+      const reasonId = String(item.reasonId ?? "");
+      const reason = reasonMap.get(reasonId);
+      if (!reason || usedReasonIds.has(reasonId)) throw new Error("Managed agent selected an invalid deduction reason");
+      usedReasonIds.add(reasonId);
+      return { reason, amount: 0, notice: String(item.notice ?? "").trim(), acknowledgement: String(item.acknowledgement ?? "").trim() };
     });
-    const modelTotal = roundMoney(selected.reduce((sum, item) => sum + item.amount, 0));
-    if (Math.abs(modelTotal - requiredDeduction) > 0.01) throw new Error("Managed agent deduction total did not match the required total");
+    const weights = selected.length === 1 ? [1] : selected.length === 2 ? [0.6, 0.4] : [0.45, 0.35, 0.2];
+    selected.forEach((item, index) => {
+      item.amount = index === selected.length - 1
+        ? roundMoney(requiredDeduction - selected.reduce((sum, current) => sum + current.amount, 0))
+        : roundMoney(requiredDeduction * weights[index]);
+    });
 
     const [year, monthNumber] = month.split("-").map(Number);
     const lastDay = new Date(year, monthNumber, 0).getDate();

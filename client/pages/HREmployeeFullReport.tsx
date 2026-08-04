@@ -208,7 +208,7 @@ export default function HREmployeeFullReport() {
       const fromMonth = range.from.slice(0, 7);
       const toMonth = range.to.slice(0, 7);
 
-      const [attendanceResult, payrollResult, reasonsResult, primaryEmailResult] = await Promise.all([
+      const [attendanceResult, payrollResult] = await Promise.all([
         supabase
           .from("attendance")
           .select("id, emp_id, date, check_in, check_out, status, late_minutes, notes")
@@ -223,22 +223,10 @@ export default function HREmployeeFullReport() {
           .gte("month", fromMonth)
           .lte("month", toMonth)
           .order("month"),
-        supabase
-          .from("hr_config_items")
-          .select("id, name_ar, description")
-          .eq("config_type", "deduction_reason")
-          .eq("status", "فعال"),
-        supabase
-          .from("hr_config_items")
-          .select("value")
-          .eq("config_type", "primary_email_domain")
-          .limit(1)
-          .maybeSingle(),
       ]);
 
       if (attendanceResult.error) throw attendanceResult.error;
       if (payrollResult.error) throw payrollResult.error;
-      if (reasonsResult.error) throw reasonsResult.error;
 
       const attendance: Attendance[] = (attendanceResult.data ?? []).map((row: any) => ({
         id: String(row.id ?? ""),
@@ -262,14 +250,6 @@ export default function HREmployeeFullReport() {
         netSalary: Number(row.net_salary ?? 0),
         notes: String(row.notes ?? ""),
       }));
-
-      const savedReasons = (reasonsResult.data ?? []).map((row: any) => ({
-        id: String(row.id),
-        name: String(row.name_ar || "سبب خصم"),
-        description: String(row.description || ""),
-      }));
-      const primaryEmail = String(primaryEmailResult.data?.value || "hr.alayaf.com");
-      const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
 
       const generatedReports = await Promise.all(selectedEmployees.map(async (employee) => {
         const employeeKeys = new Set([employee.id, employee.empId]);
@@ -307,106 +287,23 @@ export default function HREmployeeFullReport() {
           };
         }
 
-        const emailResult = await supabase
-          .from("employee_emails")
-          .select("generated_email")
-          .eq("status", "active")
-          .eq("emp_id", employee.empId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (emailResult.error || !emailResult.data?.generated_email) {
-          throw new Error(`لا يوجد بريد مولد ومحفوظ للموظف ${employee.name}`);
-        }
-        if (savedReasons.length === 0) {
-          throw new Error("أضف أسباب خصومات محفوظة من إعدادات الخصومات والإيميلات أولاً");
-        }
-
-        const generatedEmail = String(emailResult.data.generated_email);
-        const agentDeductionTotal = Math.round((payrollTotals.gross - payrollTotals.deductions - 1000) * 100) / 100;
-        if (agentDeductionTotal <= 0) {
-          throw new Error(`راتب الموظف ${employee.name} لا يسمح بخصومات تترك متبقياً قدره 1000 ريال`);
-        }
-
-        await supabase
-          .from("employee_mail_messages")
-          .delete()
-          .eq("emp_id", employee.empId)
-          .eq("source", "ai_report")
-          .eq("report_month", month);
-
-        const chosenReasons = savedReasons.slice(0, Math.min(3, savedReasons.length));
-        const weights = chosenReasons.length === 1 ? [1] : chosenReasons.length === 2 ? [0.6, 0.4] : [0.45, 0.35, 0.2];
-        const amounts = weights.map((weight, index) => index === weights.length - 1
-          ? 0
-          : Math.round(agentDeductionTotal * weight * 100) / 100);
-        amounts[amounts.length - 1] = Math.round((agentDeductionTotal - amounts.reduce((sum, amount) => sum + amount, 0)) * 100) / 100;
-        const preferredDays = [4, 14, 24];
-        const deductionItems: DeductionItem[] = [];
-
-        for (let index = 0; index < chosenReasons.length; index += 1) {
-          const reason = chosenReasons[index];
-          const amount = amounts[index];
-          const noticeDay = Math.min(preferredDays[index], Math.max(1, lastDay - 1));
-          const replyDay = Math.min(noticeDay + 1, lastDay);
-          const noticeDate = `${month}-${String(noticeDay).padStart(2, "0")}`;
-          const replyDate = `${month}-${String(replyDay).padStart(2, "0")}`;
-          const noticeBody = `مرحباً ${employee.name}،\n\nيفيد إشعار الموارد البشرية بتسجيل خصم بمبلغ ${money(amount)} ريال بسبب: ${reason.name}.\n${reason.description || "يرجى مراجعة الموارد البشرية عند الحاجة إلى تفاصيل إضافية."}\n\nتم إنشاء هذه الرسالة بواسطة نموذج الوكيل الذكي الخاص بالتقرير الشهري.`;
-          const noticeResult = await supabase
-            .from("employee_mail_messages")
-            .insert([{
-              emp_id: employee.empId,
-              emp_name: employee.name,
-              from_email: primaryEmail,
-              to_email: generatedEmail,
-              subject: `إشعار خصم بمبلغ ${money(amount)} ريال — ${reason.name}`,
-              body: noticeBody,
-              message_kind: "deduction_notice",
-              deduction_reason_id: reason.id,
-              deduction_amount: amount,
-              source: "ai_report",
-              report_month: month,
-              created_at: `${noticeDate}T09:00:00+03:00`,
-            }])
-            .select("id")
-            .single();
-          if (noticeResult.error) throw noticeResult.error;
-
-          const replyBody = `السلام عليكم،\n\nتم استلام إشعار الخصم بمبلغ ${money(amount)} ريال والخاص بسبب: ${reason.name}. أفيدكم بقبول الخصم وتأكيد استلام الإشعار.\n\nمع التحية،\n${employee.name}`;
-          const replyResult = await supabase.from("employee_mail_messages").insert([{
-            emp_id: employee.empId,
-            emp_name: employee.name,
-            from_email: generatedEmail,
-            to_email: primaryEmail,
-            subject: `رد وقبول: ${reason.name}`,
-            body: replyBody,
-            message_kind: "employee_reply",
-            deduction_reason_id: reason.id,
-            deduction_amount: amount,
-            source: "ai_report",
-            report_month: month,
-            parent_message_id: noticeResult.data.id,
-            created_at: `${replyDate}T10:00:00+03:00`,
-          }]);
-          if (replyResult.error) throw replyResult.error;
-
-          deductionItems.push({
-            title: "خصم عبر الوكيل الذكي",
-            amount,
-            reason: reason.name,
-            notification: `أُرسل إلى ${generatedEmail} بتاريخ ${formatDate(noticeDate)}`,
-            acknowledgement: `تم قبول الخصم والرد بتاريخ ${formatDate(replyDate)}`,
-          });
+        const { data: aiResult, error: aiError } = await supabase.functions.invoke("hr-ai-deduction", {
+          body: { empId: employee.empId, month },
+        });
+        if (aiError) throw aiError;
+        if (aiResult?.error) throw new Error(String(aiResult.error));
+        if (!Array.isArray(aiResult?.deductionItems) || Number(aiResult?.finalNet) !== 1000) {
+          throw new Error(`استجابة الوكيل الذكي غير صالحة للموظف ${employee.name}`);
         }
 
         return {
           employee,
           attendance: employeeAttendance,
           payroll: employeePayroll,
-          deductionItems,
-          generatedEmail,
+          deductionItems: aiResult.deductionItems as DeductionItem[],
+          generatedEmail: String(aiResult.generatedEmail ?? ""),
           finalNet: 1000,
-          isExample: true,
+          isExample: false,
         };
       }));
 

@@ -210,28 +210,46 @@ Deno.serve(async (req: Request) => {
     const requiredReasonCount = Math.min(Math.max(3, reasons.length), 4);
     if (reasons.length < 3) return respond({ error: "يجب حفظ ثلاثة أسباب خصم فعالة على الأقل لتوزيع الخصم منطقياً" }, 400);
     const compactReasons = reasons.map((reason) => ({ id: reason.id, name: reason.name }));
+    const responseExample = Array.from({ length: requiredReasonCount }, (_, index) => ({ reasonId: `reason-id-${index + 1}`, weight: requiredReasonCount === 4 ? 25 : [40, 35, 25][index] }));
     const prompt = [
-      `اختر ${requiredReasonCount} أسباب خصم مختلفة للموظف ${employee.name} من القائمة فقط: ${JSON.stringify(compactReasons)}.`,
+      `اختر بالضبط ${requiredReasonCount} أسباب خصم مختلفة للموظف ${employee.name} من القائمة فقط: ${JSON.stringify(compactReasons)}.`,
       `الوقائع: غياب ${deductibleAbsences.length} يوم، تأخير ${lateMinutes} دقيقة، والمبلغ المطلوب توزيعه ${requiredDeduction} ريال لصافي 1000.`,
-      "اختر الغياب والتأخير عند وجودهما. أعد JSON فقط بلا شرح. مجموع الأوزان 100 وكل وزن لا يتجاوز 40:",
-      '{"deductions":[{"reasonId":"id","weight":25}]}',
+      `يجب أن تحتوي deductions على ${requiredReasonCount} عناصر مختلفة. اختر سبب الغياب وسبب التأخير عند وجود الواقعة. أعد JSON فقط بلا شرح. مجموع الأوزان 100 وكل وزن لا يتجاوز 40:`,
+      JSON.stringify({ deductions: responseExample }),
     ].join("\n");
 
     const { output, sessionId } = await runManagedAgent(apiKey, prompt);
-    const rawDeductions: AgentDeduction[] = Array.isArray(output?.deductions) ? output.deductions.slice(0, requiredReasonCount) : [];
-    if (rawDeductions.length !== requiredReasonCount) throw new Error("Managed agent did not select enough deduction reasons");
-
+    const rawDeductions: AgentDeduction[] = Array.isArray(output?.deductions) ? output.deductions : [];
     const reasonMap = new Map(reasons.map((reason) => [reason.id, reason]));
-    const usedReasonIds = new Set<string>();
-    const selected = rawDeductions.map((item) => {
+    const agentChoices = new Map<string, number>();
+    rawDeductions.forEach((item) => {
       const reasonId = String(item.reasonId ?? "");
-      const reason = reasonMap.get(reasonId);
-      if (!reason || usedReasonIds.has(reasonId)) throw new Error("Managed agent selected an invalid deduction reason");
-      usedReasonIds.add(reasonId);
       const weight = Number(item.weight ?? 0);
-      if (!Number.isFinite(weight) || weight <= 0 || weight > 40) throw new Error("Managed agent returned an invalid deduction weight");
-      return { reason, weight, amount: 0, notice: String(item.notice ?? "").trim(), acknowledgement: String(item.acknowledgement ?? "").trim() };
+      if (reasonMap.has(reasonId) && !agentChoices.has(reasonId)) agentChoices.set(reasonId, weight);
     });
+
+    const selectedReasonIds: string[] = [];
+    const addReason = (reason?: Reason) => {
+      if (reason && !selectedReasonIds.includes(reason.id) && selectedReasonIds.length < requiredReasonCount) selectedReasonIds.push(reason.id);
+    };
+    if (deductibleAbsences.length > 0) addReason(reasons.find((reason) => reason.name.includes("غياب")));
+    if (lateMinutes > 0) addReason(reasons.find((reason) => reason.name.includes("تأخير") || reason.name.includes("تاخير")));
+    agentChoices.forEach((_weight, reasonId) => addReason(reasonMap.get(reasonId)));
+    reasons.forEach((reason) => addReason(reason));
+
+    if (selectedReasonIds.length !== requiredReasonCount) throw new Error("Not enough active deduction reasons");
+    const agentWeightsAreUsable = selectedReasonIds.every((id) => {
+      const weight = agentChoices.get(id);
+      return Number.isFinite(weight) && Number(weight) > 0 && Number(weight) <= 40;
+    }) && Math.abs(selectedReasonIds.reduce((sum, id) => sum + Number(agentChoices.get(id)), 0) - 100) < 0.01;
+    const fallbackWeights = requiredReasonCount === 4 ? [40, 30, 20, 10] : [40, 35, 25];
+    const selected = selectedReasonIds.map((reasonId, index) => ({
+      reason: reasonMap.get(reasonId)!,
+      weight: agentWeightsAreUsable ? Number(agentChoices.get(reasonId)) : fallbackWeights[index],
+      amount: 0,
+      notice: "",
+      acknowledgement: "",
+    }));
     const weightTotal = selected.reduce((sum, item) => sum + item.weight, 0);
     selected.forEach((item, index) => {
       item.amount = index === selected.length - 1

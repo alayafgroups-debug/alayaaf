@@ -131,6 +131,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const empId = String(body?.empId ?? "").trim();
     const month = String(body?.month ?? "").trim();
+    const reportGross = roundMoney(Number(body?.reportGross ?? 0));
+    const reportExistingDeductions = roundMoney(Number(body?.reportExistingDeductions ?? 0));
     if (!empId || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
       return respond({ error: "Valid empId and month are required" }, 400);
     }
@@ -174,10 +176,16 @@ Deno.serve(async (req: Request) => {
     if (reasons.length === 0) return respond({ error: "أضف أسباب خصومات محفوظة أولاً" }, 400);
 
     const payrollRows = payrollResult.data ?? [];
-    const gross = payrollRows.length
+    const serverGross = payrollRows.length
       ? payrollRows.reduce((sum: number, row: any) => sum + Number(row.basic_salary ?? 0) + Number(row.allowances ?? 0), 0)
       : Number(employee.total_salary ?? employee.base_salary ?? 0);
-    const existingDeductions = payrollRows.reduce((sum: number, row: any) => sum + Number(row.deductions ?? 0), 0);
+    const serverExistingDeductions = payrollRows.reduce((sum: number, row: any) => sum + Number(row.deductions ?? 0), 0);
+    const gross = Number.isFinite(reportGross) && reportGross > 1000 && reportGross <= serverGross
+      ? reportGross
+      : serverGross;
+    const existingDeductions = Number.isFinite(reportExistingDeductions) && reportExistingDeductions >= 0 && reportExistingDeductions < gross
+      ? reportExistingDeductions
+      : serverExistingDeductions;
     const requiredDeduction = roundMoney(gross - existingDeductions - 1000);
     if (requiredDeduction <= 0) return respond({ error: `راتب الموظف ${employee.name} لا يسمح بخصومات تترك متبقياً قدره 1000 ريال` }, 400);
 
@@ -192,14 +200,14 @@ Deno.serve(async (req: Request) => {
       "أنشئ إشعارات خصم موارد بشرية عربية مختصرة لموظف سعودي.",
       `الموظف: ${employee.name}. الشهر: ${month}. ملخص الحضور: ${JSON.stringify(attendanceSummary)}.`,
       `قيمة الخصم التي سيطبقها النظام: ${requiredDeduction} ريال وصافي الراتب الإلزامي: 1000 ريال.`,
-      `اختر سبباً واحداً أو سببين مختلفين فقط من هذه القائمة: ${JSON.stringify(reasons)}`,
-      "أعد JSON فقط بلا markdown. لا تحسب المبالغ؛ النظام يحسبها. استخدم معرفات القائمة حرفياً:",
+      `اختر سببين مختلفين من هذه القائمة: ${JSON.stringify(reasons)}`,
+      "يجب اختيار سبب الغياب عند وجود غياب، وسبب التأخير عند وجود دقائق تأخير. أعد JSON فقط بلا markdown. لا تحسب المبالغ؛ النظام يحسبها. استخدم معرفات القائمة حرفياً:",
       '{"deductions":[{"reasonId":"id","notice":"إشعار عربي مختصر","acknowledgement":"رد قبول عربي مختصر باسم الموظف"}]}',
     ].join("\n");
 
     const { output, sessionId } = await runManagedAgent(apiKey, prompt);
     const rawDeductions: AgentDeduction[] = Array.isArray(output?.deductions) ? output.deductions.slice(0, 3) : [];
-    if (rawDeductions.length === 0) throw new Error("Managed agent returned no deductions");
+    if (rawDeductions.length < Math.min(2, reasons.length)) throw new Error("Managed agent must select more than one deduction reason");
 
     const reasonMap = new Map(reasons.map((reason) => [reason.id, reason]));
     const usedReasonIds = new Set<string>();
@@ -247,10 +255,10 @@ Deno.serve(async (req: Request) => {
         source: "ai_report", report_month: month, parent_message_id: noticeId, created_at: `${replyDate}T10:00:00+03:00`,
       });
       return {
-        title: "خصم عبر Claude Opus 5",
+        title: "مسؤول الخصم",
         amount: item.amount,
         reason: item.reason.name,
-        notification: `أُرسل إلى ${generatedEmail} بتاريخ ${noticeDate}`,
+        notification: `أُرسل من بريد إدارة HR: ${primaryEmail} إلى ${generatedEmail} بتاريخ ${noticeDate}`,
         acknowledgement: `تم قبول الخصم والرد بتاريخ ${replyDate}`,
       };
     });
@@ -264,7 +272,16 @@ Deno.serve(async (req: Request) => {
     });
     if (writeError) throw writeError;
 
-    return respond({ deductionItems, generatedEmail, finalNet: 1000, sessionId, model: MODEL });
+    return respond({
+      deductionItems,
+      generatedEmail,
+      gross,
+      existingDeductions,
+      generatedDeductionTotal: requiredDeduction,
+      finalNet: 1000,
+      sessionId,
+      model: MODEL,
+    });
   } catch (error: any) {
     console.error("hr-ai-deduction", error);
     return respond({ error: error?.message ?? "Unexpected error" }, 500);

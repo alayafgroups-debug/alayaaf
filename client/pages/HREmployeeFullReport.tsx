@@ -288,12 +288,25 @@ export default function HREmployeeFullReport() {
         }
 
         const { data: aiResult, error: aiError } = await supabase.functions.invoke("hr-ai-deduction", {
-          body: { empId: employee.empId, month },
+          body: {
+            empId: employee.empId,
+            month,
+            reportGross: payrollTotals.gross,
+            reportExistingDeductions: payrollTotals.deductions,
+          },
         });
         if (aiError) throw aiError;
         if (aiResult?.error) throw new Error(String(aiResult.error));
         if (!Array.isArray(aiResult?.deductionItems) || Number(aiResult?.finalNet) !== 1000) {
           throw new Error(`استجابة الوكيل الذكي غير صالحة للموظف ${employee.name}`);
+        }
+        const generatedTotal = aiResult.deductionItems.reduce(
+          (sum: number, item: DeductionItem) => sum + Number(item.amount || 0),
+          0,
+        );
+        const expectedTotal = Math.round((payrollTotals.gross - payrollTotals.deductions - 1000) * 100) / 100;
+        if (Math.abs(generatedTotal - expectedTotal) > 0.01 || generatedTotal > payrollTotals.gross) {
+          throw new Error(`قيمة الخصم لا تتطابق مع راتب الموظف ${employee.name}`);
         }
 
         return {

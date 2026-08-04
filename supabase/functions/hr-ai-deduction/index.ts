@@ -80,7 +80,7 @@ const runManagedAgent = async (apiKey: string, prompt: string) => {
   });
   if (!session?.id) throw new Error("Anthropic did not return a session ID");
 
-  const deadline = Date.now() + 52_000;
+  const deadline = Date.now() + 44_000;
   let status = String(session.status ?? "running");
   let iteration = 0;
   while (Date.now() < deadline) {
@@ -209,14 +209,12 @@ Deno.serve(async (req: Request) => {
     const finalNet = 1000;
     const requiredReasonCount = Math.min(Math.max(3, reasons.length), 4);
     if (reasons.length < 3) return respond({ error: "يجب حفظ ثلاثة أسباب خصم فعالة على الأقل لتوزيع الخصم منطقياً" }, 400);
+    const compactReasons = reasons.map((reason) => ({ id: reason.id, name: reason.name }));
     const prompt = [
-      "حلل بيانات الموظف الشهرية واختر عدة أسباب خصم من قائمة الموارد البشرية فقط.",
-      `الموظف: ${employee.name}. الشهر: ${month}. تفاصيل الحضور والإجازات: ${JSON.stringify(attendanceSummary)}.`,
-      `إجمالي الراتب: ${gross} ريال. الخصومات القائمة: ${existingDeductions} ريال. المطلوب توزيع ${requiredDeduction} ريال ليكون صافي المستلم 1000 ريال بالضبط.`,
-      `خصم الغياب الاسترشادي: ${absenceAmount} ريال. خصم التأخير الاسترشادي: ${lateAmount} ريال.`,
-      `الأسباب المحفوظة المتاحة: ${JSON.stringify(reasons)}`,
-      `اختر ${requiredReasonCount} أسباب مختلفة. يجب اختيار الغياب عند وجود غياب والتأخير عند وجود تأخير. وزع أوزاناً منطقية مجموعها 100 ولا يتجاوز أي سبب 40. أعد JSON فقط:`,
-      '{"deductions":[{"reasonId":"id","weight":25,"notice":"إشعار مفصل بالسبب والواقعة","acknowledgement":"رد قبول عربي باسم الموظف"}]}',
+      `اختر ${requiredReasonCount} أسباب خصم مختلفة للموظف ${employee.name} من القائمة فقط: ${JSON.stringify(compactReasons)}.`,
+      `الوقائع: غياب ${deductibleAbsences.length} يوم، تأخير ${lateMinutes} دقيقة، والمبلغ المطلوب توزيعه ${requiredDeduction} ريال لصافي 1000.`,
+      "اختر الغياب والتأخير عند وجودهما. أعد JSON فقط بلا شرح. مجموع الأوزان 100 وكل وزن لا يتجاوز 40:",
+      '{"deductions":[{"reasonId":"id","weight":25}]}',
     ].join("\n");
 
     const { output, sessionId } = await runManagedAgent(apiKey, prompt);
@@ -243,7 +241,7 @@ Deno.serve(async (req: Request) => {
 
     const [year, monthNumber] = month.split("-").map(Number);
     const lastDay = new Date(year, monthNumber, 0).getDate();
-    const preferredDays = [4, 14, 24];
+    const preferredDays = [4, 11, 18, 25];
     const generatedEmail = String(emailResult.data.generated_email);
     const primaryEmail = String(primaryEmailResult.data?.value || "hr.alayaf.com");
     const messages: Record<string, unknown>[] = [];
@@ -255,8 +253,13 @@ Deno.serve(async (req: Request) => {
       const noticeId = crypto.randomUUID();
       const replyId = crypto.randomUUID();
       const amountText = item.amount.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const noticeBody = item.notice || `مرحباً ${employee.name}،\n\nتم تسجيل خصم بمبلغ ${amountText} ريال بسبب: ${item.reason.name}.`;
-      const acknowledgementBody = item.acknowledgement || `السلام عليكم،\n\nأؤكد استلام وقبول إشعار الخصم بسبب: ${item.reason.name}.\n\n${employee.name}`;
+      const attendanceDetail = item.reason.name.includes("غياب")
+        ? `سجل الشهر يتضمن ${deductibleAbsences.length} يوم غياب غير مغطى بإجازة معتمدة.`
+        : item.reason.name.includes("تأخير") || item.reason.name.includes("تاخير")
+          ? `سجل الشهر يتضمن تأخيراً بإجمالي ${lateMinutes} دقيقة.`
+          : "تم اختيار السبب بواسطة وكيل Claude من قائمة أسباب الخصم المعتمدة.";
+      const noticeBody = `مرحباً ${employee.name}،\n\nتم تسجيل خصم بمبلغ ${amountText} ريال بسبب: ${item.reason.name}.\n${attendanceDetail}`;
+      const acknowledgementBody = `السلام عليكم،\n\nأؤكد استلام وقبول إشعار الخصم بسبب: ${item.reason.name}.\n\n${employee.name}`;
 
       messages.push({
         id: noticeId, emp_id: empId, emp_name: employee.name, from_email: primaryEmail, to_email: generatedEmail,

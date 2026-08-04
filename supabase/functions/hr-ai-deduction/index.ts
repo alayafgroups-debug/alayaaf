@@ -153,13 +153,14 @@ Deno.serve(async (req: Request) => {
     const permissions = role?.permissions && typeof role.permissions === "object" ? role.permissions : {};
     if (!canManageReports(permissions as Record<string, unknown>)) return respond({ error: "Forbidden" }, 403);
 
-    const [employeeResult, payrollResult, attendanceResult, reasonsResult, emailResult, primaryEmailResult] = await Promise.all([
-      adminClient.from("employees").select("id, emp_id, name, nationality, job_title, department, base_salary, total_salary").eq("emp_id", empId).maybeSingle(),
+    const [employeeResult, payrollResult, attendanceResult, reasonsResult, emailResult, primaryEmailResult, leavesResult] = await Promise.all([
+      adminClient.from("employees").select("id, emp_id, name, nationality, job_title, department, base_salary, total_salary, daily_hours").eq("emp_id", empId).maybeSingle(),
       adminClient.from("payroll").select("basic_salary, allowances, deductions, net_salary, notes").eq("emp_id", empId).eq("month", month),
       adminClient.from("attendance").select("date, check_in, check_out, status, late_minutes, notes").eq("emp_id", empId).gte("date", `${month}-01`).lte("date", `${month}-31`).order("date"),
       adminClient.from("hr_config_items").select("id, name_ar, description").eq("config_type", "deduction_reason").eq("status", "فعال").order("sort_order"),
       adminClient.from("employee_emails").select("generated_email").eq("emp_id", empId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       adminClient.from("hr_config_items").select("value").eq("config_type", "primary_email_domain").limit(1).maybeSingle(),
+      adminClient.from("leave_requests").select("leave_type, start_date, end_date, status, notes, admin_note").eq("emp_id", empId).lte("start_date", `${month}-31`).gte("end_date", `${month}-01`),
     ]);
 
     if (employeeResult.error || !employeeResult.data) return respond({ error: "Employee not found" }, 404);
@@ -186,30 +187,44 @@ Deno.serve(async (req: Request) => {
     const existingDeductions = Number.isFinite(reportExistingDeductions) && reportExistingDeductions >= 0 && reportExistingDeductions < gross
       ? reportExistingDeductions
       : serverExistingDeductions;
-    const requiredDeduction = roundMoney(gross - existingDeductions - 1000);
-    if (requiredDeduction <= 0) return respond({ error: `راتب الموظف ${employee.name} لا يسمح بخصومات تترك متبقياً قدره 1000 ريال` }, 400);
-
     const attendanceRows = attendanceResult.data ?? [];
+    const approvedLeaves = (leavesResult.data ?? []).filter((leave: any) => ["موافق", "موافق عليها", "معتمد", "approved"].includes(String(leave.status).toLowerCase()));
+    const absentRows = attendanceRows.filter((row: any) => ["غائب", "absent"].includes(String(row.status).toLowerCase()));
+    const deductibleAbsences = absentRows.filter((row: any) => !approvedLeaves.some((leave: any) => String(leave.start_date) <= String(row.date) && String(leave.end_date) >= String(row.date)));
+    const lateMinutes = attendanceRows.reduce((sum: number, row: any) => sum + Math.max(0, Number(row.late_minutes ?? 0)), 0);
+    const dailyHours = Math.max(1, Number(employee.daily_hours ?? 8));
+    const absenceAmount = roundMoney((gross / 30) * deductibleAbsences.length);
+    const lateAmount = roundMoney((gross / 30 / dailyHours / 60) * lateMinutes);
     const attendanceSummary = {
       records: attendanceRows.length,
-      absent: attendanceRows.filter((row: any) => ["غائب", "absent"].includes(String(row.status))).length,
-      lateRecords: attendanceRows.filter((row: any) => Number(row.late_minutes ?? 0) > 0).length,
-      lateMinutes: attendanceRows.reduce((sum: number, row: any) => sum + Number(row.late_minutes ?? 0), 0),
+      present: attendanceRows.filter((row: any) => Boolean(row.check_in) && !["غائب", "absent"].includes(String(row.status).toLowerCase())).length,
+      absentDates: absentRows.map((row: any) => ({ date: row.date, notes: row.notes || "لا يوجد سبب مسجل" })),
+      approvedLeaves,
+      deductibleAbsentDays: deductibleAbsences.length,
+      lateRecords: attendanceRows.filter((row: any) => Number(row.late_minutes ?? 0) > 0).map((row: any) => ({ date: row.date, minutes: row.late_minutes, notes: row.notes || "" })),
+      lateMinutes,
     };
+    const eligibleReasons = reasons.filter((reason) =>
+      (absenceAmount > 0 && reason.name.includes("غياب")) ||
+      (lateAmount > 0 && (reason.name.includes("تأخير") || reason.name.includes("تاخير")))
+    );
+    if (eligibleReasons.length === 0) return respond({ error: "لا توجد أسباب خصم محفوظة تطابق الغياب أو التأخير المسجل" }, 400);
+    const requiredDeduction = roundMoney(absenceAmount + lateAmount);
+    const finalNet = roundMoney(gross - existingDeductions - requiredDeduction);
     const prompt = [
-      "أنشئ إشعارات خصم موارد بشرية عربية مختصرة لموظف سعودي.",
-      `الموظف: ${employee.name}. الشهر: ${month}. ملخص الحضور: ${JSON.stringify(attendanceSummary)}.`,
-      `قيمة الخصم التي سيطبقها النظام: ${requiredDeduction} ريال وصافي الراتب الإلزامي: 1000 ريال.`,
-      `اختر سببين مختلفين من هذه القائمة: ${JSON.stringify(reasons)}`,
-      "يجب اختيار سبب الغياب عند وجود غياب، وسبب التأخير عند وجود دقائق تأخير. أعد JSON فقط بلا markdown. لا تحسب المبالغ؛ النظام يحسبها. استخدم معرفات القائمة حرفياً:",
-      '{"deductions":[{"reasonId":"id","notice":"إشعار عربي مختصر","acknowledgement":"رد قبول عربي مختصر باسم الموظف"}]}',
+      "حلل سجل الحضور الشهري واكتب إشعارات خصم عربية مهنية بناءً على الوقائع فقط دون اختراع أسباب.",
+      `الموظف: ${employee.name}. الشهر: ${month}. تفاصيل الحضور والإجازات: ${JSON.stringify(attendanceSummary)}.`,
+      `خصم الغياب المحتسب نظامياً: ${absenceAmount} ريال. خصم التأخير المحتسب بالدقائق: ${lateAmount} ريال.`,
+      `استخدم جميع الأسباب المطابقة التالية فقط: ${JSON.stringify(eligibleReasons)}`,
+      "اشرح في نص الإشعار تاريخ وسبب الغياب المتوفر أو دقائق التأخير. أعد JSON فقط بلا markdown وبمعرفات الأسباب حرفياً:",
+      '{"deductions":[{"reasonId":"id","notice":"إشعار مفصل بالواقعة والحساب","acknowledgement":"رد قبول عربي مختصر باسم الموظف"}]}',
     ].join("\n");
 
     const { output, sessionId } = await runManagedAgent(apiKey, prompt);
-    const rawDeductions: AgentDeduction[] = Array.isArray(output?.deductions) ? output.deductions.slice(0, 3) : [];
-    if (rawDeductions.length < Math.min(2, reasons.length)) throw new Error("Managed agent must select more than one deduction reason");
+    const rawDeductions: AgentDeduction[] = Array.isArray(output?.deductions) ? output.deductions.slice(0, eligibleReasons.length) : [];
+    if (rawDeductions.length !== eligibleReasons.length) throw new Error("Managed agent did not cover all attendance deduction reasons");
 
-    const reasonMap = new Map(reasons.map((reason) => [reason.id, reason]));
+    const reasonMap = new Map(eligibleReasons.map((reason) => [reason.id, reason]));
     const usedReasonIds = new Set<string>();
     const selected = rawDeductions.map((item) => {
       const reasonId = String(item.reasonId ?? "");
@@ -218,11 +233,8 @@ Deno.serve(async (req: Request) => {
       usedReasonIds.add(reasonId);
       return { reason, amount: 0, notice: String(item.notice ?? "").trim(), acknowledgement: String(item.acknowledgement ?? "").trim() };
     });
-    const weights = selected.length === 1 ? [1] : selected.length === 2 ? [0.6, 0.4] : [0.45, 0.35, 0.2];
-    selected.forEach((item, index) => {
-      item.amount = index === selected.length - 1
-        ? roundMoney(requiredDeduction - selected.reduce((sum, current) => sum + current.amount, 0))
-        : roundMoney(requiredDeduction * weights[index]);
+    selected.forEach((item) => {
+      item.amount = item.reason.name.includes("غياب") ? absenceAmount : lateAmount;
     });
 
     const [year, monthNumber] = month.split("-").map(Number);
@@ -278,7 +290,7 @@ Deno.serve(async (req: Request) => {
       gross,
       existingDeductions,
       generatedDeductionTotal: requiredDeduction,
-      finalNet: 1000,
+      finalNet,
       sessionId,
       model: MODEL,
     });

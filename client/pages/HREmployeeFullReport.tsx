@@ -297,14 +297,14 @@ export default function HREmployeeFullReport() {
         });
         if (aiError) throw aiError;
         if (aiResult?.error) throw new Error(String(aiResult.error));
-        if (!Array.isArray(aiResult?.deductionItems) || Number(aiResult?.finalNet) !== 1000) {
+        if (!Array.isArray(aiResult?.deductionItems) || !Number.isFinite(Number(aiResult?.finalNet))) {
           throw new Error(`استجابة الوكيل الذكي غير صالحة للموظف ${employee.name}`);
         }
         const generatedTotal = aiResult.deductionItems.reduce(
           (sum: number, item: DeductionItem) => sum + Number(item.amount || 0),
           0,
         );
-        const expectedTotal = Math.round((payrollTotals.gross - payrollTotals.deductions - 1000) * 100) / 100;
+        const expectedTotal = Number(aiResult.generatedDeductionTotal ?? generatedTotal);
         if (Math.abs(generatedTotal - expectedTotal) > 0.01 || generatedTotal > payrollTotals.gross) {
           throw new Error(`قيمة الخصم لا تتطابق مع راتب الموظف ${employee.name}`);
         }
@@ -315,7 +315,7 @@ export default function HREmployeeFullReport() {
           payroll: employeePayroll,
           deductionItems: aiResult.deductionItems as DeductionItem[],
           generatedEmail: String(aiResult.generatedEmail ?? ""),
-          finalNet: 1000,
+          finalNet: Number(aiResult.finalNet),
           isExample: false,
         };
       }));

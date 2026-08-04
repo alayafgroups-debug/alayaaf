@@ -84,8 +84,7 @@ export default function HRAttendanceMonthlyReport() {
       const attMap: Record<string, Record<number, any>> = {};
       (attRecords || []).forEach((r: any) => {
         if (!attMap[r.emp_id]) attMap[r.emp_id] = {};
-        const date = new Date(r.date);
-        const day = date.getDate();
+        const day = Number(String(r.date).slice(8, 10));
         attMap[r.emp_id][day] = {
           status: r.status || "غياب",
           notes: r.notes || "",

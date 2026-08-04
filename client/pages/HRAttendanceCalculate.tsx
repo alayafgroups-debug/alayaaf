@@ -45,8 +45,8 @@ export default function HRAttendanceCalculate() {
         const key = String(r.emp_id ?? "");
         if (!key) return;
         if (!attMap[key]) attMap[key] = {};
-        const d = new Date(r.date).getDate();
-        attMap[key][d] = r.status;
+        const d = Number(String(r.date).slice(8, 10));
+        if (Number.isFinite(d)) attMap[key][d] = r.status;
       });
 
       const today = new Date();

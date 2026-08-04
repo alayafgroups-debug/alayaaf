@@ -62,6 +62,44 @@ interface EmployeeRequest {
   adminNote: string;
 }
 
+interface AttendanceOverview {
+  requiredSeconds: number;
+  absenceSeconds: number;
+  overtimeSeconds: number;
+  workedSeconds: number;
+  latestRecord: { date: string; checkIn: string | null; checkOut: string | null; status: string; source: string } | null;
+}
+
+const EMPTY_ATTENDANCE_OVERVIEW: AttendanceOverview = {
+  requiredSeconds: 0,
+  absenceSeconds: 0,
+  overtimeSeconds: 0,
+  workedSeconds: 0,
+  latestRecord: null,
+};
+
+const timeToSeconds = (value: string | null | undefined) => {
+  if (!value) return null;
+  const [hours, minutes, seconds = "0"] = value.split(":");
+  const total = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+  return Number.isFinite(total) ? total : null;
+};
+
+const durationBetween = (start: string | null, end: string | null) => {
+  const startSeconds = timeToSeconds(start);
+  const endSeconds = timeToSeconds(end);
+  if (startSeconds === null || endSeconds === null) return 0;
+  return endSeconds >= startSeconds ? endSeconds - startSeconds : 86400 - startSeconds + endSeconds;
+};
+
+const formatDuration = (totalSeconds: number) => {
+  const safe = Math.max(0, Math.round(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
+
 type AppPage = "home" | "requests" | "send-request" | "more" | "employees" | "profile" | "payroll" | "payslip" | "penalties" | "schedule" | "my-reports" | "reports" | "manager-requests" | "team" | "attendance" | "performance" | "commissions" | "circulars" | "announcements" | "complaints" | "contact" | "settings" | "about" | "privacy" | "notifications" | "email";
 
 // Map Arabic request name → schema ID used in DynamicRequestForm / LeaveRequestForm
@@ -198,6 +236,7 @@ export default function EmployeePortal() {
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [allowedRequests, setAllowedRequests] = useState<string[]>([]);
   const [employeeDepartment, setEmployeeDepartment] = useState("");
+  const [attendanceOverview, setAttendanceOverview] = useState<AttendanceOverview>(EMPTY_ATTENDANCE_OVERVIEW);
 
   // Form state for request dialogs
   const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
@@ -315,6 +354,7 @@ export default function EmployeePortal() {
         setVerifyStatus("idle");
         return;
       }
+      if (user?.empId) await loadAttendanceOverview(user.empId);
 
       if (cameraMode === "in") {
         setCheckInTime(`${time} ${date}`);
@@ -490,7 +530,64 @@ export default function EmployeePortal() {
     else toast.info(`سيتم فتح ${option.name} قريباً`);
   };
 
-  // Fetch employee permissions from DB to filter request types
+  const loadAttendanceOverview = async (empId: string) => {
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const startDate = `${month}-01`;
+    const endDate = getLocalDate(now);
+    const [employeeResult, attendanceResult] = await Promise.all([
+      supabase.from("employees").select("daily_hours").eq("emp_id", empId).maybeSingle(),
+      supabase
+        .from("attendance")
+        .select("date, check_in, check_out, status, entry_source")
+        .eq("emp_id", empId)
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .order("date", { ascending: false }),
+    ]);
+    if (employeeResult.error || attendanceResult.error) return;
+
+    const dailySeconds = Number(employeeResult.data?.daily_hours ?? 8) * 3600;
+    const records = attendanceResult.data ?? [];
+    const byDate = new Map(records.map((record: any) => [String(record.date), record]));
+    let requiredSeconds = 0;
+    let absenceSeconds = 0;
+    let overtimeSeconds = 0;
+    let workedSeconds = 0;
+
+    for (let day = 1; day <= now.getDate(); day += 1) {
+      const current = new Date(now.getFullYear(), now.getMonth(), day);
+      if (current.getDay() === 5 || current.getDay() === 6) continue;
+      requiredSeconds += dailySeconds;
+      const dateKey = `${month}-${String(day).padStart(2, "0")}`;
+      const record: any = byDate.get(dateKey);
+      const isToday = day === now.getDate();
+      if (!record || record.status === "غائب") {
+        if (!isToday || record?.status === "غائب") absenceSeconds += dailySeconds;
+        continue;
+      }
+      if (["إجازة", "عطلة", "عطلة رسمية"].includes(String(record.status))) continue;
+      if (isToday && !record.check_out) continue;
+      const worked = durationBetween(record.check_in, record.check_out);
+      workedSeconds += worked;
+      absenceSeconds += Math.max(dailySeconds - worked, 0);
+      overtimeSeconds += Math.max(worked - dailySeconds, 0);
+    }
+
+    const latest: any = records[0];
+    setAttendanceOverview({
+      requiredSeconds,
+      absenceSeconds,
+      overtimeSeconds,
+      workedSeconds,
+      latestRecord: latest ? {
+        date: String(latest.date), checkIn: latest.check_in, checkOut: latest.check_out,
+        status: String(latest.status ?? ""), source: String(latest.entry_source ?? "employee"),
+      } : null,
+    });
+  };
+
+  // Fetch employee permissions and live attendance from DB
   useEffect(() => {
     if (!user?.empId) return;
     const fetchPermissions = async () => {
@@ -530,7 +627,18 @@ export default function EmployeePortal() {
 
     fetchPermissions();
     loadTodayAttendance();
+    loadAttendanceOverview(user.empId);
     loadEmployeeRequests(user.empId);
+
+    const channel = supabase
+      .channel(`employee-attendance-${user.empId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance", filter: `emp_id=eq.${user.empId}` }, () => {
+        loadTodayAttendance();
+        loadAttendanceOverview(user.empId);
+      })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
   }, [user?.empId]);
 
   // Visible request types: filtered by permissions (if any are set)
@@ -1066,8 +1174,8 @@ export default function EmployeePortal() {
                   <div className="flex items-center justify-between mb-4">
                     <Clock className="h-8 w-8 text-blue-500" />
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">الساعات الواجبة</p>
-                  <p className="text-2xl font-bold text-gray-900">198:00:00</p>
+                  <p className="text-sm text-gray-600 mb-1">الساعات الواجبة حتى اليوم</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.requiredSeconds)}</p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
 
@@ -1075,8 +1183,8 @@ export default function EmployeePortal() {
                   <div className="flex items-center justify-between mb-4">
                     <Zap className="h-8 w-8 text-orange-500" />
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">ساعات الغياب</p>
-                  <p className="text-2xl font-bold text-gray-900">00:00:00</p>
+                  <p className="text-sm text-gray-600 mb-1">ساعات الغياب والنقص</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.absenceSeconds)}</p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
 
@@ -1085,7 +1193,7 @@ export default function EmployeePortal() {
                     <DollarSign className="h-8 w-8 text-green-500" />
                   </div>
                   <p className="text-sm text-gray-600 mb-1">الساعات الإضافية</p>
-                  <p className="text-2xl font-bold text-gray-900">00:00:00</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.overtimeSeconds)}</p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
 
@@ -1094,14 +1202,22 @@ export default function EmployeePortal() {
                     <MapPin className="h-8 w-8 text-purple-500" />
                   </div>
                   <p className="text-sm text-gray-600 mb-1">الحضور لهذا الشهر</p>
-                  <p className="text-2xl font-bold text-gray-900">00:00:00</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.workedSeconds)}</p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
               </div>
 
               {/* Attendance Card */}
               <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-                <h3 className="text-lg font-bold text-gray-900 mb-6">تم تسجيل الحضور</h3>
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-lg font-bold text-gray-900">حضور اليوم</h3>
+                  {attendanceOverview.latestRecord && (
+                    <button onClick={() => setCurrentPage("schedule")} className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100">
+                      آخر سجل: {attendanceOverview.latestRecord.date} — {attendanceOverview.latestRecord.status}
+                      {attendanceOverview.latestRecord.source === "manager_manual" ? " (بواسطة الإدارة)" : ""}
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-3 gap-6">
                   <div>
                     <p className="text-sm text-gray-600 mb-2">تسجيل الحضور</p>

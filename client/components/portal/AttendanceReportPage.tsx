@@ -16,13 +16,17 @@ type Record_ = {
 export default function AttendanceReportPage({ empId, onBack }: Props) {
   const [records, setRecords] = useState<Record_[]>([]);
   const [loading, setLoading] = useState(true);
-  const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
+  const [monthFilter, setMonthFilter] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       const start = `${monthFilter}-01`;
-      const end = `${monthFilter}-31`;
+      const [year, month] = monthFilter.split("-").map(Number);
+      const end = `${monthFilter}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
       const { data } = await supabase
         .from("attendance")
         .select("id, date, check_in, check_out, status, late_minutes")

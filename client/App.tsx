@@ -37,6 +37,7 @@ import HRRequestsSent from "./pages/HRRequestsSent";
 import HRRequestFormSettings from "./pages/HRRequestFormSettings";
 import HRAttendanceCalculate from "./pages/HRAttendanceCalculate";
 import HRAttendanceReport from "./pages/HRAttendanceReport";
+import HRAttendancePreparation from "./pages/HRAttendancePreparation";
 import HRAttendanceMonthlyReport from "./pages/HRAttendanceMonthlyReport";
 import HRAttendanceSchedules from "./pages/HRAttendanceSchedules";
 import Login from "./pages/Login";
@@ -171,6 +172,7 @@ const App = () => (
           <Route path="/hr/attendance" element={<Navigate to="/hr/attendance/calculate" replace />} />
           <Route path="/hr/attendance/calculate" element={<HRAttendanceCalculate />} />
           <Route path="/hr/attendance/report" element={<HRAttendanceReport />} />
+          <Route path="/hr/attendance/individual-group" element={<HRAttendancePreparation />} />
           <Route path="/hr/attendance/monthly" element={<HRAttendanceMonthlyReport />} />
           <Route path="/hr/attendance/schedules" element={<HRAttendanceSchedules />} />
           <Route path="/hr/penalties" element={<Navigate to="/hr/penalties/investigations" replace />} />

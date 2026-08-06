@@ -556,6 +556,32 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "update_branch_location") {
+      if (!existingSetup?.compliance_issued_at) {
+        return respond({ error: "يجب تجهيز الجهاز أولاً" }, 400);
+      }
+      const branchLocation = clean(body.branchLocation);
+      parseRegisteredAddress(branchLocation);
+      const { error } = await admin
+        .from("zatca_onboarding_settings")
+        .update({
+          branch_location: branchLocation,
+          last_error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingSetup.id)
+        .eq("created_by", user.id);
+      if (error) throw error;
+      await admin.from("zatca_onboarding_audit").insert({
+        onboarding_id: existingSetup.id,
+        actor_id: user.id,
+        action: "branch_location_updated",
+        result: "success",
+        details: { mode: "simulation" },
+      });
+      return respond({ message: "تم حفظ عنوان الفواتير المسجل" });
+    }
+
     if (action === "onboard") {
       const otp = clean(body.otp);
       if (!/^\d{6}$/.test(otp))

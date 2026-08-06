@@ -119,6 +119,7 @@ const auditActionLabels: Record<string, string> = {
   "compliance_test_simplified-invoice": "فحص فاتورة مبسطة B2C",
   "compliance_test_simplified-credit": "فحص إشعار دائن مبسط B2C",
   "compliance_test_simplified-debit": "فحص إشعار مدين مبسط B2C",
+  branch_location_updated: "تحديث عنوان الفواتير المسجل",
 };
 
 export default function ZATCASettings() {
@@ -128,7 +129,7 @@ export default function ZATCASettings() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<
-    "prepare" | "onboard" | "refresh" | "compliance" | null
+    "prepare" | "address" | "onboard" | "refresh" | "compliance" | null
   >(null);
 
   const invoke = async (body: Record<string, unknown>) => {
@@ -224,6 +225,27 @@ export default function ZATCASettings() {
         title: "تعذر تجهيز الجهاز",
         description:
           error instanceof Error ? error.message : "تحقق من البيانات",
+        variant: "destructive",
+      });
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const saveBranchLocation = async () => {
+    setAction("address");
+    try {
+      const data = await invoke({
+        action: "update_branch_location",
+        branchLocation: identity.branchLocation,
+      });
+      toast({ title: "تم حفظ العنوان", description: data.message });
+      await loadStatus(true);
+    } catch (error) {
+      toast({
+        title: "تعذر حفظ العنوان",
+        description:
+          error instanceof Error ? error.message : "تحقق من العنوان المسجل",
         variant: "destructive",
       });
     } finally {
@@ -550,27 +572,20 @@ export default function ZATCASettings() {
           </div>
           <div className="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4">
             <button
-              onClick={prepare}
-              disabled={
-                Boolean(action) ||
-                Boolean(
-                  setup &&
-                    (Boolean(setup.compliance_csid_masked) ||
-                      [
-                        "compliance_ready",
-                        "compliance_testing",
-                        "compliance_passed",
-                      ].includes(setup.status)),
-                )
+              onClick={
+                setup?.compliance_csid_masked ? saveBranchLocation : prepare
               }
+              disabled={Boolean(action)}
               className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {action === "prepare" ? (
+              {action === "prepare" || action === "address" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <FileKey2 className="h-4 w-4" />
               )}
-              حفظ البيانات وتوليد CSR آمن
+              {setup?.compliance_csid_masked
+                ? "حفظ عنوان الفواتير"
+                : "حفظ البيانات وتوليد CSR آمن"}
             </button>
           </div>
         </section>

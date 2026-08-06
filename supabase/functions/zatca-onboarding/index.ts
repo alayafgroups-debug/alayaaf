@@ -123,42 +123,15 @@ Deno.serve(async (req) => {
   } = await caller.auth.getUser(token);
   if (authError || !user?.email) return respond({ error: "Unauthorized" }, 401);
 
-  const { data: employee } = await admin
-    .from("employees")
-    .select("employee_role, role, account_title")
-    .ilike("email", user.email)
+  const { data: existingSetup, error: ownerError } = await admin
+    .from("zatca_onboarding_settings")
+    .select("id, created_by")
+    .eq("mode", "simulation")
     .maybeSingle();
-  const roleName = clean(
-    employee?.employee_role || employee?.role || employee?.account_title,
-  );
-  const { data: role } = roleName
-    ? await admin
-        .from("user_roles")
-        .select("permissions")
-        .eq("name_ar", roleName)
-        .eq("status", "فعال")
-        .maybeSingle()
-    : ({ data: null } as any);
-  const permissions =
-    role?.permissions && typeof role.permissions === "object"
-      ? (role.permissions as Record<string, unknown>)
-      : {};
-  const permissionKeys = [
-    "zatca.settings",
-    "module.zatca",
-    "module.settings",
-    "module.sales",
-    "module.accounting",
-  ];
-  const followsUnrestrictedAppRole =
-    Boolean(employee && roleName) && Object.keys(permissions).length === 0;
-  const canManage =
-    permissionKeys.some(
-      (key) => permissions[key] === true || permissions[key] === "manage",
-    ) ||
-    followsUnrestrictedAppRole ||
-    /admin|مدير|مسؤول النظام/i.test(roleName);
-  if (!canManage) return respond({ error: "Forbidden" }, 403);
+  if (ownerError) throw ownerError;
+  if (existingSetup && existingSetup.created_by !== user.id) {
+    return respond({ error: "هذه التهيئة مرتبطة بحساب إداري آخر" }, 403);
+  }
 
   let body: any = {};
   try {

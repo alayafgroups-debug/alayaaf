@@ -122,7 +122,16 @@ export default function ZATCASettings() {
       "zatca-onboarding",
       { body },
     );
-    if (error) throw error;
+    if (error) {
+      const context = (error as { context?: Response }).context;
+      const payload = context
+        ? await context
+            .clone()
+            .json()
+            .catch(() => null)
+        : null;
+      throw new Error(String(payload?.error ?? error.message));
+    }
     if (data?.error) throw new Error(String(data.error));
     return data;
   };

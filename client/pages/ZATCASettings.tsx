@@ -104,7 +104,7 @@ const statusLabels: Record<SetupStatus, string> = {
   compliance_ready: "تم الحصول على Compliance CSID",
   compliance_testing: "جاري فحص التوافق",
   compliance_passed: "اجتاز فحص التوافق",
-  failed: "تحتاج العملية إلى إعادة المحاولة",
+  failed: "آخر محاولة تهيئة لم تنجح",
 };
 
 export default function ZATCASettings() {
@@ -335,9 +335,15 @@ export default function ZATCASettings() {
               )}
             </div>
             {setup.last_error && (
-              <p className="mt-3 rounded-lg bg-white/70 p-3 text-sm text-rose-700">
-                {setup.last_error}
-              </p>
+              <div className="mt-3 rounded-lg bg-white/70 p-3 text-sm text-rose-700">
+                <strong className="block">
+                  آخر رد محفوظ من المحاولة السابقة
+                </strong>
+                <span className="mt-1 block">{setup.last_error}</span>
+                <small className="mt-1 block text-slate-500">
+                  ظهور هذه الرسالة لا يعني إرسال طلب جديد دون OTP.
+                </small>
+              </div>
             )}
           </section>
         )}

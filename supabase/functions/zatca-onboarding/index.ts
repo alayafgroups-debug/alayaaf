@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { KEYUTIL, KJUR } from "npm:jsrsasign@11.1.3";
 import {
   BuyerData,
@@ -19,12 +20,29 @@ const corsHeaders = {
 };
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 const SIMULATION_URL = "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation";
+const ZATCA_INITIAL_PIH =
+  "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==";
 
 const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
 const clean = (value: unknown) => String(value ?? "").trim();
 const escapeDn = (value: string) => value.replace(/[,+"\\<>;/]/g, " ").trim();
+const escapeXmlText = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+const fullAccessRoles = new Set(["مدير النظام", "مدير عام", "المدير العام"]);
+const canManageSettings = (
+  roleName: string,
+  permissions: Record<string, unknown>,
+) =>
+  fullAccessRoles.has(roleName) ||
+  permissions["module.settings"] === true ||
+  permissions["module.settings"] === "manage";
 
 const publicFields = `id, mode, company_name_ar, company_name_en, vat_number, commercial_registration,
   branch_name, branch_location, industry, device_manufacturer, device_model, device_serial,
@@ -109,6 +127,7 @@ function validateIdentity(body: any) {
     throw new Error("أكمل جميع بيانات المنشأة والجهاز المطلوبة");
   if (!/^[A-Za-z0-9._\-\/]+$/.test(identity.deviceSerial))
     throw new Error("الرقم التسلسلي للجهاز يحتوي على رموز غير صالحة");
+  parseRegisteredAddress(identity.branchLocation);
   return identity;
 }
 
@@ -158,6 +177,17 @@ const complianceCases: ComplianceCase[] = [
   },
 ];
 
+function requiredCaseIndexes(invoiceType: string) {
+  return complianceCases
+    .map((testCase, index) => ({ testCase, index }))
+    .filter(({ testCase }) => {
+      if (invoiceType === "1000") return testCase.scope === "standard";
+      if (invoiceType === "0100") return testCase.scope === "simplified";
+      return true;
+    })
+    .map(({ index }) => index);
+}
+
 function toCertificatePem(binarySecurityToken: string) {
   const compactToken = binarySecurityToken.replace(/\s+/g, "");
   const decoded = Buffer.from(compactToken, "base64").toString("utf8").trim();
@@ -182,10 +212,12 @@ function parseRegisteredAddress(location: string) {
     .split(/[،,]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  const cityName =
-    parts.find((part) =>
-      /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
-    ) ?? "مكة المكرمة";
+  const cityName = parts.find((part) =>
+    /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
+  );
+  if (!cityName) {
+    throw new Error("عنوان الفرع يجب أن يتضمن اسم المدينة المسجلة");
+  }
   const citySubdivisionName =
     parts.find((part) => /حي|الشوقية|العزيزية|الروضة|النسيم/.test(part)) ??
     parts[1] ??
@@ -200,6 +232,44 @@ function parseRegisteredAddress(location: string) {
     citySubdivisionName,
     streetName: streetName || "العنوان الوطني",
   };
+}
+
+function correctXadesDigests(xml: string, certificate: Certificate) {
+  const signingTime = xml.match(
+    /<xades:SigningTime>([^<]+)<\/xades:SigningTime>/,
+  )?.[1];
+  if (!signingTime) throw new Error("تعذر التحقق من وقت توقيع XAdES");
+
+  const signedPropertiesXml =
+    '<xades:SignedProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Id="xadesSignedProperties">\n' +
+    "                                <xades:SignedSignatureProperties>\n" +
+    `                                    <xades:SigningTime>${signingTime}</xades:SigningTime>\n` +
+    "                                    <xades:SigningCertificate>\n" +
+    "                                        <xades:Cert>\n" +
+    "                                            <xades:CertDigest>\n" +
+    '                                                <ds:DigestMethod xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>\n' +
+    `                                                <ds:DigestValue xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${certificate.getCertHash()}</ds:DigestValue>\n` +
+    "                                            </xades:CertDigest>\n" +
+    "                                            <xades:IssuerSerial>\n" +
+    `                                                <ds:X509IssuerName xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${certificate.getFormattedIssuer()}</ds:X509IssuerName>\n` +
+    `                                                <ds:X509SerialNumber xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${certificate.getSerialNumber()}</ds:X509SerialNumber>\n` +
+    "                                            </xades:IssuerSerial>\n" +
+    "                                        </xades:Cert>\n" +
+    "                                    </xades:SigningCertificate>\n" +
+    "                                </xades:SignedSignatureProperties>\n" +
+    "                            </xades:SignedProperties>";
+  const digest = createHash("sha256")
+    .update(signedPropertiesXml, "utf8")
+    .digest("base64");
+
+  const correctedType = xml.replace(
+    'Type="http://www.w3.org/2000/09/xmldsig#SignatureProperties" URI="#xadesSignedProperties"',
+    'Type="http://uri.etsi.org/01903#SignedProperties" URI="#xadesSignedProperties"',
+  );
+  return correctedType.replace(
+    /(<ds:Reference Type="http:\/\/uri\.etsi\.org\/01903#SignedProperties" URI="#xadesSignedProperties">[\s\S]*?<ds:DigestValue>)[^<]*(<\/ds:DigestValue>)/,
+    `$1${digest}$2`,
+  );
 }
 
 function buildComplianceDocument(
@@ -231,14 +301,14 @@ function buildComplianceDocument(
   else invoice.debitNote();
 
   const seller = new SellerData()
-    .setRegistrationName(String(setup.company_name_ar))
+    .setRegistrationName(escapeXmlText(setup.company_name_ar))
     .setVatNumber(String(setup.vat_number))
     .setPartyIdentification(String(setup.commercial_registration))
     .setPartyIdentificationId("CRN")
-    .setStreetName(address.streetName)
+    .setStreetName(escapeXmlText(address.streetName))
     .setBuildingNumber(address.buildingNumber)
-    .setCitySubdivisionName(address.citySubdivisionName)
-    .setCityName(address.cityName)
+    .setCitySubdivisionName(escapeXmlText(address.citySubdivisionName))
+    .setCityName(escapeXmlText(address.cityName))
     .setPostalZone(address.postalZone)
     .setCountryCode("SA");
 
@@ -297,11 +367,23 @@ function buildComplianceDocument(
     String(setup.private_key_pem),
     String(setup.compliance_secret),
   );
+  certificate.getCertHash = () => {
+    const certificateDer = Buffer.from(
+      certificate
+        .getRawCertificate()
+        .replace(
+          /-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s+/g,
+          "",
+        ),
+      "base64",
+    );
+    return createHash("sha256").update(certificateDer).digest("base64");
+  };
   const signer = InvoiceSigner.signInvoice(unsignedXml, certificate);
   return {
     uuid,
     invoiceNumber,
-    signedXml: signer.getXML(),
+    signedXml: correctXadesDigests(signer.getXML(), certificate),
     invoiceHash: signer.getHash(),
   };
 }
@@ -351,9 +433,29 @@ Deno.serve(async (req) => {
   } = await caller.auth.getUser(token);
   if (authError || !user?.email) return respond({ error: "Unauthorized" }, 401);
 
+  const { data: callerEmployee } = await admin
+    .from("employees")
+    .select("employee_role")
+    .ilike("email", user.email)
+    .maybeSingle();
+  if (!callerEmployee?.employee_role)
+    return respond({ error: "غير مصرح بإدارة إعدادات ZATCA" }, 403);
+  const { data: callerRole } = await admin
+    .from("user_roles")
+    .select("permissions")
+    .eq("name_ar", callerEmployee.employee_role)
+    .eq("status", "فعال")
+    .maybeSingle();
+  const permissions =
+    callerRole?.permissions && typeof callerRole.permissions === "object"
+      ? (callerRole.permissions as Record<string, unknown>)
+      : {};
+  if (!canManageSettings(callerEmployee.employee_role, permissions))
+    return respond({ error: "غير مصرح بإدارة إعدادات ZATCA" }, 403);
+
   const { data: existingSetup, error: ownerError } = await admin
     .from("zatca_onboarding_settings")
-    .select("id, created_by")
+    .select("id, created_by, status, compliance_issued_at")
     .eq("mode", "simulation")
     .maybeSingle();
   if (ownerError) throw ownerError;
@@ -385,6 +487,23 @@ Deno.serve(async (req) => {
     }
 
     if (action === "prepare") {
+      if (
+        existingSetup &&
+        (Boolean(existingSetup.compliance_issued_at) ||
+          [
+            "compliance_ready",
+            "compliance_testing",
+            "compliance_passed",
+          ].includes(existingSetup.status))
+      ) {
+        return respond(
+          {
+            error:
+              "لا يمكن إعادة توليد المفاتيح بعد إصدار شهادة التوافق لأنها ستفقد صلاحيتها",
+          },
+          409,
+        );
+      }
       const identity = validateIdentity(body);
       const csr = generateCsr(identity);
       const payload = {
@@ -415,11 +534,14 @@ Deno.serve(async (req) => {
         last_error: null,
         updated_at: new Date().toISOString(),
       };
-      const { data, error } = await admin
-        .from("zatca_onboarding_settings")
-        .upsert(payload, { onConflict: "mode" })
-        .select("id")
-        .single();
+      const saveQuery = existingSetup
+        ? admin
+            .from("zatca_onboarding_settings")
+            .update(payload)
+            .eq("id", existingSetup.id)
+            .eq("created_by", user.id)
+        : admin.from("zatca_onboarding_settings").insert(payload);
+      const { data, error } = await saveQuery.select("id").single();
       if (error) throw error;
       await admin.from("zatca_onboarding_audit").insert({
         onboarding_id: data.id,
@@ -440,7 +562,7 @@ Deno.serve(async (req) => {
         return respond({ error: "رمز OTP يجب أن يتكون من 6 أرقام" }, 400);
       const { data: setup, error: setupError } = await admin
         .from("zatca_onboarding_settings")
-        .select("id, csr_pem")
+        .select("id, csr_pem, compliance_csid")
         .eq("mode", "simulation")
         .maybeSingle();
       if (setupError) throw setupError;
@@ -449,6 +571,12 @@ Deno.serve(async (req) => {
           { error: "يجب تجهيز بيانات المنشأة وتوليد CSR أولاً" },
           400,
         );
+      if (setup.compliance_csid) {
+        return respond(
+          { error: "تم إصدار شهادة التوافق لهذا الجهاز مسبقاً" },
+          409,
+        );
+      }
 
       const csrBase64 = Buffer.from(setup.csr_pem, "utf8").toString("base64");
       const zatcaResponse = await fetch(`${SIMULATION_URL}/compliance`, {
@@ -566,20 +694,33 @@ Deno.serve(async (req) => {
         return respond({ error: "يجب الحصول على Compliance CSID أولاً" }, 400);
       }
 
-      const existingResults: any[] =
-        caseIndex === 0
+      const existingResults: any[] = Array.isArray(setup.compliance_results)
+        ? setup.compliance_results
+        : [];
+      const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
+      const sequenceIndex = requiredIndexes.indexOf(caseIndex);
+      if (sequenceIndex === -1) {
+        return respond(
+          { error: "نوع هذا المستند غير مشمول في شهادة الجهاز" },
+          400,
+        );
+      }
+      const previousCaseIndex = requiredIndexes[sequenceIndex - 1];
+      const scopedExistingResults =
+        sequenceIndex === 0
           ? []
-          : Array.isArray(setup.compliance_results)
-            ? setup.compliance_results
-            : [];
-      const previousHash =
-        caseIndex === 0
-          ? "MA=="
-          : clean(
-              existingResults.find((item) => item.caseIndex === caseIndex - 1)
-                ?.invoiceHash,
+          : existingResults.filter((item) =>
+              requiredIndexes.includes(Number(item.caseIndex)),
             );
-      if (caseIndex > 0 && !previousHash) {
+      const previousHash =
+        sequenceIndex === 0
+          ? ZATCA_INITIAL_PIH
+          : clean(
+              scopedExistingResults.find(
+                (item) => item.caseIndex === previousCaseIndex,
+              )?.invoiceHash,
+            );
+      if (sequenceIndex > 0 && !previousHash) {
         return respond({ error: "يجب تنفيذ اختبارات التوافق بالترتيب" }, 409);
       }
 
@@ -654,12 +795,12 @@ Deno.serve(async (req) => {
         };
       }
 
-      const nextResults = existingResults.filter(
+      const nextResults = scopedExistingResults.filter(
         (item) => item.caseIndex !== caseIndex,
       );
       nextResults.push(result);
       nextResults.sort((a, b) => a.caseIndex - b.caseIndex);
-      const completed = nextResults.length === complianceCases.length;
+      const completed = nextResults.length === requiredIndexes.length;
       const allPassed =
         completed && nextResults.every((item) => item.status === "passed");
       const firstFailure = nextResults.find((item) => item.status === "failed");

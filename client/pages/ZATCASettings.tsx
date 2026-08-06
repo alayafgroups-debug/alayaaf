@@ -86,19 +86,19 @@ const initialIdentity: IdentityForm = {
 };
 
 const complianceDocuments = [
-  "فاتورة ضريبية معيارية B2B",
-  "إشعار دائن معياري B2B",
-  "إشعار مدين معياري B2B",
-  "فاتورة ضريبية مبسطة B2C",
-  "إشعار دائن مبسط B2C",
-  "إشعار مدين مبسط B2C",
-];
+  { caseIndex: 0, scope: "standard", label: "فاتورة ضريبية معيارية B2B" },
+  { caseIndex: 1, scope: "standard", label: "إشعار دائن معياري B2B" },
+  { caseIndex: 2, scope: "standard", label: "إشعار مدين معياري B2B" },
+  { caseIndex: 3, scope: "simplified", label: "فاتورة ضريبية مبسطة B2C" },
+  { caseIndex: 4, scope: "simplified", label: "إشعار دائن مبسط B2C" },
+  { caseIndex: 5, scope: "simplified", label: "إشعار مدين مبسط B2C" },
+] as const;
 
 const onboardingSteps = [
   { number: 1, label: "بيانات المنشأة", Icon: Building2 },
   { number: 2, label: "OTP وتهيئة الجهاز", Icon: FileKey2 },
   { number: 3, label: "شهادة التوافق", Icon: ShieldCheck },
-  { number: 4, label: "الاختبارات الستة", Icon: MonitorCog },
+  { number: 4, label: "اختبارات التوافق", Icon: MonitorCog },
 ];
 
 const statusLabels: Record<SetupStatus, string> = {
@@ -199,6 +199,15 @@ export default function ZATCASettings() {
     loadStatus(true);
   }, []);
 
+  const requiredComplianceDocuments = useMemo(() => {
+    const invoiceType = setup?.invoice_type ?? identity.invoiceType;
+    return complianceDocuments.filter((document) => {
+      if (invoiceType === "1000") return document.scope === "standard";
+      if (invoiceType === "0100") return document.scope === "simplified";
+      return true;
+    });
+  }, [identity.invoiceType, setup?.invoice_type]);
+
   const setField = <K extends keyof IdentityForm>(
     key: K,
     value: IdentityForm[K],
@@ -261,12 +270,11 @@ export default function ZATCASettings() {
     setAction("compliance");
     try {
       let passed = 0;
-      for (
-        let caseIndex = 0;
-        caseIndex < complianceDocuments.length;
-        caseIndex += 1
-      ) {
-        const data = await invoke({ action: "run_compliance_case", caseIndex });
+      for (const document of requiredComplianceDocuments) {
+        const data = await invoke({
+          action: "run_compliance_case",
+          caseIndex: document.caseIndex,
+        });
         if (data.result?.status === "passed") passed += 1;
         setSetup((current) =>
           current
@@ -275,7 +283,7 @@ export default function ZATCASettings() {
                 status: data.status as SetupStatus,
                 compliance_results: [
                   ...(current.compliance_results ?? []).filter(
-                    (item) => item.caseIndex !== caseIndex,
+                    (item) => item.caseIndex !== document.caseIndex,
                   ),
                   data.result as ComplianceResult,
                 ].sort(
@@ -288,12 +296,14 @@ export default function ZATCASettings() {
       await loadStatus(true);
       toast({
         title:
-          passed === complianceDocuments.length
+          passed === requiredComplianceDocuments.length
             ? "اجتاز النظام فحص التوافق"
             : "اكتمل فحص التوافق",
-        description: `نجح ${passed} من ${complianceDocuments.length} مستندات`,
+        description: `نجح ${passed} من ${requiredComplianceDocuments.length} مستندات`,
         variant:
-          passed === complianceDocuments.length ? "default" : "destructive",
+          passed === requiredComplianceDocuments.length
+            ? "default"
+            : "destructive",
       });
     } catch (error) {
       await loadStatus(true);
@@ -541,7 +551,18 @@ export default function ZATCASettings() {
           <div className="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4">
             <button
               onClick={prepare}
-              disabled={Boolean(action)}
+              disabled={
+                Boolean(action) ||
+                Boolean(
+                  setup &&
+                    (Boolean(setup.compliance_csid_masked) ||
+                      [
+                        "compliance_ready",
+                        "compliance_testing",
+                        "compliance_passed",
+                      ].includes(setup.status)),
+                )
+              }
               className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {action === "prepare" ? (
@@ -578,6 +599,7 @@ export default function ZATCASettings() {
                 Boolean(action) ||
                 !setup ||
                 !["csr_generated", "failed"].includes(setup.status) ||
+                Boolean(setup.compliance_csid_masked) ||
                 otp.length !== 6
               }
               className="flex h-12 items-center gap-2 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
@@ -600,7 +622,7 @@ export default function ZATCASettings() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-bold text-slate-900">
-                3. فحص التوافق — المستندات الستة
+                3. فحص التوافق — المستندات المطلوبة
               </h2>
               <p className="mt-1 text-sm text-slate-500">
                 ينشئ الخادم مستندات UBL موقعة ويرسل كل نتيجة فعليًا إلى منصة
@@ -631,20 +653,20 @@ export default function ZATCASettings() {
             </button>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {complianceDocuments.map((document, caseIndex) => {
+            {requiredComplianceDocuments.map((document) => {
               const result = setup?.compliance_results?.find(
-                (item) => item.caseIndex === caseIndex,
+                (item) => item.caseIndex === document.caseIndex,
               );
               return (
                 <div
-                  key={document}
+                  key={document.caseIndex}
                   className={`rounded-xl border p-3 text-sm ${result?.status === "passed" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : result?.status === "failed" ? "border-rose-200 bg-rose-50 text-rose-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}
                 >
                   <div className="flex items-center gap-2 font-semibold">
                     <span
                       className={`h-2.5 w-2.5 rounded-full ${result?.status === "passed" ? "bg-emerald-500" : result?.status === "failed" ? "bg-rose-500" : "bg-slate-300"}`}
                     />
-                    {document}
+                    {document.label}
                   </div>
                   <p className="mt-2 text-xs leading-5 opacity-80">
                     {result?.status === "passed"

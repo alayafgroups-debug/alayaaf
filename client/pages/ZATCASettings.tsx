@@ -46,10 +46,13 @@ type SetupMetadata = {
 };
 
 type ComplianceResult = {
+  caseIndex?: number;
   documentType: string;
   label: string;
   status: "pending" | "testing" | "passed" | "failed";
   message?: string;
+  httpStatus?: number;
+  invoiceHash?: string;
 };
 
 type IdentityForm = {
@@ -110,6 +113,12 @@ const statusLabels: Record<SetupStatus, string> = {
 const auditActionLabels: Record<string, string> = {
   csr_generated: "توليد CSR والمفتاح الخاص",
   compliance_csid_requested: "طلب شهادة التوافق من ZATCA",
+  "compliance_test_standard-invoice": "فحص فاتورة معيارية B2B",
+  "compliance_test_standard-credit": "فحص إشعار دائن معياري B2B",
+  "compliance_test_standard-debit": "فحص إشعار مدين معياري B2B",
+  "compliance_test_simplified-invoice": "فحص فاتورة مبسطة B2C",
+  "compliance_test_simplified-credit": "فحص إشعار دائن مبسط B2C",
+  "compliance_test_simplified-debit": "فحص إشعار مدين مبسط B2C",
 };
 
 export default function ZATCASettings() {
@@ -119,7 +128,7 @@ export default function ZATCASettings() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<
-    "prepare" | "onboard" | "refresh" | null
+    "prepare" | "onboard" | "refresh" | "compliance" | null
   >(null);
 
   const invoke = async (body: Record<string, unknown>) => {
@@ -241,10 +250,68 @@ export default function ZATCASettings() {
     }
   };
 
+  const runComplianceTests = async () => {
+    if (
+      !setup ||
+      !["compliance_ready", "compliance_testing", "compliance_passed"].includes(
+        setup.status,
+      )
+    )
+      return;
+    setAction("compliance");
+    try {
+      let passed = 0;
+      for (
+        let caseIndex = 0;
+        caseIndex < complianceDocuments.length;
+        caseIndex += 1
+      ) {
+        const data = await invoke({ action: "run_compliance_case", caseIndex });
+        if (data.result?.status === "passed") passed += 1;
+        setSetup((current) =>
+          current
+            ? {
+                ...current,
+                status: data.status as SetupStatus,
+                compliance_results: [
+                  ...(current.compliance_results ?? []).filter(
+                    (item) => item.caseIndex !== caseIndex,
+                  ),
+                  data.result as ComplianceResult,
+                ].sort(
+                  (a, b) => Number(a.caseIndex ?? 0) - Number(b.caseIndex ?? 0),
+                ),
+              }
+            : current,
+        );
+      }
+      await loadStatus(true);
+      toast({
+        title:
+          passed === complianceDocuments.length
+            ? "اجتاز النظام فحص التوافق"
+            : "اكتمل فحص التوافق",
+        description: `نجح ${passed} من ${complianceDocuments.length} مستندات`,
+        variant:
+          passed === complianceDocuments.length ? "default" : "destructive",
+      });
+    } catch (error) {
+      await loadStatus(true);
+      toast({
+        title: "تعذر إكمال فحص التوافق",
+        description:
+          error instanceof Error ? error.message : "حدث خطأ أثناء الفحص",
+        variant: "destructive",
+      });
+    } finally {
+      setAction(null);
+    }
+  };
+
   const step = useMemo(() => {
     if (!setup) return 1;
     if (setup.status === "csr_generated" || setup.status === "failed") return 2;
-    if (setup.status === "compliance_ready") return 3;
+    if (setup.status === "compliance_ready") return 4;
     if (setup.status === "compliance_testing") return 4;
     if (setup.status === "compliance_passed") return 5;
     return 1;
@@ -536,24 +603,62 @@ export default function ZATCASettings() {
                 3. فحص التوافق — المستندات الستة
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                يُفتح بعد الحصول على Compliance CSID. لن يُعرض نجاح وهمي قبل
-                إرسال مستندات موقعة وصحيحة إلى ZATCA.
+                ينشئ الخادم مستندات UBL موقعة ويرسل كل نتيجة فعليًا إلى منصة
+                ZATCA Simulation.
               </p>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-              بانتظار مرحلة التوقيع والفحص
-            </span>
+            <button
+              onClick={runComplianceTests}
+              disabled={
+                Boolean(action) ||
+                !setup ||
+                ![
+                  "compliance_ready",
+                  "compliance_testing",
+                  "compliance_passed",
+                ].includes(setup.status)
+              }
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {action === "compliance" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MonitorCog className="h-4 w-4" />
+              )}
+              {action === "compliance"
+                ? "جاري إرسال المستندات..."
+                : "تشغيل فحص التوافق"}
+            </button>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {complianceDocuments.map((document) => (
-              <div
-                key={document}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
-              >
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
-                {document}
-              </div>
-            ))}
+            {complianceDocuments.map((document, caseIndex) => {
+              const result = setup?.compliance_results?.find(
+                (item) => item.caseIndex === caseIndex,
+              );
+              return (
+                <div
+                  key={document}
+                  className={`rounded-xl border p-3 text-sm ${result?.status === "passed" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : result?.status === "failed" ? "border-rose-200 bg-rose-50 text-rose-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}
+                >
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${result?.status === "passed" ? "bg-emerald-500" : result?.status === "failed" ? "bg-rose-500" : "bg-slate-300"}`}
+                    />
+                    {document}
+                  </div>
+                  <p className="mt-2 text-xs leading-5 opacity-80">
+                    {result?.status === "passed"
+                      ? "اجتاز فحص ZATCA"
+                      : result?.message || "لم يُختبر بعد"}
+                  </p>
+                  {result?.httpStatus ? (
+                    <small className="mt-1 block font-mono">
+                      HTTP {result.httpStatus}
+                    </small>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </section>
 

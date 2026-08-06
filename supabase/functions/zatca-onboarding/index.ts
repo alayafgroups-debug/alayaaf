@@ -2,6 +2,15 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { Buffer } from "node:buffer";
 import { KEYUTIL, KJUR } from "npm:jsrsasign@11.1.3";
+import {
+  BuyerData,
+  Certificate,
+  InvoiceData,
+  InvoiceLineData,
+  InvoiceSigner,
+  SellerData,
+  ZatcaInvoice,
+} from "npm:@khaledhajsalem/zatca-node@1.0.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,6 +110,221 @@ function validateIdentity(body: any) {
   if (!/^[A-Za-z0-9._\-\/]+$/.test(identity.deviceSerial))
     throw new Error("الرقم التسلسلي للجهاز يحتوي على رموز غير صالحة");
   return identity;
+}
+
+type ComplianceCase = {
+  key: string;
+  label: string;
+  scope: "standard" | "simplified";
+  kind: "invoice" | "credit" | "debit";
+};
+
+const complianceCases: ComplianceCase[] = [
+  {
+    key: "standard-invoice",
+    label: "فاتورة ضريبية معيارية B2B",
+    scope: "standard",
+    kind: "invoice",
+  },
+  {
+    key: "standard-credit",
+    label: "إشعار دائن معياري B2B",
+    scope: "standard",
+    kind: "credit",
+  },
+  {
+    key: "standard-debit",
+    label: "إشعار مدين معياري B2B",
+    scope: "standard",
+    kind: "debit",
+  },
+  {
+    key: "simplified-invoice",
+    label: "فاتورة ضريبية مبسطة B2C",
+    scope: "simplified",
+    kind: "invoice",
+  },
+  {
+    key: "simplified-credit",
+    label: "إشعار دائن مبسط B2C",
+    scope: "simplified",
+    kind: "credit",
+  },
+  {
+    key: "simplified-debit",
+    label: "إشعار مدين مبسط B2C",
+    scope: "simplified",
+    kind: "debit",
+  },
+];
+
+function toCertificatePem(binarySecurityToken: string) {
+  const compactToken = binarySecurityToken.replace(/\s+/g, "");
+  const decoded = Buffer.from(compactToken, "base64").toString("utf8").trim();
+  if (decoded.includes("-----BEGIN CERTIFICATE-----")) return decoded;
+  const certificateBody =
+    /^[A-Za-z0-9+/=\s]+$/.test(decoded) && decoded.length > 100
+      ? decoded.replace(/\s+/g, "")
+      : compactToken;
+  return `-----BEGIN CERTIFICATE-----\n${certificateBody.match(/.{1,64}/g)?.join("\n") ?? certificateBody}\n-----END CERTIFICATE-----`;
+}
+
+function parseRegisteredAddress(location: string) {
+  const normalized = location.replace(/\s+/g, " ").trim();
+  const buildingNumber = normalized.match(/\b\d{4}\b/)?.[0];
+  const postalZone = normalized.match(/\b\d{5}\b/)?.[0];
+  if (!buildingNumber || !postalZone) {
+    throw new Error(
+      "عنوان الفرع يجب أن يتضمن رقم المبنى من 4 أرقام والرمز البريدي من 5 أرقام",
+    );
+  }
+  const parts = normalized
+    .split(/[،,]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const cityName =
+    parts.find((part) =>
+      /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
+    ) ?? "مكة المكرمة";
+  const citySubdivisionName =
+    parts.find((part) => /حي|الشوقية|العزيزية|الروضة|النسيم/.test(part)) ??
+    parts[1] ??
+    "الفرع الرئيسي";
+  const streetName = (parts[0] ?? normalized)
+    .replace(new RegExp(`^${buildingNumber}\\s*`), "")
+    .trim();
+  return {
+    buildingNumber,
+    postalZone,
+    cityName,
+    citySubdivisionName,
+    streetName: streetName || "العنوان الوطني",
+  };
+}
+
+function buildComplianceDocument(
+  setup: any,
+  testCase: ComplianceCase,
+  caseIndex: number,
+  previousHash: string,
+) {
+  const address = parseRegisteredAddress(String(setup.branch_location));
+  const now = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+  const issueDate = now.slice(0, 10);
+  const issueTime = now.slice(11, 19);
+  const invoiceNumber = `SIM-${String(caseIndex + 1).padStart(2, "0")}-${Date.now()}`;
+  const invoice = new InvoiceData()
+    .setInvoiceNumber(invoiceNumber)
+    .setIssueDate(issueDate)
+    .setIssueTime(issueTime)
+    .setDueDate(issueDate)
+    .setCurrencyCode("SAR")
+    .setDocumentCurrencyCode("SAR")
+    .setTaxCurrencyCode("SAR")
+    .setInvoiceCounter(String(caseIndex + 1))
+    .setPreviousInvoiceHash(previousHash);
+
+  if (testCase.scope === "standard") invoice.standard();
+  else invoice.simplified();
+  if (testCase.kind === "invoice") invoice.taxInvoice();
+  else if (testCase.kind === "credit") invoice.creditNote();
+  else invoice.debitNote();
+
+  const seller = new SellerData()
+    .setRegistrationName(String(setup.company_name_ar))
+    .setVatNumber(String(setup.vat_number))
+    .setPartyIdentification(String(setup.commercial_registration))
+    .setPartyIdentificationId("CRN")
+    .setStreetName(address.streetName)
+    .setBuildingNumber(address.buildingNumber)
+    .setCitySubdivisionName(address.citySubdivisionName)
+    .setCityName(address.cityName)
+    .setPostalZone(address.postalZone)
+    .setCountryCode("SA");
+
+  const buyer = new BuyerData()
+    .setRegistrationName(
+      testCase.scope === "standard" ? "شركة المشتري التجريبية" : "عميل تجريبي",
+    )
+    .setPartyIdentification(
+      testCase.scope === "standard" ? "310000000000003" : "1234567890",
+    )
+    .setPartyIdentificationId(testCase.scope === "standard" ? "VAT" : "NAT")
+    .setStreetName("شارع الملك فهد")
+    .setBuildingNumber("1234")
+    .setCitySubdivisionName("حي العليا")
+    .setCityName("الرياض")
+    .setPostalZone("12345")
+    .setCountryCode("SA");
+  if (testCase.scope === "standard") buyer.setVatNumber("310000000000003");
+
+  const line = new InvoiceLineData()
+    .setId(1)
+    .setItemName(
+      testCase.kind === "invoice"
+        ? "خدمة اختبار التوافق"
+        : testCase.kind === "credit"
+          ? "تعديل دائن تجريبي"
+          : "تعديل مدين تجريبي",
+    )
+    .setDescription("مستند محاكاة مخصص لفحص التوافق لدى ZATCA")
+    .setQuantity(1)
+    .setUnitPrice(100)
+    .setTaxPercent(15)
+    .setUnitCode("EA")
+    .calculateTotals();
+
+  invoice.setSeller(seller).setBuyer(buyer).addLine(line);
+  if (testCase.kind !== "invoice") {
+    invoice.addBillingReference({
+      id: `SIM-ORIGINAL-${caseIndex + 1}`,
+      uuid: crypto.randomUUID(),
+    });
+    invoice.addPaymentMeans({
+      code: "10",
+      instruction_note:
+        testCase.kind === "credit"
+          ? "إلغاء جزء من التوريد"
+          : "زيادة قيمة التوريد",
+    });
+  }
+  invoice.calculateTotals();
+
+  const uuid = crypto.randomUUID();
+  const unsignedXml = new ZatcaInvoice().generateXml(invoice, uuid);
+  const certificate = new Certificate(
+    toCertificatePem(String(setup.compliance_csid)),
+    String(setup.private_key_pem),
+    String(setup.compliance_secret),
+  );
+  const signer = InvoiceSigner.signInvoice(unsignedXml, certificate);
+  return {
+    uuid,
+    invoiceNumber,
+    signedXml: signer.getXML(),
+    invoiceHash: signer.getHash(),
+  };
+}
+
+function getValidationSummary(responseData: any) {
+  const validation = responseData?.validationResults ?? {};
+  const errors = Array.isArray(validation.errorMessages)
+    ? validation.errorMessages
+    : [];
+  const warnings = Array.isArray(validation.warningMessages)
+    ? validation.warningMessages
+    : [];
+  const status = clean(validation.status).toUpperCase();
+  const passed = errors.length === 0 && ["PASS", "WARNING"].includes(status);
+  return {
+    passed,
+    status: status || "ERROR",
+    message:
+      errors[0]?.message ??
+      warnings[0]?.message ??
+      (passed ? "اجتاز فحص ZATCA" : "لم يجتز فحص ZATCA"),
+    validationResults: validation,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -317,6 +541,153 @@ Deno.serve(async (req) => {
         },
         message: "تم الحصول على Compliance CSID من منصة المحاكاة",
       });
+    }
+
+    if (action === "run_compliance_case") {
+      const caseIndex = Number(body.caseIndex);
+      if (
+        !Number.isInteger(caseIndex) ||
+        caseIndex < 0 ||
+        caseIndex >= complianceCases.length
+      ) {
+        return respond({ error: "رقم اختبار التوافق غير صالح" }, 400);
+      }
+      const { data: setup, error: setupError } = await admin
+        .from("zatca_onboarding_settings")
+        .select("*")
+        .eq("mode", "simulation")
+        .maybeSingle();
+      if (setupError) throw setupError;
+      if (
+        !setup?.compliance_csid ||
+        !setup?.compliance_secret ||
+        !setup?.private_key_pem
+      ) {
+        return respond({ error: "يجب الحصول على Compliance CSID أولاً" }, 400);
+      }
+
+      const existingResults: any[] =
+        caseIndex === 0
+          ? []
+          : Array.isArray(setup.compliance_results)
+            ? setup.compliance_results
+            : [];
+      const previousHash =
+        caseIndex === 0
+          ? "MA=="
+          : clean(
+              existingResults.find((item) => item.caseIndex === caseIndex - 1)
+                ?.invoiceHash,
+            );
+      if (caseIndex > 0 && !previousHash) {
+        return respond({ error: "يجب تنفيذ اختبارات التوافق بالترتيب" }, 409);
+      }
+
+      const testCase = complianceCases[caseIndex];
+      await admin
+        .from("zatca_onboarding_settings")
+        .update({
+          status: "compliance_testing",
+          last_error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", setup.id);
+
+      let result: Record<string, unknown>;
+      let httpStatus = 0;
+      try {
+        const document = buildComplianceDocument(
+          setup,
+          testCase,
+          caseIndex,
+          previousHash,
+        );
+        const zatcaResponse = await fetch(
+          `${SIMULATION_URL}/compliance/invoices`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "Accept-Version": "V2",
+              "Accept-Language": "ar",
+              Authorization: `Basic ${Buffer.from(`${setup.compliance_csid}:${setup.compliance_secret}`).toString("base64")}`,
+            },
+            body: JSON.stringify({
+              invoiceHash: document.invoiceHash,
+              uuid: document.uuid,
+              invoice: Buffer.from(document.signedXml, "utf8").toString(
+                "base64",
+              ),
+            }),
+            signal: AbortSignal.timeout(35_000),
+          },
+        );
+        httpStatus = zatcaResponse.status;
+        const responseData = await zatcaResponse.json().catch(() => ({}));
+        const validation = getValidationSummary(responseData);
+        result = {
+          caseIndex,
+          documentType: testCase.key,
+          label: testCase.label,
+          status: zatcaResponse.ok && validation.passed ? "passed" : "failed",
+          message:
+            validation.message ||
+            responseData?.message ||
+            `ZATCA HTTP ${httpStatus}`,
+          httpStatus,
+          uuid: document.uuid,
+          invoiceNumber: document.invoiceNumber,
+          invoiceHash: document.invoiceHash,
+          validationResults: validation.validationResults,
+          testedAt: new Date().toISOString(),
+        };
+      } catch (error: any) {
+        result = {
+          caseIndex,
+          documentType: testCase.key,
+          label: testCase.label,
+          status: "failed",
+          message: error?.message ?? "فشل إنشاء أو توقيع مستند التوافق",
+          httpStatus,
+          testedAt: new Date().toISOString(),
+        };
+      }
+
+      const nextResults = existingResults.filter(
+        (item) => item.caseIndex !== caseIndex,
+      );
+      nextResults.push(result);
+      nextResults.sort((a, b) => a.caseIndex - b.caseIndex);
+      const completed = nextResults.length === complianceCases.length;
+      const allPassed =
+        completed && nextResults.every((item) => item.status === "passed");
+      const firstFailure = nextResults.find((item) => item.status === "failed");
+      const nextStatus = allPassed ? "compliance_passed" : "compliance_testing";
+      const { error: updateError } = await admin
+        .from("zatca_onboarding_settings")
+        .update({
+          status: nextStatus,
+          compliance_results: nextResults,
+          last_error: firstFailure ? firstFailure.message : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", setup.id);
+      if (updateError) throw updateError;
+      await admin.from("zatca_onboarding_audit").insert({
+        onboarding_id: setup.id,
+        actor_id: user.id,
+        action: `compliance_test_${testCase.key}`,
+        result: result.status === "passed" ? "success" : "failed",
+        http_status: httpStatus || null,
+        details: {
+          documentType: testCase.key,
+          uuid: result.uuid ?? null,
+          invoiceHash: result.invoiceHash ?? null,
+          message: result.message,
+        },
+      });
+      return respond({ result, completed, allPassed, status: nextStatus });
     }
 
     return respond({ error: "Unknown action" }, 400);

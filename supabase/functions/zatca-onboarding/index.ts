@@ -754,6 +754,65 @@ Deno.serve(async (req) => {
         ? setup.compliance_results
         : [];
       const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
+      const testCase = complianceCases[caseIndex];
+      const { data: passedAuditRows } = await admin
+        .from("zatca_onboarding_audit")
+        .select("action, http_status, details, created_at")
+        .eq("onboarding_id", setup.id)
+        .eq("result", "success")
+        .gte("created_at", setup.compliance_issued_at)
+        .like("action", "compliance_test_%");
+      const hydratedResults = new Map<number, any>();
+      for (const item of existingResults) {
+        hydratedResults.set(Number(item.caseIndex), item);
+      }
+      for (const auditRow of passedAuditRows ?? []) {
+        const restoredIndex = complianceCases.findIndex(
+          (item) => `compliance_test_${item.key}` === auditRow.action,
+        );
+        if (restoredIndex < 0) continue;
+        const restoredCase = complianceCases[restoredIndex];
+        hydratedResults.set(restoredIndex, {
+          caseIndex: restoredIndex,
+          documentType: restoredCase.key,
+          label: restoredCase.label,
+          status: "passed",
+          message: auditRow.details?.message ?? "اجتاز فحص ZATCA مسبقاً",
+          httpStatus: auditRow.http_status ?? 200,
+          uuid: auditRow.details?.uuid ?? null,
+          invoiceHash: auditRow.details?.invoiceHash ?? null,
+          testedAt: auditRow.created_at,
+        });
+      }
+      const currentPassed = hydratedResults.get(caseIndex);
+      if (currentPassed?.status === "passed" && currentPassed.invoiceHash) {
+        const restoredResults = [...hydratedResults.values()]
+          .filter((item) => requiredIndexes.includes(Number(item.caseIndex)))
+          .sort((a, b) => a.caseIndex - b.caseIndex);
+        const restoredComplete = requiredIndexes.every(
+          (index) => hydratedResults.get(index)?.status === "passed",
+        );
+        const restoredStatus = restoredComplete
+          ? "compliance_passed"
+          : "compliance_testing";
+        const { error: restoreError } = await admin
+          .from("zatca_onboarding_settings")
+          .update({
+            status: restoredStatus,
+            compliance_results: restoredResults,
+            last_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", setup.id);
+        if (restoreError) throw restoreError;
+        return respond({
+          result: currentPassed,
+          completed: restoredComplete,
+          allPassed: restoredComplete,
+          status: restoredStatus,
+        });
+      }
+
       const sequenceIndex = requiredIndexes.indexOf(caseIndex);
       if (sequenceIndex === -1) {
         return respond(
@@ -765,7 +824,7 @@ Deno.serve(async (req) => {
       const scopedExistingResults =
         sequenceIndex === 0
           ? []
-          : existingResults.filter((item) =>
+          : [...hydratedResults.values()].filter((item) =>
               requiredIndexes.includes(Number(item.caseIndex)),
             );
       const previousHash =
@@ -780,7 +839,6 @@ Deno.serve(async (req) => {
         return respond({ error: "يجب تنفيذ اختبارات التوافق بالترتيب" }, 409);
       }
 
-      const testCase = complianceCases[caseIndex];
       await admin
         .from("zatca_onboarding_settings")
         .update({

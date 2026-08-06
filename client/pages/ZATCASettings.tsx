@@ -142,6 +142,14 @@ export default function ZATCASettings() {
       const data = await invoke({ action: "status" });
       setSetup(data.setup ?? null);
       setAudit(data.audit ?? []);
+      if (!quiet) {
+        toast({
+          title: "الاتصال الآمن يعمل",
+          description: data.setup
+            ? `حالة التهيئة: ${statusLabels[data.setup.status as SetupStatus] ?? data.setup.status}`
+            : "لا توجد تهيئة سابقة. راجع البيانات ثم ولّد CSR.",
+        });
+      }
       if (data.setup) {
         setIdentity({
           companyNameAr: data.setup.company_name_ar ?? "",

@@ -53,6 +53,10 @@ type ComplianceResult = {
   message?: string;
   httpStatus?: number;
   invoiceHash?: string;
+  validationResults?: {
+    errorMessages?: Array<{ code?: string; message?: string }>;
+    warningMessages?: Array<{ code?: string; message?: string }>;
+  };
 };
 
 type IdentityForm = {
@@ -684,11 +688,25 @@ export default function ZATCASettings() {
                     />
                     {document.label}
                   </div>
-                  <p className="mt-2 text-xs leading-5 opacity-80">
-                    {result?.status === "passed"
-                      ? "اجتاز فحص ZATCA"
-                      : result?.message || "لم يُختبر بعد"}
-                  </p>
+                  {result?.status === "failed" &&
+                  result.validationResults?.errorMessages?.length ? (
+                    <ul className="mt-2 space-y-1 text-xs leading-5 opacity-80">
+                      {result.validationResults.errorMessages.map(
+                        (error, index) => (
+                          <li key={`${error.code ?? "error"}-${index}`}>
+                            {error.code ? `[${error.code}] ` : ""}
+                            {error.message || "رفضت ZATCA المستند"}
+                          </li>
+                        ),
+                      )}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs leading-5 opacity-80">
+                      {result?.status === "passed"
+                        ? "اجتاز فحص ZATCA"
+                        : result?.message || "لم يُختبر بعد"}
+                    </p>
+                  )}
                   {result?.httpStatus ? (
                     <small className="mt-1 block font-mono">
                       HTTP {result.httpStatus}

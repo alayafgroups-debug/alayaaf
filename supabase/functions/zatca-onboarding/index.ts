@@ -357,9 +357,9 @@ function buildComplianceDocument(
       testCase.scope === "standard" ? "شركة المشتري التجريبية" : "عميل تجريبي",
     )
     .setPartyIdentification(
-      testCase.scope === "standard" ? "310000000000003" : "1234567890",
+      testCase.scope === "standard" ? "1010000000" : "1234567890",
     )
-    .setPartyIdentificationId(testCase.scope === "standard" ? "VAT" : "NAT")
+    .setPartyIdentificationId(testCase.scope === "standard" ? "CRN" : "NAT")
     .setStreetName("شارع الملك فهد")
     .setBuildingNumber("1234")
     .setCitySubdivisionName("حي العليا")

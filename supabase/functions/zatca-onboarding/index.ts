@@ -257,9 +257,10 @@ function createCompatibleCertificate(
     getRawCertificate: () => certificatePem,
     getSecretKey: () => secret,
     getCertHash: () =>
-      createHash("sha256")
-        .update(Buffer.from(certificateBody, "base64"))
-        .digest("base64"),
+      Buffer.from(
+        createHash("sha256").update(certificateBody).digest("hex"),
+        "utf8",
+      ).toString("base64"),
     getFormattedIssuer: () => issuer,
     getSerialNumber: () => serialNumber,
     getRawPublicKey: () =>
@@ -298,9 +299,10 @@ function correctXadesDigests(xml: string, certificate: Certificate) {
     "                                    </xades:SigningCertificate>\n" +
     "                                </xades:SignedSignatureProperties>\n" +
     "                            </xades:SignedProperties>";
-  const digest = createHash("sha256")
-    .update(signedPropertiesXml, "utf8")
-    .digest("base64");
+  const digest = Buffer.from(
+    createHash("sha256").update(signedPropertiesXml, "utf8").digest("hex"),
+    "utf8",
+  ).toString("base64");
 
   const correctedType = xml.replace(
     'Type="http://www.w3.org/2000/09/xmldsig#SignatureProperties" URI="#xadesSignedProperties"',

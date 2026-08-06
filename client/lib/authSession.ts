@@ -45,7 +45,10 @@ export function checkPerm(liveMap: PermissionMap, ...keys: string[]): boolean {
   return false;
 }
 
-export function canManagePerm(liveMap: PermissionMap, ...keys: string[]): boolean {
+export function canManagePerm(
+  liveMap: PermissionMap,
+  ...keys: string[]
+): boolean {
   if (Object.keys(liveMap).length === 0) return true;
   for (const key of keys) {
     if (!Object.prototype.hasOwnProperty.call(liveMap, key)) continue;
@@ -55,13 +58,19 @@ export function canManagePerm(liveMap: PermissionMap, ...keys: string[]): boolea
   return false;
 }
 
-export function permissionLevel(liveMap: PermissionMap, ...keys: string[]): "none" | "read" | "manage" {
+export function permissionLevel(
+  liveMap: PermissionMap,
+  ...keys: string[]
+): "none" | "read" | "manage" {
   if (!checkPerm(liveMap, ...keys)) return "none";
   return canManagePerm(liveMap, ...keys) ? "manage" : "read";
 }
 
 // ── Legacy helpers kept for non-sidebar code ─────────────────────────────────
-export function hasPermission(session: UserSession | null, ...keys: string[]): boolean {
+export function hasPermission(
+  session: UserSession | null,
+  ...keys: string[]
+): boolean {
   if (!session) return false;
   return checkPerm(session.permissions, ...keys);
 }
@@ -84,21 +93,33 @@ export function permissionForMainPath(path: string): string | null {
   if (path.startsWith("/expenses")) return "module.accounting";
   if (path.startsWith("/users")) return "module.users";
   if (path.startsWith("/ai")) return "module.ai";
+  if (path.startsWith("/zatca")) return "module.settings";
   if (path.startsWith("/settings")) return "module.settings";
   return null;
 }
 
 export function permissionForMainSubPath(path: string): string[] {
   const rules: Array<[string, string, string]> = [
-    ["/sales/quotations", "sales.quotations", "module.sales"], ["/sales/orders", "sales.orders", "module.sales"],
-    ["/sales/invoices", "sales.invoices", "module.sales"], ["/sales/credit-note", "sales.credit_notes", "module.sales"],
-    ["/sales/delivery-note", "sales.delivery_notes", "module.sales"], ["/purchases/invoices", "purchases.invoices", "module.purchases"],
-    ["/purchases/cash-expenses", "purchases.cash_expenses", "module.purchases"], ["/purchases/debit-notes", "purchases.debit_notes", "module.purchases"],
-    ["/purchases/orders", "purchases.orders", "module.purchases"], ["/purchases/reports", "purchases.reports", "module.purchases"],
-    ["/crm/customers", "crm.customers", "module.crm"], ["/crm/vendors", "crm.vendors", "module.crm"], ["/crm/reports", "crm.reports", "module.crm"],
-    ["/expenses/tax-reports", "accounting.tax_reports", "module.accounting"], ["/expenses/tax", "accounting.tax", "module.accounting"],
-    ["/expenses", "accounting.accounts", "module.accounting"], ["/users/roles", "users.roles", "module.users"],
-    ["/users/audit", "users.audit", "module.users"], ["/users", "users.list", "module.users"], ["/ai", "ai.assistant", "module.ai"],
+    ["/sales/quotations", "sales.quotations", "module.sales"],
+    ["/sales/orders", "sales.orders", "module.sales"],
+    ["/sales/invoices", "sales.invoices", "module.sales"],
+    ["/sales/credit-note", "sales.credit_notes", "module.sales"],
+    ["/sales/delivery-note", "sales.delivery_notes", "module.sales"],
+    ["/purchases/invoices", "purchases.invoices", "module.purchases"],
+    ["/purchases/cash-expenses", "purchases.cash_expenses", "module.purchases"],
+    ["/purchases/debit-notes", "purchases.debit_notes", "module.purchases"],
+    ["/purchases/orders", "purchases.orders", "module.purchases"],
+    ["/purchases/reports", "purchases.reports", "module.purchases"],
+    ["/crm/customers", "crm.customers", "module.crm"],
+    ["/crm/vendors", "crm.vendors", "module.crm"],
+    ["/crm/reports", "crm.reports", "module.crm"],
+    ["/expenses/tax-reports", "accounting.tax_reports", "module.accounting"],
+    ["/expenses/tax", "accounting.tax", "module.accounting"],
+    ["/expenses", "accounting.accounts", "module.accounting"],
+    ["/users/roles", "users.roles", "module.users"],
+    ["/users/audit", "users.audit", "module.users"],
+    ["/users", "users.list", "module.users"],
+    ["/ai", "ai.assistant", "module.ai"],
   ];
   const match = rules.find(([prefix]) => path.startsWith(prefix));
   return match ? [match[1], match[2]] : [permissionForMainPath(path) ?? ""];
@@ -107,15 +128,31 @@ export function permissionForMainSubPath(path: string): string[] {
 export function permissionForHRPath(path: string): string[] {
   if (path === "/hr" || path === "/hr/dashboard") return ["module.hr"];
   const groups: Array<[string, string]> = [
-    ["/hr/employees", "hr.employees"], ["/hr/user-logs", "hr.employees"], ["/hr/requests", "hr.requests"],
-    ["/hr/attendance", "hr.attendance"], ["/hr/payroll", "hr.payroll"], ["/hr/reports", "hr.reports"],
-    ["/hr/penalties", "hr.penalties"], ["/hr/leaves", "hr.leaves"], ["/hr/termination", "hr.termination"],
-    ["/hr/insurance", "hr.insurance"], ["/hr/approvals", "hr.approvals"], ["/hr/financial-setup", "hr.finance_setup"],
-    ["/hr/succession", "hr.succession"], ["/hr/certificates", "hr.certificates"], ["/hr/organization", "hr.org"],
-    ["/hr/permissions", "hr.permissions"], ["/hr/settings", "hr.settings"],
+    ["/hr/employees", "hr.employees"],
+    ["/hr/user-logs", "hr.employees"],
+    ["/hr/requests", "hr.requests"],
+    ["/hr/attendance", "hr.attendance"],
+    ["/hr/payroll", "hr.payroll"],
+    ["/hr/reports", "hr.reports"],
+    ["/hr/penalties", "hr.penalties"],
+    ["/hr/leaves", "hr.leaves"],
+    ["/hr/termination", "hr.termination"],
+    ["/hr/insurance", "hr.insurance"],
+    ["/hr/approvals", "hr.approvals"],
+    ["/hr/financial-setup", "hr.finance_setup"],
+    ["/hr/succession", "hr.succession"],
+    ["/hr/certificates", "hr.certificates"],
+    ["/hr/organization", "hr.org"],
+    ["/hr/permissions", "hr.permissions"],
+    ["/hr/settings", "hr.settings"],
   ];
   const group = groups.find(([prefix]) => path.startsWith(prefix));
   if (!group) return ["module.hr"];
-  const suffix = path.slice(group[0].length).replace(/^\//, "").replace(/\//g, ".");
-  return suffix ? [`${group[1]}.${suffix}`, group[1], "module.hr"] : [group[1], "module.hr"];
+  const suffix = path
+    .slice(group[0].length)
+    .replace(/^\//, "")
+    .replace(/\//g, ".");
+  return suffix
+    ? [`${group[1]}.${suffix}`, group[1], "module.hr"]
+    : [group[1], "module.hr"];
 }

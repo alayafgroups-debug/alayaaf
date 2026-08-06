@@ -1,515 +1,596 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { AlertCircle, Check, Copy, Eye, EyeOff, RefreshCw, Settings, Trash2, Play } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { useZATCA, ComplianceTestResult } from "@/hooks/useZATCA";
+import { toast } from "@/hooks/use-toast";
+import {
+  AlertCircle,
+  Building2,
+  Check,
+  FileKey2,
+  Loader2,
+  MonitorCog,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 
-interface ZATCASetup {
-  id?: string;
-  org_id?: string;
-  mode: "sandbox" | "production";
-  csid?: string;
-  ccsid?: string;
-  secret?: string;
-  sandbox_tested: boolean;
-  production_ready: boolean;
-  api_key?: string;
-  created_at?: string;
-  last_sync?: string;
-}
+type SetupStatus =
+  | "identity_saved"
+  | "csr_generated"
+  | "compliance_ready"
+  | "compliance_testing"
+  | "compliance_passed"
+  | "failed";
+
+type SetupMetadata = {
+  id: string;
+  mode: "simulation";
+  company_name_ar: string;
+  company_name_en?: string;
+  vat_number: string;
+  commercial_registration: string;
+  branch_name: string;
+  branch_location: string;
+  industry: string;
+  device_manufacturer: string;
+  device_model: string;
+  device_serial: string;
+  common_name: string;
+  invoice_type: "1000" | "0100" | "1100";
+  status: SetupStatus;
+  compliance_request_id?: string;
+  compliance_csid_masked?: string;
+  compliance_issued_at?: string;
+  compliance_results?: ComplianceResult[];
+  last_error?: string;
+  updated_at?: string;
+};
+
+type ComplianceResult = {
+  documentType: string;
+  label: string;
+  status: "pending" | "testing" | "passed" | "failed";
+  message?: string;
+};
+
+type IdentityForm = {
+  companyNameAr: string;
+  companyNameEn: string;
+  vatNumber: string;
+  commercialRegistration: string;
+  branchName: string;
+  branchLocation: string;
+  industry: string;
+  deviceManufacturer: string;
+  deviceModel: string;
+  deviceSerial: string;
+  commonName: string;
+  invoiceType: "1000" | "0100" | "1100";
+};
+
+const initialIdentity: IdentityForm = {
+  companyNameAr: "شركة لاكجري العياف",
+  companyNameEn: "Luxury Al Ayaf Company",
+  vatNumber: "314559705300003",
+  commercialRegistration: "7053358979",
+  branchName: "الفرع الرئيسي",
+  branchLocation:
+    "8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة 24351، المملكة العربية السعودية",
+  industry: "المقاولات وإدارة الأعمال",
+  deviceManufacturer: "Alayaaf ERP",
+  deviceModel: "Web EGS V1",
+  deviceSerial: "ALAYAAF-EGS-001",
+  commonName: "ALAYAAF-EGS-001",
+  invoiceType: "1100",
+};
+
+const complianceDocuments = [
+  "فاتورة ضريبية معيارية B2B",
+  "إشعار دائن معياري B2B",
+  "إشعار مدين معياري B2B",
+  "فاتورة ضريبية مبسطة B2C",
+  "إشعار دائن مبسط B2C",
+  "إشعار مدين مبسط B2C",
+];
+
+const onboardingSteps = [
+  { number: 1, label: "بيانات المنشأة", Icon: Building2 },
+  { number: 2, label: "OTP وتهيئة الجهاز", Icon: FileKey2 },
+  { number: 3, label: "شهادة التوافق", Icon: ShieldCheck },
+  { number: 4, label: "الاختبارات الستة", Icon: MonitorCog },
+];
+
+const statusLabels: Record<SetupStatus, string> = {
+  identity_saved: "تم حفظ بيانات المنشأة",
+  csr_generated: "CSR جاهز — بانتظار OTP",
+  compliance_ready: "تم الحصول على Compliance CSID",
+  compliance_testing: "جاري فحص التوافق",
+  compliance_passed: "اجتاز فحص التوافق",
+  failed: "تحتاج العملية إلى إعادة المحاولة",
+};
 
 export default function ZATCASettings() {
-  const [setup, setSetup] = useState<ZATCASetup>({
-    mode: "sandbox",
-    sandbox_tested: false,
-    production_ready: false,
-  });
+  const [identity, setIdentity] = useState<IdentityForm>(initialIdentity);
+  const [setup, setSetup] = useState<SetupMetadata | null>(null);
+  const [audit, setAudit] = useState<any[]>([]);
+  const [otp, setOtp] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [action, setAction] = useState<
+    "prepare" | "onboard" | "refresh" | null
+  >(null);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "connected" | "failed">("idle");
-  const [complianceResults, setComplianceResults] = useState<ComplianceTestResult[]>([]);
-  const [isRunningCompliance, setIsRunningCompliance] = useState(false);
-  const { testConnection, runFullComplianceTest } = useZATCA();
-
-  // تحميل الإعدادات الحالية
-  useEffect(() => {
-    const loadSetup = async () => {
-      try {
-        const { data } = await supabase
-          .from("zatca_integration")
-          .select("*")
-          .limit(1)
-          .single();
-
-        if (data) {
-          setSetup(data);
-        }
-      } catch (error) {
-        console.error("Error loading setup:", error);
-      }
-    };
-
-    loadSetup();
-  }, []);
-
-  // حفظ الإعدادات
-  const handleSave = async () => {
-    setIsLoading(true);
-    try {
-      if (setup.id) {
-        // تحديث
-        const { error } = await supabase
-          .from("zatca_integration")
-          .update({
-            mode: setup.mode,
-            csid: setup.csid,
-            ccsid: setup.ccsid,
-            secret: setup.secret,
-            api_key: setup.api_key,
-            sandbox_tested: setup.sandbox_tested,
-            production_ready: setup.production_ready,
-          })
-          .eq("id", setup.id);
-
-        if (error) throw error;
-      } else {
-        // إدراج
-        const { error } = await supabase
-          .from("zatca_integration")
-          .insert([setup]);
-
-        if (error) throw error;
-      }
-
-      toast({
-        title: "تم الحفظ بنجاح",
-        description: "تم حفظ إعدادات ZATCA بنجاح",
-      });
-    } catch (error) {
-      toast({
-        title: "خطأ",
-        description: error instanceof Error ? error.message : "فشل حفظ الإعدادات",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  const invoke = async (body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke(
+      "zatca-onboarding",
+      { body },
+    );
+    if (error) throw error;
+    if (data?.error) throw new Error(String(data.error));
+    return data;
   };
 
-  // اختبار الاتصال
-  const handleTestConnection = async () => {
-    setConnectionStatus("testing");
+  const loadStatus = async (quiet = false) => {
+    if (!quiet) setAction("refresh");
     try {
-      const result = await testConnection();
-      if (result.connected) {
-        setConnectionStatus("connected");
-        setSetup((prev) => ({ ...prev, sandbox_tested: true }));
-        toast({
-          title: "نجح الاتصال",
-          description: result.message,
+      const data = await invoke({ action: "status" });
+      setSetup(data.setup ?? null);
+      setAudit(data.audit ?? []);
+      if (data.setup) {
+        setIdentity({
+          companyNameAr: data.setup.company_name_ar ?? "",
+          companyNameEn: data.setup.company_name_en ?? "",
+          vatNumber: data.setup.vat_number ?? "",
+          commercialRegistration: data.setup.commercial_registration ?? "",
+          branchName: data.setup.branch_name ?? "",
+          branchLocation: data.setup.branch_location ?? "",
+          industry: data.setup.industry ?? "",
+          deviceManufacturer: data.setup.device_manufacturer ?? "",
+          deviceModel: data.setup.device_model ?? "",
+          deviceSerial: data.setup.device_serial ?? "",
+          commonName: data.setup.common_name ?? "",
+          invoiceType: data.setup.invoice_type ?? "1100",
         });
-      } else {
-        setConnectionStatus("failed");
+      }
+    } catch (error) {
+      if (!quiet) {
         toast({
-          title: "فشل الاتصال",
-          description: result.message,
+          title: "تعذر تحميل حالة ZATCA",
+          description:
+            error instanceof Error ? error.message : "حدث خطأ غير متوقع",
           variant: "destructive",
         });
       }
-    } catch (error) {
-      setConnectionStatus("failed");
-      toast({
-        title: "خطأ",
-        description: "فشل اختبار الاتصال",
-        variant: "destructive",
-      });
+    } finally {
+      setLoading(false);
+      setAction(null);
     }
   };
 
-  // تشغيل فحص التوافق الكامل
-  const handleRunCompliance = async () => {
-    if (!setup.csid || !setup.secret) {
+  useEffect(() => {
+    loadStatus(true);
+  }, []);
+
+  const setField = <K extends keyof IdentityForm>(
+    key: K,
+    value: IdentityForm[K],
+  ) => setIdentity((current) => ({ ...current, [key]: value }));
+
+  const prepare = async () => {
+    setAction("prepare");
+    try {
+      const data = await invoke({ action: "prepare", ...identity });
+      toast({ title: "تم تجهيز الجهاز", description: data.message });
+      await loadStatus(true);
+    } catch (error) {
       toast({
-        title: "خطأ",
-        description: "يجب إدخال CSID والـ Secret أولاً",
+        title: "تعذر تجهيز الجهاز",
+        description:
+          error instanceof Error ? error.message : "تحقق من البيانات",
+        variant: "destructive",
+      });
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const onboard = async () => {
+    if (!/^\d{6}$/.test(otp)) {
+      toast({
+        title: "رمز غير صالح",
+        description: "أدخل رمز OTP المكون من 6 أرقام",
         variant: "destructive",
       });
       return;
     }
-
-    setIsRunningCompliance(true);
-    setComplianceResults([]);
-
+    setAction("onboard");
     try {
-      const results = await runFullComplianceTest((results) => {
-        setComplianceResults(results);
-      });
-
-      const passedCount = results.filter((r) => r.status === "passed").length;
-      const totalCount = results.length;
-
-      toast({
-        title:
-          passedCount === totalCount
-            ? "نجح الاختبار!"
-            : "الاختبار مكتمل",
-        description: `${passedCount} من ${totalCount} اختبارات نجحت`,
-        variant:
-          passedCount === totalCount ? "default" : "destructive",
-      });
-
-      setSetup((prev) => ({
-        ...prev,
-        sandbox_tested: passedCount === totalCount,
-      }));
+      const data = await invoke({ action: "onboard", otp });
+      setOtp("");
+      toast({ title: "نجحت تهيئة Sandbox", description: data.message });
+      await loadStatus(true);
     } catch (error) {
       toast({
-        title: "خطأ",
+        title: "رفضت ZATCA طلب التهيئة",
         description:
-          error instanceof Error
-            ? error.message
-            : "فشل تشغيل الاختبارات",
+          error instanceof Error ? error.message : "تحقق من OTP والبيانات",
         variant: "destructive",
       });
+      await loadStatus(true);
     } finally {
-      setIsRunningCompliance(false);
+      setAction(null);
     }
   };
 
-  // نسخ قيمة إلى الحافظة
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast({
-        title: "تم النسخ",
-        description: "تم نسخ القيمة إلى الحافظة",
-      });
-    } catch {
-      toast({
-        title: "خطأ",
-        description: "فشل نسخ القيمة",
-        variant: "destructive",
-      });
-    }
-  };
+  const step = useMemo(() => {
+    if (!setup) return 1;
+    if (setup.status === "csr_generated" || setup.status === "failed") return 2;
+    if (setup.status === "compliance_ready") return 3;
+    if (setup.status === "compliance_testing") return 4;
+    if (setup.status === "compliance_passed") return 5;
+    return 1;
+  }, [setup]);
 
-  // حذف الإعدادات
-  const handleDelete = async () => {
-    if (!setup.id) return;
-
-    if (!confirm("هل أنت متأكد من حذف هذه الإعدادات؟")) return;
-
-    setIsLoading(true);
-    try {
-      const { error } = await supabase
-        .from("zatca_integration")
-        .delete()
-        .eq("id", setup.id);
-
-      if (error) throw error;
-
-      setSetup({
-        mode: "sandbox",
-        sandbox_tested: false,
-        production_ready: false,
-      });
-
-      toast({
-        title: "تم الحذف",
-        description: "تم حذف الإعدادات بنجاح",
-      });
-    } catch (error) {
-      toast({
-        title: "خطأ",
-        description: error instanceof Error ? error.message : "فشل حذف الإعدادات",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const inputClass =
+    "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto p-6 bg-white">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">إعدادات ZATCA</h1>
-          <p className="text-gray-600">إدارة تكامل نظام الفاتورة الإلكترونية مع ZATCA</p>
-        </div>
+      <div className="mx-auto max-w-6xl space-y-6 p-2" dir="rtl">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-blue-700">
+              الفاتورة الإلكترونية — المرحلة الثانية
+            </p>
+            <h1 className="mt-1 text-3xl font-bold text-slate-950">
+              تهيئة ZATCA التجريبية
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              تجهيز وحدة EGS داخل بيئة المحاكاة، وتوليد CSR والمفتاح الخاص داخل
+              الخادم دون عرض الأسرار في المتصفح.
+            </p>
+          </div>
+          <button
+            onClick={() => loadStatus()}
+            disabled={Boolean(action)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${action === "refresh" ? "animate-spin" : ""}`}
+            />{" "}
+            تحديث الحالة
+          </button>
+        </header>
 
-        {/* حالة الاتصال */}
-        <div className="mb-6 p-4 rounded-lg border-2 border-blue-200 bg-blue-50">
-          <div className="flex items-center justify-between">
+        <section className="grid gap-3 md:grid-cols-4">
+          {onboardingSteps.map(({ number, label, Icon }) => {
+            const active = step >= number;
+            return (
+              <div
+                key={number}
+                className={`rounded-2xl border p-4 ${active ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`grid h-9 w-9 place-items-center rounded-full ${active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400"}`}
+                  >
+                    {step > number ? (
+                      <Check className="h-5 w-5" />
+                    ) : (
+                      <Icon className="h-5 w-5" />
+                    )}
+                  </span>
+                  <div>
+                    <small className="text-slate-500">الخطوة {number}</small>
+                    <strong className="block text-sm text-slate-900">
+                      {label}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        {setup && (
+          <section
+            className={`rounded-2xl border p-4 ${setup.status === "failed" ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <ShieldCheck
+                  className={
+                    setup.status === "failed"
+                      ? "text-rose-600"
+                      : "text-emerald-600"
+                  }
+                />
+                <div>
+                  <strong className="block text-slate-900">
+                    {statusLabels[setup.status]}
+                  </strong>
+                  <span className="text-xs text-slate-600">
+                    البيئة: Simulation فقط
+                  </span>
+                </div>
+              </div>
+              {setup.compliance_csid_masked && (
+                <code className="rounded-lg bg-white px-3 py-2 text-xs text-slate-700">
+                  CSID: {setup.compliance_csid_masked}
+                </code>
+              )}
+            </div>
+            {setup.last_error && (
+              <p className="mt-3 rounded-lg bg-white/70 p-3 text-sm text-rose-700">
+                {setup.last_error}
+              </p>
+            )}
+          </section>
+        )}
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+            <h2 className="font-bold text-slate-900">
+              1. بيانات المنشأة ووحدة إصدار الفواتير
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              راجع البيانات القانونية بدقة قبل إنشاء OTP؛ ستُستخدم داخل طلب
+              الشهادة.
+            </p>
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-2">
+            <Field
+              label="اسم المنشأة بالعربية"
+              value={identity.companyNameAr}
+              onChange={(value) => setField("companyNameAr", value)}
+              className={inputClass}
+            />
+            <Field
+              label="اسم المنشأة بالإنجليزية"
+              value={identity.companyNameEn}
+              onChange={(value) => setField("companyNameEn", value)}
+              className={inputClass}
+            />
+            <Field
+              label="الرقم الضريبي — 15 رقمًا"
+              value={identity.vatNumber}
+              onChange={(value) =>
+                setField("vatNumber", value.replace(/\D/g, "").slice(0, 15))
+              }
+              className={inputClass}
+              dir="ltr"
+            />
+            <Field
+              label="رقم السجل التجاري"
+              value={identity.commercialRegistration}
+              onChange={(value) =>
+                setField(
+                  "commercialRegistration",
+                  value.replace(/\D/g, "").slice(0, 15),
+                )
+              }
+              className={inputClass}
+              dir="ltr"
+            />
+            <Field
+              label="اسم الفرع"
+              value={identity.branchName}
+              onChange={(value) => setField("branchName", value)}
+              className={inputClass}
+            />
+            <Field
+              label="نوع النشاط"
+              value={identity.industry}
+              onChange={(value) => setField("industry", value)}
+              className={inputClass}
+            />
+            <div className="md:col-span-2">
+              <Field
+                label="عنوان الفرع المسجل"
+                value={identity.branchLocation}
+                onChange={(value) => setField("branchLocation", value)}
+                className={inputClass}
+              />
+            </div>
+            <Field
+              label="مصنّع الحل التقني"
+              value={identity.deviceManufacturer}
+              onChange={(value) => setField("deviceManufacturer", value)}
+              className={inputClass}
+              dir="ltr"
+            />
+            <Field
+              label="طراز الجهاز / النظام"
+              value={identity.deviceModel}
+              onChange={(value) => setField("deviceModel", value)}
+              className={inputClass}
+              dir="ltr"
+            />
+            <Field
+              label="الرقم التسلسلي للوحدة"
+              value={identity.deviceSerial}
+              onChange={(value) =>
+                setField(
+                  "deviceSerial",
+                  value.toUpperCase().replace(/[^A-Z0-9._\-/]/g, ""),
+                )
+              }
+              className={inputClass}
+              dir="ltr"
+            />
+            <Field
+              label="الاسم الشائع للشهادة (CN)"
+              value={identity.commonName}
+              onChange={(value) => setField("commonName", value)}
+              className={inputClass}
+              dir="ltr"
+            />
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="text-xs font-bold text-slate-700">
+                أنواع الفواتير التي تصدرها الوحدة
+              </span>
+              <select
+                value={identity.invoiceType}
+                onChange={(event) =>
+                  setField(
+                    "invoiceType",
+                    event.target.value as IdentityForm["invoiceType"],
+                  )
+                }
+                className={inputClass}
+              >
+                <option value="1100">معيارية ومبسطة — 1100</option>
+                <option value="1000">معيارية فقط — 1000</option>
+                <option value="0100">مبسطة فقط — 0100</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4">
+            <button
+              onClick={prepare}
+              disabled={Boolean(action)}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {action === "prepare" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileKey2 className="h-4 w-4" />
+              )}
+              حفظ البيانات وتوليد CSR آمن
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="font-bold text-slate-900">2. إدخال رمز التفعيل OTP</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            بعد ظهور حالة CSR جاهز، أنشئ رمزًا واحدًا من منصة المحاكاة وأدخله
+            هنا خلال ساعة.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <input
+              value={otp}
+              onChange={(event) =>
+                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              dir="ltr"
+              className="h-12 w-48 rounded-xl border border-slate-300 px-4 text-center font-mono text-xl tracking-[0.35em] outline-none focus:border-blue-500"
+            />
+            <button
+              onClick={onboard}
+              disabled={
+                Boolean(action) ||
+                !setup ||
+                !["csr_generated", "failed"].includes(setup.status) ||
+                otp.length !== 6
+              }
+              className="flex h-12 items-center gap-2 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {action === "onboard" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+              تهيئة الجهاز في Sandbox
+            </button>
+          </div>
+          <div className="mt-4 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+            <AlertCircle className="h-5 w-5 shrink-0" /> لا يُحفظ OTP، ولا يعرض
+            النظام المفتاح الخاص أو Secret أو CSID الكامل في المتصفح.
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-gray-900">حالة الاتصال</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                {connectionStatus === "idle" && "لم يتم اختبار الاتصال بعد"}
-                {connectionStatus === "testing" && "جاري الاختبار..."}
-                {connectionStatus === "connected" && "متصل بنجاح ✓"}
-                {connectionStatus === "failed" && "فشل الاتصال ✗"}
+              <h2 className="font-bold text-slate-900">
+                3. فحص التوافق — المستندات الستة
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                يُفتح بعد الحصول على Compliance CSID. لن يُعرض نجاح وهمي قبل
+                إرسال مستندات موقعة وصحيحة إلى ZATCA.
               </p>
             </div>
-            <button
-              onClick={handleTestConnection}
-              disabled={isLoading || connectionStatus === "testing"}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              <RefreshCw size={18} />
-              اختبار الاتصال
-            </button>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+              بانتظار مرحلة التوقيع والفحص
+            </span>
           </div>
-        </div>
-
-        {/* نمط التشغيل */}
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">نمط التشغيل</label>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="mode"
-                value="sandbox"
-                checked={setup.mode === "sandbox"}
-                onChange={(e) => setSetup({ ...setup, mode: e.target.value as "sandbox" | "production" })}
-                className="w-4 h-4"
-              />
-              <span>Sandbox (الاختبار)</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="mode"
-                value="production"
-                checked={setup.mode === "production"}
-                onChange={(e) => setSetup({ ...setup, mode: e.target.value as "sandbox" | "production" })}
-                className="w-4 h-4"
-              />
-              <span>Production (الإنتاج)</span>
-            </label>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {complianceDocuments.map((document) => (
+              <div
+                key={document}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+              >
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                {document}
+              </div>
+            ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            استخدم Sandbox للاختبار قبل الانتقال للإنتاج
-          </p>
-        </div>
+        </section>
 
-        {/* بيانات الشهادات */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* CSID */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">CSID (Compliance Stamp ID)</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={setup.csid || ""}
-                onChange={(e) => setSetup({ ...setup, csid: e.target.value })}
-                placeholder="الحصول عليه من ZATCA"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
-              />
-              {setup.csid && (
-                <button
-                  onClick={() => copyToClipboard(setup.csid!)}
-                  className="px-3 py-2 text-gray-600 hover:text-gray-900"
-                  title="نسخ"
-                >
-                  <Copy size={18} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* CCSID */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              CCSID (Compliance Cryptographic Stamp ID)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={setup.ccsid || ""}
-                onChange={(e) => setSetup({ ...setup, ccsid: e.target.value })}
-                placeholder="الحصول عليه من ZATCA"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
-              />
-              {setup.ccsid && (
-                <button
-                  onClick={() => copyToClipboard(setup.ccsid!)}
-                  className="px-3 py-2 text-gray-600 hover:text-gray-900"
-                  title="نسخ"
-                >
-                  <Copy size={18} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Secret */}
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Secret (المفتاح السري المرافق للـ CSID)
-          </label>
-          <div className="flex gap-2">
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={setup.secret || ""}
-              onChange={(e) => setSetup({ ...setup, secret: e.target.value })}
-              placeholder="الحصول عليه من ZATCA مع الـ CSID"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
-            />
-            <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="px-3 py-2 text-gray-600 hover:text-gray-900"
-            >
-              {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            يُستخدم مع الـ CSID لبناء مصادقة Basic Auth عند الإبلاغ عن الفواتير
-          </p>
-        </div>
-
-        {/* API Key */}
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">مفتاح API (اختياري)</label>
-          <div className="flex gap-2">
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={setup.api_key || ""}
-              onChange={(e) => setSetup({ ...setup, api_key: e.target.value })}
-              placeholder="مفتاح API من ZATCA"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            />
-            <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="px-3 py-2 text-gray-600 hover:text-gray-900"
-            >
-              {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-        </div>
-
-        {/* حالات الاختبار والإنتاج */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h3 className="font-semibold text-gray-900 mb-4">حالة التجهيز</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={setup.sandbox_tested}
-                  onChange={(e) => setSetup({ ...setup, sandbox_tested: e.target.checked })}
-                  className="w-4 h-4"
-                />
-                <span>تم اختبار Sandbox</span>
-              </label>
-              {setup.sandbox_tested && <Check className="text-green-600" size={20} />}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={setup.production_ready}
-                  onChange={(e) => setSetup({ ...setup, production_ready: e.target.checked })}
-                  className="w-4 h-4"
-                  disabled={!setup.sandbox_tested}
-                />
-                <span>جاهز للإنتاج</span>
-              </label>
-              {setup.production_ready && <Check className="text-green-600" size={20} />}
-            </div>
-          </div>
-        </div>
-
-        {/* تنبيهات */}
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex gap-3">
-          <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-          <div className="text-sm text-gray-800">
-            <p className="font-semibold mb-1">نصائح هامة:</p>
-            <ul className="list-disc list-inside space-y-1 text-xs">
-              <li>ابدأ دائماً بـ Sandbox للاختبار قبل الانتقال للإنتاج</li>
-              <li>احفظ CSID و CCSID بشكل آمن</li>
-              <li>تأكد من صحة بيانات الشركة قبل الإرسال</li>
-              <li>احتفظ بسجل لجميع الفواتير المرسلة</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* فحص التوافق الكامل */}
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="font-semibold text-gray-900 mb-3">فحص التوافق (الأنواع الستة)</h3>
-          <p className="text-sm text-gray-700 mb-4">
-            اختبر نظامك على جميع أنواع الوثائق الستة المطلوبة من ZATCA:
-          </p>
-          {complianceResults.length > 0 && (
-            <div className="mb-4 space-y-2">
-              {complianceResults.map((result) => (
+        {audit.length > 0 && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="mb-3 font-bold text-slate-900">سجل التهيئة</h2>
+            <div className="space-y-2">
+              {audit.map((item) => (
                 <div
-                  key={result.documentType}
-                  className={`p-3 rounded-lg ${
-                    result.status === "passed"
-                      ? "bg-green-100 text-green-800"
-                      : result.status === "failed"
-                      ? "bg-red-100 text-red-800"
-                      : "bg-gray-100 text-gray-700"
-                  }`}
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{result.label}</span>
-                    {result.status === "passed" && <Check size={18} />}
-                    {result.status === "failed" && (
-                      <span className="text-xs">{result.error}</span>
-                    )}
-                  </div>
+                  <span className="font-semibold text-slate-700">
+                    {item.action}
+                  </span>
+                  <span
+                    className={
+                      item.result === "success"
+                        ? "text-emerald-700"
+                        : "text-rose-700"
+                    }
+                  >
+                    {item.result === "success" ? "نجح" : "فشل"}
+                  </span>
+                  <time className="text-slate-400">
+                    {new Date(item.created_at).toLocaleString("ar-SA")}
+                  </time>
                 </div>
               ))}
             </div>
-          )}
-          <button
-            onClick={handleRunCompliance}
-            disabled={isRunningCompliance || !setup.csid}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            <Play size={18} />
-            {isRunningCompliance ? "جاري الاختبار..." : "تشغيل فحص التوافق"}
-          </button>
-        </div>
+          </section>
+        )}
 
-        {/* الأزرار */}
-        <div className="flex gap-3 justify-end">
-          {setup.id && (
-            <button
-              onClick={handleDelete}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50"
-            >
-              <Trash2 size={18} />
-              حذف
-            </button>
-          )}
-
-          <button
-            onClick={handleSave}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-          >
-            <Settings size={18} />
-            {isLoading ? "جاري الحفظ..." : "حفظ الإعدادات"}
-          </button>
-        </div>
-
-        {/* معلومات إضافية */}
-        {setup.created_at && (
-          <div className="mt-6 pt-6 border-t border-gray-200 text-xs text-gray-500">
-            <p>تاريخ الإنشاء: {new Date(setup.created_at).toLocaleString("ar-SA")}</p>
-            {setup.last_sync && (
-              <p>آخر مزامنة: {new Date(setup.last_sync).toLocaleString("ar-SA")}</p>
-            )}
+        {loading && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-white/40 backdrop-blur-[1px]">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           </div>
         )}
       </div>
     </Layout>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  className,
+  dir,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className: string;
+  dir?: "rtl" | "ltr";
+}) {
+  return (
+    <label className="space-y-1.5">
+      <span className="text-xs font-bold text-slate-700">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={className}
+        dir={dir}
+      />
+    </label>
   );
 }

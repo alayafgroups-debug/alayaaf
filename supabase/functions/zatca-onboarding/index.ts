@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { KEYUTIL, KJUR } from "npm:jsrsasign@11.1.3";
+import { KEYUTIL, KJUR, X509 } from "npm:jsrsasign@11.1.3";
 import {
   BuyerData,
   Certificate,
@@ -234,6 +234,46 @@ function parseRegisteredAddress(location: string) {
   };
 }
 
+function createCompatibleCertificate(
+  certificatePem: string,
+  privateKeyPem: string,
+  secret: string,
+) {
+  const x509 = new X509();
+  x509.readCertPEM(certificatePem);
+  const certificateBody = certificatePem.replace(
+    /-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s+/g,
+    "",
+  );
+  const issuer = x509
+    .getIssuerString()
+    .split("/")
+    .filter(Boolean)
+    .reverse()
+    .join(", ");
+  const serialNumber = BigInt(`0x${x509.getSerialNumberHex()}`).toString(10);
+
+  return {
+    getRawCertificate: () => certificatePem,
+    getSecretKey: () => secret,
+    getCertHash: () =>
+      createHash("sha256")
+        .update(Buffer.from(certificateBody, "base64"))
+        .digest("base64"),
+    getFormattedIssuer: () => issuer,
+    getSerialNumber: () => serialNumber,
+    getRawPublicKey: () =>
+      Buffer.from(x509.getPublicKeyHex(), "hex").toString("base64"),
+    getCertSignature: () => Buffer.from(x509.getSignatureValueHex(), "hex"),
+    sign: (data: Buffer) => {
+      const signature = new KJUR.crypto.Signature({ alg: "SHA256withECDSA" });
+      signature.init(privateKeyPem);
+      signature.updateHex(data.toString("hex"));
+      return Buffer.from(signature.sign(), "hex");
+    },
+  } as unknown as Certificate;
+}
+
 function correctXadesDigests(xml: string, certificate: Certificate) {
   const signingTime = xml.match(
     /<xades:SigningTime>([^<]+)<\/xades:SigningTime>/,
@@ -362,23 +402,11 @@ function buildComplianceDocument(
 
   const uuid = crypto.randomUUID();
   const unsignedXml = new ZatcaInvoice().generateXml(invoice, uuid);
-  const certificate = new Certificate(
+  const certificate = createCompatibleCertificate(
     toCertificatePem(String(setup.compliance_csid)),
     String(setup.private_key_pem),
     String(setup.compliance_secret),
   );
-  certificate.getCertHash = () => {
-    const certificateDer = Buffer.from(
-      certificate
-        .getRawCertificate()
-        .replace(
-          /-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s+/g,
-          "",
-        ),
-      "base64",
-    );
-    return createHash("sha256").update(certificateDer).digest("base64");
-  };
   const signer = InvoiceSigner.signInvoice(unsignedXml, certificate);
   return {
     uuid,

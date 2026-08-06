@@ -314,6 +314,7 @@ export default function ZATCASettings() {
               }
             : current,
         );
+        if (data.result?.status !== "passed") break;
       }
       await loadStatus(true);
       toast({

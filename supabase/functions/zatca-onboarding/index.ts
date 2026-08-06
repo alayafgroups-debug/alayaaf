@@ -143,10 +143,21 @@ Deno.serve(async (req) => {
     role?.permissions && typeof role.permissions === "object"
       ? (role.permissions as Record<string, unknown>)
       : {};
+  const permissionKeys = [
+    "zatca.settings",
+    "module.zatca",
+    "module.settings",
+    "module.sales",
+    "module.accounting",
+  ];
+  const followsUnrestrictedAppRole =
+    Boolean(employee && roleName) && Object.keys(permissions).length === 0;
   const canManage =
-    ["zatca.settings", "module.zatca", "module.settings", "module.sales"].some(
+    permissionKeys.some(
       (key) => permissions[key] === true || permissions[key] === "manage",
-    ) || /admin|مدير النظام/i.test(roleName);
+    ) ||
+    followsUnrestrictedAppRole ||
+    /admin|مدير|مسؤول النظام/i.test(roleName);
   if (!canManage) return respond({ error: "Forbidden" }, 403);
 
   let body: any = {};
@@ -209,15 +220,13 @@ Deno.serve(async (req) => {
         .select("id")
         .single();
       if (error) throw error;
-      await admin
-        .from("zatca_onboarding_audit")
-        .insert({
-          onboarding_id: data.id,
-          actor_id: user.id,
-          action: "csr_generated",
-          result: "success",
-          details: { mode: "simulation" },
-        });
+      await admin.from("zatca_onboarding_audit").insert({
+        onboarding_id: data.id,
+        actor_id: user.id,
+        action: "csr_generated",
+        result: "success",
+        details: { mode: "simulation" },
+      });
       return respond({
         setup: { id: data.id, status: "csr_generated" },
         message: "تم حفظ البيانات وتوليد CSR داخل الخادم",
@@ -276,16 +285,14 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", setup.id);
-        await admin
-          .from("zatca_onboarding_audit")
-          .insert({
-            onboarding_id: setup.id,
-            actor_id: user.id,
-            action: "compliance_csid_requested",
-            result: "failed",
-            http_status: zatcaResponse.status,
-            details: safeDetails,
-          });
+        await admin.from("zatca_onboarding_audit").insert({
+          onboarding_id: setup.id,
+          actor_id: user.id,
+          action: "compliance_csid_requested",
+          result: "failed",
+          http_status: zatcaResponse.status,
+          details: safeDetails,
+        });
         return respond(
           { error: message, details: safeDetails },
           zatcaResponse.status >= 400 ? zatcaResponse.status : 502,
@@ -308,16 +315,14 @@ Deno.serve(async (req) => {
         })
         .eq("id", setup.id);
       if (updateError) throw updateError;
-      await admin
-        .from("zatca_onboarding_audit")
-        .insert({
-          onboarding_id: setup.id,
-          actor_id: user.id,
-          action: "compliance_csid_requested",
-          result: "success",
-          http_status: zatcaResponse.status,
-          details: safeDetails,
-        });
+      await admin.from("zatca_onboarding_audit").insert({
+        onboarding_id: setup.id,
+        actor_id: user.id,
+        action: "compliance_csid_requested",
+        result: "success",
+        http_status: zatcaResponse.status,
+        details: safeDetails,
+      });
       return respond({
         setup: {
           id: setup.id,

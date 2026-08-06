@@ -35,6 +35,10 @@ function generateCsr(input: Record<string, string>) {
     sigalg: "SHA256withECDSA",
     extreq: [
       {
+        extname: "1.3.6.1.4.1.311.20.2",
+        extn: { prnstr: { str: "PREZATCA-Code-Signing" } },
+      },
+      {
         extname: "subjectAltName",
         array: [
           {
@@ -238,14 +242,22 @@ Deno.serve(async (req) => {
       const csid = clean(responseData.binarySecurityToken);
       const secret = clean(responseData.secret);
       const ok = zatcaResponse.ok && Boolean(requestId && csid && secret);
+      const validationErrors =
+        responseData?.validationResults?.errorMessages ?? responseData?.errors;
+      const firstValidationError = Array.isArray(validationErrors)
+        ? validationErrors[0]
+        : validationErrors;
       const safeDetails = {
         requestId: requestId || null,
         dispositionMessage: responseData.dispositionMessage ?? null,
+        errorCode: firstValidationError?.code ?? responseData?.code ?? null,
+        errorMessage: firstValidationError?.message ?? null,
       };
 
       if (!ok) {
         const message = clean(
-          responseData.message ||
+          firstValidationError?.message ||
+            responseData.message ||
             responseData.error ||
             responseData.dispositionMessage ||
             `ZATCA HTTP ${zatcaResponse.status}`,

@@ -68,14 +68,13 @@ type IdentityForm = {
 };
 
 const initialIdentity: IdentityForm = {
-  companyNameAr: "شركة لاكجري العياف",
-  companyNameEn: "Luxury Al Ayaf Company",
-  vatNumber: "314559705300003",
-  commercialRegistration: "7053358979",
+  companyNameAr: "شركة إدارة العياف للمقاولات",
+  companyNameEn: "Al-ayaf Management Company",
+  vatNumber: "314067317200003",
+  commercialRegistration: "7049437580",
   branchName: "الفرع الرئيسي",
-  branchLocation:
-    "8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة 24351، المملكة العربية السعودية",
-  industry: "المقاولات وإدارة الأعمال",
+  branchLocation: "",
+  industry: "المقاولات",
   deviceManufacturer: "Alayaaf ERP",
   deviceModel: "Web EGS V1",
   deviceSerial: "ALAYAAF-EGS-001",
@@ -332,8 +331,9 @@ export default function ZATCASettings() {
               1. بيانات المنشأة ووحدة إصدار الفواتير
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              راجع البيانات القانونية بدقة قبل إنشاء OTP؛ ستُستخدم داخل طلب
-              الشهادة.
+              راجع البيانات القانونية بدقة قبل إنشاء OTP؛ يجب أن يطابق الرقم
+              الضريبي بيانات المنشأة الظاهرة في بوابة فاتورة، وأدخل عنوان الفرع
+              المسجل كاملًا.
             </p>
           </div>
           <div className="grid gap-4 p-5 md:grid-cols-2">

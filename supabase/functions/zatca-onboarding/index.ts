@@ -751,6 +751,13 @@ Deno.serve(async (req) => {
           message: "تم إصدار Production CSID التجريبي مسبقاً",
         });
       }
+      const productionOtp = clean(body.otp);
+      if (!/^\d{6}$/.test(productionOtp)) {
+        return respond(
+          { error: "أدخل رمز OTP جديدًا من منصة المحاكاة لإصدار Production CSID" },
+          400,
+        );
+      }
       const complianceCsid = cleanToken(setup.compliance_csid);
       const complianceSecret = cleanToken(setup.compliance_secret);
       const productionResponse = await fetch(
@@ -762,6 +769,7 @@ Deno.serve(async (req) => {
             Accept: "application/json",
             "Accept-Version": "V2",
             "Accept-Language": "en",
+            OTP: productionOtp,
             Authorization: `Basic ${Buffer.from(`${complianceCsid}:${complianceSecret}`, "utf8").toString("base64")}`,
           },
           body: JSON.stringify({

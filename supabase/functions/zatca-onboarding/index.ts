@@ -27,6 +27,7 @@ const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
 const clean = (value: unknown) => String(value ?? "").trim();
+const cleanToken = (value: unknown) => String(value ?? "").replace(/\s+/g, "");
 const escapeDn = (value: string) => value.replace(/[,+"\\<>;/]/g, " ").trim();
 const escapeXmlText = (value: unknown) =>
   String(value ?? "")
@@ -770,14 +771,21 @@ Deno.serve(async (req) => {
       const productionRequestId = clean(
         responseData.requestID ?? responseData.requestId,
       );
-      const productionCsid = clean(responseData.binarySecurityToken);
-      const productionSecret = clean(responseData.secret);
+      const productionCsid = cleanToken(responseData.binarySecurityToken);
+      const productionSecret = cleanToken(responseData.secret);
       const ok =
         productionResponse.ok &&
         Boolean(productionRequestId && productionCsid && productionSecret);
       if (!ok) {
+        const productionErrors =
+          responseData?.validationResults?.errorMessages ??
+          responseData?.errors;
+        const firstProductionError = Array.isArray(productionErrors)
+          ? productionErrors[0]
+          : productionErrors;
         const message = clean(
-          responseData.message ??
+          firstProductionError?.message ??
+            responseData.message ??
             responseData.error ??
             responseData.dispositionMessage ??
             `ZATCA HTTP ${productionResponse.status}`,
@@ -796,7 +804,11 @@ Deno.serve(async (req) => {
           action: "production_csid_requested",
           result: "failed",
           http_status: productionResponse.status,
-          details: { message },
+          details: {
+            message,
+            code: firstProductionError?.code ?? responseData.code ?? null,
+            response: responseData,
+          },
         });
         return respond(
           { error: message },

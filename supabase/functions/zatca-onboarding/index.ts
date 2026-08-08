@@ -47,7 +47,9 @@ const canManageSettings = (
 const publicFields = `id, mode, company_name_ar, company_name_en, vat_number, commercial_registration,
   branch_name, branch_location, industry, device_manufacturer, device_model, device_serial,
   common_name, invoice_type, status, compliance_request_id, compliance_csid_masked,
-  compliance_issued_at, compliance_results, last_error, created_at, updated_at`;
+  compliance_issued_at, compliance_results, production_request_id,
+  production_csid_masked, production_issued_at, production_status, last_error,
+  created_at, updated_at`;
 
 function generateCsr(input: Record<string, string>) {
   const keypair = KEYUTIL.generateKeypair("EC", "secp256k1");
@@ -724,6 +726,112 @@ Deno.serve(async (req) => {
           complianceCsidMasked: masked,
         },
         message: "تم الحصول على Compliance CSID من منصة المحاكاة",
+      });
+    }
+
+    if (action === "request_production_csid") {
+      const { data: setup, error: setupError } = await admin
+        .from("zatca_onboarding_settings")
+        .select(
+          "id, mode, status, compliance_request_id, compliance_csid, compliance_secret, production_csid",
+        )
+        .eq("mode", "simulation")
+        .maybeSingle();
+      if (setupError) throw setupError;
+      if (!setup?.compliance_csid || !setup?.compliance_secret) {
+        return respond({ error: "يجب الحصول على Compliance CSID أولاً" }, 400);
+      }
+      if (setup.status !== "compliance_passed") {
+        return respond({ error: "أكمل اختبارات التوافق الستة أولاً" }, 409);
+      }
+      if (setup.production_csid) {
+        return respond({
+          status: "production_ready",
+          message: "تم إصدار Production CSID التجريبي مسبقاً",
+        });
+      }
+      const productionResponse = await fetch(
+        `${SIMULATION_URL}/production/csids`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "Accept-Version": "V2",
+            Authorization: `Basic ${Buffer.from(`${setup.compliance_csid}:${setup.compliance_secret}`).toString("base64")}`,
+          },
+          body: JSON.stringify({
+            compliance_request_id: setup.compliance_request_id,
+          }),
+          signal: AbortSignal.timeout(35_000),
+        },
+      );
+      const responseData = await productionResponse.json().catch(() => ({}));
+      const productionRequestId = clean(
+        responseData.requestID ?? responseData.requestId,
+      );
+      const productionCsid = clean(responseData.binarySecurityToken);
+      const productionSecret = clean(responseData.secret);
+      const ok =
+        productionResponse.ok &&
+        Boolean(productionRequestId && productionCsid && productionSecret);
+      if (!ok) {
+        const message = clean(
+          responseData.message ??
+            responseData.error ??
+            responseData.dispositionMessage ??
+            `ZATCA HTTP ${productionResponse.status}`,
+        );
+        await admin
+          .from("zatca_onboarding_settings")
+          .update({
+            production_status: "failed",
+            last_error: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", setup.id);
+        await admin.from("zatca_onboarding_audit").insert({
+          onboarding_id: setup.id,
+          actor_id: user.id,
+          action: "production_csid_requested",
+          result: "failed",
+          http_status: productionResponse.status,
+          details: { message },
+        });
+        return respond(
+          { error: message },
+          productionResponse.status >= 400 ? productionResponse.status : 502,
+        );
+      }
+      const issuedAt = new Date().toISOString();
+      const masked = `${productionCsid.slice(0, 8)}••••${productionCsid.slice(-6)}`;
+      const { error: updateError } = await admin
+        .from("zatca_onboarding_settings")
+        .update({
+          production_request_id: productionRequestId,
+          production_csid: productionCsid,
+          production_secret: productionSecret,
+          production_csid_masked: masked,
+          production_issued_at: issuedAt,
+          production_status: "issued",
+          last_error: null,
+          updated_at: issuedAt,
+        })
+        .eq("id", setup.id);
+      if (updateError) throw updateError;
+      await admin.from("zatca_onboarding_audit").insert({
+        onboarding_id: setup.id,
+        actor_id: user.id,
+        action: "production_csid_requested",
+        result: "success",
+        http_status: productionResponse.status,
+        details: { requestId: productionRequestId, csidMasked: masked },
+      });
+      return respond({
+        status: "production_ready",
+        productionRequestId,
+        productionCsidMasked: masked,
+        message: "تم إصدار Production CSID التجريبي من منصة المحاكاة",
       });
     }
 

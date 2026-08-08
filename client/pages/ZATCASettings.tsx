@@ -40,6 +40,10 @@ type SetupMetadata = {
   compliance_request_id?: string;
   compliance_csid_masked?: string;
   compliance_issued_at?: string;
+  production_request_id?: string;
+  production_csid_masked?: string;
+  production_issued_at?: string;
+  production_status?: "not_requested" | "issued" | "failed";
   compliance_results?: ComplianceResult[];
   last_error?: string;
   updated_at?: string;
@@ -103,6 +107,7 @@ const onboardingSteps = [
   { number: 2, label: "OTP وتهيئة الجهاز", Icon: FileKey2 },
   { number: 3, label: "شهادة التوافق", Icon: ShieldCheck },
   { number: 4, label: "اختبارات التوافق", Icon: MonitorCog },
+  { number: 5, label: "Production CSID التجريبي", Icon: ShieldCheck },
 ];
 
 const statusLabels: Record<SetupStatus, string> = {
@@ -133,7 +138,13 @@ export default function ZATCASettings() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<
-    "prepare" | "address" | "onboard" | "refresh" | "compliance" | null
+    | "prepare"
+    | "address"
+    | "onboard"
+    | "refresh"
+    | "compliance"
+    | "production"
+    | null
   >(null);
 
   const invoke = async (body: Record<string, unknown>) => {
@@ -285,6 +296,25 @@ export default function ZATCASettings() {
     }
   };
 
+  const requestProductionCsid = async () => {
+    setAction("production");
+    try {
+      const data = await invoke({ action: "request_production_csid" });
+      toast({ title: "تم إصدار Production CSID", description: data.message });
+      await loadStatus(true);
+    } catch (error) {
+      toast({
+        title: "تعذر إصدار Production CSID",
+        description:
+          error instanceof Error ? error.message : "حدث خطأ أثناء الطلب",
+        variant: "destructive",
+      });
+      await loadStatus(true);
+    } finally {
+      setAction(null);
+    }
+  };
+
   const runComplianceTests = async () => {
     if (
       !setup ||
@@ -350,7 +380,8 @@ export default function ZATCASettings() {
     if (setup.status === "csr_generated" || setup.status === "failed") return 2;
     if (setup.status === "compliance_ready") return 4;
     if (setup.status === "compliance_testing") return 4;
-    if (setup.status === "compliance_passed") return 5;
+    if (setup.production_csid_masked) return 5;
+    if (setup.status === "compliance_passed") return 4;
     return 1;
   }, [setup]);
 
@@ -717,6 +748,43 @@ export default function ZATCASettings() {
             })}
           </div>
         </section>
+
+        {setup?.status === "compliance_passed" && (
+          <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="font-bold text-indigo-950">
+                  4. إصدار Production CSID التجريبي
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-indigo-800">
+                  هذه شهادة تشغيل تجريبية من Simulation وليست شهادة الإنتاج
+                  الحقيقي. تُستخدم للانتقال إلى اختبار Clearance وReporting.
+                </p>
+                {setup.production_csid_masked && (
+                  <code className="mt-3 inline-block rounded-lg bg-white px-3 py-2 text-xs text-indigo-900">
+                    CSID: {setup.production_csid_masked}
+                  </code>
+                )}
+              </div>
+              <button
+                onClick={requestProductionCsid}
+                disabled={
+                  Boolean(action) || Boolean(setup.production_csid_masked)
+                }
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {action === "production" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                {setup.production_csid_masked
+                  ? "تم الإصدار"
+                  : "إصدار Production CSID التجريبي"}
+              </button>
+            </div>
+          </section>
+        )}
 
         {audit.length > 0 && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5">

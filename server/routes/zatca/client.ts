@@ -83,9 +83,15 @@ export async function requestProductionCSID(
       "Content-Type": "application/json",
       Accept: "application/json",
       "Accept-Version": "V2",
-      Authorization: buildBasicAuth(complianceCsid, complianceSecret),
+      "Accept-Language": "en",
+      Authorization: buildBasicAuth(
+        complianceCsid.replace(/\s+/g, ""),
+        complianceSecret.replace(/\s+/g, ""),
+      ),
     },
-    body: JSON.stringify({ compliance_request_id: complianceRequestId }),
+    body: JSON.stringify({
+      compliance_request_id: complianceRequestId.trim(),
+    }),
   });
   const data = await parseJson(res);
   return {

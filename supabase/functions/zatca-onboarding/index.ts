@@ -751,6 +751,8 @@ Deno.serve(async (req) => {
           message: "تم إصدار Production CSID التجريبي مسبقاً",
         });
       }
+      const complianceCsid = cleanToken(setup.compliance_csid);
+      const complianceSecret = cleanToken(setup.compliance_secret);
       const productionResponse = await fetch(
         `${SIMULATION_URL}/production/csids`,
         {
@@ -759,10 +761,11 @@ Deno.serve(async (req) => {
             "Content-Type": "application/json",
             Accept: "application/json",
             "Accept-Version": "V2",
-            Authorization: `Basic ${Buffer.from(`${setup.compliance_csid}:${setup.compliance_secret}`).toString("base64")}`,
+            "Accept-Language": "en",
+            Authorization: `Basic ${Buffer.from(`${complianceCsid}:${complianceSecret}`, "utf8").toString("base64")}`,
           },
           body: JSON.stringify({
-            compliance_request_id: setup.compliance_request_id,
+            compliance_request_id: clean(setup.compliance_request_id),
           }),
           signal: AbortSignal.timeout(35_000),
         },

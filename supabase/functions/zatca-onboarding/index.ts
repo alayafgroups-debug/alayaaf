@@ -519,6 +519,22 @@ Deno.serve(async (req) => {
       return respond({ setup: data, audit: audit ?? [] });
     }
 
+    if (action === "reset_onboarding") {
+      if (!existingSetup) {
+        return respond({ message: "لا توجد تهيئة تجريبية لإعادة تشغيلها" });
+      }
+      const { error } = await admin
+        .from("zatca_onboarding_settings")
+        .delete()
+        .eq("id", existingSetup.id)
+        .eq("created_by", user.id);
+      if (error) throw error;
+      return respond({
+        message:
+          "تم حذف اعتماد المحاكاة السابق. جهّز الجهاز من جديد باستخدام OTP جديد.",
+      });
+    }
+
     if (action === "prepare") {
       if (
         existingSetup &&
@@ -751,13 +767,6 @@ Deno.serve(async (req) => {
           message: "تم إصدار Production CSID التجريبي مسبقاً",
         });
       }
-      const productionOtp = clean(body.otp);
-      if (!/^\d{6}$/.test(productionOtp)) {
-        return respond(
-          { error: "أدخل رمز OTP جديدًا من منصة المحاكاة لإصدار Production CSID" },
-          400,
-        );
-      }
       const complianceCsid = clean(setup.compliance_csid);
       const complianceSecret = clean(setup.compliance_secret);
       const productionResponse = await fetch(
@@ -769,7 +778,6 @@ Deno.serve(async (req) => {
             Accept: "application/json",
             "Accept-Version": "V2",
             "Accept-Language": "en",
-            OTP: productionOtp,
             Authorization: `Basic ${Buffer.from(`${complianceCsid}:${complianceSecret}`, "utf8").toString("base64")}`,
           },
           body: JSON.stringify({

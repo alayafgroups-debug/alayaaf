@@ -136,7 +136,6 @@ export default function ZATCASettings() {
   const [setup, setSetup] = useState<SetupMetadata | null>(null);
   const [audit, setAudit] = useState<any[]>([]);
   const [otp, setOtp] = useState("");
-  const [productionOtp, setProductionOtp] = useState("");
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<
     | "prepare"
@@ -298,21 +297,9 @@ export default function ZATCASettings() {
   };
 
   const requestProductionCsid = async () => {
-    if (!/^\d{6}$/.test(productionOtp)) {
-      toast({
-        title: "رمز OTP مطلوب",
-        description: "أنشئ رمز OTP جديدًا من منصة المحاكاة وأدخل الأرقام الستة",
-        variant: "destructive",
-      });
-      return;
-    }
     setAction("production");
     try {
-      const data = await invoke({
-        action: "request_production_csid",
-        otp: productionOtp,
-      });
-      setProductionOtp("");
+      const data = await invoke({ action: "request_production_csid" });
       toast({ title: "تم إصدار Production CSID", description: data.message });
       await loadStatus(true);
     } catch (error) {
@@ -770,24 +757,9 @@ export default function ZATCASettings() {
                   4. إصدار Production CSID التجريبي
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-indigo-800">
-                  أنشئ رمز OTP جديدًا من منصة المحاكاة لإصدار شهادة التشغيل
-                  التجريبية. الرمز لا يُحفظ داخل النظام.
+                  هذه شهادة تشغيل تجريبية من Simulation وليست شهادة الإنتاج
+                  الحقيقي. تُستخدم للانتقال إلى اختبار Clearance وReporting.
                 </p>
-                {!setup.production_csid_masked && (
-                  <input
-                    value={productionOtp}
-                    onChange={(event) =>
-                      setProductionOtp(
-                        event.target.value.replace(/\D/g, "").slice(0, 6),
-                      )
-                    }
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="000000"
-                    dir="ltr"
-                    className="mt-3 h-11 w-48 rounded-xl border border-indigo-300 bg-white px-4 text-center font-mono text-lg tracking-[0.35em] outline-none focus:border-indigo-500"
-                  />
-                )}
                 {setup.production_csid_masked && (
                   <code className="mt-3 inline-block rounded-lg bg-white px-3 py-2 text-xs text-indigo-900">
                     CSID: {setup.production_csid_masked}
@@ -797,9 +769,7 @@ export default function ZATCASettings() {
               <button
                 onClick={requestProductionCsid}
                 disabled={
-                  Boolean(action) ||
-                  Boolean(setup.production_csid_masked) ||
-                  productionOtp.length !== 6
+                  Boolean(action) || Boolean(setup.production_csid_masked)
                 }
                 className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
               >

@@ -643,7 +643,7 @@ Deno.serve(async (req) => {
         return respond({ error: "رمز OTP يجب أن يتكون من 6 أرقام" }, 400);
       const { data: setup, error: setupError } = await admin
         .from("zatca_onboarding_settings")
-        .select("id, csr_pem, compliance_csid")
+        .select("*")
         .eq("mode", "simulation")
         .maybeSingle();
       if (setupError) throw setupError;
@@ -659,7 +659,32 @@ Deno.serve(async (req) => {
         );
       }
 
-      const csrBase64 = Buffer.from(setup.csr_pem, "utf8").toString("base64");
+      const csr = generateCsr({
+        companyNameAr: clean(setup.company_name_ar),
+        vatNumber: clean(setup.vat_number),
+        branchName: clean(setup.branch_name),
+        branchLocation: clean(setup.branch_location),
+        industry: clean(setup.industry),
+        deviceManufacturer: clean(setup.device_manufacturer),
+        deviceModel: clean(setup.device_model),
+        deviceSerial: clean(setup.device_serial),
+        commonName: clean(setup.common_name),
+        invoiceType: clean(setup.invoice_type),
+      });
+      const { error: csrUpdateError } = await admin
+        .from("zatca_onboarding_settings")
+        .update({
+          csr_pem: csr.csrPem,
+          public_key_pem: csr.publicKeyPem,
+          private_key_pem: csr.privateKeyPem,
+          status: "csr_generated",
+          last_error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", setup.id);
+      if (csrUpdateError) throw csrUpdateError;
+
+      const csrBase64 = csr.csrBase64;
       const zatcaResponse = await fetch(`${SIMULATION_URL}/compliance`, {
         method: "POST",
         headers: {

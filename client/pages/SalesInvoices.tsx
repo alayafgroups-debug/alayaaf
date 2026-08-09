@@ -1550,24 +1550,44 @@ function InvoiceForm({
       status: "مفتوحة",
     };
 
-    const { data, error } = await supabase
-      .from("sales_invoices")
-      .insert(payload)
-      .select()
-      .single();
+    let data: any = null;
+    let error: any = null;
+    let attemptId = invoiceId;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const result = await supabase
+        .from("sales_invoices")
+        .insert({ ...payload, id: attemptId })
+        .select()
+        .single();
+      data = result.data;
+      error = result.error;
+      if (!error || error.code !== "23505") break;
+      const nextNumber =
+        Number(String(attemptId).replace(/\D/g, "")) + 1 || Date.now();
+      attemptId = `INV-${String(nextNumber).padStart(6, "0")}`;
+    }
 
-    if (!error && data) {
+    if (error) {
+      toast({
+        title: "تعذر حفظ الفاتورة",
+        description: String(error.message ?? "حاول مرة أخرى"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (data) {
       localStorage.setItem(
-        `sales-invoice-items-${data.id ?? invoiceId}`,
+        `sales-invoice-items-${data.id ?? attemptId}`,
         JSON.stringify(items),
       );
       localStorage.setItem(
-        `sales-invoice-address-${data.id ?? invoiceId}`,
+        `sales-invoice-address-${data.id ?? attemptId}`,
         customerAddress,
       );
-      const zatca = await submitInvoiceToZatca(data.id ?? invoiceId);
+      const zatca = await submitInvoiceToZatca(data.id ?? attemptId);
       onSaved({
-        id: data.id ?? invoiceId,
+        id: data.id ?? attemptId,
         date: data.date ?? invoiceDate,
         dueDate: data.due_date ?? dueDate,
         customer: data.customer ?? customer,

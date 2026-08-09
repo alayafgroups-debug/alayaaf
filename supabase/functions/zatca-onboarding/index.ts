@@ -58,6 +58,7 @@ function generateCsr(input: Record<string, string>) {
   const publicKeyPem = KEYUTIL.getPEM(keypair.pubKeyObj);
   const subject = `/CN=${escapeDn(input.commonName)}/OU=${escapeDn(input.branchName)}/O=${escapeDn(input.companyNameAr)}/C=SA`;
   const serialNumber = `1-${input.deviceManufacturer}|2-${input.deviceModel}|3-${input.deviceSerial}`;
+  const registeredAddress = compactCsrLocation(input.branchLocation);
   const csrPem = KJUR.asn1.csr.CSRUtil.newCSRPEM({
     subject: { str: subject },
     sbjpubkey: keypair.pubKeyObj,
@@ -77,7 +78,7 @@ function generateCsr(input: Record<string, string>) {
                 [{ type: "SN", value: serialNumber, ds: "prn" }],
                 [{ type: "UID", value: input.vatNumber, ds: "prn" }],
                 [{ type: "title", value: input.invoiceType, ds: "prn" }],
-                [{ type: "2.5.4.26", value: input.branchLocation, ds: "prn" }],
+                [{ type: "2.5.4.26", value: registeredAddress, ds: "prn" }],
                 [{ type: "2.5.4.15", value: input.industry, ds: "prn" }],
               ],
             },
@@ -235,6 +236,14 @@ function parseRegisteredAddress(location: string) {
     citySubdivisionName,
     streetName: streetName || "العنوان الوطني",
   };
+}
+
+function compactCsrLocation(location: string) {
+  const address = parseRegisteredAddress(location);
+  const suffix = `${address.cityName} ${address.postalZone}`;
+  const prefix = `${address.buildingNumber} ${address.streetName} ${address.citySubdivisionName}`;
+  const maxPrefixLength = Math.max(0, 64 - suffix.length - 1);
+  return `${prefix.slice(0, maxPrefixLength).trim()} ${suffix}`.trim();
 }
 
 function createCompatibleCertificate(

@@ -4,6 +4,14 @@ import { Plus, Save, Trash2, ArrowRight } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import ZatcaQrCode from "@/components/ZatcaQrCode";
+
+const zatcaStatusLabels: Record<string, string> = {
+  pending: "بانتظار الإرسال",
+  cleared: "مصادق من ZATCA",
+  reported: "مُبلّغ لـ ZATCA",
+  rejected: "مرفوض من ZATCA",
+};
 
 type CreditNoteItem = {
   id: string;
@@ -31,6 +39,8 @@ type SavedCreditNote = {
   balanceBefore: number;
   balanceAfter: number;
   items: CreditNoteItem[];
+  zatcaStatus: string;
+  qrCodeData: string;
 };
 
 type OriginalInvoice = {
@@ -90,7 +100,8 @@ export default function SalesCreditNote() {
   const [savedNotes, setSavedNotes] = useState<SavedCreditNote[]>([]);
   const [invoices, setInvoices] = useState<OriginalInvoice[]>([]);
   const [nextSequence, setNextSequence] = useState(START_NUMBER);
-  const [mode, setMode] = useState<"list" | "create">("list");
+  const [mode, setMode] = useState<"list" | "create" | "details">("list");
+  const [selectedNote, setSelectedNote] = useState<SavedCreditNote | null>(null);
   const [form, setForm] = useState<CreditNoteForm>(() => createEmptyForm(START_NUMBER));
 
   useEffect(() => {
@@ -98,7 +109,7 @@ export default function SalesCreditNote() {
       const [notesResult, invoicesResult] = await Promise.all([
         supabase
           .from("invoice_adjustment_notes")
-          .select("id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items")
+          .select("id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, zatca_status, qr_code_data")
           .in("note_type", ["sales_credit", "sales_debit"])
           .order("created_at", { ascending: false }),
         supabase
@@ -126,6 +137,8 @@ export default function SalesCreditNote() {
           balanceBefore: Number(row.balance_before),
           balanceAfter: Number(row.balance_after),
           items: Array.isArray(row.items) ? row.items : [],
+          zatcaStatus: String(row.zatca_status ?? "pending"),
+          qrCodeData: String(row.qr_code_data ?? ""),
         }));
         setSavedNotes(parsed);
         const sequence = parsed.reduce((max, note) => Math.max(max, extractSequence(note.noteNumber)), START_NUMBER - 1) + 1;
@@ -243,6 +256,8 @@ export default function SalesCreditNote() {
       subtotal, tax, total, balanceBefore: invoice.adjustedTotal,
       balanceAfter: invoice.adjustedTotal + signedAmount,
       items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
+      zatcaStatus: String(zatca.data?.status ?? "rejected"),
+      qrCodeData: String(zatca.data?.qrCodeData ?? ""),
     };
     setSavedNotes((current) => [payload, ...current]);
     setInvoices((current) => current.map((item) => item.id === form.originalInvoiceId ? { ...item, adjustedTotal: payload.balanceAfter } : item));
@@ -318,24 +333,87 @@ export default function SalesCreditNote() {
                       <th className="px-3 py-2">التاريخ</th>
                       <th className="px-3 py-2">الإجمالي</th>
                       <th className="px-3 py-2">الرصيد بعد الإشعار</th>
+                      <th className="px-3 py-2">حالة ZATCA</th>
                     </tr>
                   </thead>
                   <tbody>
                     {savedNotes.map((note) => (
                       <tr key={note.id} className="border-t border-border">
-                        <td className="px-3 py-2 font-semibold text-primary">{note.noteNumber}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => {
+                              setSelectedNote(note);
+                              setMode("details");
+                            }}
+                            className="font-semibold text-primary underline-offset-2 hover:underline"
+                          >
+                            {note.noteNumber}
+                          </button>
+                        </td>
                         <td className="px-3 py-2">{note.noteType === "sales_credit" ? "دائن −" : "مدين +"}</td>
                         <td className="px-3 py-2 font-medium">{note.originalInvoiceId}</td>
                         <td className="px-3 py-2">{note.customer}</td>
                         <td className="px-3 py-2">{note.date}</td>
                         <td className="px-3 py-2">{note.total.toFixed(2)} {note.currency}</td>
                         <td className="px-3 py-2 font-semibold">{note.balanceAfter.toFixed(2)} {note.currency}</td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              note.zatcaStatus === "cleared" ||
+                              note.zatcaStatus === "reported"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : note.zatcaStatus === "rejected"
+                                  ? "bg-rose-100 text-rose-700"
+                                  : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {zatcaStatusLabels[note.zatcaStatus] ?? note.zatcaStatus}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+          </div>
+        ) : mode === "details" && selectedNote ? (
+          <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-bold text-foreground">
+                {selectedNote.noteNumber}
+              </h2>
+              <button
+                onClick={() => setMode("list")}
+                className="rounded-md border border-border px-4 py-2 text-sm font-semibold"
+              >
+                رجوع للقائمة
+              </button>
+            </div>
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <p>النوع: {selectedNote.noteType === "sales_credit" ? "إشعار دائن" : "إشعار مدين"}</p>
+              <p>الفاتورة الأصلية: {selectedNote.originalInvoiceId}</p>
+              <p>العميل: {selectedNote.customer}</p>
+              <p>التاريخ: {selectedNote.date}</p>
+              <p>المجموع الفرعي: {selectedNote.subtotal.toFixed(2)} {selectedNote.currency}</p>
+              <p>الضريبة: {selectedNote.tax.toFixed(2)} {selectedNote.currency}</p>
+              <p>الإجمالي: {selectedNote.total.toFixed(2)} {selectedNote.currency}</p>
+              <p>
+                حالة ZATCA: {zatcaStatusLabels[selectedNote.zatcaStatus] ?? selectedNote.zatcaStatus}
+              </p>
+            </div>
+            <div className="flex items-center gap-4 border-t border-border pt-4">
+              {selectedNote.qrCodeData ? (
+                <ZatcaQrCode value={selectedNote.qrCodeData} size={112} />
+              ) : (
+                <div className="flex h-28 w-28 items-center justify-center rounded border border-dashed border-border text-xs text-muted-foreground">
+                  QR بعد الاعتماد
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                يظهر رمز الاستجابة السريعة بعد قبول ZATCA للإشعار.
+              </p>
+            </div>
           </div>
         ) : (
           <>

@@ -240,10 +240,7 @@ function parseRegisteredAddress(location: string) {
 
 function compactCsrLocation(location: string) {
   const address = parseRegisteredAddress(location);
-  const suffix = `${address.cityName} ${address.postalZone}`;
-  const prefix = `${address.buildingNumber} ${address.streetName} ${address.citySubdivisionName}`;
-  const maxPrefixLength = Math.max(0, 64 - suffix.length - 1);
-  return `${prefix.slice(0, maxPrefixLength).trim()} ${suffix}`.trim();
+  return `${address.buildingNumber} ${address.cityName} ${address.postalZone}`;
 }
 
 function createCompatibleCertificate(

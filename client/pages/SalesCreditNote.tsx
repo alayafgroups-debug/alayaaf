@@ -208,6 +208,31 @@ export default function SalesCreditNote() {
       return;
     }
 
+    const zatca = await supabase.functions.invoke("zatca-invoice", {
+      body: { noteId: String(data) },
+    });
+    if (zatca.error || zatca.data?.error) {
+      const context = (zatca.error as { context?: Response } | null)?.context;
+      const payload = context
+        ? await context
+            .clone()
+            .json()
+            .catch(() => null)
+        : null;
+      toast({
+        title: "تعذر إرسال الإشعار إلى ZATCA",
+        description: String(
+          payload?.error ??
+            zatca.data?.error ??
+            zatca.error?.message ??
+            "حدث خطأ غير متوقع",
+        ),
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "ZATCA", description: String(zatca.data.message) });
+    }
+
     const invoice = invoices.find((item) => item.id === form.originalInvoiceId)!;
     const signedAmount = form.noteType === "sales_credit" ? -total : total;
     const payload: SavedCreditNote = {

@@ -196,8 +196,19 @@ function buildSignedInvoice(input: {
   icv: number;
   previousHash: string;
   uuid: string;
+  documentType: "invoice" | "creditNote" | "debitNote";
+  originalInvoiceId?: string;
 }) {
-  const { setup, invoice, lines, icv, previousHash, uuid } = input;
+  const {
+    setup,
+    invoice,
+    lines,
+    icv,
+    previousHash,
+    uuid,
+    documentType,
+    originalInvoiceId,
+  } = input;
   const address = parseRegisteredAddress(String(setup.branch_location));
   const now = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
   const simplified = invoice.invoice_type !== "standard";
@@ -215,7 +226,9 @@ function buildSignedInvoice(input: {
 
   if (simplified) document.simplified();
   else document.standard();
-  document.taxInvoice();
+  if (documentType === "creditNote") document.creditNote();
+  else if (documentType === "debitNote") document.debitNote();
+  else document.taxInvoice();
 
   const seller = new SellerData()
     .setRegistrationName(escapeXmlText(setup.company_name_ar))
@@ -258,6 +271,19 @@ function buildSignedInvoice(input: {
         .calculateTotals(),
     );
   });
+  if (documentType !== "invoice") {
+    document.addBillingReference({
+      id: String(originalInvoiceId ?? invoice.id),
+      uuid: crypto.randomUUID(),
+    });
+    document.addPaymentMeans({
+      code: "10",
+      instruction_note:
+        documentType === "creditNote"
+          ? "تخفيض قيمة الفاتورة الأصلية"
+          : "زيادة قيمة الفاتورة الأصلية",
+    });
+  }
   document.calculateTotals();
 
   const unsignedXml = new ZatcaInvoice().generateXml(document, uuid);
@@ -324,7 +350,11 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const invoiceId = clean(body.invoiceId);
-    if (!invoiceId) return respond({ error: "رقم الفاتورة مطلوب" }, 400);
+    const noteId = clean(body.noteId);
+    if (!invoiceId && !noteId)
+      return respond({ error: "رقم الفاتورة أو الإشعار مطلوب" }, 400);
+    const table = noteId ? "invoice_adjustment_notes" : "sales_invoices";
+    const recordId = noteId || invoiceId;
 
     const { data: setup, error: setupError } = await admin
       .from("zatca_onboarding_settings")
@@ -336,30 +366,58 @@ Deno.serve(async (req) => {
       return respond({ error: "أكمل تهيئة ZATCA قبل إرسال الفواتير" }, 409);
     }
 
-    const { data: invoice, error: invoiceError } = await admin
-      .from("sales_invoices")
+    const { data: record, error: recordError } = await admin
+      .from(table)
       .select("*")
-      .eq("id", invoiceId)
+      .eq("id", recordId)
       .maybeSingle();
-    if (invoiceError) throw invoiceError;
-    if (!invoice) return respond({ error: "الفاتورة غير موجودة" }, 404);
-    if (invoice.zatca_status === "cleared" || invoice.zatca_status === "reported") {
+    if (recordError) throw recordError;
+    if (!record) return respond({ error: "المستند غير موجود" }, 404);
+    if (record.zatca_status === "cleared" || record.zatca_status === "reported") {
       return respond({
-        status: invoice.zatca_status,
-        qrCodeData: invoice.qr_code_data,
-        message: "تم إرسال هذه الفاتورة إلى ZATCA مسبقاً",
+        status: record.zatca_status,
+        qrCodeData: record.qr_code_data,
+        message: "تم إرسال هذا المستند إلى ZATCA مسبقاً",
       });
     }
 
-    const rawItems = Array.isArray(invoice.items) ? invoice.items : [];
+    let originalInvoice: any = null;
+    if (noteId) {
+      const { data: linked } = await admin
+        .from("sales_invoices")
+        .select("*")
+        .eq("id", clean(record.original_invoice_id))
+        .maybeSingle();
+      originalInvoice = linked;
+    }
+
+    const documentType: "invoice" | "creditNote" | "debitNote" = !noteId
+      ? "invoice"
+      : record.note_type === "sales_credit"
+        ? "creditNote"
+        : "debitNote";
+
+    const invoice = noteId
+      ? {
+          id: clean(record.note_number) || recordId,
+          date: clean(record.issue_date),
+          due_date: clean(record.issue_date),
+          customer: clean(record.counterparty),
+          customer_address: clean(originalInvoice?.customer_address),
+          invoice_type: clean(originalInvoice?.invoice_type) || "simplified",
+          buyer_vat: clean(originalInvoice?.buyer_vat),
+        }
+      : record;
+
+    const rawItems = Array.isArray(record.items) ? record.items : [];
     const lines = rawItems.map((item: any) => ({
       description: clean(item.description),
       quantity: Number(item.quantity) || 1,
       unitPrice: Number(item.unitPrice) || 0,
-      taxPercent: Number(item.taxPercent) || 15,
+      taxPercent: Number(item.taxPercent ?? 15) || 15,
     }));
     if (!lines.length) {
-      return respond({ error: "لا توجد بنود صالحة داخل الفاتورة" }, 400);
+      return respond({ error: "لا توجد بنود صالحة داخل المستند" }, 400);
     }
 
     const { data: lastLog } = await admin
@@ -375,7 +433,7 @@ Deno.serve(async (req) => {
       .select("id", { count: "exact", head: true })
       .in("status", ["cleared", "reported"]);
     const icv = (count ?? 0) + 1;
-    const uuid = clean(invoice.uuid) || crypto.randomUUID();
+    const uuid = clean(record.uuid) || crypto.randomUUID();
 
     const signed = buildSignedInvoice({
       setup,
@@ -384,6 +442,8 @@ Deno.serve(async (req) => {
       icv,
       previousHash,
       uuid,
+      documentType,
+      originalInvoiceId: clean(record.original_invoice_id),
     });
 
     const endpoint = signed.simplified
@@ -426,9 +486,9 @@ Deno.serve(async (req) => {
       : "rejected";
 
     await admin.from("zatca_invoice_submission_logs").insert({
-      invoice_id: invoiceId,
-      invoice_table: "sales_invoices",
-      document_type: "invoice",
+      invoice_id: recordId,
+      invoice_table: table,
+      document_type: documentType,
       invoice_type: signed.simplified ? "simplified" : "standard",
       mode: "simulation",
       endpoint,
@@ -448,18 +508,18 @@ Deno.serve(async (req) => {
           `ZATCA HTTP ${zatcaResponse.status}`,
       );
       await admin
-        .from("sales_invoices")
+        .from(table)
         .update({
           zatca_status: "rejected",
           zatca_response: responseData,
           zatca_submitted_at: submittedAt,
         })
-        .eq("id", invoiceId);
+        .eq("id", recordId);
       return respond({ error: errorMessage, details: responseData }, 422);
     }
 
     await admin
-      .from("sales_invoices")
+      .from(table)
       .update({
         uuid,
         icv: String(icv),
@@ -473,7 +533,7 @@ Deno.serve(async (req) => {
         zatca_approved_at: signed.simplified ? null : submittedAt,
         zatca_reported_at: signed.simplified ? submittedAt : null,
       })
-      .eq("id", invoiceId);
+      .eq("id", recordId);
 
     return respond({
       status,
@@ -481,8 +541,8 @@ Deno.serve(async (req) => {
       icv,
       qrCodeData: signed.qrCodeData,
       message: signed.simplified
-        ? "تم إبلاغ ZATCA بالفاتورة المبسطة"
-        : "تمت مصادقة ZATCA على الفاتورة المعيارية",
+        ? "تم إبلاغ ZATCA بالمستند المبسط"
+        : "تمت مصادقة ZATCA على المستند المعياري",
     });
   } catch (error: any) {
     console.error("zatca-invoice", error);

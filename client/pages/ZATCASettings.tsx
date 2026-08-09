@@ -160,7 +160,15 @@ export default function ZATCASettings() {
             .json()
             .catch(() => null)
         : null;
-      throw new Error(String(payload?.error ?? error.message));
+      const upstreamDetail =
+        payload?.details?.responseText ||
+        payload?.details?.response?.message ||
+        payload?.details?.response?.error;
+      throw new Error(
+        [payload?.error ?? error.message, upstreamDetail]
+          .filter(Boolean)
+          .join(" — "),
+      );
     }
     if (data?.error) throw new Error(String(data.error));
     return data;

@@ -824,7 +824,16 @@ Deno.serve(async (req) => {
           },
         });
         return respond(
-          { error: message },
+          {
+            error: message,
+            details: {
+              status: productionResponse.status,
+              endpoint: `${SIMULATION_URL}/production/csids`,
+              requestId: clean(setup.compliance_request_id) || null,
+              response: responseData,
+              responseText: responseText || null,
+            },
+          },
           productionResponse.status >= 400 ? productionResponse.status : 502,
         );
       }

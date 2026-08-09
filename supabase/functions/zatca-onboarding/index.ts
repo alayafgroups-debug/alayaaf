@@ -59,6 +59,7 @@ function generateCsr(input: Record<string, string>) {
   const subject = `/CN=${escapeDn(input.commonName)}/OU=${escapeDn(input.branchName)}/O=${escapeDn(input.companyNameAr)}/C=SA`;
   const serialNumber = `1-${input.deviceManufacturer}|2-${input.deviceModel}|3-${input.deviceSerial}`;
   const registeredAddress = compactCsrLocation(input.branchLocation);
+  const businessCategory = asciiCsrValue(input.industry, "Contracting", 64);
   const csrPem = KJUR.asn1.csr.CSRUtil.newCSRPEM({
     subject: { str: subject },
     sbjpubkey: keypair.pubKeyObj,
@@ -79,7 +80,7 @@ function generateCsr(input: Record<string, string>) {
                 [{ type: "UID", value: input.vatNumber, ds: "prn" }],
                 [{ type: "title", value: input.invoiceType, ds: "prn" }],
                 [{ type: "2.5.4.26", value: registeredAddress, ds: "prn" }],
-                [{ type: "2.5.4.15", value: input.industry, ds: "prn" }],
+                [{ type: "2.5.4.15", value: businessCategory, ds: "prn" }],
               ],
             },
           },
@@ -238,9 +239,22 @@ function parseRegisteredAddress(location: string) {
   };
 }
 
+function asciiCsrValue(value: string, fallback: string, maxLength: number) {
+  const ascii = value
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/[^A-Za-z0-9 .\-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (ascii || fallback).slice(0, maxLength).trim();
+}
+
 function compactCsrLocation(location: string) {
   const address = parseRegisteredAddress(location);
-  return `${address.buildingNumber} ${address.cityName} ${address.postalZone}`;
+  return asciiCsrValue(
+    `${address.buildingNumber} ${address.postalZone} SA`,
+    "0000 00000 SA",
+    64,
+  );
 }
 
 function createCompatibleCertificate(

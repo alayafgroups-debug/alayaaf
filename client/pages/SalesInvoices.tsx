@@ -44,6 +44,34 @@ const parseCurrency = (value: string) =>
 
 const initialInvoices: Invoice[] = [];
 
+async function submitInvoiceToZatca(invoiceId: string) {
+  const { data, error } = await supabase.functions.invoke("zatca-invoice", {
+    body: { invoiceId },
+  });
+  if (error || data?.error) {
+    const context = (error as { context?: Response } | null)?.context;
+    const payload = context
+      ? await context
+          .clone()
+          .json()
+          .catch(() => null)
+      : null;
+    toast({
+      title: "تعذر إرسال الفاتورة إلى ZATCA",
+      description: String(
+        payload?.error ?? data?.error ?? error?.message ?? "حدث خطأ غير متوقع",
+      ),
+      variant: "destructive",
+    });
+    return { status: "rejected" as const, qrCodeData: "" };
+  }
+  toast({ title: "ZATCA", description: String(data.message) });
+  return {
+    status: String(data.status ?? "pending"),
+    qrCodeData: String(data.qrCodeData ?? ""),
+  };
+}
+
 type Invoice = {
   id: string;
   date: string;
@@ -1537,6 +1565,7 @@ function InvoiceForm({
         `sales-invoice-address-${data.id ?? invoiceId}`,
         customerAddress,
       );
+      const zatca = await submitInvoiceToZatca(data.id ?? invoiceId);
       onSaved({
         id: data.id ?? invoiceId,
         date: data.date ?? invoiceDate,
@@ -1545,8 +1574,8 @@ function InvoiceForm({
         customerAddress: data.customer_address ?? customerAddress,
         invoiceType: data.invoice_type ?? invoiceType,
         buyerVat: data.buyer_vat ?? buyerVat,
-        zatcaStatus: data.zatca_status ?? "pending",
-        qrCodeData: data.qr_code_data ?? "",
+        zatcaStatus: zatca.status ?? data.zatca_status ?? "pending",
+        qrCodeData: zatca.qrCodeData ?? data.qr_code_data ?? "",
         total: data.total ?? payload.total,
         paid: data.paid ?? payload.paid,
         remaining: data.remaining ?? payload.remaining,

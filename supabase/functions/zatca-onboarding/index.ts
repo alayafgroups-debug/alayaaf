@@ -770,7 +770,13 @@ Deno.serve(async (req) => {
           signal: AbortSignal.timeout(35_000),
         },
       );
-      const responseData = await productionResponse.json().catch(() => ({}));
+      const responseText = await productionResponse.text();
+      let responseData: any = {};
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        responseData = {};
+      }
       const productionRequestId = clean(
         responseData.requestID ?? responseData.requestId,
       );
@@ -791,6 +797,7 @@ Deno.serve(async (req) => {
             responseData.message ??
             responseData.error ??
             responseData.dispositionMessage ??
+            responseText ??
             `ZATCA HTTP ${productionResponse.status}`,
         );
         await admin
@@ -808,9 +815,12 @@ Deno.serve(async (req) => {
           result: "failed",
           http_status: productionResponse.status,
           details: {
+            endpoint: `${SIMULATION_URL}/production/csids`,
+            requestId: clean(setup.compliance_request_id) || null,
             message,
             code: firstProductionError?.code ?? responseData.code ?? null,
             response: responseData,
+            responseText: responseText || null,
           },
         });
         return respond(

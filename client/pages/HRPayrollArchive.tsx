@@ -23,6 +23,7 @@ type ArchiveRow = {
   allowances: number;
   overtime: number;
   bonus: number;
+  socialInsurance: number;
   deductions: number;
   netSalary: number;
   status: string;
@@ -78,6 +79,7 @@ export default function HRPayrollArchive() {
             allowances: Number(r.allowances ?? 0),
             overtime: Number((r as Record<string, unknown>).overtime ?? 0),
             bonus: Number((r as Record<string, unknown>).bonus ?? 0),
+            socialInsurance: Number((r as Record<string, unknown>).social_insurance_deduction ?? 0),
             deductions: Number(r.deductions ?? 0),
             netSalary: Number(r.net_salary ?? 0),
             status: String(r.status ?? "معلق"),
@@ -144,13 +146,14 @@ export default function HRPayrollArchive() {
     { key: "department", label: "الإدارة", width: 20 }, { key: "basic", label: "الراتب الأساسي", width: 16 },
     { key: "allowances", label: "البدلات", width: 14 }, { key: "overtime", label: "إضافي", width: 12 },
     { key: "bonus", label: "مكافآت", width: 12 }, { key: "entitlements", label: "الاستحقاقات", width: 16 },
-    { key: "deductions", label: "الاستقطاعات", width: 14 }, { key: "net", label: "صافي الراتب", width: 16 },
+    { key: "socialInsurance", label: "التأمينات الاجتماعية 9.75%", width: 20 },
+    { key: "deductions", label: "إجمالي الاستقطاعات", width: 18 }, { key: "net", label: "صافي الراتب", width: 16 },
     { key: "status", label: "الحالة", width: 12 }, { key: "paidDate", label: "تاريخ الصرف", width: 16 },
   ];
   const toArchiveRow = (record: ArchiveRow) => ({
     month: record.month, empName: record.empName, department: record.department,
     basic: record.basicSalary.toFixed(2), allowances: record.allowances.toFixed(2), overtime: record.overtime.toFixed(2), bonus: record.bonus.toFixed(2),
-    entitlements: (record.basicSalary + record.allowances + record.overtime + record.bonus).toFixed(2), deductions: record.deductions.toFixed(2), net: record.netSalary.toFixed(2), status: record.status, paidDate: record.paidDate || "-",
+    entitlements: (record.basicSalary + record.allowances + record.overtime + record.bonus).toFixed(2), socialInsurance: record.socialInsurance.toFixed(2), deductions: record.deductions.toFixed(2), net: record.netSalary.toFixed(2), status: record.status, paidDate: record.paidDate || "-",
   });
   const archiveRows = filtered.map(toArchiveRow);
   const archiveSummary = [{ label: "عدد السجلات", value: filtered.length }, { label: "إجمالي صافي الرواتب", value: `${totalNet.toFixed(2)} ر.س` }];
@@ -278,7 +281,8 @@ export default function HRPayrollArchive() {
                   <th className="py-2 px-2 font-medium">الإجراءات</th>
                   <th className="py-2 px-2 font-medium">الحالة</th>
                   <th className="py-2 px-2 font-medium">صافي الراتب</th>
-                  <th className="py-2 px-2 font-medium">الاستقطاعات</th>
+                  <th className="py-2 px-2 font-medium">إجمالي الاستقطاعات</th>
+                  <th className="py-2 px-2 font-medium">التأمينات الاجتماعية 9.75%</th>
                   <th className="py-2 px-2 font-medium">إجمالي الاستحقاقات</th>
                   <th className="py-2 px-2 font-medium">مكافآت</th>
                   <th className="py-2 px-2 font-medium">ساعات إضافية</th>
@@ -293,11 +297,11 @@ export default function HRPayrollArchive() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={12} className="py-10 text-slate-400">جاري التحميل...</td>
+                    <td colSpan={13} className="py-10 text-slate-400">جاري التحميل...</td>
                   </tr>
                 ) : pageData.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-10 text-slate-400">لا توجد سجلات</td>
+                    <td colSpan={13} className="py-10 text-slate-400">لا توجد سجلات</td>
                   </tr>
                 ) : (
                   pageData.map((rec) => {
@@ -346,6 +350,7 @@ export default function HRPayrollArchive() {
 
                         <td className="py-2 px-2 font-semibold text-green-700">{money(rec.netSalary)}</td>
                         <td className="py-2 px-2 font-semibold text-red-600">{money(rec.deductions)}</td>
+                        <td className="py-2 px-2 font-semibold text-orange-600">{money(rec.socialInsurance)}</td>
                         <td className="py-2 px-2 font-semibold text-[#0a5a92]">{money(entitlements)}</td>
                         <td className="py-2 px-2">{money(rec.bonus)}</td>
                         <td className="py-2 px-2">{money(rec.overtime)}</td>
@@ -429,7 +434,8 @@ export default function HRPayrollArchive() {
                       selectedRecord.bonus
                   )}
                 />
-                <Detail label="الاستقطاعات" value={money(selectedRecord.deductions)} />
+                <Detail label="التأمينات الاجتماعية 9.75%" value={money(selectedRecord.socialInsurance)} />
+                <Detail label="إجمالي الاستقطاعات" value={money(selectedRecord.deductions)} />
                 <Detail label="صافي الراتب" value={money(selectedRecord.netSalary)} />
                 <Detail label="الحالة" value={selectedRecord.status} />
                 <Detail label="تاريخ الصرف" value={selectedRecord.paidDate || "-"} />

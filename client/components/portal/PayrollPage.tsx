@@ -9,6 +9,7 @@ type PayrollRecord = {
   month: string;
   basic_salary: number;
   allowances: number;
+  social_insurance_deduction: number;
   deductions: number;
   net_salary: number;
   status: string;
@@ -24,7 +25,7 @@ export default function PayrollPage({ empId, onBack }: Props) {
     async function load() {
       const { data } = await supabase
         .from("payroll")
-        .select("id, month, basic_salary, allowances, deductions, net_salary, status, paid_date")
+        .select("id, month, basic_salary, allowances, social_insurance_deduction, deductions, net_salary, status, paid_date")
         .eq("emp_id", empId)
         .order("month", { ascending: false });
       setRecords((data ?? []) as PayrollRecord[]);
@@ -50,7 +51,8 @@ export default function PayrollPage({ empId, onBack }: Props) {
             {[
               { label: "الراتب الأساسي", value: selected.basic_salary, color: "text-gray-800" },
               { label: "البدلات", value: selected.allowances, color: "text-green-600" },
-              { label: "الخصومات", value: selected.deductions, color: "text-red-600", negative: true },
+              { label: "التأمينات الاجتماعية 9.75%", value: selected.social_insurance_deduction, color: "text-orange-600", negative: true },
+              { label: "إجمالي الخصومات", value: selected.deductions, color: "text-red-600", negative: true },
               { label: "صافي الراتب", value: selected.net_salary, color: "text-[#004e89] font-bold" },
             ].map(({ label, value, color, negative }) => (
               <div key={label} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">

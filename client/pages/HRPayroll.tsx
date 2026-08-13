@@ -35,6 +35,7 @@ type PayrollEntry = {
   month: string;
   basicSalary: number;
   allowances: number;
+  socialInsurance: number;
   deductions: number;
   netSalary: number;
   status: string;
@@ -58,9 +59,17 @@ type EmployeeLite = {
   emp_id: string | null;
   name: string;
   department: string | null;
+  base_salary: number | null;
   total_salary: number | null;
+  nationality: string | null;
   status: string | null;
 };
+
+const SOCIAL_INSURANCE_RATE = 0.0975;
+const isSaudiNationality = (nationality: string | null | undefined) => [
+  "سعودي", "سعودية", "السعودية", "المملكة العربية السعودية", "saudi", "saudi arabia", "saudi arabian",
+].includes(String(nationality ?? "").trim().toLowerCase());
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const emptyEntry = (): PayrollEntry => ({
   id: crypto.randomUUID(),
@@ -70,6 +79,7 @@ const emptyEntry = (): PayrollEntry => ({
   month: new Date().toISOString().slice(0, 7),
   basicSalary: 0,
   allowances: 0,
+  socialInsurance: 0,
   deductions: 0,
   netSalary: 0,
   status: "معلق",
@@ -85,6 +95,7 @@ const mapRow = (r: Record<string, unknown>): PayrollEntry => ({
   month: String(r.month ?? ""),
   basicSalary: Number(r.basic_salary ?? 0),
   allowances: Number(r.allowances ?? 0),
+  socialInsurance: Number(r.social_insurance_deduction ?? 0),
   deductions: Number(r.deductions ?? 0),
   netSalary: Number(r.net_salary ?? 0),
   status: String(r.status ?? "معلق"),
@@ -242,7 +253,7 @@ export default function HRPayroll() {
     try {
       const { data: employees, error: employeesError } = await supabase
         .from("employees")
-        .select("id, emp_id, name, department, total_salary, status")
+        .select("id, emp_id, name, department, base_salary, total_salary, nationality, status")
         .in("status", ["نشط", "فعال"]);
 
       if (employeesError) throw employeesError;
@@ -265,7 +276,10 @@ export default function HRPayroll() {
       const newPayload = activeEmployees
         .map((emp) => {
           const empId = String(emp.emp_id ?? "").trim() || String(emp.id);
-          const basicSalary = Number(emp.total_salary ?? 0);
+          const basicSalary = Number(emp.base_salary ?? emp.total_salary ?? 0);
+          const socialInsurance = isSaudiNationality(emp.nationality)
+            ? roundMoney(basicSalary * SOCIAL_INSURANCE_RATE)
+            : 0;
           return {
             id: crypto.randomUUID(),
             emp_id: empId,
@@ -274,8 +288,11 @@ export default function HRPayroll() {
             month: generationMonth,
             basic_salary: basicSalary,
             allowances: 0,
-            deductions: 0,
-            net_salary: basicSalary,
+            social_insurance_deduction: socialInsurance,
+            social_insurance_rate: socialInsurance > 0 ? SOCIAL_INSURANCE_RATE : 0,
+            nationality_snapshot: emp.nationality ?? "",
+            deductions: socialInsurance,
+            net_salary: roundMoney(basicSalary - socialInsurance),
             status: "معلق",
             paid_date: null,
             notes: "تم الإنشاء تلقائياً من مسير الرواتب الشهري",
@@ -527,7 +544,8 @@ export default function HRPayroll() {
                     <th className="px-3 py-2">القسم</th>
                     <th className="px-3 py-2">الأساسي</th>
                     <th className="px-3 py-2">البدلات</th>
-                    <th className="px-3 py-2">الاستقطاعات</th>
+                    <th className="px-3 py-2">التأمينات الاجتماعية 9.75%</th>
+                    <th className="px-3 py-2">إجمالي الاستقطاعات</th>
                     <th className="px-3 py-2">الصافي</th>
                     <th className="px-3 py-2">الحالة</th>
                   </tr>
@@ -540,6 +558,7 @@ export default function HRPayroll() {
                       <td className="px-3 py-2">{e.department}</td>
                       <td className="px-3 py-2">{e.basicSalary.toLocaleString()}</td>
                       <td className="px-3 py-2 text-green-600">{e.allowances.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-orange-600">{e.socialInsurance.toLocaleString()}</td>
                       <td className="px-3 py-2 text-red-500">{e.deductions.toLocaleString()}</td>
                       <td className="px-3 py-2 font-semibold text-emerald-600">{e.netSalary.toLocaleString()}</td>
                       <td className="px-3 py-2">{e.status}</td>
@@ -582,6 +601,15 @@ function PayrollForm({ onBack, onSaved }: { onBack: () => void; onSaved: () => v
 
     setSaving(true);
     try {
+      const { data: employee } = await supabase
+        .from("employees")
+        .select("nationality")
+        .eq("emp_id", form.empId.trim())
+        .maybeSingle();
+      const socialInsurance = isSaudiNationality(employee?.nationality)
+        ? roundMoney(form.basicSalary * SOCIAL_INSURANCE_RATE)
+        : 0;
+      const totalDeductions = roundMoney(form.deductions + socialInsurance);
       const payload = {
         id: form.id,
         emp_id: form.empId,
@@ -590,8 +618,11 @@ function PayrollForm({ onBack, onSaved }: { onBack: () => void; onSaved: () => v
         month: form.month,
         basic_salary: form.basicSalary,
         allowances: form.allowances,
-        deductions: form.deductions,
-        net_salary: form.netSalary,
+        social_insurance_deduction: socialInsurance,
+        social_insurance_rate: socialInsurance > 0 ? SOCIAL_INSURANCE_RATE : 0,
+        nationality_snapshot: employee?.nationality ?? "",
+        deductions: totalDeductions,
+        net_salary: roundMoney(form.basicSalary + form.allowances - totalDeductions),
         status: form.status,
         paid_date: form.paidDate || null,
         notes: form.notes,

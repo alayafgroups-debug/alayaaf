@@ -19,6 +19,7 @@ type EmpLite = {
   workLocation: string;
   employeeType: string;
   status: string;
+  nationality: string;
   baseSalary: number;
 };
 
@@ -29,6 +30,7 @@ type PayrollCalc = {
   basic: number;
   allowances: number;
   overtime: number;
+  socialInsurance: number;
   deductions: number;
   net: number;
 };
@@ -59,6 +61,12 @@ const monthNames: Record<string, string> = {
   "11": "نوفمبر",
   "12": "ديسمبر",
 };
+
+const SOCIAL_INSURANCE_RATE = 0.0975;
+const isSaudiNationality = (nationality: string) => [
+  "سعودي", "سعودية", "السعودية", "المملكة العربية السعودية", "saudi", "saudi arabia", "saudi arabian",
+].includes(nationality.trim().toLowerCase());
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const current = new Date();
 const defaultYear = String(current.getFullYear());
@@ -97,7 +105,7 @@ export default function HRPayrollStatement() {
       try {
         const { data, error } = await supabase
           .from("employees")
-          .select("id, emp_id, name, job_title, department, branch, work_location, employment_type, status, base_salary")
+          .select("id, emp_id, name, job_title, department, branch, work_location, employment_type, status, nationality, base_salary")
         .order("name");
 
         if (error) {
@@ -117,6 +125,7 @@ export default function HRPayrollStatement() {
               workLocation: String(r.work_location ?? r.branch ?? ""),
               employeeType: String(r.employment_type ?? "أساسي"),
               status: String(r.status ?? "نشط"),
+              nationality: String(r.nationality ?? ""),
               baseSalary: Number(r.base_salary ?? 0),
             }))
           );
@@ -234,8 +243,12 @@ export default function HRPayrollStatement() {
       const absenceDeduction = att.absent * dailyRate;
       const penalties = penByEmp[e.id] ?? 0;
       const overtime = otByEmp[e.id] ?? 0;
-      const deductions = Math.round((absenceDeduction + penalties) * 100) / 100;
-      const net = Math.round((e.baseSalary + overtime - deductions) * 100) / 100;
+      const otherDeductions = roundMoney(absenceDeduction + penalties);
+      const socialInsurance = isSaudiNationality(e.nationality)
+        ? roundMoney(e.baseSalary * SOCIAL_INSURANCE_RATE)
+        : 0;
+      const deductions = roundMoney(otherDeductions + socialInsurance);
+      const net = roundMoney(e.baseSalary + overtime - deductions);
       result[e.id] = {
         workDays,
         presentDays: att.present,
@@ -243,6 +256,7 @@ export default function HRPayrollStatement() {
         basic: e.baseSalary,
         allowances: 0,
         overtime,
+        socialInsurance,
         deductions,
         net,
       };
@@ -270,6 +284,9 @@ export default function HRPayrollStatement() {
           month: period,
           basic_salary: c.basic,
           allowances: c.allowances + c.overtime,
+          social_insurance_deduction: c.socialInsurance,
+          social_insurance_rate: c.socialInsurance > 0 ? SOCIAL_INSURANCE_RATE : 0,
+          nationality_snapshot: e.nationality,
           deductions: c.deductions,
           net_salary: c.net,
           status: "معلق",
@@ -326,11 +343,12 @@ export default function HRPayrollStatement() {
     { key: "department", label: "القسم", width: 20 }, { key: "branch", label: "الفرع", width: 18 },
     { key: "workDays", label: "أيام العمل", width: 14 }, { key: "basic", label: "الراتب الأساسي", width: 16 },
     { key: "allowances", label: "البدلات", width: 14 }, { key: "overtime", label: "الإضافي", width: 14 },
-    { key: "deductions", label: "الاستقطاعات", width: 14 }, { key: "net", label: "صافي الراتب", width: 16 },
+    { key: "socialInsurance", label: "التأمينات الاجتماعية 9.75%", width: 20 },
+    { key: "deductions", label: "إجمالي الاستقطاعات", width: 18 }, { key: "net", label: "صافي الراتب", width: 16 },
   ];
   const payrollRows = selectedEmployees.map((employee) => {
     const computed = calc[employee.id];
-    return { empId: employee.empId, name: employee.name, department: employee.department || "-", branch: employee.branch || "-", workDays: computed ? `${computed.presentDays}/${computed.workDays}` : "-", basic: (computed?.basic ?? employee.baseSalary).toFixed(2), allowances: (computed?.allowances ?? 0).toFixed(2), overtime: (computed?.overtime ?? 0).toFixed(2), deductions: (computed?.deductions ?? 0).toFixed(2), net: (computed?.net ?? employee.baseSalary).toFixed(2) };
+    return { empId: employee.empId, name: employee.name, department: employee.department || "-", branch: employee.branch || "-", workDays: computed ? `${computed.presentDays}/${computed.workDays}` : "-", basic: (computed?.basic ?? employee.baseSalary).toFixed(2), allowances: (computed?.allowances ?? 0).toFixed(2), overtime: (computed?.overtime ?? 0).toFixed(2), socialInsurance: (computed?.socialInsurance ?? 0).toFixed(2), deductions: (computed?.deductions ?? 0).toFixed(2), net: (computed?.net ?? employee.baseSalary).toFixed(2) };
   });
   const payrollTotal = selectedEmployees.reduce((total, employee) => total + (calc[employee.id]?.net ?? employee.baseSalary), 0);
   const payrollSubtitle = `كشف رواتب ${monthNames[monthFilter]} ${yearFilter}`;
@@ -409,6 +427,9 @@ export default function HRPayrollStatement() {
             month: period,
             basic_salary: c.basic,
             allowances: c.allowances + c.overtime,
+            social_insurance_deduction: c.socialInsurance,
+            social_insurance_rate: c.socialInsurance > 0 ? SOCIAL_INSURANCE_RATE : 0,
+            nationality_snapshot: employee.nationality,
             deductions: c.deductions,
             net_salary: c.net,
             status: stoppedEmployeeIds.has(employee.id) ? "موقوف" : "معلق",
@@ -592,7 +613,8 @@ export default function HRPayrollStatement() {
                     <th className="py-2 px-2">البدلات</th>
                     <th className="py-2 px-2">إضافي</th>
                     <th className="py-2 px-2">عمولات</th>
-                    <th className="py-2 px-2">استقطاعات</th>
+                    <th className="py-2 px-2">التأمينات الاجتماعية 9.75%</th>
+                    <th className="py-2 px-2">إجمالي الاستقطاعات</th>
                     <th className="py-2 px-2">صافي الراتب</th>
                   </tr>
                 </thead>
@@ -610,6 +632,7 @@ export default function HRPayrollStatement() {
                       <td className="py-2 px-2">{(c?.allowances ?? 0).toFixed(2)}</td>
                       <td className="py-2 px-2">{(c?.overtime ?? 0).toFixed(2)}</td>
                       <td className="py-2 px-2">0.00</td>
+                      <td className="py-2 px-2 text-orange-600">{(c?.socialInsurance ?? 0).toFixed(2)}</td>
                       <td className="py-2 px-2 text-red-600">{(c?.deductions ?? 0).toFixed(2)}</td>
                       <td className="py-2 px-2 font-semibold text-emerald-700">{(c?.net ?? emp.baseSalary).toFixed(2)}</td>
                     </tr>

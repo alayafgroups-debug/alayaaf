@@ -12,6 +12,8 @@ interface MailMessage {
   read_at?: string | null;
   deleted_by_sender_at?: string | null;
   deleted_by_recipient_at?: string | null;
+  purged_by_sender_at?: string | null;
+  purged_by_recipient_at?: string | null;
   created_at: string;
 }
 
@@ -68,7 +70,7 @@ export default function EmployeeEmailPage({
       }
       const { data, error } = await supabase
         .from("employee_mail_messages")
-        .select("id, from_email, to_email, subject, body, read_at, deleted_by_sender_at, deleted_by_recipient_at, created_at")
+        .select("id, from_email, to_email, subject, body, read_at, deleted_by_sender_at, deleted_by_recipient_at, purged_by_sender_at, purged_by_recipient_at, created_at")
         .or(`to_email.eq.${employeeEmail},from_email.eq.${employeeEmail}`)
         .order("created_at", { ascending: false });
       if (!error && data) setMessages(data as MailMessage[]);
@@ -87,8 +89,8 @@ export default function EmployeeEmailPage({
   );
   const trash = useMemo(
     () => messages.filter((message) =>
-      (message.from_email === employeeEmail && Boolean(message.deleted_by_sender_at)) ||
-      (message.to_email === employeeEmail && Boolean(message.deleted_by_recipient_at)),
+      (message.from_email === employeeEmail && Boolean(message.deleted_by_sender_at) && !message.purged_by_sender_at) ||
+      (message.to_email === employeeEmail && Boolean(message.deleted_by_recipient_at) && !message.purged_by_recipient_at),
     ),
     [messages, employeeEmail],
   );
@@ -144,6 +146,29 @@ export default function EmployeeEmailPage({
     } : item));
     setSelectedEmail(null);
     toast.success("تم نقل الرسالة إلى المهملات");
+  };
+
+  const purgeMessage = async (message: MailMessage) => {
+    if (!window.confirm("سيتم حذف الرسالة نهائياً من مهملاتك. هل تريد المتابعة؟")) return;
+
+    setDeletingMessageId(message.id);
+    const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
+      body: { action: "purge-mailbox-message", empId, messageId: message.id },
+    });
+    setDeletingMessageId(null);
+    if (error || !data?.success) {
+      toast.error(data?.error || "تعذر حذف الرسالة نهائياً");
+      return;
+    }
+
+    const purgedAt = String(data.purged_at || new Date().toISOString());
+    setMessages((current) => current.map((item) => item.id === message.id ? {
+      ...item,
+      purged_by_sender_at: item.from_email === employeeEmail ? purgedAt : item.purged_by_sender_at,
+      purged_by_recipient_at: item.to_email === employeeEmail ? purgedAt : item.purged_by_recipient_at,
+    } : item));
+    setSelectedEmail(null);
+    toast.success("تم حذف الرسالة نهائياً من مهملاتك");
   };
 
   const openMessage = async (message: MailMessage) => {
@@ -290,16 +315,14 @@ export default function EmployeeEmailPage({
                           <span className="whitespace-nowrap text-xs text-gray-500">{new Date(message.created_at).toLocaleDateString("ar-SA")}</span>
                         </div>
                       </button>
-                      {activeFolder !== "trash" && (
-                        <button
-                          onClick={() => deleteMessage(message)}
-                          disabled={deletingMessageId === message.id}
-                          title="نقل إلى المهملات"
-                          className="px-4 text-gray-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => activeFolder === "trash" ? purgeMessage(message) : deleteMessage(message)}
+                        disabled={deletingMessageId === message.id}
+                        title={activeFolder === "trash" ? "حذف نهائي" : "نقل إلى المهملات"}
+                        className="px-4 text-gray-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
                     </div>
                   ))}
                   {visibleMessages.length === 0 && <div className="p-8 text-center text-gray-400">لا توجد رسائل</div>}
@@ -339,16 +362,14 @@ export default function EmployeeEmailPage({
                       <p className="text-sm text-gray-400 mt-2">إلى:</p>
                       <p dir="ltr" className="text-white text-sm text-left">{selectedEmail.to_email}</p>
                     </div>
-                    {activeFolder !== "trash" && (
-                      <button
-                        onClick={() => deleteMessage(selectedEmail)}
-                        disabled={deletingMessageId === selectedEmail.id}
-                        title="نقل إلى المهملات"
-                        className="text-gray-400 hover:text-red-400 disabled:opacity-40"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => activeFolder === "trash" ? purgeMessage(selectedEmail) : deleteMessage(selectedEmail)}
+                      disabled={deletingMessageId === selectedEmail.id}
+                      title={activeFolder === "trash" ? "حذف نهائي" : "نقل إلى المهملات"}
+                      className="text-gray-400 hover:text-red-400 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
                   </div>
                   <h2 className="text-xl font-bold mb-2">{selectedEmail.subject}</h2>
                   <div className="text-sm text-gray-400 mb-6">{new Date(selectedEmail.created_at).toLocaleString("ar-SA")}</div>

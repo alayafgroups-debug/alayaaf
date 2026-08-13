@@ -128,7 +128,7 @@ Deno.serve(async (req: Request) => {
       : callerQuery.ilike("email", user.email);
     const { data: caller } = await callerQuery.maybeSingle();
 
-    if (["mailbox-info", "verify-mailbox", "delete-mailbox-message"].includes(action)) {
+    if (["mailbox-info", "verify-mailbox", "delete-mailbox-message", "purge-mailbox-message"].includes(action)) {
       const requestedEmpId = String(body?.empId ?? "").trim();
       if (!caller || !requestedEmpId || String(caller.emp_id) !== requestedEmpId) {
         return respond({ success: false, error: "غير مصرح بالدخول إلى هذا البريد" }, 403);
@@ -157,27 +157,55 @@ Deno.serve(async (req: Request) => {
         return respond({ success: true, generated_email: credential.generated_email });
       }
 
-      if (action === "delete-mailbox-message") {
+      if (action === "delete-mailbox-message" || action === "purge-mailbox-message") {
         const messageId = String(body?.messageId ?? "").trim();
         if (!messageId) return respond({ success: false, error: "الرسالة مطلوبة" }, 400);
         const { data: message } = await adminClient
           .from("employee_mail_messages")
-          .select("id, from_email, to_email")
+          .select("id, from_email, to_email, deleted_by_sender_at, deleted_by_recipient_at, purged_by_sender_at, purged_by_recipient_at")
           .eq("id", messageId)
           .maybeSingle();
         if (!message || ![message.from_email, message.to_email].includes(credential.generated_email)) {
           return respond({ success: false, error: "الرسالة غير موجودة في بريدك" }, 404);
         }
-        const deletedAt = new Date().toISOString();
-        const deletion: Record<string, string> = {};
-        if (message.from_email === credential.generated_email) deletion.deleted_by_sender_at = deletedAt;
-        if (message.to_email === credential.generated_email) deletion.deleted_by_recipient_at = deletedAt;
-        const { error: deleteError } = await adminClient
+
+        const changedAt = new Date().toISOString();
+        const changes: Record<string, string> = {};
+        const isSender = message.from_email === credential.generated_email;
+        const isRecipient = message.to_email === credential.generated_email;
+        if (action === "purge-mailbox-message") {
+          if ((isSender && !message.deleted_by_sender_at) || (isRecipient && !message.deleted_by_recipient_at)) {
+            return respond({ success: false, error: "يجب نقل الرسالة إلى المهملات أولاً" }, 400);
+          }
+          if (isSender) changes.purged_by_sender_at = changedAt;
+          if (isRecipient) changes.purged_by_recipient_at = changedAt;
+        } else {
+          if (isSender) changes.deleted_by_sender_at = changedAt;
+          if (isRecipient) changes.deleted_by_recipient_at = changedAt;
+        }
+
+        const { error: changeError } = await adminClient
           .from("employee_mail_messages")
-          .update(deletion)
+          .update(changes)
           .eq("id", message.id);
-        if (deleteError) throw deleteError;
-        return respond({ success: true, message_id: message.id, deleted_at: deletedAt });
+        if (changeError) throw changeError;
+
+        const senderPurged = Boolean(message.purged_by_sender_at || changes.purged_by_sender_at);
+        const recipientPurged = Boolean(message.purged_by_recipient_at || changes.purged_by_recipient_at);
+        if (senderPurged && recipientPurged) {
+          const { error: hardDeleteError } = await adminClient
+            .from("employee_mail_messages")
+            .delete()
+            .eq("id", message.id);
+          if (hardDeleteError) throw hardDeleteError;
+        }
+
+        return respond({
+          success: true,
+          message_id: message.id,
+          deleted_at: action === "delete-mailbox-message" ? changedAt : null,
+          purged_at: action === "purge-mailbox-message" ? changedAt : null,
+        });
       }
 
       const suppliedPassword = String(body?.password ?? "");

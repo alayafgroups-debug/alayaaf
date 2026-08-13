@@ -1,6 +1,8 @@
 alter table public.employee_mail_messages
   add column if not exists deleted_by_sender_at timestamptz,
-  add column if not exists deleted_by_recipient_at timestamptz;
+  add column if not exists deleted_by_recipient_at timestamptz,
+  add column if not exists purged_by_sender_at timestamptz,
+  add column if not exists purged_by_recipient_at timestamptz;
 
 create index if not exists employee_mail_messages_sender_visible_idx
   on public.employee_mail_messages(from_email, created_at desc)

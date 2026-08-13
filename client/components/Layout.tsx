@@ -731,7 +731,7 @@ function MainSidebar({
       <nav
         ref={navRef}
         onScroll={handleScroll}
-        className="relative z-10 flex flex-col gap-1 px-3 py-4 flex-1 overflow-y-auto"
+        className="main-sidebar-nav relative z-10 flex flex-col gap-1 px-3 py-4 flex-1 overflow-y-auto"
       >
         {sidebarOpen && (
           <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white/25">

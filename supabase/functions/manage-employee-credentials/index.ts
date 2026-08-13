@@ -85,6 +85,17 @@ const decryptPassword = async (encrypted: string | null, secret: string) => {
   }
 };
 
+const secureEqual = (left: string, right: string) => {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  if (leftBytes.length !== rightBytes.length) return false;
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    difference |= leftBytes[index] ^ rightBytes[index];
+  }
+  return difference === 0;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return respond({ success: false, error: "Method not allowed" }, 405);
@@ -106,13 +117,55 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await callerClient.auth.getUser(token);
     if (authError || !user?.email) return respond({ success: false, error: "Unauthorized" }, 401);
 
-    const { data: caller } = await adminClient
+    const body = await req.json().catch(() => ({}));
+    const action = String(body?.action ?? "");
+    const linkedEmployeeId = String(user.user_metadata?.employee_id ?? "").trim();
+    let callerQuery = adminClient
       .from("employees")
-      .select("employee_role")
-      .ilike("email", user.email)
-      .maybeSingle();
-    if (!caller?.employee_role) return respond({ success: false, error: "غير مصرح بإدارة بيانات الدخول" }, 403);
+      .select("id, emp_id, name, employee_role");
+    callerQuery = linkedEmployeeId
+      ? callerQuery.eq("id", linkedEmployeeId)
+      : callerQuery.ilike("email", user.email);
+    const { data: caller } = await callerQuery.maybeSingle();
 
+    if (action === "mailbox-info" || action === "verify-mailbox") {
+      const requestedEmpId = String(body?.empId ?? "").trim();
+      if (!caller || !requestedEmpId || String(caller.emp_id) !== requestedEmpId) {
+        return respond({ success: false, error: "غير مصرح بالدخول إلى هذا البريد" }, 403);
+      }
+
+      let { data: credential } = await adminClient
+        .from("employee_emails")
+        .select("generated_email, password_ciphertext")
+        .eq("employee_id", caller.id)
+        .eq("status", "active")
+        .maybeSingle();
+      if (!credential) {
+        const fallback = await adminClient
+          .from("employee_emails")
+          .select("generated_email, password_ciphertext")
+          .eq("emp_id", caller.emp_id)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        credential = fallback.data;
+      }
+      if (!credential) return respond({ success: false, error: "لم يتم إنشاء بريد إلكتروني لك بعد" }, 404);
+
+      if (action === "mailbox-info") {
+        return respond({ success: true, generated_email: credential.generated_email });
+      }
+
+      const suppliedPassword = String(body?.password ?? "");
+      const savedPassword = await decryptPassword(credential.password_ciphertext, serviceKey);
+      if (!savedPassword || !secureEqual(suppliedPassword, savedPassword)) {
+        return respond({ success: false, error: "كلمة مرور البريد غير صحيحة" }, 401);
+      }
+      return respond({ success: true, generated_email: credential.generated_email });
+    }
+
+    if (!caller?.employee_role) return respond({ success: false, error: "غير مصرح بإدارة بيانات الدخول" }, 403);
     const { data: role } = await adminClient
       .from("user_roles")
       .select("permissions")
@@ -125,9 +178,6 @@ Deno.serve(async (req: Request) => {
     if (!canManageCredentials(caller.employee_role, permissions)) {
       return respond({ success: false, error: "غير مصرح بإدارة بيانات الدخول" }, 403);
     }
-
-    const body = await req.json().catch(() => ({}));
-    const action = String(body?.action ?? "");
 
     if (action === "list") {
       const { data, error } = await adminClient
@@ -197,29 +247,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const userAttributes = {
-      email: generatedEmail,
-      password: generatedPassword,
-      email_confirm: true,
-      user_metadata: {
-        employee_id: employee.id,
-        emp_id: employee.emp_id,
-        employee_name: employee.name,
-      },
-    };
-    if (authUserId) {
-      const { error } = await adminClient.auth.admin.updateUserById(authUserId, userAttributes);
-      if (error) throw error;
-    } else {
-      const { data, error } = await adminClient.auth.admin.createUser(userAttributes);
-      if (error || !data.user) throw error ?? new Error("تعذر إنشاء حساب الموظف");
-      authUserId = data.user.id;
-    }
-
     const passwordCiphertext = await encryptPassword(generatedPassword, serviceKey);
     const credentialPayload = {
       employee_id: employee.id,
-      auth_user_id: authUserId,
+      auth_user_id: authUserId || null,
       emp_id: employee.emp_id,
       emp_name: employee.name,
       generated_first_name: localPart,
@@ -232,12 +263,6 @@ Deno.serve(async (req: Request) => {
       ? await adminClient.from("employee_emails").update(credentialPayload).eq("id", existingCredential.id)
       : await adminClient.from("employee_emails").insert(credentialPayload);
     if (credentialResult.error) throw credentialResult.error;
-
-    const { error: employeeUpdateError } = await adminClient
-      .from("employees")
-      .update({ email: generatedEmail })
-      .eq("id", employee.id);
-    if (employeeUpdateError) throw employeeUpdateError;
 
     return respond({
       success: true,

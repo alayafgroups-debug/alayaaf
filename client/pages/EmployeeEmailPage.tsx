@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Mail, Trash2, Send, Settings as SettingsIcon, ChevronLeft } from "lucide-react";
+import { Mail, Trash2, Send, Settings as SettingsIcon, ChevronLeft, Lock, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 interface MailMessage {
@@ -27,45 +27,38 @@ export default function EmployeeEmailPage({
   const [employeeEmail, setEmployeeEmail] = useState("");
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<MailMessage | null>(null);
+  const [mailboxPassword, setMailboxPassword] = useState("");
+  const [mailboxAuthenticated, setMailboxAuthenticated] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoadingEmail, setIsLoadingEmail] = useState(true);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
     async function loadEmployeeEmail() {
-      if (!empId && !employeeName) return;
-
-      let email = "";
-      if (empId) {
-        const result = await supabase
-          .from("employee_emails")
-          .select("generated_email")
-          .eq("status", "active")
-          .eq("emp_id", empId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        email = String(result.data?.generated_email || "");
+      if (!empId) {
+        setLoginError("لم يتم العثور على الرقم الوظيفي");
+        setIsLoadingEmail(false);
+        return;
       }
 
-      if (!email && employeeName) {
-        const result = await supabase
-          .from("employee_emails")
-          .select("generated_email")
-          .eq("status", "active")
-          .eq("emp_name", employeeName)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        email = String(result.data?.generated_email || "");
+      const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
+        body: { action: "mailbox-info", empId },
+      });
+      if (error || !data?.success) {
+        setLoginError(data?.error || "لم يتم إنشاء بريد إلكتروني لك بعد");
+      } else {
+        setEmployeeEmail(String(data.generated_email || ""));
       }
-
-      setEmployeeEmail(email);
+      setIsLoadingEmail(false);
     }
 
     loadEmployeeEmail();
-  }, [empId, employeeName]);
+  }, [empId]);
 
   useEffect(() => {
     async function loadMessages() {
-      if (!employeeEmail) {
+      if (!employeeEmail || !mailboxAuthenticated) {
         setMessages([]);
         return;
       }
@@ -78,7 +71,7 @@ export default function EmployeeEmailPage({
     }
 
     loadMessages();
-  }, [employeeEmail]);
+  }, [employeeEmail, mailboxAuthenticated]);
 
   const inbox = useMemo(
     () => messages.filter((message) => message.to_email === employeeEmail),
@@ -97,6 +90,28 @@ export default function EmployeeEmailPage({
     { id: "settings", label: "الإعدادات", count: 0 },
   ];
 
+  const handleMailboxLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!mailboxPassword) {
+      setLoginError("أدخل كلمة مرور البريد الإلكتروني");
+      return;
+    }
+
+    setIsSigningIn(true);
+    setLoginError("");
+    const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
+      body: { action: "verify-mailbox", empId, password: mailboxPassword },
+    });
+    setIsSigningIn(false);
+    if (error || !data?.success) {
+      setLoginError(data?.error || "كلمة مرور البريد غير صحيحة");
+      return;
+    }
+
+    setMailboxPassword("");
+    setMailboxAuthenticated(true);
+  };
+
   const openMessage = async (message: MailMessage) => {
     setSelectedEmail(message);
     if (message.to_email === employeeEmail && !message.read_at) {
@@ -105,6 +120,79 @@ export default function EmployeeEmailPage({
       setMessages((current) => current.map((item) => item.id === message.id ? { ...item, read_at: readAt } : item));
     }
   };
+
+  if (isLoadingEmail) {
+    return (
+      <div className="h-screen bg-gray-900 text-white flex items-center justify-center" dir="rtl">
+        <p className="text-gray-400">جاري تحميل البريد الإلكتروني...</p>
+      </div>
+    );
+  }
+
+  if (!mailboxAuthenticated) {
+    return (
+      <div className="h-screen bg-gray-900 text-white flex items-center justify-center p-4" dir="rtl">
+        <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-800 p-6 shadow-2xl">
+          <button onClick={onBack} className="mb-6 flex items-center gap-1 text-sm text-gray-400 hover:text-white">
+            <ChevronLeft className="h-4 w-4 rotate-180" />
+            رجوع
+          </button>
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600/20">
+              <Mail className="h-7 w-7 text-blue-400" />
+            </div>
+            <h1 className="text-xl font-bold">الدخول إلى البريد الإلكتروني</h1>
+            <p className="mt-2 text-sm text-gray-400">البريد مثبت لحسابك، أدخل كلمة المرور فقط</p>
+          </div>
+          <form onSubmit={handleMailboxLogin} className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm text-gray-300">البريد الإلكتروني</label>
+              <input
+                dir="ltr"
+                type="email"
+                value={employeeEmail}
+                readOnly
+                className="w-full cursor-not-allowed rounded-lg border border-gray-600 bg-gray-900 px-4 py-3 text-left font-mono text-blue-300 outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm text-gray-300">كلمة مرور البريد</label>
+              <div className="relative">
+                <Lock className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={mailboxPassword}
+                  onChange={(event) => {
+                    setMailboxPassword(event.target.value);
+                    setLoginError("");
+                  }}
+                  disabled={!employeeEmail || isSigningIn}
+                  autoComplete="current-password"
+                  placeholder="أدخل كلمة المرور"
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900 py-3 pr-10 pl-10 text-white outline-none focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            {loginError && <p className="text-sm text-red-400">{loginError}</p>}
+            <button
+              type="submit"
+              disabled={!employeeEmail || isSigningIn}
+              className="w-full rounded-lg bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSigningIn ? "جاري الدخول..." : "دخول البريد"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col md:flex-row" dir="rtl">

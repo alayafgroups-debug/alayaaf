@@ -63,8 +63,14 @@ export default function HROrgWorkLocations() {
     if (!formName.trim()) { toast({ title: "خطأ", description: "اسم موقع العمل مطلوب", variant: "destructive" }); return; }
     const latitude = formLatitude.trim() ? Number(formLatitude) : null;
     const longitude = formLongitude.trim() ? Number(formLongitude) : null;
-    if ((latitude == null) !== (longitude == null) || (latitude != null && (!Number.isFinite(latitude) || !Number.isFinite(longitude)))) {
-      toast({ title: "إحداثيات غير صحيحة", description: "أدخل خط العرض وخط الطول معاً", variant: "destructive" });
+    if (
+      (latitude == null) !== (longitude == null) ||
+      (latitude != null && (
+        !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        latitude < -90 || latitude > 90 || Number(longitude) < -180 || Number(longitude) > 180
+      ))
+    ) {
+      toast({ title: "إحداثيات غير صحيحة", description: "أدخل خط العرض وخط الطول ضمن النطاق الصحيح", variant: "destructive" });
       return;
     }
     const payload = {

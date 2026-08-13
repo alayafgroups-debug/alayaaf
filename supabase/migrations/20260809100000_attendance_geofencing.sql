@@ -11,6 +11,27 @@ create unique index if not exists hr_work_locations_one_company_default_uidx
   on public.hr_work_locations(is_company_default)
   where is_company_default = true;
 
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'hr_work_locations_latitude_check') then
+    alter table public.hr_work_locations add constraint hr_work_locations_latitude_check
+      check (latitude is null or latitude between -90 and 90);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'hr_work_locations_longitude_check') then
+    alter table public.hr_work_locations add constraint hr_work_locations_longitude_check
+      check (longitude is null or longitude between -180 and 180);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'hr_work_locations_coordinate_pair_check') then
+    alter table public.hr_work_locations add constraint hr_work_locations_coordinate_pair_check
+      check ((latitude is null) = (longitude is null));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'hr_work_locations_radius_check') then
+    alter table public.hr_work_locations add constraint hr_work_locations_radius_check
+      check (attendance_radius_m = 10);
+  end if;
+end
+$$;
+
 alter table public.employees
   add column if not exists attendance_location_id uuid
     references public.hr_work_locations(id) on delete set null;
@@ -103,12 +124,59 @@ begin
     and location.latitude is not null
     and location.longitude is not null
     and (
-      (v_employee_location_id is not null and location.id = v_employee_location_id)
-      or
-      (v_employee_location_id is null and location.is_company_default = true)
+      location.id = v_employee_location_id
+      or location.is_company_default = true
     )
-  order by location.is_company_default desc
+  order by
+    case when location.id = v_employee_location_id then 0 else 1 end,
+    location.is_company_default desc
   limit 1;
+end;
+$$;
+
+create or replace function public.check_employee_attendance_location(
+  p_latitude double precision,
+  p_longitude double precision,
+  p_accuracy_m double precision
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_location record;
+  v_distance double precision;
+  v_allowed boolean;
+begin
+  if auth.uid() is null then raise exception 'يجب تسجيل الدخول'; end if;
+  if p_latitude is null or p_longitude is null
+    or p_latitude not between -90 and 90
+    or p_longitude not between -180 and 180 then
+    raise exception 'إحداثيات الموقع غير صحيحة';
+  end if;
+  if p_accuracy_m is null or p_accuracy_m <= 0 then
+    raise exception 'دقة الموقع غير صحيحة';
+  end if;
+
+  select * into v_location
+  from public.get_employee_attendance_location()
+  limit 1;
+  if not found then raise exception 'لم يتم إعداد موقع حضور صالح لهذا الموظف'; end if;
+
+  v_distance := public.attendance_distance_meters(
+    p_latitude, p_longitude, v_location.latitude, v_location.longitude
+  );
+  v_allowed := v_distance is not null
+    and p_accuracy_m <= v_location.radius_m
+    and (v_distance + p_accuracy_m) <= v_location.radius_m;
+
+  return jsonb_build_object(
+    'allowed', v_allowed,
+    'distanceMeters', round(v_distance::numeric, 1),
+    'accuracyMeters', round(p_accuracy_m::numeric, 1),
+    'radiusMeters', v_location.radius_m,
+    'locationName', v_location.location_name
+  );
 end;
 $$;
 
@@ -127,17 +195,20 @@ declare
   v_location record;
   v_attendance_id uuid;
   v_check_in time;
+  v_check_out time;
   v_distance double precision;
   v_date date := timezone('Asia/Riyadh', now())::date;
   v_time time := timezone('Asia/Riyadh', now())::time;
 begin
   if auth.uid() is null then raise exception 'يجب تسجيل الدخول'; end if;
   if p_mode not in ('in', 'out') then raise exception 'نوع عملية الحضور غير صحيح'; end if;
-  if p_latitude not between -90 and 90 or p_longitude not between -180 and 180 then
+  if p_latitude is null or p_longitude is null
+    or p_latitude not between -90 and 90
+    or p_longitude not between -180 and 180 then
     raise exception 'إحداثيات الموقع غير صحيحة';
   end if;
-  if p_accuracy_m is null or p_accuracy_m <= 0 or p_accuracy_m > 50 then
-    raise exception 'دقة الموقع غير كافية. اقترب من نافذة أو فعّل الموقع الدقيق ثم حاول مرة أخرى';
+  if p_accuracy_m is null or p_accuracy_m <= 0 then
+    raise exception 'دقة الموقع غير صحيحة';
   end if;
 
   select * into v_employee
@@ -154,11 +225,16 @@ begin
   v_distance := public.attendance_distance_meters(
     p_latitude, p_longitude, v_location.latitude, v_location.longitude
   );
-  if v_distance > v_location.radius_m then
-    raise exception 'أنت خارج نطاق موقع الحضور المسموح. المسافة الحالية % متر', round(v_distance::numeric, 1);
+  if v_distance is null
+    or p_accuracy_m > v_location.radius_m
+    or (v_distance + p_accuracy_m) > v_location.radius_m then
+    raise exception 'أنت خارج نطاق موقع الحضور المسموح أو دقة GPS غير كافية. المسافة % متر والدقة % متر',
+      round(v_distance::numeric, 1), round(p_accuracy_m::numeric, 1);
   end if;
 
-  select id, check_in into v_attendance_id, v_check_in
+  perform set_config('app.attendance_geofence_verified', 'true', true);
+
+  select id, check_in, check_out into v_attendance_id, v_check_in, v_check_out
   from public.attendance
   where emp_id = v_employee.emp_id and date = v_date
   for update;
@@ -196,6 +272,9 @@ begin
     if v_attendance_id is null or v_check_in is null then
       raise exception 'يجب تسجيل الحضور أولاً قبل تسجيل الانصراف';
     end if;
+    if v_check_out is not null then
+      raise exception 'تم تسجيل انصرافك مسبقاً لهذا اليوم';
+    end if;
     update public.attendance set
       check_out = v_time,
       attendance_location_id = v_location.location_id,
@@ -228,10 +307,59 @@ as $$
   select exists (
     select 1
     from public.employees employee
+    left join public.user_roles role
+      on role.name_ar = employee.employee_role and role.status = 'فعال'
     where lower(employee.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-      and employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+      and (
+        employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+        or coalesce(role.permissions ->> 'hr.attendance.location.manage', '') in ('true', 'manage')
+        or coalesce(employee.permissions ->> 'hr.attendance.location.manage', '') in ('true', 'manage')
+      )
   );
 $$;
+
+create or replace function public.manage_attendance_records_allowed()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select auth.role() = 'service_role' or exists (
+    select 1
+    from public.employees employee
+    left join public.user_roles role
+      on role.name_ar = employee.employee_role and role.status = 'فعال'
+    where lower(employee.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      and (
+        employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+        or coalesce(role.permissions ->> 'hr.attendance', '') in ('true', 'manage')
+        or coalesce(role.permissions ->> 'hr.attendance.individual-group', '') in ('true', 'manage')
+        or coalesce(employee.permissions ->> 'hr.attendance', '') in ('true', 'manage')
+      )
+  );
+$$;
+
+create or replace function public.enforce_employee_attendance_geofence()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.role() = 'service_role'
+    or public.manage_attendance_records_allowed()
+    or current_setting('app.attendance_geofence_verified', true) = 'true' then
+    return new;
+  end if;
+  raise exception 'يجب تسجيل حضور الموظف من بوابة الموظف وبعد التحقق من موقعه';
+end;
+$$;
+
+drop trigger if exists enforce_employee_attendance_geofence on public.attendance;
+create trigger enforce_employee_attendance_geofence
+before insert or update on public.attendance
+for each row execute function public.enforce_employee_attendance_geofence();
 
 create or replace function public.set_company_attendance_location(
   p_name text,
@@ -336,7 +464,13 @@ alter table public.attendance_location_assignment_audit enable row level securit
 revoke all on public.attendance_location_assignment_audit from public, anon, authenticated;
 grant all on public.attendance_location_assignment_audit to service_role;
 
-grant execute on function public.get_employee_attendance_location() to authenticated;
+revoke execute on function public.get_employee_attendance_location() from public, anon, authenticated;
+revoke execute on function public.record_employee_attendance(text, double precision, double precision, double precision) from public, anon;
+revoke execute on function public.check_employee_attendance_location(double precision, double precision, double precision) from public, anon;
+revoke execute on function public.set_company_attendance_location(text, text, double precision, double precision) from public, anon;
+revoke execute on function public.assign_employee_attendance_location(uuid[], uuid) from public, anon;
+
+grant execute on function public.check_employee_attendance_location(double precision, double precision, double precision) to authenticated;
 grant execute on function public.record_employee_attendance(text, double precision, double precision, double precision) to authenticated;
 grant execute on function public.set_company_attendance_location(text, text, double precision, double precision) to authenticated;
 grant execute on function public.assign_employee_attendance_location(uuid[], uuid) to authenticated;

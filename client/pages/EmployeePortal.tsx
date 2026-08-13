@@ -194,29 +194,12 @@ type AttendancePosition = {
   accuracy: number;
 };
 
-type AttendanceLocation = {
-  location_id: string;
-  location_name: string;
-  latitude: number;
-  longitude: number;
-  radius_m: number;
-};
-
-const distanceMeters = (
-  latitude1: number,
-  longitude1: number,
-  latitude2: number,
-  longitude2: number,
-) => {
-  const radians = (value: number) => (value * Math.PI) / 180;
-  const deltaLatitude = radians(latitude2 - latitude1);
-  const deltaLongitude = radians(longitude2 - longitude1);
-  const a =
-    Math.sin(deltaLatitude / 2) ** 2 +
-    Math.cos(radians(latitude1)) *
-      Math.cos(radians(latitude2)) *
-      Math.sin(deltaLongitude / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+type AttendanceLocationCheck = {
+  allowed: boolean;
+  distanceMeters: number;
+  accuracyMeters: number;
+  radiusMeters: number;
+  locationName: string;
 };
 
 const EMPLOYEE_MORE_OPTION_NAMES = new Set([
@@ -280,10 +263,8 @@ export default function EmployeePortal() {
   const [verifyStatus, setVerifyStatus] = useState<"idle" | "verifying" | "success">("idle");
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
   const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
-  const [attendanceLocation, setAttendanceLocation] = useState<AttendanceLocation | null>(null);
   const [locationChecking, setLocationChecking] = useState(false);
   const [locationAllowed, setLocationAllowed] = useState(false);
-  const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [locationMessage, setLocationMessage] = useState("جاري التحقق من موقع الحضور...");
   const verifiedPositionRef = useRef<AttendancePosition | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -307,12 +288,6 @@ export default function EmployeePortal() {
     setLocationChecking(true);
     setLocationMessage("جاري تحديد موقعك الحالي...");
     try {
-      const { data, error } = await supabase.rpc("get_employee_attendance_location");
-      const configured = (Array.isArray(data) ? data[0] : data) as AttendanceLocation | null;
-      if (error) throw error;
-      if (!configured) throw new Error("لم يتم إعداد موقع حضور صالح لك");
-      setAttendanceLocation(configured);
-
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
@@ -325,25 +300,22 @@ export default function EmployeePortal() {
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
       };
-      const distance = distanceMeters(
-        currentPosition.latitude,
-        currentPosition.longitude,
-        Number(configured.latitude),
-        Number(configured.longitude),
-      );
-      const allowed = distance <= Number(configured.radius_m) && currentPosition.accuracy <= 50;
-      verifiedPositionRef.current = allowed ? currentPosition : null;
-      setCurrentDistance(distance);
-      setLocationAllowed(allowed);
+      const { data, error } = await supabase.rpc("check_employee_attendance_location", {
+        p_latitude: currentPosition.latitude,
+        p_longitude: currentPosition.longitude,
+        p_accuracy_m: currentPosition.accuracy,
+      });
+      if (error) throw error;
+      const check = data as AttendanceLocationCheck;
+      verifiedPositionRef.current = check.allowed ? currentPosition : null;
+      setLocationAllowed(check.allowed);
       setLocationMessage(
-        allowed
-          ? `أنت داخل نطاق ${configured.location_name} — المسافة ${distance.toFixed(1)} متر`
-          : currentPosition.accuracy > 50
-            ? `دقة الموقع الحالية ${currentPosition.accuracy.toFixed(0)} متر وغير كافية`
-            : `أنت خارج نطاق الحضور — المسافة ${distance.toFixed(1)} متر`,
+        check.allowed
+          ? `أنت داخل نطاق ${check.locationName} — المسافة ${Number(check.distanceMeters).toFixed(1)} متر`
+          : `خارج النطاق أو دقة GPS غير كافية — المسافة ${Number(check.distanceMeters).toFixed(1)} م، الدقة ${Number(check.accuracyMeters).toFixed(1)} م`,
       );
-      if (!allowed && showError) toast.error("زر الحضور يظهر فقط داخل نطاق موقع العمل المحدد");
-      return allowed;
+      if (!check.allowed && showError) toast.error("زر الحضور يظهر فقط داخل نطاق موقع العمل المحدد وبدقة مناسبة");
+      return check.allowed;
     } catch (locationError) {
       verifiedPositionRef.current = null;
       setLocationAllowed(false);

@@ -9,6 +9,18 @@ import { supabase } from "@/lib/supabaseClient";
 
 const COMPANY_NAME = "شركة العياف التجارية";
 
+type SalesPostingRule = {
+  receivableAccountCode: string;
+  revenueAccountCode: string;
+  outputVatAccountCode: string;
+};
+
+const DEFAULT_SALES_RULE: SalesPostingRule = {
+  receivableAccountCode: "112",
+  revenueAccountCode: "411",
+  outputVatAccountCode: "219",
+};
+
 const toDatabaseAccount = (account: AccountNode) => ({
   code: account.code,
   company_name: COMPANY_NAME,
@@ -34,6 +46,7 @@ export default function ChartOfAccountsTree() {
   const [collapsedCodes, setCollapsedCodes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"tree" | "list">("tree");
   const [hoveredSystem, setHoveredSystem] = useState<string | null>(null);
+  const [salesPostingRule, setSalesPostingRule] = useState<SalesPostingRule>(DEFAULT_SALES_RULE);
 
   useEffect(() => {
     const loadAccounts = async () => {
@@ -69,10 +82,41 @@ export default function ChartOfAccountsTree() {
           parentCode: row.parent_code ?? "",
         })));
       }
+
+      const { data: rule } = await supabase
+        .from("accounting_posting_rules")
+        .select("receivable_account_code, revenue_account_code, output_vat_account_code")
+        .eq("rule_code", "sales_default")
+        .maybeSingle();
+      if (rule) {
+        setSalesPostingRule({
+          receivableAccountCode: String(rule.receivable_account_code),
+          revenueAccountCode: String(rule.revenue_account_code),
+          outputVatAccountCode: String(rule.output_vat_account_code),
+        });
+      }
     };
 
     void loadAccounts();
   }, []);
+
+  const saveSalesPostingRule = async () => {
+    const { error } = await supabase.from("accounting_posting_rules").upsert({
+      rule_code: "sales_default",
+      company_name: COMPANY_NAME,
+      receivable_account_code: salesPostingRule.receivableAccountCode,
+      revenue_account_code: salesPostingRule.revenueAccountCode,
+      output_vat_account_code: salesPostingRule.outputVatAccountCode,
+      active: true,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      toast({ title: "تعذر حفظ قواعد الترحيل", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تم حفظ قواعد الترحيل", description: "ستُستخدم الحسابات المحددة في الفواتير والإشعارات الجديدة" });
+  };
 
   const hasChildren = (code: string) =>
     accounts.some((a) => a.parentCode === code);
@@ -275,6 +319,41 @@ export default function ChartOfAccountsTree() {
         </div>
       </div>
 
+      <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4" dir="rtl">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-foreground">قواعد ترحيل فواتير المبيعات</h3>
+            <p className="text-xs text-muted-foreground">تحدد الحسابات الافتراضية للقيد: مدين ذمم العملاء، ودائن الإيراد وضريبة المخرجات.</p>
+          </div>
+          <button
+            onClick={saveSalesPostingRule}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+          >
+            حفظ قواعد الترحيل
+          </button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <PostingAccountSelect
+            label="حساب ذمم العملاء (مدين)"
+            value={salesPostingRule.receivableAccountCode}
+            accounts={accounts.filter((account) => account.code.startsWith("1") && !accounts.some((child) => child.parentCode === account.code))}
+            onChange={(value) => setSalesPostingRule((rule) => ({ ...rule, receivableAccountCode: value }))}
+          />
+          <PostingAccountSelect
+            label="حساب إيرادات المبيعات (دائن)"
+            value={salesPostingRule.revenueAccountCode}
+            accounts={accounts.filter((account) => account.code.startsWith("4") && !accounts.some((child) => child.parentCode === account.code))}
+            onChange={(value) => setSalesPostingRule((rule) => ({ ...rule, revenueAccountCode: value }))}
+          />
+          <PostingAccountSelect
+            label="حساب ضريبة المخرجات (دائن)"
+            value={salesPostingRule.outputVatAccountCode}
+            accounts={accounts.filter((account) => account.code.startsWith("2") && !accounts.some((child) => child.parentCode === account.code))}
+            onChange={(value) => setSalesPostingRule((rule) => ({ ...rule, outputVatAccountCode: value }))}
+          />
+        </div>
+      </div>
+
       {/* Table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
@@ -359,6 +438,35 @@ export default function ChartOfAccountsTree() {
         />
       )}
     </div>
+  );
+}
+
+function PostingAccountSelect({
+  label,
+  value,
+  accounts,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  accounts: AccountNode[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="space-y-1 text-xs font-medium text-foreground">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm"
+      >
+        {accounts.map((account) => (
+          <option key={account.code} value={account.code}>
+            {account.code} — {account.nameAr}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

@@ -39,6 +39,25 @@ const statusColors: Record<string, string> = {
   مفتوحة: "bg-cyan-500 text-white",
 };
 
+const zatcaStatusLabels: Record<string, string> = {
+  pending: "بانتظار الإرسال",
+  cleared: "مصادق من ZATCA",
+  reported: "مُبلّغ لـ ZATCA",
+  rejected: "مرفوض من ZATCA",
+};
+
+const accountingStatusLabels: Record<string, string> = {
+  unposted: "غير مُرحّلة",
+  posted: "قيد مُرحّل",
+  failed: "فشل الترحيل",
+  reversed: "قيد معكوس",
+};
+
+type RevenueAccount = {
+  code: string;
+  nameAr: string;
+};
+
 const parseCurrency = (value: string) =>
   Number(value.replace(/[^0-9.]/g, "")) || 0;
 
@@ -87,6 +106,8 @@ type Invoice = {
   buyerVat?: string;
   zatcaStatus?: string;
   qrCodeData?: string;
+  accountingStatus?: string;
+  accountingJournalEntryId?: string;
 };
 
 export default function SalesInvoices() {
@@ -132,6 +153,8 @@ export default function SalesInvoices() {
           buyerVat: row.buyer_vat ?? "",
           zatcaStatus: row.zatca_status ?? "pending",
           qrCodeData: row.qr_code_data ?? "",
+          accountingStatus: row.accounting_status ?? "unposted",
+          accountingJournalEntryId: row.accounting_journal_entry_id ?? "",
         }));
         setInvoices(mapped);
       }
@@ -150,6 +173,22 @@ export default function SalesInvoices() {
     );
   };
 
+  const handlePostAccounting = async (invoice: Invoice) => {
+    const { data, error } = await supabase.rpc("post_sales_invoice_accounting", {
+      p_invoice_id: invoice.id,
+    });
+    if (error) {
+      toast({ title: "تعذر ترحيل الفاتورة", description: error.message, variant: "destructive" });
+      return;
+    }
+    setInvoices((current) => current.map((item) => item.id === invoice.id ? {
+      ...item,
+      accountingStatus: "posted",
+      accountingJournalEntryId: String(data),
+    } : item));
+    toast({ title: "تم ترحيل الفاتورة محاسبياً", description: `تم إنشاء القيد المتوازن للفاتورة ${invoice.id}` });
+  };
+
   const handleDelete = async (invoiceId: string) => {
     const { error } = await supabase
       .from("sales_invoices")
@@ -165,7 +204,8 @@ export default function SalesInvoices() {
     } else {
       toast({
         title: "تعذر حذف الفاتورة",
-        description: "يرجى المحاولة لاحقاً",
+        description: error.message || "الفاتورة المُرحّلة تُعكس بإشعار دائن ولا تُحذف",
+        variant: "destructive",
       });
     }
   };
@@ -428,6 +468,7 @@ export default function SalesInvoices() {
               setSelectedInvoice(invoice);
               setView("payment");
             }}
+            onPostAccounting={handlePostAccounting}
             onDelete={handleDelete}
             onDownloadPdf={handleDownloadPdf}
             invoices={invoices}
@@ -466,6 +507,7 @@ function InvoicesList({
   onView,
   onEdit,
   onPayment,
+  onPostAccounting,
   onDelete,
   onDownloadPdf,
   invoices,
@@ -474,6 +516,7 @@ function InvoicesList({
   onView: (invoice: Invoice) => void;
   onEdit: (invoice: Invoice) => void;
   onPayment: (invoice: Invoice) => void;
+  onPostAccounting: (invoice: Invoice) => void;
   onDelete: (invoiceId: string) => void;
   onDownloadPdf: (invoice: Invoice) => void;
   invoices: Invoice[];
@@ -510,6 +553,8 @@ function InvoicesList({
       <DataTable
         headers={[
           "الإجراءات",
+          "حالة ZATCA",
+          "القيد المحاسبي",
           "الحالة",
           "المبلغ المتبقي",
           "المبلغ المدفوع",
@@ -539,9 +584,18 @@ function InvoicesList({
                 />
                 <ActionBtn
                   icon={Edit}
-                  label="تعديل"
+                  label={invoice.accountingStatus === "posted" ? "استخدم إشعار تعديل" : "تعديل"}
                   color="emerald"
-                  onClick={() => onEdit(invoice)}
+                  onClick={() => {
+                    if (invoice.accountingStatus === "posted") {
+                      toast({
+                        title: "الفاتورة مُرحّلة محاسبياً",
+                        description: "استخدم إشعاراً دائناً أو مديناً لتعديل المبالغ دون كسر القيد المحاسبي.",
+                      });
+                      return;
+                    }
+                    onEdit(invoice);
+                  }}
                 />
                 <ActionBtn
                   icon={CreditCard}
@@ -549,6 +603,14 @@ function InvoicesList({
                   color="indigo"
                   onClick={() => onPayment(invoice)}
                 />
+                {invoice.accountingStatus !== "posted" && (
+                  <ActionBtn
+                    icon={FileText}
+                    label="ترحيل محاسبي"
+                    color="blue"
+                    onClick={() => onPostAccounting(invoice)}
+                  />
+                )}
                 <ActionBtn
                   icon={Trash2}
                   label="حذف"
@@ -565,6 +627,28 @@ function InvoicesList({
                   }}
                 />
               </div>
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right">
+              <span className={cn(
+                "inline-flex rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
+                invoice.zatcaStatus === "cleared" || invoice.zatcaStatus === "reported"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : invoice.zatcaStatus === "rejected"
+                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                    : "bg-slate-50 text-slate-600 border-slate-200",
+              )}>
+                {zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ?? invoice.zatcaStatus}
+              </span>
+            </td>
+            <td className="px-5 py-3.5 align-middle text-right">
+              <span className={cn(
+                "inline-flex rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
+                invoice.accountingStatus === "posted"
+                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                  : "bg-amber-50 text-amber-700 border-amber-200",
+              )}>
+                {accountingStatusLabels[invoice.accountingStatus ?? "unposted"] ?? invoice.accountingStatus}
+              </span>
             </td>
             <td className="px-5 py-3.5 align-middle text-right">
               <span
@@ -749,6 +833,19 @@ function InvoiceDetails({
                 فاتورة ضريبية
               </h3>
               <p className="text-sm text-slate-500">Tax Invoice</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs font-semibold">
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
+                  المحاسبة: {accountingStatusLabels[invoice.accountingStatus ?? "unposted"] ?? invoice.accountingStatus}
+                </span>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                  ZATCA: {zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ?? invoice.zatcaStatus}
+                </span>
+                {invoice.accountingJournalEntryId && (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                    رقم القيد: {invoice.accountingJournalEntryId}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="border border-slate-200 rounded">
@@ -930,6 +1027,7 @@ function InvoiceEdit({
         {
           id: 1,
           description: "",
+          accountCode: "411",
           quantity: 1,
           unitPrice: 0,
           discount: 0,
@@ -937,6 +1035,36 @@ function InvoiceEdit({
         },
       ],
   );
+  const [revenueAccounts, setRevenueAccounts] = useState<RevenueAccount[]>([]);
+
+  useEffect(() => {
+    const loadRevenueAccounts = async () => {
+      const { data } = await supabase
+        .from("accounting_accounts")
+        .select("code, name_ar, parent_code")
+        .like("code", "4%")
+        .order("code");
+      const accountRows = data ?? [];
+      setRevenueAccounts(accountRows
+        .filter((account) => !accountRows.some((child) => child.parent_code === account.code))
+        .map((account) => ({
+          code: String(account.code),
+          nameAr: String(account.name_ar),
+        })));
+      const { data: rule } = await supabase
+        .from("accounting_posting_rules")
+        .select("revenue_account_code")
+        .eq("rule_code", "sales_default")
+        .maybeSingle();
+      if (rule?.revenue_account_code) {
+        setItems((current: typeof items) => current.map((item: (typeof items)[number]) => ({
+          ...item,
+          accountCode: item.accountCode ?? String(rule.revenue_account_code),
+        })));
+      }
+    };
+    void loadRevenueAccounts();
+  }, []);
 
   const handleAddItem = () => {
     setItems((prev: typeof items) => [
@@ -944,6 +1072,7 @@ function InvoiceEdit({
       {
         id: prev.length + 1,
         description: "",
+        accountCode: "411",
         quantity: 1,
         unitPrice: 0,
         discount: 0,
@@ -993,6 +1122,10 @@ function InvoiceEdit({
         date: invoiceDate,
         due_date: dueDate,
         customer,
+        customer_address: customerAddress,
+        items,
+        subtotal: totals.subtotal,
+        total_tax: totals.tax,
         total: `ريال ${totalValue.toFixed(2)}`,
         remaining: `ريال ${remainingValue.toFixed(2)}`,
         status,
@@ -1149,6 +1282,7 @@ function InvoiceEdit({
                   <th className="pb-2 font-medium w-20">خصم</th>
                   <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
                   <th className="pb-2 font-medium w-20">الكمية *</th>
+                  <th className="pb-2 font-medium w-52">حساب الإيراد *</th>
                   <th className="pb-2 font-medium w-[320px]">وصف البند</th>
                 </tr>
               </thead>
@@ -1226,6 +1360,19 @@ function InvoiceEdit({
                           }
                           className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
+                      </td>
+                      <td className="pt-4 px-1 align-top min-w-[210px]">
+                        <select
+                          value={item.accountCode ?? "411"}
+                          onChange={(event) => updateItem(item.id, { accountCode: event.target.value })}
+                          className="h-10 w-full rounded-xl border border-border/60 bg-white px-2 text-sm"
+                        >
+                          {(revenueAccounts.length ? revenueAccounts : [{ code: "411", nameAr: "إيرادات المبيعات والخدمات" }]).map((account) => (
+                            <option key={account.code} value={account.code}>
+                              {account.code} — {account.nameAr}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
                         <textarea
@@ -1441,12 +1588,14 @@ function InvoiceForm({
     {
       id: 1,
       description: "",
+      accountCode: "411",
       quantity: 1,
       unitPrice: 0,
       discount: 0,
       taxPercent: 15,
     },
   ]);
+  const [revenueAccounts, setRevenueAccounts] = useState<RevenueAccount[]>([]);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -1471,6 +1620,32 @@ function InvoiceForm({
       setInvoiceDate(today.toISOString().split("T")[0]);
       setDueDate(due.toISOString().split("T")[0]);
 
+      const { data: accountRows } = await supabase
+        .from("accounting_accounts")
+        .select("code, name_ar, parent_code")
+        .like("code", "4%")
+        .order("code");
+      const postableAccounts = (accountRows ?? []).filter(
+        (account) => !(accountRows ?? []).some((child) => child.parent_code === account.code),
+      );
+      setRevenueAccounts(
+        postableAccounts.map((account) => ({
+          code: String(account.code),
+          nameAr: String(account.name_ar),
+        })),
+      );
+      const { data: postingRule } = await supabase
+        .from("accounting_posting_rules")
+        .select("revenue_account_code")
+        .eq("rule_code", "sales_default")
+        .maybeSingle();
+      if (postingRule?.revenue_account_code) {
+        setItems((current) => current.map((item) => ({
+          ...item,
+          accountCode: String(postingRule.revenue_account_code),
+        })));
+      }
+
       const { data } = await supabase
         .from("sales_invoices")
         .select("id")
@@ -1492,6 +1667,7 @@ function InvoiceForm({
       {
         id: prev.length + 1,
         description: "",
+        accountCode: "411",
         quantity: 1,
         unitPrice: 0,
         discount: 0,
@@ -1504,6 +1680,10 @@ function InvoiceForm({
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...changes } : item)),
     );
+  };
+
+  const removeItem = (id: number) => {
+    setItems((prev) => prev.length > 1 ? prev.filter((item) => item.id !== id) : prev);
   };
 
   const totals = items.reduce(
@@ -1523,6 +1703,14 @@ function InvoiceForm({
 
   const handleSave = async () => {
     const invoiceId = invoiceNumber || `INV-${Date.now()}`;
+    if (!customer.trim()) {
+      toast({ title: "العميل مطلوب", description: "اختر العميل قبل حفظ الفاتورة", variant: "destructive" });
+      return;
+    }
+    if (items.some((item) => !item.accountCode)) {
+      toast({ title: "حساب الإيراد مطلوب", description: "اختر حساباً من شجرة الحسابات لكل بند", variant: "destructive" });
+      return;
+    }
     if (invoiceType === "standard" && !/^3\d{14}$/.test(buyerVat)) {
       toast({
         title: "رقم ضريبي مطلوب",
@@ -1585,7 +1773,21 @@ function InvoiceForm({
         `sales-invoice-address-${data.id ?? attemptId}`,
         customerAddress,
       );
-      const zatca = await submitInvoiceToZatca(data.id ?? attemptId);
+      const savedInvoiceId = String(data.id ?? attemptId);
+      const accounting = await supabase.rpc("post_sales_invoice_accounting", {
+        p_invoice_id: savedInvoiceId,
+      });
+      const accountingPosted = !accounting.error;
+      if (accounting.error) {
+        toast({
+          title: "تعذر تأكيد القيد المحاسبي",
+          description: accounting.error.message,
+          variant: "destructive",
+        });
+      }
+      const zatca = accountingPosted
+        ? await submitInvoiceToZatca(savedInvoiceId)
+        : { status: "pending", qrCodeData: "" };
       onSaved({
         id: data.id ?? attemptId,
         date: data.date ?? invoiceDate,
@@ -1596,6 +1798,8 @@ function InvoiceForm({
         buyerVat: data.buyer_vat ?? buyerVat,
         zatcaStatus: zatca.status ?? data.zatca_status ?? "pending",
         qrCodeData: zatca.qrCodeData ?? data.qr_code_data ?? "",
+        accountingStatus: accountingPosted ? "posted" : "unposted",
+        accountingJournalEntryId: String(accounting.data ?? data.accounting_journal_entry_id ?? ""),
         total: data.total ?? payload.total,
         paid: data.paid ?? payload.paid,
         remaining: data.remaining ?? payload.remaining,
@@ -1900,6 +2104,7 @@ function InvoiceForm({
                   <th className="pb-2 font-medium w-20">خصم</th>
                   <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
                   <th className="pb-2 font-medium w-20">الكمية *</th>
+                  <th className="pb-2 font-medium w-52">حساب الإيراد *</th>
                   <th className="pb-2 font-medium w-[320px]">وصف البند</th>
                 </tr>
               </thead>
@@ -1917,7 +2122,10 @@ function InvoiceForm({
                           <button className="w-7 h-7 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
                             <Settings className="w-3.5 h-3.5" />
                           </button>
-                          <button className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                          >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -1977,6 +2185,19 @@ function InvoiceForm({
                           }
                           className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
+                      </td>
+                      <td className="pt-4 px-1 align-top min-w-[210px]">
+                        <select
+                          value={item.accountCode ?? "411"}
+                          onChange={(event) => updateItem(item.id, { accountCode: event.target.value })}
+                          className="h-10 w-full rounded-xl border border-border/60 bg-white px-2 text-sm"
+                        >
+                          {(revenueAccounts.length ? revenueAccounts : [{ code: "411", nameAr: "إيرادات المبيعات والخدمات" }]).map((account) => (
+                            <option key={account.code} value={account.code}>
+                              {account.code} — {account.nameAr}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
                         <textarea

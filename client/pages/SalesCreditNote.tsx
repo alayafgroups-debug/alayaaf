@@ -13,6 +13,18 @@ const zatcaStatusLabels: Record<string, string> = {
   rejected: "مرفوض من ZATCA",
 };
 
+const accountingStatusLabels: Record<string, string> = {
+  unposted: "غير مُرحّل",
+  posted: "قيد مُرحّل",
+  failed: "فشل الترحيل",
+  reversed: "قيد معكوس",
+};
+
+type AccountingAccount = {
+  code: string;
+  nameAr: string;
+};
+
 type CreditNoteItem = {
   id: string;
   description: string;
@@ -41,6 +53,8 @@ type SavedCreditNote = {
   items: CreditNoteItem[];
   zatcaStatus: string;
   qrCodeData: string;
+  accountingStatus: string;
+  accountingJournalEntryId: string;
 };
 
 type OriginalInvoice = {
@@ -70,7 +84,7 @@ const START_NUMBER = 100;
 const emptyItem = (): CreditNoteItem => ({
   id: crypto.randomUUID(),
   description: "",
-  account: "",
+  account: "411",
   quantity: 1,
   unitPrice: 0,
 });
@@ -99,6 +113,8 @@ const createEmptyForm = (sequence: number): CreditNoteForm => ({
 export default function SalesCreditNote() {
   const [savedNotes, setSavedNotes] = useState<SavedCreditNote[]>([]);
   const [invoices, setInvoices] = useState<OriginalInvoice[]>([]);
+  const [revenueAccounts, setRevenueAccounts] = useState<AccountingAccount[]>([]);
+  const [defaultRevenueAccount, setDefaultRevenueAccount] = useState("411");
   const [nextSequence, setNextSequence] = useState(START_NUMBER);
   const [mode, setMode] = useState<"list" | "create" | "details">("list");
   const [selectedNote, setSelectedNote] = useState<SavedCreditNote | null>(null);
@@ -106,16 +122,27 @@ export default function SalesCreditNote() {
 
   useEffect(() => {
     const load = async () => {
-      const [notesResult, invoicesResult] = await Promise.all([
+      const [notesResult, invoicesResult, accountsResult, ruleResult] = await Promise.all([
         supabase
           .from("invoice_adjustment_notes")
-          .select("id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, zatca_status, qr_code_data")
+          .select("id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, zatca_status, qr_code_data, accounting_status, accounting_journal_entry_id")
           .in("note_type", ["sales_credit", "sales_debit"])
           .order("created_at", { ascending: false }),
         supabase
           .from("sales_invoices")
-          .select("id, customer, total, adjusted_total")
+          .select("id, customer, total, adjusted_total, accounting_status")
+          .eq("accounting_status", "posted")
           .order("date", { ascending: false }),
+        supabase
+          .from("accounting_accounts")
+          .select("code, name_ar, parent_code")
+          .like("code", "4%")
+          .order("code"),
+        supabase
+          .from("accounting_posting_rules")
+          .select("revenue_account_code")
+          .eq("rule_code", "sales_default")
+          .maybeSingle(),
       ]);
 
       if (!notesResult.error) {
@@ -139,6 +166,8 @@ export default function SalesCreditNote() {
           items: Array.isArray(row.items) ? row.items : [],
           zatcaStatus: String(row.zatca_status ?? "pending"),
           qrCodeData: String(row.qr_code_data ?? ""),
+          accountingStatus: String(row.accounting_status ?? "unposted"),
+          accountingJournalEntryId: String(row.accounting_journal_entry_id ?? ""),
         }));
         setSavedNotes(parsed);
         const sequence = parsed.reduce((max, note) => Math.max(max, extractSequence(note.noteNumber)), START_NUMBER - 1) + 1;
@@ -153,6 +182,24 @@ export default function SalesCreditNote() {
           total: Number(String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
           adjustedTotal: Number(row.adjusted_total ?? String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
         })));
+      }
+
+      if (!accountsResult.error) {
+        const accountRows = accountsResult.data ?? [];
+        setRevenueAccounts(accountRows
+          .filter((account: any) => !accountRows.some((child: any) => child.parent_code === account.code))
+          .map((row: any) => ({
+            code: String(row.code),
+            nameAr: String(row.name_ar),
+          })));
+      }
+      if (!ruleResult.error && ruleResult.data?.revenue_account_code) {
+        const configuredRevenue = String(ruleResult.data.revenue_account_code);
+        setDefaultRevenueAccount(configuredRevenue);
+        setForm((current) => ({
+          ...current,
+          items: current.items.map((item) => ({ ...item, account: configuredRevenue })),
+        }));
       }
     };
     load();
@@ -172,7 +219,10 @@ export default function SalesCreditNote() {
     }));
   };
 
-  const addItem = () => setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
+  const addItem = () => setForm((prev) => ({
+    ...prev,
+    items: [...prev.items, { ...emptyItem(), account: defaultRevenueAccount }],
+  }));
 
   const removeItem = (id: string) =>
     setForm((prev) => ({
@@ -181,7 +231,9 @@ export default function SalesCreditNote() {
     }));
 
   const createNewNote = () => {
-    setForm(createEmptyForm(nextSequence));
+    const nextForm = createEmptyForm(nextSequence);
+    nextForm.items = nextForm.items.map((item) => ({ ...item, account: defaultRevenueAccount }));
+    setForm(nextForm);
     setMode("create");
   };
 
@@ -196,6 +248,10 @@ export default function SalesCreditNote() {
     }
     if (total <= 0) {
       toast({ title: "مبلغ الإشعار غير صحيح", description: "أضف بنداً بقيمة أكبر من صفر" });
+      return;
+    }
+    if (form.items.some((item) => !item.account)) {
+      toast({ title: "الحساب المحاسبي مطلوب", description: "اختر حساب الإيراد لكل بند من شجرة الحسابات" });
       return;
     }
 
@@ -220,6 +276,12 @@ export default function SalesCreditNote() {
       toast({ title: "تعذر ترحيل الإشعار", description: error.message, variant: "destructive" });
       return;
     }
+
+    const { data: postedNote } = await supabase
+      .from("invoice_adjustment_notes")
+      .select("accounting_status, accounting_journal_entry_id")
+      .eq("id", String(data))
+      .single();
 
     const zatca = await supabase.functions.invoke("zatca-invoice", {
       body: { noteId: String(data) },
@@ -258,13 +320,17 @@ export default function SalesCreditNote() {
       items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
       zatcaStatus: String(zatca.data?.status ?? "rejected"),
       qrCodeData: String(zatca.data?.qrCodeData ?? ""),
+      accountingStatus: String(postedNote?.accounting_status ?? "posted"),
+      accountingJournalEntryId: String(postedNote?.accounting_journal_entry_id ?? ""),
     };
     setSavedNotes((current) => [payload, ...current]);
     setInvoices((current) => current.map((item) => item.id === form.originalInvoiceId ? { ...item, adjustedTotal: payload.balanceAfter } : item));
 
     const sequence = extractSequence(form.noteNumber) + 1;
     setNextSequence(sequence);
-    setForm(createEmptyForm(sequence));
+    const nextForm = createEmptyForm(sequence);
+    nextForm.items = nextForm.items.map((item) => ({ ...item, account: defaultRevenueAccount }));
+    setForm(nextForm);
     setMode("list");
     toast({
       title: form.noteType === "sales_credit" ? "تم ترحيل الإشعار الدائن" : "تم ترحيل الإشعار المدين",
@@ -333,6 +399,7 @@ export default function SalesCreditNote() {
                       <th className="px-3 py-2">التاريخ</th>
                       <th className="px-3 py-2">الإجمالي</th>
                       <th className="px-3 py-2">الرصيد بعد الإشعار</th>
+                      <th className="px-3 py-2">القيد المحاسبي</th>
                       <th className="px-3 py-2">حالة ZATCA</th>
                     </tr>
                   </thead>
@@ -356,6 +423,15 @@ export default function SalesCreditNote() {
                         <td className="px-3 py-2">{note.date}</td>
                         <td className="px-3 py-2">{note.total.toFixed(2)} {note.currency}</td>
                         <td className="px-3 py-2 font-semibold">{note.balanceAfter.toFixed(2)} {note.currency}</td>
+                        <td className="px-3 py-2">
+                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            note.accountingStatus === "posted"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {accountingStatusLabels[note.accountingStatus] ?? note.accountingStatus}
+                          </span>
+                        </td>
                         <td className="px-3 py-2">
                           <span
                             className={`rounded-full px-2 py-1 text-xs font-semibold ${
@@ -401,6 +477,12 @@ export default function SalesCreditNote() {
               <p>
                 حالة ZATCA: {zatcaStatusLabels[selectedNote.zatcaStatus] ?? selectedNote.zatcaStatus}
               </p>
+              <p>
+                القيد المحاسبي: {accountingStatusLabels[selectedNote.accountingStatus] ?? selectedNote.accountingStatus}
+              </p>
+              {selectedNote.accountingJournalEntryId && (
+                <p>رقم القيد: {selectedNote.accountingJournalEntryId}</p>
+              )}
             </div>
             <div className="flex items-center gap-4 border-t border-border pt-4">
               {selectedNote.qrCodeData ? (
@@ -562,12 +644,17 @@ export default function SalesCreditNote() {
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <input
+                            <select
                               value={item.account}
                               onChange={(e) => updateItem(item.id, "account", e.target.value)}
-                              placeholder="مطلوب"
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
-                            />
+                            >
+                              {(revenueAccounts.length ? revenueAccounts : [{ code: "411", nameAr: "إيرادات المبيعات والخدمات" }]).map((account) => (
+                                <option key={account.code} value={account.code}>
+                                  {account.code} — {account.nameAr}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-3 py-2">
                             <input

@@ -14,6 +14,7 @@ type Request = {
   status: string;
   date: string;
   details: string;
+  signatureData: string;
 };
 
 export default function ManagerRequestsPage({ onBack }: Props) {
@@ -34,7 +35,7 @@ export default function ManagerRequestsPage({ onBack }: Props) {
       const [leavesResult, payrollResult] = await Promise.all([
         supabase
           .from("leave_requests")
-          .select("id, emp_name, leave_type, start_date, end_date, days, status, notes, created_at")
+          .select("id, emp_name, leave_type, start_date, end_date, days, status, notes, signature_data, created_at")
           .order("created_at", { ascending: false }),
         supabase
           .from("payroll")
@@ -51,6 +52,7 @@ export default function ManagerRequestsPage({ onBack }: Props) {
         status: normalizeStatus(r.status),
         date: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "",
         details: `${r.days ?? 0} يوم من ${r.start_date ?? ""} إلى ${r.end_date ?? ""}${r.notes ? ` — ${r.notes}` : ""}`,
+        signatureData: r.signature_data ?? "",
       }));
 
       const payrollRows: Request[] = (payrollResult.data ?? []).map((r: any, idx: number) => ({
@@ -62,6 +64,7 @@ export default function ManagerRequestsPage({ onBack }: Props) {
         status: r.status === "مدفوع" ? "موافق" : normalizeStatus(r.status),
         date: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "",
         details: `شهر ${r.month} — صافي ${(+r.net_salary).toLocaleString("ar-SA")} ر.س`,
+        signatureData: "",
       }));
 
       const all = [...leaveRows, ...payrollRows].sort((a, b) => b.date.localeCompare(a.date));
@@ -149,6 +152,16 @@ export default function ManagerRequestsPage({ onBack }: Props) {
                 <span className="text-gray-800 text-sm text-right">{value}</span>
               </div>
             ))}
+            {selected.rawTable === "leave_requests" && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="mb-2 text-sm text-gray-500">توقيع الموظف</p>
+                {selected.signatureData ? (
+                  <img src={selected.signatureData} alt={`توقيع ${selected.empName}`} className="h-24 w-full rounded-lg border bg-white object-contain" />
+                ) : (
+                  <p className="rounded-lg bg-gray-50 p-3 text-center text-xs text-gray-400">طلب قديم بلا توقيع إلكتروني</p>
+                )}
+              </div>
+            )}
           </div>
 
           {isPending && (

@@ -4,6 +4,7 @@ import { arSA } from "date-fns/locale";
 import { supabase } from "@/lib/supabaseClient";
 import { Calendar, Plus, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import EmployeeSignatureField, { EmployeeSignature } from "./EmployeeSignatureField";
 
 import {
   Dialog,
@@ -23,6 +24,7 @@ interface LeaveRequestFormProps {
 
 export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: LeaveRequestFormProps) {
   const [loading, setLoading] = useState(false);
+  const [signature, setSignature] = useState<EmployeeSignature | null>(null);
   const [formData, setFormData] = useState({
     leaveType: "",
     startDate: "",
@@ -66,6 +68,12 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
         return;
       }
 
+      if (!signature) {
+        alert("يجب إنشاء وحفظ توقيعك الإلكتروني قبل إرسال الطلب");
+        setLoading(false);
+        return;
+      }
+
       const leaveTypeMap: Record<string, string> = {
         annual: "إجازة سنوية",
         sick: "إجازة مرضية",
@@ -80,6 +88,8 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
         start_date: formData.startDate,
         end_date: formData.endDate,
         status: "معلق",
+        signature_data: signature.signatureData,
+        signed_at: new Date().toISOString(),
         notes: `مدة الإجازة: ${duration} يوم | العنوان: ${formData.address} | البديل: ${formData.substituteId} | الهاتف: ${formData.phone} | السبب: ${formData.reason}`,
       });
 
@@ -267,6 +277,8 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
                 className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right resize-none"
               />
             </div>
+
+            <EmployeeSignatureField onChange={setSignature} />
 
             {/* Attachments */}
             <div className="space-y-2">

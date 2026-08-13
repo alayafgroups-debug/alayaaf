@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 type RequestRow = {
   id: string; requestDate: string; empId: string; empName: string;
   moveType: string; requestType: string; status: string; lastUpdate: string;
-  adminNote: string; source: "leave" | "request";
+  adminNote: string; signatureData: string; signedAt: string; source: "leave" | "request";
 };
 
 const normalizeStatus = (raw: string) =>
@@ -42,7 +42,7 @@ export default function HRRequestsIncoming() {
         moveType: "إجازة", requestType: r.leave_type ?? "-",
         status: normalizeStatus(String(r.status ?? "").trim()),
         lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
-        adminNote: r.admin_note ?? "", source: "leave",
+        adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "leave",
       }));
 
       const reqRows: RequestRow[] = (reqRes.data ?? []).map((r: any) => ({
@@ -51,7 +51,7 @@ export default function HRRequestsIncoming() {
         moveType: "طلب", requestType: r.request_type ?? "-",
         status: normalizeStatus(String(r.status ?? "").trim()),
         lastUpdate: r.updated_at ? new Date(r.updated_at).toLocaleDateString("ar-SA") : "-",
-        adminNote: r.admin_note ?? "", source: "request",
+        adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "request",
       }));
 
       setItems([...leaveRows, ...reqRows].sort((a, b) => b.requestDate.localeCompare(a.requestDate)));
@@ -110,15 +110,16 @@ export default function HRRequestsIncoming() {
                   <th className="py-3 px-4 font-medium">نوع الحركة</th>
                   <th className="py-3 px-4 font-medium">نوع الطلب</th>
                   <th className="py-3 px-4 font-medium text-center">الحالة</th>
+                  <th className="py-3 px-4 font-medium text-center">توقيع الموظف</th>
                   <th className="py-3 px-4 font-medium">آخر تحديث</th>
                   <th className="py-3 px-4 font-medium text-center min-w-64">ملاحظة الإدارة والإجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y bg-white">
                 {loading ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">لا توجد طلبات واردة</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">لا توجد طلبات واردة</td></tr>
                 ) : filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50/50">
                     <td className="py-3 px-4">{row.requestDate}</td>
@@ -127,6 +128,16 @@ export default function HRRequestsIncoming() {
                     <td className="py-3 px-4">{row.requestType}</td>
                     <td className="py-3 px-4 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.status === "موافق" ? "bg-emerald-100 text-emerald-800" : row.status === "مرفوض" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>{row.status}</span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {row.signatureData ? (
+                        <div className="inline-flex flex-col items-center gap-1">
+                          <img src={row.signatureData} alt={`توقيع ${row.empName}`} className="h-12 w-28 rounded border bg-white object-contain" />
+                          <span className="text-[10px] text-gray-400">موقّع إلكترونيًا</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">طلب قديم بلا توقيع</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">{row.lastUpdate}</td>
                     <td className="py-3 px-4">

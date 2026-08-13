@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { FormSchema, FormField } from "./formSchemas";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import EmployeeSignatureField, { EmployeeSignature } from "./EmployeeSignatureField";
 
 interface Props {
   open: boolean;
@@ -18,6 +19,7 @@ interface Props {
 
 export default function DynamicRequestForm({ open, onOpenChange, schema, employeeInfo }: Props) {
   const [loading, setLoading] = useState(false);
+  const [signature, setSignature] = useState<EmployeeSignature | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
 
   if (!schema) return null;
@@ -63,6 +65,11 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
       return;
     }
 
+    if (!signature) {
+      toast.error("يجب إنشاء وحفظ توقيعك الإلكتروني قبل إرسال الطلب");
+      return;
+    }
+
     setLoading(true);
     try {
       const { error } = await supabase.from("hr_requests").insert([
@@ -73,6 +80,8 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
           start_date: startDate,
           end_date: endDate,
           status: "معلق",
+          signature_data: signature.signatureData,
+          signed_at: new Date().toISOString(),
           details: formData,
         },
       ]);
@@ -219,6 +228,10 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
                 {renderField(field)}
               </div>
             ))}
+          </div>
+
+          <div className="pt-8">
+            <EmployeeSignatureField onChange={setSignature} />
           </div>
 
           <div className="space-y-2 pt-8">

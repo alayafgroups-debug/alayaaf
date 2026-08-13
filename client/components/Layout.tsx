@@ -415,7 +415,7 @@ function HRSidebar({
       <nav
         ref={navRef}
         onScroll={handleScroll}
-        className="relative z-10 flex flex-col gap-0.5 px-3 py-3 flex-1 overflow-y-auto"
+        className="main-sidebar-nav relative z-10 flex flex-col gap-0.5 px-3 py-3 flex-1 overflow-y-auto"
       >
         {sidebarOpen && (
           <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300/25">

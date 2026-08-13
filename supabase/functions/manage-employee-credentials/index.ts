@@ -128,7 +128,7 @@ Deno.serve(async (req: Request) => {
       : callerQuery.ilike("email", user.email);
     const { data: caller } = await callerQuery.maybeSingle();
 
-    if (["mailbox-info", "verify-mailbox", "delete-mailbox-message", "purge-mailbox-message"].includes(action)) {
+    if (["mailbox-info", "verify-mailbox", "mark-mailbox-messages-read", "delete-mailbox-message", "purge-mailbox-message"].includes(action)) {
       const requestedEmpId = String(body?.empId ?? "").trim();
       if (!caller || !requestedEmpId || String(caller.emp_id) !== requestedEmpId) {
         return respond({ success: false, error: "غير مصرح بالدخول إلى هذا البريد" }, 403);
@@ -155,6 +155,29 @@ Deno.serve(async (req: Request) => {
 
       if (action === "mailbox-info") {
         return respond({ success: true, generated_email: credential.generated_email });
+      }
+
+      if (action === "mark-mailbox-messages-read") {
+        const requestedIds = Array.isArray(body?.messageIds)
+          ? Array.from(new Set(body.messageIds.map((value: unknown) => String(value)).filter(Boolean))).slice(0, 100)
+          : [];
+        if (requestedIds.length === 0) return respond({ success: true, message_ids: [] });
+        const { data: ownedMessages, error: ownedMessagesError } = await adminClient
+          .from("employee_mail_messages")
+          .select("id")
+          .in("id", requestedIds)
+          .eq("to_email", credential.generated_email)
+          .is("read_at", null);
+        if (ownedMessagesError) throw ownedMessagesError;
+        const ownedIds = (ownedMessages ?? []).map((message) => String(message.id));
+        if (ownedIds.length === 0) return respond({ success: true, message_ids: [] });
+        const readAt = new Date().toISOString();
+        const { error: readError } = await adminClient
+          .from("employee_mail_messages")
+          .update({ read_at: readAt })
+          .in("id", ownedIds);
+        if (readError) throw readError;
+        return respond({ success: true, message_ids: ownedIds, read_at: readAt });
       }
 
       if (action === "delete-mailbox-message" || action === "purge-mailbox-message") {

@@ -19,6 +19,8 @@ interface MailMessage {
 
 type Folder = "inbox" | "sent" | "trash" | "settings";
 
+const AUTO_READ_AFTER_MS = 60 * 60 * 1000;
+
 export default function EmployeeEmailPage({
   onBack,
   empId,
@@ -103,6 +105,51 @@ export default function EmployeeEmailPage({
     { id: "settings", label: "الإعدادات", count: 0 },
   ];
 
+  const markMessagesRead = async (messageIds: string[]) => {
+    if (messageIds.length === 0) return;
+    const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
+      body: { action: "mark-mailbox-messages-read", empId, messageIds },
+    });
+    if (error || !data?.success) return;
+
+    const updatedIds = new Set<string>((data.message_ids ?? []).map((id: unknown) => String(id)));
+    if (updatedIds.size === 0) return;
+    const readAt = String(data.read_at || new Date().toISOString());
+    setMessages((current) => current.map((message) =>
+      updatedIds.has(message.id) ? { ...message, read_at: readAt } : message,
+    ));
+  };
+
+  useEffect(() => {
+    if (!mailboxAuthenticated || !employeeEmail) return;
+    const unreadMessages = messages.filter((message) =>
+      message.to_email === employeeEmail &&
+      !message.read_at &&
+      !message.deleted_by_recipient_at &&
+      !message.purged_by_recipient_at,
+    );
+    if (unreadMessages.length === 0) return;
+
+    const now = Date.now();
+    const dueAt = (message: MailMessage) => new Date(message.created_at).getTime() + AUTO_READ_AFTER_MS;
+    const overdueIds = unreadMessages
+      .filter((message) => dueAt(message) <= now)
+      .map((message) => message.id);
+    if (overdueIds.length > 0) {
+      void markMessagesRead(overdueIds);
+      return;
+    }
+
+    const nearestDueAt = Math.min(...unreadMessages.map(dueAt));
+    const timer = window.setTimeout(() => {
+      const ids = unreadMessages
+        .filter((message) => dueAt(message) <= Date.now())
+        .map((message) => message.id);
+      void markMessagesRead(ids);
+    }, Math.max(250, nearestDueAt - now));
+    return () => window.clearTimeout(timer);
+  }, [mailboxAuthenticated, employeeEmail, messages]);
+
   const handleMailboxLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!mailboxPassword) {
@@ -171,12 +218,10 @@ export default function EmployeeEmailPage({
     toast.success("تم حذف الرسالة نهائياً من مهملاتك");
   };
 
-  const openMessage = async (message: MailMessage) => {
+  const openMessage = (message: MailMessage) => {
     setSelectedEmail(message);
     if (message.to_email === employeeEmail && !message.read_at) {
-      const readAt = new Date().toISOString();
-      await supabase.from("employee_mail_messages").update({ read_at: readAt }).eq("id", message.id);
-      setMessages((current) => current.map((item) => item.id === message.id ? { ...item, read_at: readAt } : item));
+      void markMessagesRead([message.id]);
     }
   };
 

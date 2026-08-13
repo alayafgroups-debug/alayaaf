@@ -128,7 +128,7 @@ Deno.serve(async (req: Request) => {
       : callerQuery.ilike("email", user.email);
     const { data: caller } = await callerQuery.maybeSingle();
 
-    if (action === "mailbox-info" || action === "verify-mailbox") {
+    if (["mailbox-info", "verify-mailbox", "delete-mailbox-message"].includes(action)) {
       const requestedEmpId = String(body?.empId ?? "").trim();
       if (!caller || !requestedEmpId || String(caller.emp_id) !== requestedEmpId) {
         return respond({ success: false, error: "غير مصرح بالدخول إلى هذا البريد" }, 403);
@@ -155,6 +155,29 @@ Deno.serve(async (req: Request) => {
 
       if (action === "mailbox-info") {
         return respond({ success: true, generated_email: credential.generated_email });
+      }
+
+      if (action === "delete-mailbox-message") {
+        const messageId = String(body?.messageId ?? "").trim();
+        if (!messageId) return respond({ success: false, error: "الرسالة مطلوبة" }, 400);
+        const { data: message } = await adminClient
+          .from("employee_mail_messages")
+          .select("id, from_email, to_email")
+          .eq("id", messageId)
+          .maybeSingle();
+        if (!message || ![message.from_email, message.to_email].includes(credential.generated_email)) {
+          return respond({ success: false, error: "الرسالة غير موجودة في بريدك" }, 404);
+        }
+        const deletedAt = new Date().toISOString();
+        const deletion: Record<string, string> = {};
+        if (message.from_email === credential.generated_email) deletion.deleted_by_sender_at = deletedAt;
+        if (message.to_email === credential.generated_email) deletion.deleted_by_recipient_at = deletedAt;
+        const { error: deleteError } = await adminClient
+          .from("employee_mail_messages")
+          .update(deletion)
+          .eq("id", message.id);
+        if (deleteError) throw deleteError;
+        return respond({ success: true, message_id: message.id, deleted_at: deletedAt });
       }
 
       const suppliedPassword = String(body?.password ?? "");

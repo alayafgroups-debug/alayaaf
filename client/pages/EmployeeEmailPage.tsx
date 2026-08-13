@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Mail, Trash2, Send, Settings as SettingsIcon, ChevronLeft, Lock, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 
 interface MailMessage {
   id: string;
@@ -9,6 +10,8 @@ interface MailMessage {
   subject: string;
   body: string;
   read_at?: string | null;
+  deleted_by_sender_at?: string | null;
+  deleted_by_recipient_at?: string | null;
   created_at: string;
 }
 
@@ -33,6 +36,7 @@ export default function EmployeeEmailPage({
   const [isLoadingEmail, setIsLoadingEmail] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadEmployeeEmail() {
@@ -64,7 +68,7 @@ export default function EmployeeEmailPage({
       }
       const { data, error } = await supabase
         .from("employee_mail_messages")
-        .select("id, from_email, to_email, subject, body, read_at, created_at")
+        .select("id, from_email, to_email, subject, body, read_at, deleted_by_sender_at, deleted_by_recipient_at, created_at")
         .or(`to_email.eq.${employeeEmail},from_email.eq.${employeeEmail}`)
         .order("created_at", { ascending: false });
       if (!error && data) setMessages(data as MailMessage[]);
@@ -74,19 +78,26 @@ export default function EmployeeEmailPage({
   }, [employeeEmail, mailboxAuthenticated]);
 
   const inbox = useMemo(
-    () => messages.filter((message) => message.to_email === employeeEmail),
+    () => messages.filter((message) => message.to_email === employeeEmail && !message.deleted_by_recipient_at),
     [messages, employeeEmail],
   );
   const sent = useMemo(
-    () => messages.filter((message) => message.from_email === employeeEmail),
+    () => messages.filter((message) => message.from_email === employeeEmail && !message.deleted_by_sender_at),
     [messages, employeeEmail],
   );
-  const visibleMessages = activeFolder === "inbox" ? inbox : activeFolder === "sent" ? sent : [];
+  const trash = useMemo(
+    () => messages.filter((message) =>
+      (message.from_email === employeeEmail && Boolean(message.deleted_by_sender_at)) ||
+      (message.to_email === employeeEmail && Boolean(message.deleted_by_recipient_at)),
+    ),
+    [messages, employeeEmail],
+  );
+  const visibleMessages = activeFolder === "inbox" ? inbox : activeFolder === "sent" ? sent : activeFolder === "trash" ? trash : [];
 
   const folders: { id: Folder; label: string; count: number }[] = [
     { id: "inbox", label: "صندوق الوارد", count: inbox.filter((message) => !message.read_at).length },
     { id: "sent", label: "المرسل", count: sent.length },
-    { id: "trash", label: "المهملات", count: 0 },
+    { id: "trash", label: "المهملات", count: trash.length },
     { id: "settings", label: "الإعدادات", count: 0 },
   ];
 
@@ -110,6 +121,29 @@ export default function EmployeeEmailPage({
 
     setMailboxPassword("");
     setMailboxAuthenticated(true);
+  };
+
+  const deleteMessage = async (message: MailMessage) => {
+    if (!window.confirm("هل تريد نقل هذه الرسالة إلى المهملات؟")) return;
+
+    setDeletingMessageId(message.id);
+    const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
+      body: { action: "delete-mailbox-message", empId, messageId: message.id },
+    });
+    setDeletingMessageId(null);
+    if (error || !data?.success) {
+      toast.error(data?.error || "تعذر حذف الرسالة");
+      return;
+    }
+
+    const deletedAt = String(data.deleted_at || new Date().toISOString());
+    setMessages((current) => current.map((item) => item.id === message.id ? {
+      ...item,
+      deleted_by_sender_at: item.from_email === employeeEmail ? deletedAt : item.deleted_by_sender_at,
+      deleted_by_recipient_at: item.to_email === employeeEmail ? deletedAt : item.deleted_by_recipient_at,
+    } : item));
+    setSelectedEmail(null);
+    toast.success("تم نقل الرسالة إلى المهملات");
   };
 
   const openMessage = async (message: MailMessage) => {
@@ -237,29 +271,40 @@ export default function EmployeeEmailPage({
         <div className="flex-1 overflow-hidden">
           {!selectedEmail ? (
             <div className="h-full overflow-y-auto">
-              {(activeFolder === "inbox" || activeFolder === "sent") && (
+              {(activeFolder === "inbox" || activeFolder === "sent" || activeFolder === "trash") && (
                 <div className="divide-y divide-gray-700">
                   {visibleMessages.map((message) => (
-                    <button
-                      key={message.id}
-                      onClick={() => openMessage(message)}
-                      className={`w-full p-4 text-right hover:bg-gray-800 transition ${activeFolder === "inbox" && !message.read_at ? "bg-gray-800/70 border-r-4 border-blue-500" : ""}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <p dir="ltr" className="font-semibold text-left truncate">{activeFolder === "inbox" ? message.from_email : message.to_email}</p>
-                          <p className="text-sm text-gray-300 mt-1 truncate">{message.subject}</p>
-                          <p className="text-xs text-gray-500 mt-2 truncate">{message.body}</p>
+                    <div key={message.id} className="flex items-stretch transition hover:bg-gray-800">
+                      <button
+                        onClick={() => openMessage(message)}
+                        className="min-w-0 flex-1 p-4 text-right"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <p dir="ltr" className="truncate text-left font-semibold">
+                              {activeFolder === "inbox" ? message.from_email : activeFolder === "sent" ? message.to_email : message.from_email === employeeEmail ? message.to_email : message.from_email}
+                            </p>
+                            <p className="mt-1 truncate text-sm text-gray-300">{message.subject}</p>
+                            <p className="mt-2 truncate text-xs text-gray-500">{message.body}</p>
+                          </div>
+                          <span className="whitespace-nowrap text-xs text-gray-500">{new Date(message.created_at).toLocaleDateString("ar-SA")}</span>
                         </div>
-                        <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(message.created_at).toLocaleDateString("ar-SA")}</span>
-                      </div>
-                    </button>
+                      </button>
+                      {activeFolder !== "trash" && (
+                        <button
+                          onClick={() => deleteMessage(message)}
+                          disabled={deletingMessageId === message.id}
+                          title="نقل إلى المهملات"
+                          className="px-4 text-gray-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                   {visibleMessages.length === 0 && <div className="p-8 text-center text-gray-400">لا توجد رسائل</div>}
                 </div>
               )}
-
-              {activeFolder === "trash" && <div className="p-8 text-center text-gray-400">سلة المهملات فارغة</div>}
 
               {activeFolder === "settings" && (
                 <div className="p-6 space-y-4">
@@ -294,7 +339,16 @@ export default function EmployeeEmailPage({
                       <p className="text-sm text-gray-400 mt-2">إلى:</p>
                       <p dir="ltr" className="text-white text-sm text-left">{selectedEmail.to_email}</p>
                     </div>
-                    <button className="text-gray-400 hover:text-white"><Trash2 className="h-5 w-5" /></button>
+                    {activeFolder !== "trash" && (
+                      <button
+                        onClick={() => deleteMessage(selectedEmail)}
+                        disabled={deletingMessageId === selectedEmail.id}
+                        title="نقل إلى المهملات"
+                        className="text-gray-400 hover:text-red-400 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    )}
                   </div>
                   <h2 className="text-xl font-bold mb-2">{selectedEmail.subject}</h2>
                   <div className="text-sm text-gray-400 mb-6">{new Date(selectedEmail.created_at).toLocaleString("ar-SA")}</div>

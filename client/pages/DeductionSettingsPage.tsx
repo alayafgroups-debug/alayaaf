@@ -15,6 +15,7 @@ interface GeneratedEmail {
   emp_id: string;
   emp_name: string;
   generated_email: string;
+  generated_password: string;
   created_at: string;
 }
 
@@ -47,7 +48,6 @@ export default function DeductionSettingsPage() {
   const [saudiEmployees, setSaudiEmployees] = useState<SaudiEmployee[]>([]);
   const [primaryEmail, setPrimaryEmail] = useState("hr.alayaf.com");
   const [primaryConfigId, setPrimaryConfigId] = useState<string | null>(null);
-  const [generatedDraft, setGeneratedDraft] = useState("");
   const [mailMessages, setMailMessages] = useState<MailMessage[]>([]);
   const [showAdminMailbox, setShowAdminMailbox] = useState(false);
   const [adminFolder, setAdminFolder] = useState<"inbox" | "sent">("inbox");
@@ -140,11 +140,14 @@ export default function DeductionSettingsPage() {
   };
 
   const loadGeneratedEmails = async () => {
-    const { data, error } = await supabase
-      .from("employee_emails")
-      .select("id, emp_id, emp_name, generated_email, created_at")
-      .order("created_at", { ascending: false });
-    if (!error && data) setGeneratedEmails(data as GeneratedEmail[]);
+    const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
+      body: { action: "list" },
+    });
+    if (error || !data?.success) {
+      console.error(error ?? data?.error);
+      return;
+    }
+    setGeneratedEmails((data.credentials ?? []) as GeneratedEmail[]);
   };
 
   const loadMailMessages = async () => {
@@ -191,46 +194,27 @@ export default function DeductionSettingsPage() {
     }
   };
 
-  const generateEmailForEmployee = () => {
+  const generateEmailForEmployee = async () => {
     const emp = saudiEmployees.find((employee) => employee.id === selectedEmployee);
     if (!emp) {
       toast.error("اختر موظفاً سعودياً");
       return;
     }
 
-    const englishFirstName = String(emp.first_name || "").trim().split(/\s+/)[0];
-    const safeFirstName = englishFirstName.toLowerCase().replace(/[^a-z0-9._-]/g, "");
-    if (!safeFirstName) {
-      toast.error("يجب إضافة الاسم الأول بالإنجليزية للموظف أولاً");
-      return;
-    }
-
-    const domain = primaryEmail.trim().replace(/^https?:\/\//, "").replace(/^@/, "").replace(/\/$/, "");
-    setGeneratedDraft(`${safeFirstName}@${domain}`);
-  };
-
-  const saveGeneratedEmail = async () => {
-    const emp = saudiEmployees.find((employee) => employee.id === selectedEmployee);
-    if (!emp || !generatedDraft) return;
-
     setIsLoading(true);
-    const { error } = await supabase.from("employee_emails").insert([{
-      emp_id: emp.emp_id,
-      emp_name: emp.name,
-      generated_email: generatedDraft,
-      status: "active",
-    }]);
+    const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
+      body: { action: "generate", employeeId: emp.id },
+    });
     setIsLoading(false);
 
-    if (error) {
-      toast.error(error.code === "23505" ? "هذا الإيميل محفوظ مسبقاً" : "تعذر حفظ الإيميل");
+    if (error || !data?.success) {
+      toast.error(data?.error || "تعذر توليد بيانات دخول الموظف");
       return;
     }
 
-    toast.success("تم حفظ إيميل الموظف");
+    toast.success("تم توليد وحفظ البريد وكلمة المرور وربطهما بالموظف");
     setSelectedEmployee("");
-    setGeneratedDraft("");
-    loadGeneratedEmails();
+    await loadGeneratedEmails();
   };
 
   return (
@@ -397,7 +381,6 @@ export default function DeductionSettingsPage() {
                 value={selectedEmployee}
                 onChange={(e) => {
                   setSelectedEmployee(e.target.value);
-                  setGeneratedDraft("");
                 }}
                 className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white"
               >
@@ -415,22 +398,8 @@ export default function DeductionSettingsPage() {
                 className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 py-2 rounded-lg font-semibold flex items-center justify-center gap-2"
               >
                 <Mail className="h-5 w-5" />
-                توليد إيميل
+                {isLoading ? "جاري التوليد والحفظ..." : "توليد وحفظ بيانات الدخول"}
               </button>
-
-              {generatedDraft && (
-                <div className="bg-gray-700 p-4 rounded-lg space-y-3">
-                  <p dir="ltr" className="text-green-400 font-mono text-left">{generatedDraft}</p>
-                  <button
-                    onClick={saveGeneratedEmail}
-                    disabled={isLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 py-2 rounded-lg font-semibold flex items-center justify-center gap-2"
-                  >
-                    <Save className="h-4 w-4" />
-                    حفظ
-                  </button>
-                </div>
-              )}
 
               <div className="space-y-2 mt-6">
                 <h3 className="font-bold">الإيميلات المحفوظة</h3>
@@ -440,6 +409,9 @@ export default function DeductionSettingsPage() {
                   <div key={email.id} className="bg-gray-700 p-4 rounded-lg">
                     <p className="font-semibold">{email.emp_name}</p>
                     <p dir="ltr" className="text-sm text-green-400 font-mono text-left">{email.generated_email}</p>
+                    <p dir="ltr" className="mt-2 text-sm text-amber-300 font-mono text-left">
+                      كلمة المرور: {email.generated_password || "غير متاحة للحسابات القديمة"}
+                    </p>
                   </div>
                 ))}
               </div>

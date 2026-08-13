@@ -2,39 +2,29 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Lock, User, Users2 } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, Users2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import type { UserSession } from "@/lib/authSession";
 
 export default function EmployeeLogin() {
   const navigate = useNavigate();
-  const [empId, setEmpId] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empId.trim() || !password.trim()) {
+    if (!email.trim() || !password.trim()) {
       toast.error("يجب ملء جميع الحقول");
       return;
     }
     setLoading(true);
     try {
-      // Resolve employee email via RPC (SECURITY DEFINER, safe for anon)
-      const { data: resolvedEmail, error: empError } = await supabase.rpc(
-        "get_employee_email_by_empid",
-        { p_emp_id: empId.trim() },
-      );
-      if (empError || !resolvedEmail) {
-        toast.error("لم يتم العثور على موظف بهذا الرقم");
-        return;
-      }
-
-      // Sign in with Supabase Auth
+      const normalizedEmail = email.trim().toLowerCase();
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: (resolvedEmail as string).toLowerCase(),
+        email: normalizedEmail,
         password,
       });
       if (authError) {
@@ -42,12 +32,14 @@ export default function EmployeeLogin() {
         return;
       }
 
-      // Fetch employee profile (case-insensitive email match)
-      const { data: empData, error: profileError } = await supabase
+      const linkedEmployeeId = authData.user.user_metadata?.employee_id;
+      let profileQuery = supabase
         .from("employees")
-        .select("id, emp_id, account_title, name, employee_role, permissions")
-        .ilike("email", (resolvedEmail as string))
-        .maybeSingle();
+        .select("id, emp_id, account_title, name, employee_role, permissions");
+      profileQuery = linkedEmployeeId
+        ? profileQuery.eq("id", String(linkedEmployeeId))
+        : profileQuery.ilike("email", normalizedEmail);
+      const { data: empData, error: profileError } = await profileQuery.maybeSingle();
 
       if (profileError || !empData) {
         toast.error("لم يتم العثور على بيانات الموظف");
@@ -57,8 +49,8 @@ export default function EmployeeLogin() {
 
       const session: UserSession = {
         id: authData.user.id,
-        email: authData.user.email ?? (resolvedEmail as string).toLowerCase(),
-        empId: empData.emp_id || empId,
+        email: authData.user.email ?? normalizedEmail,
+        empId: empData.emp_id || "",
         name: empData.name,
         role: empData.employee_role ?? "موظف",
         permissions: (Array.isArray(empData.permissions) ? {} : empData.permissions ?? {}) as Record<string, boolean>,
@@ -110,19 +102,20 @@ export default function EmployeeLogin() {
         {/* Card */}
         <div className="rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-2xl p-8 space-y-6">
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Employee ID */}
+            {/* Employee email */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-white/70">الرقم الوظيفي</label>
+              <label className="block text-sm font-medium text-white/70">البريد الإلكتروني</label>
               <div className="relative">
-                <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <Input
-                  type="text"
-                  value={empId}
-                  onChange={(e) => setEmpId(e.target.value)}
-                  placeholder="مثال: 1002 أو EMP-002"
+                  dir="ltr"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@alayaf.com"
                   className="pr-10 h-11 bg-white/[0.06] border-white/10 text-white placeholder:text-white/25 focus:border-emerald-500/60 focus:ring-emerald-500/20"
                   disabled={loading}
-                  autoComplete="username"
+                  autoComplete="email"
                 />
               </div>
             </div>

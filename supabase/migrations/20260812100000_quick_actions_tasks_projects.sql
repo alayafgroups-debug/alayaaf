@@ -275,3 +275,105 @@ begin
   end loop;
 end
 $$;
+
+alter table public.work_projects
+  add column if not exists project_type text not null default 'داخلي',
+  add column if not exists department text not null default '',
+  add column if not exists manager_emp_id text,
+  add column if not exists manager_name text not null default '';
+
+alter table public.work_tasks
+  add column if not exists recurrence_type text not null default 'لا',
+  add column if not exists additional_info jsonb not null default '{}'::jsonb;
+
+create table if not exists public.work_task_points (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.work_tasks(id) on delete cascade,
+  title text not null,
+  completed boolean not null default false,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.work_comments (
+  id uuid primary key default gen_random_uuid(),
+  entity_type text not null,
+  entity_id uuid not null,
+  content text not null,
+  author_name text not null default '',
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint work_comments_entity_type_check check (entity_type in ('project', 'task', 'ticket'))
+);
+
+create table if not exists public.work_attachments (
+  id uuid primary key default gen_random_uuid(),
+  entity_type text not null,
+  entity_id uuid not null,
+  file_name text not null,
+  storage_path text not null,
+  mime_type text not null default 'application/octet-stream',
+  file_size_bytes bigint not null default 0,
+  uploaded_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint work_attachments_entity_type_check check (entity_type in ('project', 'task', 'ticket')),
+  constraint work_attachments_size_check check (file_size_bytes >= 0 and file_size_bytes <= 10485760)
+);
+
+create table if not exists public.work_activity_log (
+  id uuid primary key default gen_random_uuid(),
+  entity_type text not null,
+  entity_id uuid not null,
+  action text not null,
+  details jsonb not null default '{}'::jsonb,
+  actor_name text not null default '',
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint work_activity_entity_type_check check (entity_type in ('project', 'task', 'ticket'))
+);
+
+create table if not exists public.work_project_phases (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.work_projects(id) on delete cascade,
+  title text not null,
+  sort_order integer not null default 0,
+  start_date date,
+  due_date date,
+  status text not null default 'جديدة',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists work_task_points_task_idx on public.work_task_points(task_id);
+create index if not exists work_comments_entity_idx on public.work_comments(entity_type, entity_id);
+create index if not exists work_attachments_entity_idx on public.work_attachments(entity_type, entity_id);
+create index if not exists work_activity_entity_idx on public.work_activity_log(entity_type, entity_id);
+create index if not exists work_project_phases_project_idx on public.work_project_phases(project_id);
+
+alter table public.work_task_points enable row level security;
+alter table public.work_comments enable row level security;
+alter table public.work_attachments enable row level security;
+alter table public.work_activity_log enable row level security;
+alter table public.work_project_phases enable row level security;
+
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array['work_task_points', 'work_comments', 'work_attachments', 'work_activity_log', 'work_project_phases'] loop
+    execute format('drop policy if exists %I_authenticated_access on public.%I', table_name, table_name);
+    execute format('create policy %I_authenticated_access on public.%I for all to authenticated using (true) with check (true)', table_name, table_name);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', table_name);
+  end loop;
+end
+$$;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('work-files', 'work-files', false, 10485760, array['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'])
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists work_files_authenticated_read on storage.objects;
+create policy work_files_authenticated_read on storage.objects for select to authenticated using (bucket_id = 'work-files');
+drop policy if exists work_files_authenticated_insert on storage.objects;
+create policy work_files_authenticated_insert on storage.objects for insert to authenticated with check (bucket_id = 'work-files');
+drop policy if exists work_files_authenticated_delete on storage.objects;
+create policy work_files_authenticated_delete on storage.objects for delete to authenticated using (bucket_id = 'work-files');

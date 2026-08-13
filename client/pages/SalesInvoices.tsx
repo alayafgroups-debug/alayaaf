@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
 import {
@@ -14,6 +14,8 @@ import {
   CreditCard,
   Settings,
   Download,
+  Loader2,
+  Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -210,8 +212,8 @@ export default function SalesInvoices() {
     }
   };
 
-  const handleDownloadPdf = async (invoice: Invoice) => {
-    const printWindow = window.open("", "_blank");
+  const handleDownloadPdf = async (invoice: Invoice, targetWindow?: Window | null) => {
+    const printWindow = targetWindow ?? window.open("", "_blank");
     if (!printWindow) return;
 
     const escapeHtml = (value: string) =>
@@ -303,6 +305,7 @@ export default function SalesInvoices() {
         }).catch(() => "")
       : "";
 
+    printWindow.document.open();
     printWindow.document.write(`
       <html dir="rtl" lang="ar">
         <head>
@@ -475,7 +478,11 @@ export default function SalesInvoices() {
           />
         )}
         {view === "create" && (
-          <InvoiceForm onBack={() => setView("list")} onSaved={handleSaved} />
+          <InvoiceForm
+            onBack={() => setView("list")}
+            onSaved={handleSaved}
+            onPrint={handleDownloadPdf}
+          />
         )}
         {view === "details" && selectedInvoice && (
           <InvoiceDetails
@@ -1580,9 +1587,11 @@ function InvoicePayment({
 function InvoiceForm({
   onBack,
   onSaved,
+  onPrint,
 }: {
   onBack: () => void;
   onSaved: (invoice: Invoice) => void;
+  onPrint: (invoice: Invoice, targetWindow?: Window | null) => Promise<void>;
 }) {
   const [items, setItems] = useState([
     {
@@ -1609,6 +1618,8 @@ function InvoiceForm({
     "simplified",
   );
   const [buyerVat, setBuyerVat] = useState("");
+  const [saveIntent, setSaveIntent] = useState<"save" | "print" | null>(null);
+  const saveInFlight = useRef(false);
   const customerOptions = ["فندي بن سالم", "فندي كوزوبد", "شركة لاكجري العياف"];
 
   useEffect(() => {
@@ -1701,7 +1712,8 @@ function InvoiceForm({
     { subtotal: 0, discount: 0, tax: 0, total: 0 },
   );
 
-  const handleSave = async () => {
+  const handleSave = async (intent: "save" | "print") => {
+    if (saveInFlight.current) return;
     const invoiceId = invoiceNumber || `INV-${Date.now()}`;
     if (!customer.trim()) {
       toast({ title: "العميل مطلوب", description: "اختر العميل قبل حفظ الفاتورة", variant: "destructive" });
@@ -1720,6 +1732,15 @@ function InvoiceForm({
       });
       return;
     }
+
+    saveInFlight.current = true;
+    setSaveIntent(intent);
+    const printWindow = intent === "print" ? window.open("", "_blank") : null;
+    if (printWindow) {
+      printWindow.document.write('<div dir="rtl" style="font-family:Arial;padding:32px;text-align:center">جارٍ حفظ وتجهيز الفاتورة للطباعة...</div>');
+    }
+
+    try {
     const totalValue = totals.total;
     const payload = {
       id: invoiceId,
@@ -1756,9 +1777,12 @@ function InvoiceForm({
     }
 
     if (error) {
+      printWindow?.close();
       toast({
         title: "تعذر حفظ الفاتورة",
-        description: String(error.message ?? "حاول مرة أخرى"),
+        description: error.code === "23505"
+          ? "رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى."
+          : String(error.message ?? "حاول مرة أخرى"),
         variant: "destructive",
       });
       return;
@@ -1788,7 +1812,7 @@ function InvoiceForm({
       const zatca = accountingPosted
         ? await submitInvoiceToZatca(savedInvoiceId)
         : { status: "pending", qrCodeData: "" };
-      onSaved({
+      const savedInvoice: Invoice = {
         id: data.id ?? attemptId,
         date: data.date ?? invoiceDate,
         dueDate: data.due_date ?? dueDate,
@@ -1806,8 +1830,32 @@ function InvoiceForm({
         status: data.status ?? "مفتوحة",
         statusColor:
           statusColors[data.status ?? "مفتوحة"] ?? "bg-cyan-500 text-white",
-      });
+      };
+      onSaved(savedInvoice);
+      if (intent === "print") {
+        try {
+          await onPrint(savedInvoice, printWindow);
+        } catch (printError) {
+          printWindow?.close();
+          toast({
+            title: "تم حفظ الفاتورة وتعذرت الطباعة",
+            description: printError instanceof Error ? printError.message : "يمكن طباعتها لاحقاً من قائمة الفواتير",
+            variant: "destructive",
+          });
+        }
+      }
       onBack();
+    }
+    } catch (saveError) {
+      printWindow?.close();
+      toast({
+        title: "تعذر إكمال حفظ الفاتورة",
+        description: saveError instanceof Error ? saveError.message : "حدث خطأ غير متوقع",
+        variant: "destructive",
+      });
+    } finally {
+      saveInFlight.current = false;
+      setSaveIntent(null);
     }
   };
 
@@ -1818,36 +1866,35 @@ function InvoiceForm({
         <div className="flex gap-2">
           <button
             onClick={onBack}
-            className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all flex items-center gap-1"
+            disabled={saveIntent !== null}
+            className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <X className="h-4 w-4" />
             إلغاء
           </button>
           <button
-            onClick={handleSave}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-blue-600 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20 hover:shadow-lg transition-all flex items-center gap-2"
+            onClick={() => handleSave("save")}
+            disabled={saveIntent !== null}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-blue-600 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20 hover:shadow-lg transition-all flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-              />
-            </svg>
-            حفظ الفاتورة
+            {saveIntent === "save" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saveIntent === "save" ? "جارٍ حفظ الفاتورة..." : "حفظ الفاتورة"}
           </button>
           <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+            onClick={() => handleSave("print")}
+            disabled={saveIntent !== null}
+            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded flex items-center gap-2 hover:bg-indigo-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Printer className="h-4 w-4" />
-            حفظ وطباعة
+            {saveIntent === "print" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4" />
+            )}
+            {saveIntent === "print" ? "جارٍ الحفظ والطباعة..." : "حفظ وطباعة"}
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -1858,7 +1905,8 @@ function InvoiceForm({
         </div>
         <button
           onClick={onBack}
-          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
+          disabled={saveIntent !== null}
+          className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           العودة للقائمة
           <ArrowLeftRight className="h-4 w-4" />

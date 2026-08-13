@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { purchasesFeatures } from "./Purchases";
 import {
@@ -811,6 +811,7 @@ function FormFields({
 function InvoiceForm({ onBack, onSaved }: { onBack: () => void; onSaved: (i: PurchaseInvoice) => void }) {
   const { form, setField, items, addItem, updateItem, removeItem, totals } = useInvoiceForm();
   const [saving, setSaving] = useState(false);
+  const saveInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
@@ -832,43 +833,67 @@ function InvoiceForm({ onBack, onSaved }: { onBack: () => void; onSaved: (i: Pur
   }, []);
 
   const handleSave = async () => {
+    if (saveInFlight.current) return;
     if (!form.date) { setError("يرجى إدخال تاريخ الفاتورة"); return; }
+    if (!form.vendor.trim()) { setError("يرجى اختيار المورد قبل حفظ الفاتورة"); return; }
+
+    saveInFlight.current = true;
     setSaving(true);
     setError(null);
 
-    const newId = invoiceNumber || crypto.randomUUID();
-    const totalStr = totals.total.toFixed(2);
-    const payload = {
-      id: newId,
-      vendor: form.vendor,
-      date: form.date,
-      due_date: form.dueDate || null,
-      po_number: form.poNumber || null,
-      reference_no: form.referenceNo || null,
-      notes: form.notes || null,
-      cost_center: form.costCenter,
-      cost_center_name: form.costCenterName || null,
-      status: form.status,
-      total: totalStr,
-      paid: "0.00",
-      remaining: totalStr,
-      items: items.map((item) => ({ id: item.id, description: item.description, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice, discount: item.discount, taxPercent: item.taxPercent })),
-    };
+    try {
+      const totalStr = totals.total.toFixed(2);
+      const basePayload = {
+        vendor: form.vendor,
+        date: form.date,
+        due_date: form.dueDate || null,
+        po_number: form.poNumber || null,
+        reference_no: form.referenceNo || null,
+        notes: form.notes || null,
+        cost_center: form.costCenter,
+        cost_center_name: form.costCenterName || null,
+        status: form.status,
+        total: totalStr,
+        paid: "0.00",
+        remaining: totalStr,
+        items: items.map((item) => ({ id: item.id, description: item.description, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice, discount: item.discount, taxPercent: item.taxPercent })),
+      };
 
-    const { error: insertError } = await supabase.from("purchase_invoices").insert([payload]);
-    setSaving(false);
+      let savedId = invoiceNumber || `PIN-${Date.now()}`;
+      let insertError: { code?: string; message?: string } | null = null;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const result = await supabase
+          .from("purchase_invoices")
+          .insert([{ ...basePayload, id: savedId }]);
+        insertError = result.error;
+        if (!insertError || insertError.code !== "23505") break;
 
-    if (insertError) { setError("حدث خطأ أثناء الحفظ: " + insertError.message); return; }
+        const nextNumber = Number(savedId.replace(/\D/g, "")) + 1 || Date.now();
+        savedId = `PIN-${String(nextNumber).padStart(6, "0")}`;
+      }
 
-    onSaved({
-      id: newId,
-      ...form,
-      total: totalStr,
-      paid: "0.00",
-      remaining: totalStr,
-      statusColor: statusColors[form.status] ?? "bg-slate-500 text-white",
-      items,
-    });
+      if (insertError) {
+        setError(insertError.code === "23505"
+          ? "رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى."
+          : `حدث خطأ أثناء الحفظ: ${insertError.message ?? "حاول مرة أخرى"}`);
+        return;
+      }
+
+      onSaved({
+        id: savedId,
+        ...form,
+        total: totalStr,
+        paid: "0.00",
+        remaining: totalStr,
+        statusColor: statusColors[form.status] ?? "bg-slate-500 text-white",
+        items,
+      });
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "حدث خطأ غير متوقع أثناء الحفظ");
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
+    }
   };
 
   return (
@@ -896,7 +921,7 @@ function InvoiceForm({ onBack, onSaved }: { onBack: () => void; onSaved: (i: Pur
 
       <div className="flex justify-center gap-4 pt-2">
         <button onClick={onBack} disabled={saving} className="px-6 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 disabled:opacity-50">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60">
+        <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {saving ? "جارٍ الحفظ..." : "حفظ الفاتورة"}
         </button>

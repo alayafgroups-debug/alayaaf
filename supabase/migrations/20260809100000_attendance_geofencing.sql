@@ -1,5 +1,15 @@
 -- Geofenced employee attendance with a company default and per-employee overrides.
 
+create table if not exists public.hr_work_locations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  name_en text not null default '',
+  address text not null default '',
+  city text not null default '',
+  status text not null default 'فعال',
+  created_at timestamptz not null default now()
+);
+
 alter table public.hr_work_locations
   add column if not exists latitude numeric(10,7),
   add column if not exists longitude numeric(10,7),

@@ -9,7 +9,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 
-const REQUEST_TYPES = ["إجازة", "سلفة", "نقل", "استئذان", "عهدة", "مصروفات", "أخرى"];
+const DEFAULT_REQUEST_TYPES = ["إجازة", "سلفة", "نقل", "استئذان", "عهدة", "مصروفات", "أخرى", "الرواتب"];
+const ADD_REQUEST_TYPE = "__add_request_type__";
 
 type Step = { order: number; approver: string; role: string };
 
@@ -22,19 +23,41 @@ export default function HRApprovalsAdd() {
   const [nameEn, setNameEn] = useState("");
   const [active, setActive] = useState(true);
   const [type, setType] = useState("إجازة");
+  const [requestTypes, setRequestTypes] = useState(DEFAULT_REQUEST_TYPES);
+  const [addingRequestType, setAddingRequestType] = useState(false);
+  const [customRequestType, setCustomRequestType] = useState("");
   const [managers, setManagers] = useState<{ id: string; name: string }[]>([]);
   const [steps, setSteps] = useState<Step[]>([{ order: 1, approver: "", role: "معتمد" }]);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("employees")
-        .select("id, name")
-        .in("status", ["نشط", "فعال"])
-        .order("name");
-      setManagers((data ?? []).map((e: any) => ({ id: String(e.id), name: String(e.name) })));
+      const [employeesResult, chainsResult] = await Promise.all([
+        supabase
+          .from("employees")
+          .select("id, name")
+          .in("status", ["نشط", "فعال"])
+          .order("name"),
+        supabase.from("approval_chains").select("type"),
+      ]);
+      setManagers((employeesResult.data ?? []).map((e: any) => ({ id: String(e.id), name: String(e.name) })));
+      const savedTypes = (chainsResult.data ?? [])
+        .map((chain: any) => String(chain.type ?? "").trim())
+        .filter(Boolean);
+      setRequestTypes([...new Set([...DEFAULT_REQUEST_TYPES, ...savedTypes])]);
     })();
   }, []);
+
+  const addCustomRequestType = () => {
+    const customType = customRequestType.trim();
+    if (!customType) {
+      toast({ title: "أدخل اسم نوع الطلب", variant: "destructive" });
+      return;
+    }
+    setRequestTypes((current) => current.includes(customType) ? current : [...current, customType]);
+    setType(customType);
+    setCustomRequestType("");
+    setAddingRequestType(false);
+  };
 
   const addStep = () => setSteps((prev) => [...prev, { order: prev.length + 1, approver: "", role: "معتمد" }]);
   const removeStep = (order: number) => setSteps((prev) => prev.filter((s) => s.order !== order).map((s, i) => ({ ...s, order: i + 1 })));
@@ -112,9 +135,40 @@ export default function HRApprovalsAdd() {
               <h2 className="text-lg font-bold text-gray-800 border-b pb-3">مجال سلسلة الموافقات</h2>
               <div className="space-y-2 max-w-md">
                 <Label className="text-gray-700">نوع الطلب المرتبط *</Label>
-                <select value={type} onChange={(e) => setType(e.target.value)} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm">
-                  {REQUEST_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                <select
+                  value={type}
+                  onChange={(e) => {
+                    if (e.target.value === ADD_REQUEST_TYPE) {
+                      setAddingRequestType(true);
+                      return;
+                    }
+                    setType(e.target.value);
+                    setAddingRequestType(false);
+                  }}
+                  className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm"
+                >
+                  {requestTypes.map((requestType) => <option key={requestType} value={requestType}>{requestType}</option>)}
+                  <option value={ADD_REQUEST_TYPE}>إضافة</option>
                 </select>
+                {addingRequestType && (
+                  <div className="flex gap-2 pt-2">
+                    <Input
+                      value={customRequestType}
+                      onChange={(event) => setCustomRequestType(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addCustomRequestType();
+                        }
+                      }}
+                      placeholder="اكتب نوع الطلب الجديد"
+                      autoFocus
+                    />
+                    <Button type="button" onClick={addCustomRequestType} className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1 shrink-0">
+                      <Plus className="h-4 w-4" /> إضافة
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}

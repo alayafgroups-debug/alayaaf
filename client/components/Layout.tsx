@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { readUserSession, checkPerm, canManagePerm, permissionForMainPath, permissionForMainSubPath, permissionForHRPath } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import ReadOnlyBoundary from "@/components/permissions/ReadOnlyBoundary";
+import QuickActionsBar from "@/components/QuickActionsBar";
 
 interface LayoutProps {
   children: ReactNode;
@@ -978,6 +979,8 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
         </header>
+
+        <QuickActionsBar />
 
         {/* Page Content */}
         <div className="flex-1 overflow-auto p-4"><ReadOnlyBoundary readOnly={readOnly}>{children}</ReadOnlyBoundary></div>

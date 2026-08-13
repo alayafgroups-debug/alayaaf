@@ -242,7 +242,10 @@ export default function EmployeePortal() {
   const navigate = useNavigate();
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState<AppPage>("home");
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => {
+    const requestedView = new URLSearchParams(window.location.search).get("view");
+    return requestedView === "profile" ? "profile" : "home";
+  });
   const [notificationCount, setNotificationCount] = useState(0);
   const [requestsTab, setRequestsTab] = useState<"received" | "draft" | "sent" | "attached">("received");
   const [searchQuery, setSearchQuery] = useState("");

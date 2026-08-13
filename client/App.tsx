@@ -109,6 +109,7 @@ import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
 import ZATCASettings from "./pages/ZATCASettings";
 import NotFound from "./pages/NotFound";
+import TasksProjects from "./pages/TasksProjects";
 import RequireAuth from "./components/RequireAuth";
 
 const queryClient = new QueryClient();
@@ -257,6 +258,7 @@ const App = () => (
           <Route path="/ai/assistant" element={<AIAssistant />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/zatca/settings" element={<ZATCASettings />} />
+          <Route path="/tasks-projects" element={<TasksProjects />} />
 
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

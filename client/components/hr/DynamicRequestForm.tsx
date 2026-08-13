@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { FormSchema, FormField } from "./formSchemas";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 import EmployeeSignatureField, { EmployeeSignature } from "./EmployeeSignatureField";
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function DynamicRequestForm({ open, onOpenChange, schema, employeeInfo }: Props) {
+  const { t, direction } = useI18n();
   const [loading, setLoading] = useState(false);
   const [signature, setSignature] = useState<EmployeeSignature | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
@@ -34,7 +36,7 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
     });
 
     if (missingRequired) {
-      toast.error(`يرجى تعبئة الحقل الإلزامي: ${missingRequired.label}`);
+      toast.error(`${t("يرجى تعبئة الحقل الإلزامي")}: ${t(missingRequired.label)}`);
       return;
     }
 
@@ -61,12 +63,12 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
     const empId = employeeInfo?.empId;
     const empName = employeeInfo?.name;
     if (!empId || !empName) {
-      toast.error("تعذر تحديد بيانات الموظف مقدم الطلب");
+      toast.error(t("تعذر تحديد بيانات الموظف مقدم الطلب"));
       return;
     }
 
     if (!signature) {
-      toast.error("يجب إنشاء وحفظ توقيعك الإلكتروني قبل إرسال الطلب");
+      toast.error(t("يجب إنشاء وحفظ توقيعك الإلكتروني قبل إرسال الطلب"));
       return;
     }
 
@@ -88,19 +90,19 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
 
       if (error) throw error;
 
-      toast.success("تم إرسال الطلب بنجاح");
+      toast.success(t("تم إرسال الطلب بنجاح"));
       setFormData({});
       onOpenChange(false);
     } catch (error: any) {
       console.error("Request submission failed:", error);
-      toast.error(error?.message || "تعذر إرسال الطلب، تحقق من إعدادات قاعدة البيانات");
+      toast.error(error?.message || t("تعذر إرسال الطلب، تحقق من إعدادات قاعدة البيانات"));
     } finally {
       setLoading(false);
     }
   };
 
   const renderField = (field: FormField) => {
-    const commonClass = "w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right bg-white";
+    const commonClass = "w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start bg-white";
     
     switch (field.type) {
       case "text":
@@ -120,19 +122,19 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
             <div className="relative flex-1">
               <input
                 type="date"
-                className={cn(commonClass, "pr-10")}
+                className={cn(commonClass, "ps-10")}
                 value={formData[field.name] || ""}
                 onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
               />
-              <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             </div>
             <div className="relative flex-1">
               <input
                 type="text"
-                placeholder="هجري (اختياري)"
-                className={cn(commonClass, "pr-10 bg-gray-50/50")}
+                placeholder={t("هجري (اختياري)")}
+                className={cn(commonClass, "ps-10 bg-gray-50/50")}
               />
-              <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             </div>
           </div>
         );
@@ -155,7 +157,7 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
           >
             <option value="" disabled></option>
             {field.options?.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>{t(opt.label)}</option>
             ))}
           </select>
         );
@@ -163,7 +165,7 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
         return (
           <textarea
             rows={4}
-            className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right resize-none"
+            className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start resize-none"
             value={formData[field.name] || ""}
             onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
           />
@@ -173,7 +175,7 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
           <div className="flex items-center gap-6 h-10 px-3 bg-white border border-gray-200 rounded-lg justify-end">
             {field.options?.map(opt => (
               <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
-                <span className="text-sm text-gray-700">{opt.label}</span>
+                <span className="text-sm text-gray-700">{t(opt.label)}</span>
                 <input
                   type="radio"
                   name={field.name}
@@ -191,11 +193,11 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
           <div className="border border-gray-200 rounded-lg overflow-hidden mt-1">
             <div className="bg-[#004e89] text-white text-[13px] font-medium flex justify-between px-4 py-2">
               {field.tableColumns?.map((c, i) => (
-                <div key={i} className="flex-1 text-center">{c}</div>
+                <div key={i} className="flex-1 text-center">{t(c)}</div>
               ))}
             </div>
             <div className="p-4 flex flex-col items-center justify-center text-sm text-gray-500 bg-gray-50/50 min-h-[100px]">
-              لا يوجد شيء للعرض
+              {t("لا يوجد شيء للعرض")}
             </div>
           </div>
         );
@@ -206,9 +208,9 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[900px] p-0 overflow-hidden bg-white" dir="rtl">
-        <DialogHeader className="bg-white px-6 py-4 border-b border-gray-100 flex flex-row justify-between items-center space-y-0 text-right">
-          <DialogTitle className="text-xl font-bold text-gray-800">{schema.title}</DialogTitle>
+      <DialogContent className="sm:max-w-[900px] p-0 overflow-hidden bg-white" dir={direction}>
+        <DialogHeader className="bg-white px-6 py-4 border-b border-gray-100 flex flex-row justify-between items-center space-y-0 text-start">
+          <DialogTitle className="text-xl font-bold text-gray-800">{t(schema.title)}</DialogTitle>
         </DialogHeader>
 
         <div className="p-6 bg-white max-h-[80vh] overflow-y-auto">
@@ -223,7 +225,7 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
               >
                 <label className="text-sm font-medium text-gray-700 flex justify-end">
                   {field.required && <span className="text-red-500 ml-1">*</span>}
-                  {field.label}
+                  {t(field.label)}
                 </label>
                 {renderField(field)}
               </div>
@@ -235,9 +237,9 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
           </div>
 
           <div className="space-y-2 pt-8">
-            <label className="text-sm font-medium text-gray-700 flex justify-end">المرفق</label>
+            <label className="text-sm font-medium text-gray-700 flex justify-end">{t("المرفق")}</label>
             <button className="w-full py-3 border border-blue-200 rounded-lg text-blue-600 font-medium text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
-              <span>إضافة مرفقات</span>
+              <span>{t("إضافة مرفقات")}</span>
               <Plus className="h-4 w-4" />
             </button>
           </div>
@@ -252,7 +254,7 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
               loading && "opacity-70 cursor-not-allowed"
             )}
           >
-            {loading ? "جاري الإرسال..." : "إرسال"}
+            {loading ? t("جاري الإرسال...") : t("إرسال")}
           </button>
         </div>
       </DialogContent>

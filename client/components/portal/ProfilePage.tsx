@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, Edit2, Save, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 
 type Props = { empId: string; onBack: () => void };
 
@@ -11,6 +12,7 @@ const TABS = ["المعلومات الشخصية", "العقد", "البنك"] a
 type Tab = typeof TABS[number];
 
 export default function ProfilePage({ empId, onBack }: Props) {
+  const { t, formatDate } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>("المعلومات الشخصية");
   const [data, setData] = useState<EmpData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,9 +39,9 @@ export default function ProfilePage({ empId, onBack }: Props) {
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from("employees").update(form).eq("emp_id", empId);
-    if (error) toast.error(`تعذر الحفظ: ${error.message}`);
+    if (error) toast.error(`${t("تعذر الحفظ")}: ${error.message}`);
     else {
-      toast.success("تم حفظ البيانات");
+      toast.success(t("تم حفظ البيانات"));
       setData({ ...form });
       setEditMode(false);
     }
@@ -80,14 +82,14 @@ export default function ProfilePage({ empId, onBack }: Props) {
 
   const activeFields = activeTab === "المعلومات الشخصية" ? personalFields : activeTab === "العقد" ? contractFields : bankFields;
 
-  if (loading) return <div className="flex items-center justify-center h-full text-gray-400">جاري التحميل...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-gray-400">{t("جاري التحميل...")}</div>;
 
   return (
     <div className="flex flex-col h-full">
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between p-4">
           <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className="h-6 w-6 rotate-180" /></button>
-          <h2 className="font-bold text-lg text-gray-900">الملف الشخصي</h2>
+          <h2 className="font-bold text-lg text-gray-900">{t("الملف الشخصي")}</h2>
           <button onClick={() => editMode ? save() : setEditMode(true)} disabled={saving} className="text-[#004e89]">
             {editMode ? (saving ? <span className="text-xs">حفظ...</span> : <Save className="h-5 w-5" />) : <Edit2 className="h-5 w-5" />}
           </button>
@@ -98,38 +100,38 @@ export default function ProfilePage({ empId, onBack }: Props) {
         {/* Profile Header */}
         <div className="bg-[#004e89] text-white p-6 pb-12 text-center">
           <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3 overflow-hidden">
-            {(data as any)?.photo_url ? <img src={(data as any).photo_url} alt="profile" className="w-full h-full object-cover" /> : (data?.name ?? "").charAt(0)}
+            {(data as any)?.photo_url ? <img src={(data as any).photo_url} alt={t("الملف الشخصي")} className="w-full h-full object-cover" /> : (data?.name ?? "").charAt(0)}
           </div>
           <h3 className="text-xl font-bold">{data?.name ?? "—"}</h3>
           <p className="text-blue-100 text-sm mt-1">{(data as any)?.job_title ?? ""}</p>
           <div className="flex justify-center gap-6 mt-3 text-sm">
-            <div><p className="text-blue-200">الإدارة</p><p className="font-semibold">{(data as any)?.directorate ?? "—"}</p></div>
-            <div><p className="text-blue-200">الرقم الوظيفي</p><p className="font-semibold">{data?.emp_id ?? "—"}</p></div>
-            <div><p className="text-blue-200">تاريخ التعيين</p><p className="font-semibold">{(data as any)?.hire_date ?? "—"}</p></div>
+            <div><p className="text-blue-200">{t("الإدارة")}</p><p className="font-semibold">{(data as any)?.directorate ?? "—"}</p></div>
+            <div><p className="text-blue-200">{t("الرقم الوظيفي")}</p><p className="font-semibold">{data?.emp_id ?? "—"}</p></div>
+            <div><p className="text-blue-200">{t("تاريخ التعيين")}</p><p className="font-semibold">{(data as any)?.hire_date ? formatDate((data as any).hire_date, { dateStyle: "medium" }) : "—"}</p></div>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="bg-white border-b flex sticky top-[65px] z-10 -mt-6 rounded-t-2xl">
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-3 text-sm font-semibold border-b-2 transition ${activeTab === t ? "border-[#004e89] text-[#004e89]" : "border-transparent text-gray-500"}`}>{t}</button>
+          {TABS.map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-3 text-sm font-semibold border-b-2 transition ${activeTab === tab ? "border-[#004e89] text-[#004e89]" : "border-transparent text-gray-500"}`}>{t(tab)}</button>
           ))}
         </div>
 
         {/* Fields */}
         <div className="p-4 space-y-1">
-          <h3 className="font-bold text-gray-800 mb-3">{activeTab}</h3>
+          <h3 className="font-bold text-gray-800 mb-3">{t(activeTab)}</h3>
           {activeFields.map(({ key, label }) => (
             <div key={key} className="flex items-center justify-between py-3 border-b border-gray-100">
-              <span className="text-gray-500 text-sm">{label}</span>
+              <span className="text-gray-500 text-sm">{t(label)}</span>
               {editMode && activeTab !== "العقد" ? (
                 <input
                   value={(form as any)[key] ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                  className="border-b border-[#004e89] text-right outline-none text-sm text-gray-800 bg-transparent min-w-0 w-40"
+                  className="border-b border-[#004e89] text-start outline-none text-sm text-gray-800 bg-transparent min-w-0 w-40"
                 />
               ) : (
-                <span className="font-medium text-gray-800 text-sm">{(data as any)?.[key] ?? "لا يوجد"}</span>
+                <span className="font-medium text-gray-800 text-sm">{(data as any)?.[key] ?? t("لا يوجد")}</span>
               )}
             </div>
           ))}

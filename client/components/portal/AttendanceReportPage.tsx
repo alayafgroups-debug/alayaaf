@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, Clock, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { useI18n } from "@/i18n";
 
 type Props = { empId: string; onBack: () => void };
 
@@ -14,6 +15,7 @@ type Record_ = {
 };
 
 export default function AttendanceReportPage({ empId, onBack }: Props) {
+  const { t, formatDate } = useI18n();
   const [records, setRecords] = useState<Record_[]>([]);
   const [loading, setLoading] = useState(true);
   const [monthFilter, setMonthFilter] = useState(() => {
@@ -52,7 +54,7 @@ export default function AttendanceReportPage({ empId, onBack }: Props) {
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center gap-3 p-4">
           <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className="h-6 w-6 rotate-180" /></button>
-          <h2 className="font-bold text-lg text-gray-900">دوامي</h2>
+          <h2 className="font-bold text-lg text-gray-900">{t("دوامي")}</h2>
         </div>
         <div className="px-4 pb-3">
           <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e89]" />
@@ -64,30 +66,30 @@ export default function AttendanceReportPage({ empId, onBack }: Props) {
         <div className="grid grid-cols-3 gap-3 p-4">
           <div className="bg-white rounded-xl shadow-sm p-3 text-center border border-gray-100">
             <p className="text-2xl font-bold text-green-600">{totalPresent}</p>
-            <p className="text-xs text-gray-500 mt-1">يوم حضور</p>
+            <p className="text-xs text-gray-500 mt-1">{t("يوم حضور")}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm p-3 text-center border border-gray-100">
             <p className="text-2xl font-bold text-red-500">{totalAbsent}</p>
-            <p className="text-xs text-gray-500 mt-1">يوم غياب</p>
+            <p className="text-xs text-gray-500 mt-1">{t("يوم غياب")}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm p-3 text-center border border-gray-100">
             <p className="text-2xl font-bold text-orange-500">{totalLate}</p>
-            <p className="text-xs text-gray-500 mt-1">تأخر</p>
+            <p className="text-xs text-gray-500 mt-1">{t("تأخر")}</p>
           </div>
         </div>
 
         {/* Records */}
         <div className="px-4">
           {loading ? (
-            <div className="text-center py-12 text-gray-400">جاري التحميل...</div>
+            <div className="text-center py-12 text-gray-400">{t("جاري التحميل...")}</div>
           ) : records.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">لا توجد سجلات لهذا الشهر</div>
+            <div className="text-center py-12 text-gray-400">{t("لا توجد سجلات لهذا الشهر")}</div>
           ) : (
             records.map((rec) => (
               <div key={rec.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-gray-800 text-sm">{rec.date}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(rec.status)}`}>{rec.status}</span>
+                  <span className="font-semibold text-gray-800 text-sm">{formatDate(rec.date, { dateStyle: "medium" })}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(rec.status)}`}>{t(rec.status)}</span>
                 </div>
                 <div className="flex gap-6 text-sm">
                   <div className="flex items-center gap-1 text-gray-600">
@@ -99,7 +101,7 @@ export default function AttendanceReportPage({ empId, onBack }: Props) {
                     <span>{rec.check_out ?? "—"}</span>
                   </div>
                   {(rec.late_minutes ?? 0) > 0 && (
-                    <div className="text-orange-500 text-xs font-medium self-center">تأخر {rec.late_minutes} د</div>
+                    <div className="text-orange-500 text-xs font-medium self-center">{t("تأخر")} {rec.late_minutes} {t("د")}</div>
                   )}
                 </div>
               </div>

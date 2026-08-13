@@ -26,6 +26,7 @@ import {
   Mail,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
 import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
@@ -67,7 +68,13 @@ interface AttendanceOverview {
   absenceSeconds: number;
   overtimeSeconds: number;
   workedSeconds: number;
-  latestRecord: { date: string; checkIn: string | null; checkOut: string | null; status: string; source: string } | null;
+  latestRecord: {
+    date: string;
+    checkIn: string | null;
+    checkOut: string | null;
+    status: string;
+    source: string;
+  } | null;
 }
 
 const EMPTY_ATTENDANCE_OVERVIEW: AttendanceOverview = {
@@ -89,7 +96,9 @@ const durationBetween = (start: string | null, end: string | null) => {
   const startSeconds = timeToSeconds(start);
   const endSeconds = timeToSeconds(end);
   if (startSeconds === null || endSeconds === null) return 0;
-  return endSeconds >= startSeconds ? endSeconds - startSeconds : 86400 - startSeconds + endSeconds;
+  return endSeconds >= startSeconds
+    ? endSeconds - startSeconds
+    : 86400 - startSeconds + endSeconds;
 };
 
 const formatDuration = (totalSeconds: number) => {
@@ -100,25 +109,51 @@ const formatDuration = (totalSeconds: number) => {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
-type AppPage = "home" | "requests" | "send-request" | "more" | "employees" | "profile" | "payroll" | "payslip" | "penalties" | "schedule" | "my-reports" | "reports" | "manager-requests" | "team" | "attendance" | "performance" | "commissions" | "circulars" | "announcements" | "complaints" | "contact" | "settings" | "about" | "privacy" | "notifications" | "email";
+type AppPage =
+  | "home"
+  | "requests"
+  | "send-request"
+  | "more"
+  | "employees"
+  | "profile"
+  | "payroll"
+  | "payslip"
+  | "penalties"
+  | "schedule"
+  | "my-reports"
+  | "reports"
+  | "manager-requests"
+  | "team"
+  | "attendance"
+  | "performance"
+  | "commissions"
+  | "circulars"
+  | "announcements"
+  | "complaints"
+  | "contact"
+  | "settings"
+  | "about"
+  | "privacy"
+  | "notifications"
+  | "email";
 
 // Map Arabic request name → schema ID used in DynamicRequestForm / LeaveRequestForm
 const REQUEST_NAME_TO_SCHEMA: Record<string, string> = {
-  "صيانة": "maintenance",
-  "الصرف": "disbursement",
-  "السلف": "advance",
-  "استئذان": "accommodation",
-  "الإجازات": "leave",
-  "عهدة": "custody",
+  صيانة: "maintenance",
+  الصرف: "disbursement",
+  السلف: "advance",
+  استئذان: "accommodation",
+  الإجازات: "leave",
+  عهدة: "custody",
   "عمل إضافي": "overtime",
   "دورة تدريبية": "training",
-  "نقل": "transfer",
+  نقل: "transfer",
   "إخلاء طرف": "clearance",
-  "شراء": "purchase",
+  شراء: "purchase",
   "إضافة طرف": "add_party",
   "مباشرة العمل": "return_work",
-  "انتداب": "secondment",
-  "استقالة": "resignation",
+  انتداب: "secondment",
+  استقالة: "resignation",
   "صرف امتياز مالي": "disburse_bonus",
   "إقالة موظف": "termination",
   "وظيفة شاغرة": "vacancy",
@@ -161,19 +196,41 @@ const formatRequestReason = (requestType: string, rawReason: unknown) => {
 
   try {
     const values = JSON.parse(raw) as Record<string, unknown>;
-    if (!values || typeof values !== "object" || Array.isArray(values)) return raw;
+    if (!values || typeof values !== "object" || Array.isArray(values))
+      return raw;
 
-    const schema = Object.values(requestFormSchemas).find((item) => item.title === requestType);
-    const reasonKey = ["reason", "purpose", "advance_type", "type", "description", "notes"]
-      .find((key) => values[key] !== "" && values[key] !== null && values[key] !== undefined);
-    const valueKey = ["amount", "value", "total", "loan_amount", "requested_amount"]
-      .find((key) => values[key] !== "" && values[key] !== null && values[key] !== undefined);
+    const schema = Object.values(requestFormSchemas).find(
+      (item) => item.title === requestType,
+    );
+    const reasonKey = [
+      "reason",
+      "purpose",
+      "advance_type",
+      "type",
+      "description",
+      "notes",
+    ].find(
+      (key) =>
+        values[key] !== "" && values[key] !== null && values[key] !== undefined,
+    );
+    const valueKey = [
+      "amount",
+      "value",
+      "total",
+      "loan_amount",
+      "requested_amount",
+    ].find(
+      (key) =>
+        values[key] !== "" && values[key] !== null && values[key] !== undefined,
+    );
 
     const parts: string[] = [];
     if (reasonKey) {
       const field = schema?.fields.find((item) => item.name === reasonKey);
-      const reasonValue = field?.options?.find((option) => option.value === String(values[reasonKey]))?.label
-        ?? String(values[reasonKey]);
+      const reasonValue =
+        field?.options?.find(
+          (option) => option.value === String(values[reasonKey]),
+        )?.label ?? String(values[reasonKey]);
       parts.push(`السبب: ${reasonValue}`);
     }
     if (valueKey) parts.push(`القيمة: ${String(values[valueKey])}`);
@@ -213,47 +270,114 @@ const EMPLOYEE_MORE_OPTION_NAMES = new Set([
   "سياسة الخصوصية",
 ]);
 
-const FULL_MORE_ACCESS_ROLES = new Set(["مدير النظام", "مدير عام", "المدير العام"]);
+const FULL_MORE_ACCESS_ROLES = new Set([
+  "مدير النظام",
+  "مدير عام",
+  "المدير العام",
+]);
 
 const MORE_OPTIONS = [
-  { id: 1, name: "الملف الشخصي", desc: "المعلومات الشخصية، تعديل البيانات الشخصية", icon: "👤" },
-  { id: 2, name: "تقييم الأداء", desc: "تقييماتي لزملائي الخزين، إرشيف التقييم", icon: "⭐" },
+  {
+    id: 1,
+    name: "الملف الشخصي",
+    desc: "المعلومات الشخصية، تعديل البيانات الشخصية",
+    icon: "👤",
+  },
+  {
+    id: 2,
+    name: "تقييم الأداء",
+    desc: "تقييماتي لزملائي الخزين، إرشيف التقييم",
+    icon: "⭐",
+  },
   { id: 3, name: "قائمة الموظفين", desc: "فعال، غير فعال، متعاون", icon: "👥" },
   { id: 4, name: "فريق العمل", desc: "إضافة فريق العمل", icon: "👨‍💼" },
-  { id: 5, name: "الحضور", desc: "أيام الحضور، أيام الغياب، ساعات الحضور", icon: "📍" },
+  {
+    id: 5,
+    name: "الحضور",
+    desc: "أيام الحضور، أيام الغياب، ساعات الحضور",
+    icon: "📍",
+  },
   { id: 6, name: "دوامي", desc: "أيام الحضور، ساعات الحضور", icon: "📅" },
-  { id: 7, name: "تقاريري", desc: "الإجازات، السلف، الاستئذان، الساعات الإضافية", icon: "📊" },
+  {
+    id: 7,
+    name: "تقاريري",
+    desc: "الإجازات، السلف، الاستئذان، الساعات الإضافية",
+    icon: "📊",
+  },
   { id: 8, name: "التقارير", desc: "تقارير الموظفين", icon: "📈" },
-  { id: 9, name: "حساب الراتب", desc: "كشف الرواتب، إرشيف الرواتب، البيانات الما...", icon: "💳" },
+  {
+    id: 9,
+    name: "حساب الراتب",
+    desc: "كشف الرواتب، إرشيف الرواتب، البيانات الما...",
+    icon: "💳",
+  },
   { id: 10, name: "الشكاوي", desc: "إضافة شكاوي، إعدادات الشكاوي", icon: "⚠️" },
   { id: 11, name: "التعاميم", desc: "إضافة تعميم، تعديل تعميم", icon: "📢" },
-  { id: 12, name: "المساعلات والإنذارات", desc: "إرشيف الإنذارات، الجزاءات", icon: "📋" },
-  { id: 13, name: "عمولات الموظفين", desc: "بيعات المندوبين، بيعات المشرفين، عمو...", icon: "💰" },
-  { id: 14, name: "الإعلانات", desc: "إضافة إعلان، تعديل إعلان، نشر الإعلان", icon: "📣" },
-  { id: 15, name: "قسيمة الراتب", desc: "قسيمة الراتب، إجمالي البدلات، إجمالي ...", icon: "🧾" },
-  { id: 16, name: "التواصل مع الإدارة", desc: "المقترحات والشكاوي", icon: "💬" },
+  {
+    id: 12,
+    name: "المساعلات والإنذارات",
+    desc: "إرشيف الإنذارات، الجزاءات",
+    icon: "📋",
+  },
+  {
+    id: 13,
+    name: "عمولات الموظفين",
+    desc: "بيعات المندوبين، بيعات المشرفين، عمو...",
+    icon: "💰",
+  },
+  {
+    id: 14,
+    name: "الإعلانات",
+    desc: "إضافة إعلان، تعديل إعلان، نشر الإعلان",
+    icon: "📣",
+  },
+  {
+    id: 15,
+    name: "قسيمة الراتب",
+    desc: "قسيمة الراتب، إجمالي البدلات، إجمالي ...",
+    icon: "🧾",
+  },
+  {
+    id: 16,
+    name: "التواصل مع الإدارة",
+    desc: "المقترحات والشكاوي",
+    icon: "💬",
+  },
   { id: 17, name: "الإعدادات", desc: "اللغة، الوضع الليلي", icon: "⚙️" },
-  { id: 18, name: "من نحن", desc: "عن الشركة، مقرات الشركة، الفروع والوكلاء", icon: "ℹ️" },
+  {
+    id: 18,
+    name: "من نحن",
+    desc: "عن الشركة، مقرات الشركة، الفروع والوكلاء",
+    icon: "ℹ️",
+  },
   { id: 19, name: "سياسة الخصوصية", desc: "الأذونات", icon: "🔒" },
   { id: 20, name: "تسجيل الخروج", desc: "", icon: "🚪", logout: true },
 ];
 
 export default function EmployeePortal() {
   const navigate = useNavigate();
+  const { t, direction, formatDate } = useI18n();
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {
-    const requestedView = new URLSearchParams(window.location.search).get("view");
+    const requestedView = new URLSearchParams(window.location.search).get(
+      "view",
+    );
     return requestedView === "profile" ? "profile" : "home";
   });
   const [notificationCount, setNotificationCount] = useState(0);
-  const [requestsTab, setRequestsTab] = useState<"received" | "draft" | "sent" | "attached">("received");
+  const [requestsTab, setRequestsTab] = useState<
+    "received" | "draft" | "sent" | "attached"
+  >("received");
   const [searchQuery, setSearchQuery] = useState("");
-  const [employeeRequests, setEmployeeRequests] = useState<EmployeeRequest[]>([]);
+  const [employeeRequests, setEmployeeRequests] = useState<EmployeeRequest[]>(
+    [],
+  );
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [allowedRequests, setAllowedRequests] = useState<string[]>([]);
   const [employeeDepartment, setEmployeeDepartment] = useState("");
-  const [attendanceOverview, setAttendanceOverview] = useState<AttendanceOverview>(EMPTY_ATTENDANCE_OVERVIEW);
+  const [attendanceOverview, setAttendanceOverview] =
+    useState<AttendanceOverview>(EMPTY_ATTENDANCE_OVERVIEW);
 
   // Form state for request dialogs
   const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
@@ -263,12 +387,16 @@ export default function EmployeePortal() {
   // Face verification camera state
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<"in" | "out">("in");
-  const [verifyStatus, setVerifyStatus] = useState<"idle" | "verifying" | "success">("idle");
+  const [verifyStatus, setVerifyStatus] = useState<
+    "idle" | "verifying" | "success"
+  >("idle");
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
   const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
   const [locationChecking, setLocationChecking] = useState(false);
   const [locationAllowed, setLocationAllowed] = useState(false);
-  const [locationMessage, setLocationMessage] = useState("جاري التحقق من موقع الحضور...");
+  const [locationMessage, setLocationMessage] = useState(
+    t("جاري التحقق من موقع الحضور..."),
+  );
   const verifiedPositionRef = useRef<AttendancePosition | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -283,51 +411,62 @@ export default function EmployeePortal() {
   const requestAttendanceLocation = async (showError = true) => {
     if (!navigator.geolocation) {
       setLocationAllowed(false);
-      setLocationMessage("هذا الجهاز لا يدعم تحديد الموقع الجغرافي");
-      if (showError) toast.error("هذا الجهاز لا يدعم تحديد الموقع الجغرافي");
+      setLocationMessage(t("هذا الجهاز لا يدعم تحديد الموقع الجغرافي"));
+      if (showError) toast.error(t("هذا الجهاز لا يدعم تحديد الموقع الجغرافي"));
       return false;
     }
 
     setLocationChecking(true);
-    setLocationMessage("جاري تحديد موقعك الحالي...");
+    setLocationMessage(t("جاري تحديد موقعك الحالي..."));
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
-      });
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          });
+        },
+      );
       const currentPosition = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
       };
-      const { data, error } = await supabase.rpc("check_employee_attendance_location", {
-        p_latitude: currentPosition.latitude,
-        p_longitude: currentPosition.longitude,
-        p_accuracy_m: currentPosition.accuracy,
-      });
+      const { data, error } = await supabase.rpc(
+        "check_employee_attendance_location",
+        {
+          p_latitude: currentPosition.latitude,
+          p_longitude: currentPosition.longitude,
+          p_accuracy_m: currentPosition.accuracy,
+        },
+      );
       if (error) throw error;
       const check = data as AttendanceLocationCheck;
       verifiedPositionRef.current = check.allowed ? currentPosition : null;
       setLocationAllowed(check.allowed);
       setLocationMessage(
         check.allowed
-          ? `أنت داخل نطاق ${check.locationName} — المسافة ${Number(check.distanceMeters).toFixed(1)} متر`
-          : `خارج النطاق أو دقة GPS غير كافية — المسافة ${Number(check.distanceMeters).toFixed(1)} م، الدقة ${Number(check.accuracyMeters).toFixed(1)} م`,
+          ? `${t("أنت داخل نطاق")} ${check.locationName} — ${t("المسافة")} ${Number(check.distanceMeters).toFixed(1)} ${t("متر")}`
+          : `${t("خارج النطاق أو دقة GPS غير كافية")} — ${t("المسافة")} ${Number(check.distanceMeters).toFixed(1)} ${t("متر")}، ${t("الدقة")} ${Number(check.accuracyMeters).toFixed(1)} ${t("متر")}`,
       );
-      if (!check.allowed && showError) toast.error("زر الحضور يظهر فقط داخل نطاق موقع العمل المحدد وبدقة مناسبة");
+      if (!check.allowed && showError)
+        toast.error(
+          t("زر الحضور يظهر فقط داخل نطاق موقع العمل المحدد وبدقة مناسبة"),
+        );
       return check.allowed;
     } catch (locationError) {
       verifiedPositionRef.current = null;
       setLocationAllowed(false);
-      const isGeolocationError = typeof locationError === "object" && locationError !== null && "code" in locationError;
+      const isGeolocationError =
+        typeof locationError === "object" &&
+        locationError !== null &&
+        "code" in locationError;
       const message = isGeolocationError
-        ? "يرجى السماح بالوصول إلى الموقع وتفعيل الموقع الدقيق"
+        ? t("يرجى السماح بالوصول إلى الموقع وتفعيل الموقع الدقيق")
         : locationError instanceof Error
           ? locationError.message
-          : "تعذر التحقق من موقع الحضور";
+          : t("تعذر التحقق من موقع الحضور");
       setLocationMessage(message);
       if (showError) toast.error(message);
       return false;
@@ -340,11 +479,11 @@ export default function EmployeePortal() {
     const isInsideAttendanceLocation = await requestAttendanceLocation(true);
     if (!isInsideAttendanceLocation) return;
     if (mode === "out" && !checkInTime) {
-      toast.error("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف");
+      toast.error(t("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف"));
       return;
     }
     if (mode === "in" && checkInTime) {
-      toast.info("تم تسجيل حضورك مسبقاً لهذا اليوم");
+      toast.info(t("تم تسجيل حضورك مسبقاً لهذا اليوم"));
       return;
     }
     setCameraMode(mode);
@@ -363,7 +502,7 @@ export default function EmployeePortal() {
         }
       }, 100);
     } catch {
-      toast.error("تعذّر فتح الكاميرا، يرجى السماح بالوصول للكاميرا");
+      toast.error(t("تعذّر فتح الكاميرا، يرجى السماح بالوصول للكاميرا"));
     }
   };
 
@@ -376,7 +515,7 @@ export default function EmployeePortal() {
   const saveAttendance = async (mode: "in" | "out") => {
     const position = verifiedPositionRef.current;
     if (!user || !position) {
-      toast.error("يجب التحقق من موقعك أولاً");
+      toast.error(t("يجب التحقق من موقعك أولاً"));
       return null;
     }
     try {
@@ -396,7 +535,7 @@ export default function EmployeePortal() {
       };
     } catch (error: any) {
       console.error("Attendance save failed:", error);
-      toast.error(error?.message || "تعذر حفظ الحضور في قاعدة البيانات");
+      toast.error(error?.message || t("تعذر حفظ الحضور في قاعدة البيانات"));
       return null;
     }
   };
@@ -421,8 +560,8 @@ export default function EmployeePortal() {
       setVerifyStatus("success");
       toast.success(
         cameraMode === "in"
-          ? "تم التحقق من الوجه وتسجيل الحضور بنجاح"
-          : "تم التحقق من الوجه وتسجيل الانصراف بنجاح"
+          ? t("تم التحقق من الوجه وتسجيل الحضور بنجاح")
+          : t("تم التحقق من الوجه وتسجيل الانصراف بنجاح"),
       );
 
       setTimeout(() => {
@@ -472,7 +611,7 @@ export default function EmployeePortal() {
 
   const handleLogout = () => {
     localStorage.removeItem("user_session");
-    toast.success("تم تسجيل الخروج بنجاح");
+    toast.success(t("تم تسجيل الخروج بنجاح"));
     navigate("/employee/login");
   };
 
@@ -487,56 +626,68 @@ export default function EmployeePortal() {
   const loadEmployeeRequests = async (empId: string) => {
     setRequestsLoading(true);
     try {
-      const [requestsResult, investigationsResult, warningsResult] = await Promise.all([
-        supabase
-          .from("leave_requests")
-          .select("*")
-          .eq("emp_id", empId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("penalty_investigations")
-          .select("*")
-          .eq("emp_id", empId)
-          .order("sent_at", { ascending: false }),
-        supabase
-          .from("penalty_warnings")
-          .select("*")
-          .eq("emp_id", empId)
-          .order("sent_at", { ascending: false }),
-      ]);
+      const [requestsResult, investigationsResult, warningsResult] =
+        await Promise.all([
+          supabase
+            .from("leave_requests")
+            .select("*")
+            .eq("emp_id", empId)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("penalty_investigations")
+            .select("*")
+            .eq("emp_id", empId)
+            .order("sent_at", { ascending: false }),
+          supabase
+            .from("penalty_warnings")
+            .select("*")
+            .eq("emp_id", empId)
+            .order("sent_at", { ascending: false }),
+        ]);
 
       if (requestsResult.error) throw requestsResult.error;
       if (investigationsResult.error) throw investigationsResult.error;
       if (warningsResult.error) throw warningsResult.error;
 
-      const requests: EmployeeRequest[] = (requestsResult.data ?? []).map((r: any) => ({
-        id: `request-${String(r.id)}`,
-        type: String(r.leave_type ?? "طلب"),
-        status: normalizeStatus(r.status),
-        createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString("ar-SA") : "-",
-        reason: formatRequestReason(String(r.leave_type ?? "طلب"), r.reason ?? r.notes),
-        adminNote: String(r.admin_note ?? ""),
-      }));
+      const requests: EmployeeRequest[] = (requestsResult.data ?? []).map(
+        (r: any) => ({
+          id: `request-${String(r.id)}`,
+          type: String(r.leave_type ?? "طلب"),
+          status: normalizeStatus(r.status),
+          createdAt: r.created_at ? String(r.created_at) : "",
+          reason: formatRequestReason(
+            String(r.leave_type ?? "طلب"),
+            r.reason ?? r.notes,
+          ),
+          adminNote: String(r.admin_note ?? ""),
+        }),
+      );
 
-      const investigations: EmployeeRequest[] = (investigationsResult.data ?? []).map((r: any) => ({
+      const investigations: EmployeeRequest[] = (
+        investigationsResult.data ?? []
+      ).map((r: any) => ({
         id: `investigation-${String(r.id)}`,
         type: "مساءلة إدارية",
         status: normalizeStatus(r.status === "مرسلة" ? "معلق" : r.status),
-        createdAt: r.sent_at ? new Date(r.sent_at).toLocaleDateString("ar-SA") : "-",
+        createdAt: r.sent_at ? String(r.sent_at) : "",
         reason: `${String(r.subject ?? "مساءلة")} — ${String(r.message ?? "")}`,
         adminNote: "",
       }));
 
-      const warnings: EmployeeRequest[] = (warningsResult.data ?? []).map((r: any) => ({
-        id: `warning-${String(r.id)}`,
-        type: "إنذار إداري",
-        status: normalizeStatus(r.status === "مرسل" ? "معلق" : r.status),
-        createdAt: r.sent_at ? new Date(r.sent_at).toLocaleDateString("ar-SA") : "-",
-        reason: `${String(r.subject ?? "إنذار")} — ${String(r.message ?? "")}`,
-        adminNote: "",
-      }));
+      const warnings: EmployeeRequest[] = (warningsResult.data ?? []).map(
+        (r: any) => ({
+          id: `warning-${String(r.id)}`,
+          type: "إنذار إداري",
+          status: normalizeStatus(r.status === "مرسل" ? "معلق" : r.status),
+          createdAt: r.sent_at ? String(r.sent_at) : "",
+          reason: `${String(r.subject ?? "إنذار")} — ${String(r.message ?? "")}`,
+          adminNote: "",
+        }),
+      );
 
-      const mapped = [...requests, ...investigations, ...warnings].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const mapped = [...requests, ...investigations, ...warnings].sort(
+        (a, b) => b.createdAt.localeCompare(a.createdAt),
+      );
       setEmployeeRequests(mapped);
       setNotificationCount(mapped.filter((r) => r.status === "معلق").length);
     } catch {
@@ -547,11 +698,11 @@ export default function EmployeePortal() {
     }
   };
 
-  const handleSendRequest = (type: typeof REQUEST_TYPES[0]) => {
+  const handleSendRequest = (type: (typeof REQUEST_TYPES)[0]) => {
     if (!user) return;
     const schemaId = REQUEST_NAME_TO_SCHEMA[type.name];
     if (!schemaId) {
-      toast.info(`نموذج "${type.name}" غير متوفر حالياً`);
+      toast.info(`${t("نموذج")} "${t(type.name)}" ${t("غير متوفر حالياً")}`);
       return;
     }
     if (schemaId === "leave") {
@@ -562,26 +713,29 @@ export default function EmployeePortal() {
     }
   };
 
-  const handleMoreOption = (option: typeof MORE_OPTIONS[0]) => {
-    if (option.logout) { handleLogout(); return; }
+  const handleMoreOption = (option: (typeof MORE_OPTIONS)[0]) => {
+    if (option.logout) {
+      handleLogout();
+      return;
+    }
     const pageMap: Record<string, AppPage> = {
       "الملف الشخصي": "profile",
       "قائمة الموظفين": "employees",
       "حساب الراتب": "payroll",
       "قسيمة الراتب": "payslip",
       "المساعلات والإنذارات": "penalties",
-      "دوامي": "schedule",
-      "تقاريري": "my-reports",
-      "التقارير": "reports",
+      دوامي: "schedule",
+      تقاريري: "my-reports",
+      التقارير: "reports",
       "فريق العمل": "team",
-      "الحضور": "attendance",
+      الحضور: "attendance",
       "تقييم الأداء": "performance",
       "عموالت الموظفين": "commissions",
-      "التعاميم": "circulars",
-      "الإعلانات": "announcements",
-      "الشكاوي": "complaints",
+      التعاميم: "circulars",
+      الإعلانات: "announcements",
+      الشكاوي: "complaints",
       "التواصل مع الإدارة": "contact",
-      "الإعدادات": "settings",
+      الإعدادات: "settings",
       "من نحن": "about",
       "سياسة الخصوصية": "privacy",
     };
@@ -596,7 +750,11 @@ export default function EmployeePortal() {
     const startDate = `${month}-01`;
     const endDate = getLocalDate(now);
     const [employeeResult, attendanceResult] = await Promise.all([
-      supabase.from("employees").select("daily_hours").eq("emp_id", empId).maybeSingle(),
+      supabase
+        .from("employees")
+        .select("daily_hours")
+        .eq("emp_id", empId)
+        .maybeSingle(),
       supabase
         .from("attendance")
         .select("date, check_in, check_out, status, entry_source")
@@ -609,7 +767,9 @@ export default function EmployeePortal() {
 
     const dailySeconds = Number(employeeResult.data?.daily_hours ?? 8) * 3600;
     const records = attendanceResult.data ?? [];
-    const byDate = new Map(records.map((record: any) => [String(record.date), record]));
+    const byDate = new Map(
+      records.map((record: any) => [String(record.date), record]),
+    );
     let requiredSeconds = 0;
     let absenceSeconds = 0;
     let overtimeSeconds = 0;
@@ -623,10 +783,12 @@ export default function EmployeePortal() {
       const record: any = byDate.get(dateKey);
       const isToday = day === now.getDate();
       if (!record || record.status === "غائب") {
-        if (!isToday || record?.status === "غائب") absenceSeconds += dailySeconds;
+        if (!isToday || record?.status === "غائب")
+          absenceSeconds += dailySeconds;
         continue;
       }
-      if (["إجازة", "عطلة", "عطلة رسمية"].includes(String(record.status))) continue;
+      if (["إجازة", "عطلة", "عطلة رسمية"].includes(String(record.status)))
+        continue;
       if (isToday && !record.check_out) continue;
       const worked = durationBetween(record.check_in, record.check_out);
       workedSeconds += worked;
@@ -640,10 +802,15 @@ export default function EmployeePortal() {
       absenceSeconds,
       overtimeSeconds,
       workedSeconds,
-      latestRecord: latest ? {
-        date: String(latest.date), checkIn: latest.check_in, checkOut: latest.check_out,
-        status: String(latest.status ?? ""), source: String(latest.entry_source ?? "employee"),
-      } : null,
+      latestRecord: latest
+        ? {
+            date: String(latest.date),
+            checkIn: latest.check_in,
+            checkOut: latest.check_out,
+            status: String(latest.status ?? ""),
+            source: String(latest.entry_source ?? "employee"),
+          }
+        : null,
     });
   };
 
@@ -658,7 +825,11 @@ export default function EmployeePortal() {
           .eq("emp_id", user.empId)
           .maybeSingle();
         setEmployeeDepartment(String(data?.department ?? ""));
-        if (data && Array.isArray(data.permissions) && data.permissions.length > 0) {
+        if (
+          data &&
+          Array.isArray(data.permissions) &&
+          data.permissions.length > 0
+        ) {
           setAllowedRequests(data.permissions as string[]);
         } else {
           setAllowedRequests([]); // empty = show all
@@ -682,7 +853,9 @@ export default function EmployeePortal() {
       }
       const record = data?.[0];
       setCheckInTime(record?.check_in ? `${record.check_in} ${today}` : null);
-      setCheckOutTime(record?.check_out ? `${record.check_out} ${today}` : null);
+      setCheckOutTime(
+        record?.check_out ? `${record.check_out} ${today}` : null,
+      );
     };
 
     fetchPermissions();
@@ -692,19 +865,31 @@ export default function EmployeePortal() {
 
     const channel = supabase
       .channel(`employee-attendance-${user.empId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "attendance", filter: `emp_id=eq.${user.empId}` }, () => {
-        loadTodayAttendance();
-        loadAttendanceOverview(user.empId);
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "attendance",
+          filter: `emp_id=eq.${user.empId}`,
+        },
+        () => {
+          loadTodayAttendance();
+          loadAttendanceOverview(user.empId);
+        },
+      )
       .subscribe();
 
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [user?.empId]);
 
   // Visible request types: filtered by permissions (if any are set)
-  const visibleRequestTypes = allowedRequests.length > 0
-    ? REQUEST_TYPES.filter((t) => allowedRequests.includes(t.name))
-    : REQUEST_TYPES;
+  const visibleRequestTypes =
+    allowedRequests.length > 0
+      ? REQUEST_TYPES.filter((t) => allowedRequests.includes(t.name))
+      : REQUEST_TYPES;
 
   useEffect(() => {
     if (!user?.empId || currentPage !== "requests") return;
@@ -718,25 +903,33 @@ export default function EmployeePortal() {
   }, [currentPage, user?.empId]);
 
   const filteredRequests = employeeRequests.filter((r) => {
-    const matchesSearch = !searchQuery || r.type.includes(searchQuery) || r.reason.includes(searchQuery);
+    const matchesSearch =
+      !searchQuery ||
+      r.type.includes(searchQuery) ||
+      r.reason.includes(searchQuery);
 
     if (requestsTab === "draft") return matchesSearch && r.status === "معلق";
     if (requestsTab === "sent") return matchesSearch && r.status === "موافق";
-    if (requestsTab === "attached") return matchesSearch && r.status === "مرفوض";
+    if (requestsTab === "attached")
+      return matchesSearch && r.status === "مرفوض";
     return matchesSearch;
   });
 
-  const hasFullMoreAccess = FULL_MORE_ACCESS_ROLES.has(String(user?.role ?? "").trim());
+  const hasFullMoreAccess = FULL_MORE_ACCESS_ROLES.has(
+    String(user?.role ?? "").trim(),
+  );
   const visibleMoreOptions = hasFullMoreAccess
     ? MORE_OPTIONS
-    : MORE_OPTIONS.filter((option) => EMPLOYEE_MORE_OPTION_NAMES.has(option.name));
+    : MORE_OPTIONS.filter((option) =>
+        EMPLOYEE_MORE_OPTION_NAMES.has(option.name),
+      );
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جاري التحميل...</p>
+          <p className="text-gray-600">{t("جاري التحميل...")}</p>
         </div>
       </div>
     );
@@ -747,33 +940,66 @@ export default function EmployeePortal() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-50">
+    <div dir={direction} className="min-h-screen bg-gray-50">
       {/* ===== MOBILE VIEW ===== */}
       <div className="md:hidden">
         {/* Header */}
         <div className="sticky top-0 z-20">
           {currentPage === "home" ? (
-            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pb-0" style={{ paddingTop: "max(52px, calc(env(safe-area-inset-top, 0px) + 20px))" }}>
+            <div
+              className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-5 pb-0"
+              style={{
+                paddingTop:
+                  "max(52px, calc(env(safe-area-inset-top, 0px) + 20px))",
+              }}
+            >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("notifications"); }} className="relative w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCurrentPage("notifications");
+                    }}
+                    className="relative w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm"
+                  >
                     <Bell className="h-4.5 w-4.5 text-white" />
                     {notificationCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                      <span className="absolute -top-1 -end-1 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
                         {notificationCount}
                       </span>
                     )}
                   </button>
-                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("email"); }} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 transition" title="المراسلات">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCurrentPage("email");
+                    }}
+                    className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 transition"
+                    title={t("المراسلات")}
+                  >
                     <Mail className="h-4.5 w-4.5 text-white" />
                   </button>
-                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("settings"); }} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCurrentPage("settings");
+                    }}
+                    className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm"
+                  >
                     <Settings className="h-4.5 w-4.5 text-white" />
                   </button>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className="text-right">
-                    <p className="text-white font-bold text-sm leading-tight">{user.name}</p>
+                  <div className="text-start">
+                    <p className="text-white font-bold text-sm leading-tight">
+                      {user.name}
+                    </p>
                     <p className="text-blue-300 text-[11px]">{user.role}</p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white font-bold text-base shadow-lg">
@@ -783,19 +1009,30 @@ export default function EmployeePortal() {
               </div>
             </div>
           ) : (
-            <div className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-4 flex items-center justify-between" style={{ paddingTop: "max(52px, calc(env(safe-area-inset-top, 0px) + 16px))", paddingBottom: "14px" }}>
+            <div
+              className="bg-gradient-to-br from-[#0a1628] via-[#0d2444] to-[#0a3d6b] px-4 flex items-center justify-between"
+              style={{
+                paddingTop:
+                  "max(52px, calc(env(safe-area-inset-top, 0px) + 16px))",
+                paddingBottom: "14px",
+              }}
+            >
               <button
                 type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentPage("home"); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setCurrentPage("home");
+                }}
                 className="flex items-center gap-1 text-white/80 hover:text-white transition"
               >
                 <ChevronLeft className="h-5 w-5 rotate-180" />
-                <span className="text-sm font-medium">رجوع</span>
+                <span className="text-sm font-medium">{t("رجوع")}</span>
               </button>
               <h1 className="text-base font-bold text-white">
-                {currentPage === "requests" && "الطلبات"}
-                {currentPage === "send-request" && "طلب جديد"}
-                {currentPage === "more" && "المزيد"}
+                {currentPage === "requests" && t("الطلبات")}
+                {currentPage === "send-request" && t("طلب جديد")}
+                {currentPage === "more" && t("المزيد")}
               </h1>
               <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
                 <User className="h-4.5 w-4.5 text-white" />
@@ -813,11 +1050,25 @@ export default function EmployeePortal() {
                 {/* Greeting strip */}
                 <div className="mb-4 bg-white/5 rounded-2xl px-4 py-2.5 flex items-center justify-between backdrop-blur-sm border border-white/10">
                   <div>
-                    <p className="text-white/50 text-[10px] uppercase tracking-widest">جلسة اليوم</p>
-                    <p className="text-white/80 text-xs font-medium mt-0.5">{new Date().toLocaleDateString("ar-SA", { weekday:"long", day:"numeric", month:"long" })}</p>
+                    <p className="text-white/50 text-[10px] uppercase tracking-widest">
+                      {t("جلسة اليوم")}
+                    </p>
+                    <p className="text-white/80 text-xs font-medium mt-0.5">
+                      {formatDate(new Date(), {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                      })}
+                    </p>
                   </div>
-                  <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${checkInTime && !checkOutTime ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30" : checkOutTime ? "bg-blue-400/20 text-blue-300 border border-blue-400/30" : "bg-white/10 text-white/50 border border-white/10"}`}>
-                    {checkInTime && !checkOutTime ? "جاري العمل" : checkOutTime ? "منصرف" : "خارج الدوام"}
+                  <div
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${checkInTime && !checkOutTime ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30" : checkOutTime ? "bg-blue-400/20 text-blue-300 border border-blue-400/30" : "bg-white/10 text-white/50 border border-white/10"}`}
+                  >
+                    {checkInTime && !checkOutTime
+                      ? t("جاري العمل")
+                      : checkOutTime
+                        ? t("منصرف")
+                        : t("خارج الدوام")}
                   </div>
                 </div>
 
@@ -825,15 +1076,31 @@ export default function EmployeePortal() {
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="bg-white/8 backdrop-blur-sm rounded-2xl p-4 border border-white/10 relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400/0 via-emerald-400/60 to-emerald-400/0" />
-                    <p className="text-emerald-300/70 text-[9px] font-semibold uppercase tracking-wider mb-2">تسجيل الحضور</p>
-                    <p className="font-mono text-xl font-bold text-white leading-none">{checkInTime ? checkInTime.split(" ")[0] : "--:--"}</p>
-                    <p className="font-mono text-[10px] text-white/40 mt-1">{checkInTime ? checkInTime.split(" ")[1] : "لم يُسجّل بعد"}</p>
+                    <p className="text-emerald-300/70 text-[9px] font-semibold uppercase tracking-wider mb-2">
+                      {t("تسجيل الحضور")}
+                    </p>
+                    <p className="font-mono text-xl font-bold text-white leading-none">
+                      {checkInTime ? checkInTime.split(" ")[0] : "--:--"}
+                    </p>
+                    <p className="font-mono text-[10px] text-white/40 mt-1">
+                      {checkInTime
+                        ? checkInTime.split(" ")[1]
+                        : t("لم يُسجّل بعد")}
+                    </p>
                   </div>
                   <div className="bg-white/8 backdrop-blur-sm rounded-2xl p-4 border border-white/10 relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-orange-400/0 via-orange-400/60 to-orange-400/0" />
-                    <p className="text-orange-300/70 text-[9px] font-semibold uppercase tracking-wider mb-2">تسجيل الانصراف</p>
-                    <p className="font-mono text-xl font-bold text-white leading-none">{checkOutTime ? checkOutTime.split(" ")[0] : "--:--"}</p>
-                    <p className="font-mono text-[10px] text-white/40 mt-1">{checkOutTime ? checkOutTime.split(" ")[1] : "لم يُسجّل بعد"}</p>
+                    <p className="text-orange-300/70 text-[9px] font-semibold uppercase tracking-wider mb-2">
+                      {t("تسجيل الانصراف")}
+                    </p>
+                    <p className="font-mono text-xl font-bold text-white leading-none">
+                      {checkOutTime ? checkOutTime.split(" ")[0] : "--:--"}
+                    </p>
+                    <p className="font-mono text-[10px] text-white/40 mt-1">
+                      {checkOutTime
+                        ? checkOutTime.split(" ")[1]
+                        : t("لم يُسجّل بعد")}
+                    </p>
                   </div>
                 </div>
 
@@ -851,7 +1118,7 @@ export default function EmployeePortal() {
                         className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-all bg-white/10 text-white/70 border border-white/15 disabled:opacity-40"
                       >
                         <ScanFace className="h-4 w-4" />
-                        <span>تسجيل الانصراف</span>
+                        <span>{t("تسجيل الانصراف")}</span>
                       </button>
                       <button
                         onClick={() => openCamera("in")}
@@ -859,7 +1126,7 @@ export default function EmployeePortal() {
                         className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-bold transition-all bg-gradient-to-l from-emerald-400 to-cyan-400 text-white shadow-lg shadow-emerald-500/25 disabled:opacity-50"
                       >
                         <ScanFace className="h-4 w-4" />
-                        <span>تسجيل الحضور</span>
+                        <span>{t("تسجيل الحضور")}</span>
                       </button>
                     </div>
                   </>
@@ -869,8 +1136,16 @@ export default function EmployeePortal() {
                     disabled={locationChecking}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {locationChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                    <span>{locationChecking ? "جاري التحقق من الموقع..." : locationMessage}</span>
+                    {locationChecking ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MapPin className="h-4 w-4" />
+                    )}
+                    <span>
+                      {locationChecking
+                        ? t("جاري التحقق من الموقع...")
+                        : locationMessage}
+                    </span>
                   </button>
                 )}
               </div>
@@ -878,46 +1153,68 @@ export default function EmployeePortal() {
               {/* Quick actions */}
               <div className="px-4 -mt-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => setCurrentPage("requests")} className="group relative overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-100/80 p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                  <button
+                    onClick={() => setCurrentPage("requests")}
+                    className="group relative overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-100/80 p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                  >
                     <div className="w-11 h-11 rounded-xl bg-[#0d2444]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <FileText className="h-5 w-5 text-[#0d2444]" />
                     </div>
                     <div>
-                      <p className="font-bold text-gray-900 text-sm">الطلبات</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">طلباتك الواردة والمرسلة</p>
+                      <p className="font-bold text-gray-900 text-sm">{t("الطلبات")}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {t("طلباتك الواردة والمرسلة")}
+                      </p>
                     </div>
                     {notificationCount > 0 && (
-                      <span className="absolute top-3 left-3 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{notificationCount}</span>
+                      <span className="absolute top-3 left-3 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                        {notificationCount}
+                      </span>
                     )}
                   </button>
 
-                  <button onClick={() => setCurrentPage("send-request")} className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                  <button
+                    onClick={() => setCurrentPage("send-request")}
+                    className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                  >
                     <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Plus className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <p className="font-bold text-white text-sm">طلب جديد</p>
-                      <p className="text-[10px] text-white/70 mt-0.5">إرسال طلب جديد للإدارة</p>
+                      <p className="font-bold text-white text-sm">{t("طلب جديد")}</p>
+                      <p className="text-[10px] text-white/70 mt-0.5">
+                        {t("إرسال طلب جديد للإدارة")}
+                      </p>
                     </div>
                   </button>
 
-                  <button onClick={() => setCurrentPage("more")} className="group relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl shadow-sm p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                  <button
+                    onClick={() => setCurrentPage("more")}
+                    className="group relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl shadow-sm p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                  >
                     <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Briefcase className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <p className="font-bold text-white text-sm">الخدمات</p>
-                      <p className="text-[10px] text-white/70 mt-0.5">جميع الخدمات والخيارات</p>
+                      <p className="font-bold text-white text-sm">{t("الخدمات")}</p>
+                      <p className="text-[10px] text-white/70 mt-0.5">
+                        {t("جميع الخدمات والخيارات")}
+                      </p>
                     </div>
                   </button>
 
-                  <button onClick={() => setCurrentPage("profile")} className="group relative overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-100/80 p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                  <button
+                    onClick={() => setCurrentPage("profile")}
+                    className="group relative overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-100/80 p-5 flex flex-col items-start gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                  >
                     <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <User className="h-5 w-5 text-orange-500" />
                     </div>
                     <div>
-                      <p className="font-bold text-gray-900 text-sm">ملفي</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">بيانات الملف الشخصي</p>
+                      <p className="font-bold text-gray-900 text-sm">{t("ملفي")}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {t("بيانات الملف الشخصي")}
+                      </p>
                     </div>
                   </button>
                 </div>
@@ -929,17 +1226,25 @@ export default function EmployeePortal() {
             <div className="p-4 pb-32">
               <div className="grid grid-cols-3 gap-2.5">
                 {visibleRequestTypes.length === 0 ? (
-                  <p className="col-span-3 text-center text-gray-400 py-10">لا توجد طلبات متاحة لك</p>
-                ) : visibleRequestTypes.map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => handleSendRequest(type)}
-                    className={`${type.color} rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 hover:shadow-md active:scale-95 transition min-h-[90px]`}
-                  >
-                    <span className="text-[26px] leading-none">{type.icon}</span>
-                    <span className="text-[11px] font-bold text-center text-gray-800 leading-tight mt-0.5">{type.name}</span>
-                  </button>
-                ))}
+                  <p className="col-span-3 text-center text-gray-400 py-10">
+                    {t("لا توجد طلبات متاحة لك")}
+                  </p>
+                ) : (
+                  visibleRequestTypes.map((type) => (
+                    <button
+                      key={type.id}
+                      onClick={() => handleSendRequest(type)}
+                      className={`${type.color} rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 hover:shadow-md active:scale-95 transition min-h-[90px]`}
+                    >
+                      <span className="text-[26px] leading-none">
+                        {type.icon}
+                      </span>
+                      <span className="text-[11px] font-bold text-center text-gray-800 leading-tight mt-0.5">
+                        {t(type.name)}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -959,10 +1264,10 @@ export default function EmployeePortal() {
                           : "border-transparent text-gray-500"
                       }`}
                     >
-                      {tab === "received" && "الواردة"}
-                      {tab === "draft" && "المسودة"}
-                      {tab === "sent" && "المرسلة"}
-                      {tab === "attached" && "الملحقة"}
+                      {tab === "received" && t("الواردة")}
+                      {tab === "draft" && t("المسودة")}
+                      {tab === "sent" && t("المرسلة")}
+                      {tab === "attached" && t("الملحقة")}
                     </button>
                   ))}
                 </div>
@@ -974,7 +1279,7 @@ export default function EmployeePortal() {
                   <Search className="h-5 w-5 text-gray-500" />
                   <input
                     type="text"
-                    placeholder="بحث"
+                    placeholder={t("بحث")}
                     className="flex-1 bg-transparent outline-none text-sm"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -985,32 +1290,44 @@ export default function EmployeePortal() {
               {/* Requests List */}
               <div className="px-4 pb-4 space-y-3">
                 {requestsLoading ? (
-                  <div className="bg-white rounded-lg p-6 text-center text-gray-500">جاري تحميل الطلبات...</div>
+                  <div className="bg-white rounded-lg p-6 text-center text-gray-500">
+                    {t("جاري تحميل الطلبات...")}
+                  </div>
                 ) : filteredRequests.length === 0 ? (
                   <div className="bg-white rounded-lg p-6 text-center">
                     <AlertCircle className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600 font-medium">لا توجد طلبات</p>
+                    <p className="text-gray-600 font-medium">{t("لا توجد طلبات")}</p>
                   </div>
                 ) : (
                   filteredRequests.map((req) => (
-                    <div key={req.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                    <div
+                      key={req.id}
+                      className="bg-white rounded-xl border border-gray-200 p-4"
+                    >
                       <div className="flex items-center justify-between mb-2">
-                        <p className="font-semibold text-gray-900">{req.type}</p>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          req.status === "موافق"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : req.status === "مرفوض"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}>
-                          {req.status}
+                        <p className="font-semibold text-gray-900">
+                          {t(req.type)}
+                        </p>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            req.status === "موافق"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : req.status === "مرفوض"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {t(req.status)}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mb-1">تاريخ الإرسال: {req.createdAt}</p>
+                      <p className="text-xs text-gray-500 mb-1">
+                        {t("تاريخ الإرسال")}: {req.createdAt ? formatDate(req.createdAt, { dateStyle: "medium" }) : "-"}
+                      </p>
                       <p className="text-sm text-gray-600">{req.reason}</p>
                       {req.adminNote && (
                         <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
-                          <span className="font-semibold">رد الإدارة: </span>{req.adminNote}
+                          <span className="font-semibold">{t("رد الإدارة")} : </span>
+                          {req.adminNote}
                         </div>
                       )}
                     </div>
@@ -1023,30 +1340,36 @@ export default function EmployeePortal() {
           {currentPage === "more" && (
             <div className="p-4 pb-32 bg-gray-50">
               <div className="grid grid-cols-3 gap-2.5 mb-4">
-                {visibleMoreOptions.filter(o => !o.logout).map((option) => (
+                {visibleMoreOptions
+                  .filter((o) => !o.logout)
+                  .map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => handleMoreOption(option)}
+                      className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 text-center"
+                    >
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center text-2xl shadow-inner">
+                        {option.icon}
+                      </div>
+                      <p className="text-[10px] font-semibold text-gray-800 leading-tight">
+                        {t(option.name)}
+                      </p>
+                    </button>
+                  ))}
+              </div>
+              {/* Logout row */}
+              {visibleMoreOptions
+                .filter((o) => o.logout)
+                .map((option) => (
                   <button
                     key={option.id}
                     onClick={() => handleMoreOption(option)}
-                    className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 text-center"
+                    className="w-full bg-red-50 rounded-2xl p-4 flex items-center justify-center gap-2 border border-red-100 text-red-600 font-semibold text-sm hover:bg-red-100 transition-colors"
                   >
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center text-2xl shadow-inner">
-                      {option.icon}
-                    </div>
-                    <p className="text-[10px] font-semibold text-gray-800 leading-tight">{option.name}</p>
+                    <LogOut className="h-4 w-4" />
+                    {t(option.name)}
                   </button>
                 ))}
-              </div>
-              {/* Logout row */}
-              {visibleMoreOptions.filter(o => o.logout).map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => handleMoreOption(option)}
-                  className="w-full bg-red-50 rounded-2xl p-4 flex items-center justify-center gap-2 border border-red-100 text-red-600 font-semibold text-sm hover:bg-red-100 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  {option.name}
-                </button>
-              ))}
             </div>
           )}
 
@@ -1058,22 +1381,34 @@ export default function EmployeePortal() {
           )}
           {currentPage === "profile" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <ProfilePage empId={user.empId} onBack={() => setCurrentPage("more")} />
+              <ProfilePage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {(currentPage === "payroll" || currentPage === "payslip") && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <PayrollPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+              <PayrollPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "penalties" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+              <PenaltiesPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "schedule" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <AttendanceReportPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+              <AttendanceReportPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "manager-requests" && (
@@ -1081,30 +1416,54 @@ export default function EmployeePortal() {
               <ManagerRequestsPage onBack={() => setCurrentPage("home")} />
             </div>
           )}
-          {user && ["team","attendance","performance","my-reports","reports","circulars","announcements","commissions"].includes(currentPage) && (
+          {user &&
+            [
+              "team",
+              "attendance",
+              "performance",
+              "my-reports",
+              "reports",
+              "circulars",
+              "announcements",
+              "commissions",
+            ].includes(currentPage) && (
+              <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+                <PortalDataPage
+                  mode={currentPage as any}
+                  empId={user.empId}
+                  employeeName={user.name}
+                  isManager={hasFullMoreAccess}
+                  onBack={() => setCurrentPage("more")}
+                />
+              </div>
+            )}
+          {currentPage === "complaints" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <PortalDataPage
-                mode={currentPage as any}
+              <ComplaintsPage
                 empId={user.empId}
-                employeeName={user.name}
+                empName={user.name}
                 isManager={hasFullMoreAccess}
                 onBack={() => setCurrentPage("more")}
               />
             </div>
           )}
-          {currentPage === "complaints" && user && (
-            <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <ComplaintsPage empId={user.empId} empName={user.name} isManager={hasFullMoreAccess} onBack={() => setCurrentPage("more")} />
-            </div>
-          )}
           {currentPage === "contact" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <ContactManagementPage empId={user.empId} empName={user.name} onBack={() => setCurrentPage("more")} />
+              <ContactManagementPage
+                empId={user.empId}
+                empName={user.name}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "settings" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <EmployeeSettingsPage empId={user.empId} empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
+              <EmployeeSettingsPage
+                empId={user.empId}
+                empName={user.name}
+                empRole={user.role}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "about" && (
@@ -1119,36 +1478,48 @@ export default function EmployeePortal() {
           )}
           {currentPage === "notifications" && user && (
             <div className="h-[calc(100vh-120px)] overflow-hidden flex flex-col">
-              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("home")} />
+              <PenaltiesPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("home")}
+              />
             </div>
           )}
         </div>
 
         {/* Mobile Bottom Navigation */}
         <div className="fixed bottom-0 left-0 right-0 z-30">
-          <div className="mx-3 bg-[#0a1628]/95 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl shadow-black/50 px-4 py-3 flex items-center justify-between" style={{ marginBottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}>
+          <div
+            className="mx-3 bg-[#0a1628]/95 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl shadow-black/50 px-4 py-3 flex items-center justify-between"
+            style={{
+              marginBottom: "max(12px, env(safe-area-inset-bottom, 12px))",
+            }}
+          >
             <button
               onClick={() => setCurrentPage("home")}
               className={`flex flex-col items-center gap-1 w-14 transition-all ${currentPage === "home" ? "text-cyan-400" : "text-white/40"}`}
             >
-              <div className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${currentPage === "home" ? "bg-cyan-400/20" : ""}`}>
+              <div
+                className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${currentPage === "home" ? "bg-cyan-400/20" : ""}`}
+              >
                 <Home className="h-4.5 w-4.5" />
               </div>
-              <span className="text-[9px] font-medium">الرئيسية</span>
+              <span className="text-[9px] font-medium">{t("الرئيسية")}</span>
             </button>
             <button
               onClick={() => setCurrentPage("requests")}
               className={`flex flex-col items-center gap-1 w-14 relative transition-all ${currentPage === "requests" ? "text-cyan-400" : "text-white/40"}`}
             >
-              <div className={`w-8 h-8 flex items-center justify-center rounded-xl relative transition-all ${currentPage === "requests" ? "bg-cyan-400/20" : ""}`}>
+              <div
+                className={`w-8 h-8 flex items-center justify-center rounded-xl relative transition-all ${currentPage === "requests" ? "bg-cyan-400/20" : ""}`}
+              >
                 <FileText className="h-4.5 w-4.5" />
                 {notificationCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -end-1 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
                     {notificationCount}
                   </span>
                 )}
               </div>
-              <span className="text-[9px] font-medium">الطلبات</span>
+              <span className="text-[9px] font-medium">{t("الطلبات")}</span>
             </button>
 
             {/* FAB */}
@@ -1163,10 +1534,12 @@ export default function EmployeePortal() {
               onClick={() => setCurrentPage("more")}
               className={`flex flex-col items-center gap-1 w-14 transition-all ${currentPage === "more" ? "text-cyan-400" : "text-white/40"}`}
             >
-              <div className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${currentPage === "more" ? "bg-cyan-400/20" : ""}`}>
+              <div
+                className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${currentPage === "more" ? "bg-cyan-400/20" : ""}`}
+              >
                 <MoreHorizontal className="h-4.5 w-4.5" />
               </div>
-              <span className="text-[9px] font-medium">المزيد</span>
+              <span className="text-[9px] font-medium">{t("المزيد")}</span>
             </button>
             <button
               onClick={handleLogout}
@@ -1175,7 +1548,7 @@ export default function EmployeePortal() {
               <div className="w-8 h-8 flex items-center justify-center rounded-xl">
                 <LogOut className="h-4.5 w-4.5" />
               </div>
-              <span className="text-[9px] font-medium">خروج</span>
+              <span className="text-[9px] font-medium">{t("خروج")}</span>
             </button>
           </div>
         </div>
@@ -1187,10 +1560,13 @@ export default function EmployeePortal() {
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button onClick={() => setCurrentPage("notifications")} className="relative">
+              <button
+                onClick={() => setCurrentPage("notifications")}
+                className="relative"
+              >
                 <Bell className="h-6 w-6 text-gray-700" />
                 {notificationCount > 0 && (
-                  <span className="absolute -top-1 -left-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  <span className="absolute -top-1 -start-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                     {notificationCount}
                   </span>
                 )}
@@ -1202,10 +1578,12 @@ export default function EmployeePortal() {
                 <Settings className="h-6 w-6 text-gray-700" />
               </button>
             </div>
-            <h1 className="text-2xl font-bold text-[#004e89]">مرحباً {user.name}</h1>
+            <h1 className="text-2xl font-bold text-[#004e89]">
+              {t("مرحباً")} {user.name}
+            </h1>
             <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm text-gray-600">الدور</p>
+              <div className="text-start">
+                <p className="text-sm text-gray-600">{t("الدور")}</p>
                 <p className="font-medium text-gray-800">{user.role}</p>
               </div>
               <Button
@@ -1214,7 +1592,7 @@ export default function EmployeePortal() {
                 className="flex items-center gap-2"
               >
                 <LogOut className="h-4 w-4" />
-                خروج
+                {t("خروج")}
               </Button>
             </div>
           </div>
@@ -1228,7 +1606,7 @@ export default function EmployeePortal() {
               className="flex items-center gap-2 text-gray-600 hover:text-blue-600 mb-6 transition"
             >
               <ChevronLeft className="h-5 w-5 rotate-180" />
-              <span className="font-medium">رجوع للرئيسية</span>
+              <span className="font-medium">{t("رجوع للرئيسية")}</span>
             </button>
           )}
           {currentPage === "home" && (
@@ -1236,12 +1614,20 @@ export default function EmployeePortal() {
               {/* Hero Section */}
               <div className="bg-gradient-to-r from-[#004e89] to-[#003865] text-white rounded-xl p-8 mb-8 flex items-center justify-between">
                 <div>
-                  <h2 className="text-3xl font-bold mb-2">لوحة تحكم المدير</h2>
-                  <p className="text-blue-100">مرحباً بك في نظام إدارة الموارد البشرية</p>
+                  <h2 className="text-3xl font-bold mb-2">{t("لوحة تحكم المدير")}</h2>
+                  <p className="text-blue-100">
+                    {t("مرحباً بك في نظام إدارة الموارد البشرية")}
+                  </p>
                 </div>
-                <button onClick={() => setCurrentPage("manager-requests")} className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-5 py-3 flex items-center gap-3 transition">
+                <button
+                  onClick={() => setCurrentPage("manager-requests")}
+                  className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-5 py-3 flex items-center gap-3 transition"
+                >
                   <FileText className="h-5 w-5" />
-                  <div className="text-right"><p className="font-bold text-sm">الطلبات المعلقة</p><p className="text-xs text-blue-200">تنتظر موافقتك</p></div>
+                  <div className="text-start">
+                    <p className="font-bold text-sm">{t("الطلبات المعلقة")}</p>
+                    <p className="text-xs text-blue-200">{t("تنتظر موافقتك")}</p>
+                  </div>
                 </button>
               </div>
 
@@ -1251,8 +1637,12 @@ export default function EmployeePortal() {
                   <div className="flex items-center justify-between mb-4">
                     <Clock className="h-8 w-8 text-blue-500" />
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">الساعات الواجبة حتى اليوم</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.requiredSeconds)}</p>
+                  <p className="text-sm text-gray-600 mb-1">
+                    {t("الساعات الواجبة حتى اليوم")}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatDuration(attendanceOverview.requiredSeconds)}
+                  </p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
 
@@ -1260,8 +1650,12 @@ export default function EmployeePortal() {
                   <div className="flex items-center justify-between mb-4">
                     <Zap className="h-8 w-8 text-orange-500" />
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">ساعات الغياب والنقص</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.absenceSeconds)}</p>
+                  <p className="text-sm text-gray-600 mb-1">
+                    {t("ساعات الغياب والنقص")}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatDuration(attendanceOverview.absenceSeconds)}
+                  </p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
 
@@ -1269,8 +1663,10 @@ export default function EmployeePortal() {
                   <div className="flex items-center justify-between mb-4">
                     <DollarSign className="h-8 w-8 text-green-500" />
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">الساعات الإضافية</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.overtimeSeconds)}</p>
+                  <p className="text-sm text-gray-600 mb-1">{t("الساعات الإضافية")}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatDuration(attendanceOverview.overtimeSeconds)}
+                  </p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
 
@@ -1278,8 +1674,12 @@ export default function EmployeePortal() {
                   <div className="flex items-center justify-between mb-4">
                     <MapPin className="h-8 w-8 text-purple-500" />
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">الحضور لهذا الشهر</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatDuration(attendanceOverview.workedSeconds)}</p>
+                  <p className="text-sm text-gray-600 mb-1">
+                    {t("الحضور لهذا الشهر")}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatDuration(attendanceOverview.workedSeconds)}
+                  </p>
                   <CheckCircle className="h-5 w-5 text-green-500 mt-2" />
                 </div>
               </div>
@@ -1287,25 +1687,34 @@ export default function EmployeePortal() {
               {/* Attendance Card */}
               <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
                 <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-lg font-bold text-gray-900">حضور اليوم</h3>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {t("حضور اليوم")}
+                  </h3>
                   {attendanceOverview.latestRecord && (
-                    <button onClick={() => setCurrentPage("schedule")} className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100">
-                      آخر سجل: {attendanceOverview.latestRecord.date} — {attendanceOverview.latestRecord.status}
-                      {attendanceOverview.latestRecord.source === "manager_manual" ? " (بواسطة الإدارة)" : ""}
+                    <button
+                      onClick={() => setCurrentPage("schedule")}
+                      className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                    >
+                      {t("آخر سجل")}: {formatDate(attendanceOverview.latestRecord.date, { dateStyle: "medium" })} —{" "}
+                      {t(attendanceOverview.latestRecord.status)}
+                      {attendanceOverview.latestRecord.source ===
+                      "manager_manual"
+                        ? ` (${t("بواسطة الإدارة")})`
+                        : ""}
                     </button>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-6">
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">تسجيل الحضور</p>
+                    <p className="text-sm text-gray-600 mb-2">{t("تسجيل الحضور")}</p>
                     <p className="font-mono text-lg text-gray-900 font-bold">
-                      {checkInTime || "لم يسجل بعد"}
+                      {checkInTime || t("لم يسجل بعد")}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">تسجيل الانصراف</p>
+                    <p className="text-sm text-gray-600 mb-2">{t("تسجيل الانصراف")}</p>
                     <p className="font-mono text-lg text-gray-900 font-bold">
-                      {checkOutTime || "لم يسجل بعد"}
+                      {checkOutTime || t("لم يسجل بعد")}
                     </p>
                   </div>
                   <div className="flex items-end">
@@ -1323,7 +1732,7 @@ export default function EmployeePortal() {
                             className="flex-1 gap-2"
                           >
                             <ScanFace className="h-4 w-4" />
-                            تسجيل الانصراف
+                            {t("تسجيل الانصراف")}
                           </Button>
                           <Button
                             onClick={() => openCamera("in")}
@@ -1331,7 +1740,7 @@ export default function EmployeePortal() {
                             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
                           >
                             <ScanFace className="h-4 w-4" />
-                            تسجيل الحضور
+                            {t("تسجيل الحضور")}
                           </Button>
                         </div>
                       </div>
@@ -1342,8 +1751,14 @@ export default function EmployeePortal() {
                         variant="outline"
                         className="w-full gap-2"
                       >
-                        {locationChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                        {locationChecking ? "جاري التحقق من الموقع..." : locationMessage}
+                        {locationChecking ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MapPin className="h-4 w-4" />
+                        )}
+                        {locationChecking
+                          ? t("جاري التحقق من الموقع...")
+                        : locationMessage}
                       </Button>
                     )}
                   </div>
@@ -1352,21 +1767,59 @@ export default function EmployeePortal() {
 
               {/* Quick Actions Row */}
               <div className="grid grid-cols-4 gap-4 mb-2">
-                <button onClick={() => setCurrentPage("requests")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                <button
+                  onClick={() => setCurrentPage("requests")}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3"
+                >
                   <FileText className="h-8 w-8 text-[#004e89]" />
-                  <div><p className="font-semibold text-gray-900 text-sm">الطلبات</p><p className="text-xs text-gray-500 mt-0.5">عرض الطلبات الواردة والمرسلة</p></div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">
+                      {t("الطلبات")}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {t("عرض الطلبات الواردة والمرسلة")}
+                    </p>
+                  </div>
                 </button>
-                <button onClick={() => setCurrentPage("send-request")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                <button
+                  onClick={() => setCurrentPage("send-request")}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3"
+                >
                   <Plus className="h-8 w-8 text-green-500" />
-                  <div><p className="font-semibold text-gray-900 text-sm">طلب جديد</p><p className="text-xs text-gray-500 mt-0.5">إرسال طلب جديد</p></div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">
+                      {t("طلب جديد")}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {t("إرسال طلب جديد")}
+                    </p>
+                  </div>
                 </button>
-                <button onClick={() => setCurrentPage("more")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                <button
+                  onClick={() => setCurrentPage("more")}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3"
+                >
                   <Briefcase className="h-8 w-8 text-purple-500" />
-                  <div><p className="font-semibold text-gray-900 text-sm">الخدمات</p><p className="text-xs text-gray-500 mt-0.5">جميع الخدمات والخيارات</p></div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">
+                      {t("الخدمات")}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {t("جميع الخدمات والخيارات")}
+                    </p>
+                  </div>
                 </button>
-                <button onClick={() => setCurrentPage("profile")} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3">
+                <button
+                  onClick={() => setCurrentPage("profile")}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition text-center flex flex-col items-center gap-3"
+                >
                   <User className="h-8 w-8 text-orange-500" />
-                  <div><p className="font-semibold text-gray-900 text-sm">ملفي</p><p className="text-xs text-gray-500 mt-0.5">بيانات الملف الشخصي</p></div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">{t("ملفي")}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {t("بيانات الملف الشخصي")}
+                    </p>
+                  </div>
                 </button>
               </div>
             </>
@@ -1374,28 +1827,36 @@ export default function EmployeePortal() {
 
           {currentPage === "send-request" && (
             <>
-              <h2 className="text-3xl font-bold text-gray-900 mb-8">إرسال طلب جديد</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-8">
+                {t("إرسال طلب جديد")}
+              </h2>
               <div className="grid grid-cols-5 gap-4">
                 {visibleRequestTypes.length === 0 ? (
-                  <p className="col-span-5 text-center text-gray-400 py-10">لا توجد طلبات متاحة لك</p>
-                ) : visibleRequestTypes.map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => handleSendRequest(type)}
-                    className={`${type.color} rounded-lg p-6 flex flex-col items-center justify-center gap-3 hover:shadow-md transition h-40`}
-                  >
-                    <span className="text-4xl">{type.icon}</span>
-                    <span className="text-sm font-semibold text-center text-gray-700">{type.name}</span>
-                  </button>
-                ))}
+                  <p className="col-span-5 text-center text-gray-400 py-10">
+                    {t("لا توجد طلبات متاحة لك")}
+                  </p>
+                ) : (
+                  visibleRequestTypes.map((type) => (
+                    <button
+                      key={type.id}
+                      onClick={() => handleSendRequest(type)}
+                      className={`${type.color} rounded-lg p-6 flex flex-col items-center justify-center gap-3 hover:shadow-md transition h-40`}
+                    >
+                      <span className="text-4xl">{type.icon}</span>
+                      <span className="text-sm font-semibold text-center text-gray-700">
+                        {t(type.name)}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </>
           )}
 
           {currentPage === "requests" && (
             <>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">الطلبات</h2>
-              
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">{t("الطلبات")}</h2>
+
               {/* Tabs */}
               <div className="bg-white rounded-lg shadow-sm mb-6 border-b">
                 <div className="flex border-b">
@@ -1409,10 +1870,10 @@ export default function EmployeePortal() {
                           : "border-transparent text-gray-600"
                       }`}
                     >
-                      {tab === "received" && "الواردة"}
-                      {tab === "draft" && "المسودة"}
-                      {tab === "sent" && "المرسلة"}
-                      {tab === "attached" && "المملحقة"}
+                      {tab === "received" && t("الواردة")}
+                      {tab === "draft" && t("المسودة")}
+                      {tab === "sent" && t("المرسلة")}
+                      {tab === "attached" && t("المملحقة")}
                     </button>
                   ))}
                 </div>
@@ -1420,18 +1881,18 @@ export default function EmployeePortal() {
                 {/* Search and Filter */}
                 <div className="p-6 flex gap-4">
                   <div className="flex-1 relative">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                     <input
                       type="text"
-                      placeholder="بحث"
-                      className="w-full pr-10 pl-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={t("بحث")}
+                      className="w-full ps-10 pe-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
                   <Button variant="outline" className="flex items-center gap-2">
                     <Filter className="h-4 w-4" />
-                    تصفية
+                    {t("تصفية")}
                   </Button>
                 </div>
               </div>
@@ -1439,52 +1900,70 @@ export default function EmployeePortal() {
               {/* Requests List */}
               <div className="bg-white rounded-lg shadow-sm p-6">
                 {requestsLoading ? (
-                  <div className="text-center py-8 text-gray-500">جاري تحميل الطلبات...</div>
+                  <div className="text-center py-8 text-gray-500">
+                    {t("جاري تحميل الطلبات...")}
+                  </div>
                 ) : filteredRequests.length === 0 ? (
                   <div className="text-center py-8">
                     <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-semibold mb-6">لا توجد طلبات</p>
+                    <p className="text-gray-600 font-semibold mb-6">
+                      {t("لا توجد طلبات")}
+                    </p>
                     <Button
                       onClick={() => setCurrentPage("send-request")}
                       className="bg-blue-600 hover:bg-blue-700"
                     >
                       <Plus className="h-4 w-4 ml-2" />
-                      إرسال طلب جديد
+                      {t("إرسال طلب جديد")}
                     </Button>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-right">
+                    <table className="w-full text-sm text-start">
                       <thead className="bg-[#004e89] text-white">
                         <tr>
-                          <th className="py-3 px-4">نوع الطلب</th>
-                          <th className="py-3 px-4">السبب</th>
-                          <th className="py-3 px-4">تاريخ الإرسال</th>
-                          <th className="py-3 px-4 text-center">الحالة</th>
+                          <th className="py-3 px-4">{t("نوع الطلب")}</th>
+                          <th className="py-3 px-4">{t("السبب")}</th>
+                          <th className="py-3 px-4">{t("تاريخ الإرسال")}</th>
+                          <th className="py-3 px-4 text-center">{t("الحالة")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredRequests.map((req) => (
-                          <tr key={req.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-4 font-medium">{req.type}</td>
+                          <tr
+                            key={req.id}
+                            className="border-b hover:bg-gray-50"
+                          >
+                            <td className="py-3 px-4 font-medium">
+                              {t(req.type)}
+                            </td>
                             <td className="py-3 px-4 text-gray-600">
                               <div>{req.reason}</div>
                               {req.adminNote && (
                                 <div className="mt-2 rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-900">
-                                  <span className="font-semibold">رد الإدارة: </span>{req.adminNote}
+                                  <span className="font-semibold">
+                                    {t("رد الإدارة")}:{" "}
+                                  </span>
+                                  {req.adminNote}
                                 </div>
                               )}
                             </td>
-                            <td className="py-3 px-4">{req.createdAt}</td>
+                            <td className="py-3 px-4">
+                              {req.createdAt
+                                ? formatDate(req.createdAt, { dateStyle: "medium" })
+                                : "-"}
+                            </td>
                             <td className="py-3 px-4 text-center">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                req.status === "موافق"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : req.status === "مرفوض"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}>
-                                {req.status}
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  req.status === "موافق"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : req.status === "مرفوض"
+                                      ? "bg-red-100 text-red-800"
+                                      : "bg-yellow-100 text-yellow-800"
+                                }`}
+                              >
+                                {t(req.status)}
                               </span>
                             </td>
                           </tr>
@@ -1499,19 +1978,23 @@ export default function EmployeePortal() {
 
           {currentPage === "more" && (
             <>
-              <h2 className="text-3xl font-bold text-gray-900 mb-8">الخدمات والخيارات</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-8">
+                {t("الخدمات والخيارات")}
+              </h2>
               <div className="grid grid-cols-3 gap-4">
                 {visibleMoreOptions.map((option) => (
                   <button
                     key={option.id}
                     onClick={() => handleMoreOption(option)}
-                    className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-right border border-gray-100"
+                    className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition text-start border border-gray-100"
                   >
                     <div className="flex items-start gap-4">
                       <span className="text-3xl">{option.icon}</span>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-1">{option.name}</h3>
-                        <p className="text-sm text-gray-500">{option.desc}</p>
+                        <h3 className="font-semibold text-gray-900 mb-1">
+                          {t(option.name)}
+                        </h3>
+                        <p className="text-sm text-gray-500">{t(option.desc)}</p>
                       </div>
                       <ChevronLeft className="h-5 w-5 text-gray-400 flex-shrink-0" />
                     </div>
@@ -1522,74 +2005,152 @@ export default function EmployeePortal() {
           )}
 
           {currentPage === "employees" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "75vh" }}>
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "75vh" }}
+            >
               <EmployeeListPage onBack={() => setCurrentPage("more")} />
             </div>
           )}
           {currentPage === "profile" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <ProfilePage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <ProfilePage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {(currentPage === "payroll" || currentPage === "payslip") && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <PayrollPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <PayrollPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "penalties" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <PenaltiesPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "schedule" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <AttendanceReportPage empId={user.empId} onBack={() => setCurrentPage("more")} />
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <AttendanceReportPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "manager-requests" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "85vh" }}>
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "85vh" }}
+            >
               <ManagerRequestsPage onBack={() => setCurrentPage("home")} />
             </div>
           )}
-          {user && ["team","attendance","performance","my-reports","reports","circulars","announcements","commissions"].includes(currentPage) && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <PortalDataPage
-                mode={currentPage as any}
+          {user &&
+            [
+              "team",
+              "attendance",
+              "performance",
+              "my-reports",
+              "reports",
+              "circulars",
+              "announcements",
+              "commissions",
+            ].includes(currentPage) && (
+              <div
+                className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+                style={{ height: "80vh" }}
+              >
+                <PortalDataPage
+                  mode={currentPage as any}
+                  empId={user.empId}
+                  employeeName={user.name}
+                  isManager={hasFullMoreAccess}
+                  onBack={() => setCurrentPage("more")}
+                />
+              </div>
+            )}
+          {currentPage === "complaints" && user && (
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <ComplaintsPage
                 empId={user.empId}
-                employeeName={user.name}
+                empName={user.name}
                 isManager={hasFullMoreAccess}
                 onBack={() => setCurrentPage("more")}
               />
             </div>
           )}
-          {currentPage === "complaints" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <ComplaintsPage empId={user.empId} empName={user.name} isManager={hasFullMoreAccess} onBack={() => setCurrentPage("more")} />
-            </div>
-          )}
           {currentPage === "contact" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <ContactManagementPage empId={user.empId} empName={user.name} onBack={() => setCurrentPage("more")} />
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <ContactManagementPage
+                empId={user.empId}
+                empName={user.name}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "settings" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <EmployeeSettingsPage empId={user.empId} empName={user.name} empRole={user.role} onBack={() => setCurrentPage("more")} />
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <EmployeeSettingsPage
+                empId={user.empId}
+                empName={user.name}
+                empRole={user.role}
+                onBack={() => setCurrentPage("more")}
+              />
             </div>
           )}
           {currentPage === "about" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
               <AboutPage onBack={() => setCurrentPage("more")} />
             </div>
           )}
           {currentPage === "privacy" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
               <PrivacyPage onBack={() => setCurrentPage("more")} />
             </div>
           )}
           {currentPage === "notifications" && user && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "80vh" }}>
-              <PenaltiesPage empId={user.empId} onBack={() => setCurrentPage("home")} />
+            <div
+              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              style={{ height: "80vh" }}
+            >
+              <PenaltiesPage
+                empId={user.empId}
+                onBack={() => setCurrentPage("home")}
+              />
             </div>
           )}
         </main>
@@ -1611,7 +2172,9 @@ export default function EmployeePortal() {
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h3 className="font-bold text-gray-900">
-                {cameraMode === "in" ? "التحقق لتسجيل الحضور" : "التحقق لتسجيل الانصراف"}
+                {cameraMode === "in"
+                  ? t("التحقق لتسجيل الحضور")
+                  : t("التحقق لتسجيل الانصراف")}
               </h3>
               <button
                 onClick={closeCamera}
@@ -1639,15 +2202,18 @@ export default function EmployeePortal() {
                     verifyStatus === "success"
                       ? "border-green-500"
                       : verifyStatus === "verifying"
-                      ? "border-yellow-400 animate-pulse"
-                      : "border-white/70"
+                        ? "border-yellow-400 animate-pulse"
+                        : "border-white/70"
                   }`}
                 />
               </div>
 
               {/* Scanning line animation */}
               {verifyStatus === "verifying" && (
-                <div className="absolute inset-x-0 top-0 h-1 bg-yellow-400 animate-[scan_2s_ease-in-out_infinite]" style={{ animation: "scanline 2.5s linear infinite" }} />
+                <div
+                  className="absolute inset-x-0 top-0 h-1 bg-yellow-400 animate-[scan_2s_ease-in-out_infinite]"
+                  style={{ animation: "scanline 2.5s linear infinite" }}
+                />
               )}
 
               {/* Status overlay */}
@@ -1656,13 +2222,17 @@ export default function EmployeePortal() {
                   {verifyStatus === "verifying" && (
                     <>
                       <Loader2 className="h-5 w-5 text-yellow-400 animate-spin" />
-                      <span className="text-white font-medium">جاري التحقق من الوجه...</span>
+                      <span className="text-white font-medium">
+                        {t("جاري التحقق من الوجه...")}
+                      </span>
                     </>
                   )}
                   {verifyStatus === "success" && (
                     <>
                       <CheckCircle className="h-5 w-5 text-green-400" />
-                      <span className="text-white font-medium">تم التحقق بنجاح</span>
+                      <span className="text-white font-medium">
+                        {t("تم التحقق بنجاح")}
+                      </span>
                     </>
                   )}
                 </div>
@@ -1673,7 +2243,7 @@ export default function EmployeePortal() {
             <div className="p-4">
               {verifyStatus === "idle" && (
                 <p className="text-sm text-gray-600 text-center mb-4">
-                  ضع وجهك داخل الإطار ثم اضغط على زر التحقق
+                  {t("ضع وجهك داخل الإطار ثم اضغط على زر التحقق")}
                 </p>
               )}
               <Button
@@ -1688,17 +2258,17 @@ export default function EmployeePortal() {
                 {verifyStatus === "verifying" ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    جاري التحقق...
+                    {t("جاري التحقق...")}
                   </>
                 ) : verifyStatus === "success" ? (
                   <>
                     <CheckCircle className="h-4 w-4" />
-                    تم بنجاح
+                    {t("تم بنجاح")}
                   </>
                 ) : (
                   <>
                     <ScanFace className="h-4 w-4" />
-                    تحقق
+                    {t("تحقق")}
                   </>
                 )}
               </Button>
@@ -1714,7 +2284,9 @@ export default function EmployeePortal() {
           setDynamicFormOpen(open);
           if (!open && user?.empId) loadEmployeeRequests(user.empId);
         }}
-        schema={activeSchemaId ? (requestFormSchemas[activeSchemaId] ?? null) : null}
+        schema={
+          activeSchemaId ? (requestFormSchemas[activeSchemaId] ?? null) : null
+        }
         employeeInfo={user ? { empId: user.empId, name: user.name } : undefined}
       />
 

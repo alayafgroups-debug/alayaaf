@@ -4,7 +4,10 @@ import { arSA } from "date-fns/locale";
 import { supabase } from "@/lib/supabaseClient";
 import { Calendar, Plus, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import EmployeeSignatureField, { EmployeeSignature } from "./EmployeeSignatureField";
+import { useI18n } from "@/i18n";
+import EmployeeSignatureField, {
+  EmployeeSignature,
+} from "./EmployeeSignatureField";
 
 import {
   Dialog,
@@ -22,7 +25,12 @@ interface LeaveRequestFormProps {
   };
 }
 
-export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: LeaveRequestFormProps) {
+export default function LeaveRequestForm({
+  open,
+  onOpenChange,
+  employeeInfo,
+}: LeaveRequestFormProps) {
+  const { t, direction } = useI18n();
   const [loading, setLoading] = useState(false);
   const [signature, setSignature] = useState<EmployeeSignature | null>(null);
   const [formData, setFormData] = useState({
@@ -46,7 +54,11 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
     return 0;
   }, [formData.startDate, formData.endDate]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
@@ -54,8 +66,16 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
     try {
       setLoading(true);
       // Validate
-      if (!formData.leaveType || !formData.startDate || !formData.endDate || !formData.phone || !formData.reason || !formData.substituteId || !formData.address) {
-        alert("يرجى تعبئة جميع الحقول الإلزامية");
+      if (
+        !formData.leaveType ||
+        !formData.startDate ||
+        !formData.endDate ||
+        !formData.phone ||
+        !formData.reason ||
+        !formData.substituteId ||
+        !formData.address
+      ) {
+        alert(t("يرجى تعبئة جميع الحقول الإلزامية"));
         setLoading(false);
         return;
       }
@@ -63,13 +83,13 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
       const empId = employeeInfo?.empId;
       const empName = employeeInfo?.name;
       if (!empId || !empName) {
-        alert("تعذر تحديد بيانات الموظف مقدم الطلب");
+        alert(t("تعذر تحديد بيانات الموظف مقدم الطلب"));
         setLoading(false);
         return;
       }
 
       if (!signature) {
-        alert("يجب إنشاء وحفظ توقيعك الإلكتروني قبل إرسال الطلب");
+        alert(t("يجب إنشاء وحفظ توقيعك الإلكتروني قبل إرسال الطلب"));
         setLoading(false);
         return;
       }
@@ -94,12 +114,12 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
       });
 
       if (error) throw error;
-      
-      alert("تم إرسال الطلب بنجاح");
+
+      alert(t("تم إرسال الطلب بنجاح"));
       onOpenChange(false);
     } catch (error: any) {
       console.error("Leave request submission failed:", error);
-      alert(error?.message || "حدث خطأ أثناء إرسال الطلب");
+      alert(error?.message || t("حدث خطأ أثناء إرسال الطلب"));
     } finally {
       setLoading(false);
     }
@@ -107,42 +127,49 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[900px] p-0 overflow-hidden" dir="rtl">
+      <DialogContent className="sm:max-w-[900px] p-0 overflow-hidden" dir={direction}>
         {/* Header */}
-        <DialogHeader className="bg-white px-6 py-4 border-b border-gray-100 flex flex-row justify-between items-center space-y-0 text-right">
-          <DialogTitle className="text-xl font-bold text-gray-800">الإجازات</DialogTitle>
+        <DialogHeader className="bg-white px-6 py-4 border-b border-gray-100 flex flex-row justify-between items-center space-y-0 text-start">
+          <DialogTitle className="text-xl font-bold text-gray-800">
+            {t("الإجازات")}
+          </DialogTitle>
         </DialogHeader>
 
         {/* Form Body */}
         <div className="p-6 bg-white space-y-6 max-h-[80vh] overflow-y-auto">
-          
           <div className="grid grid-cols-2 gap-x-8 gap-y-6">
             {/* Right Column */}
             <div className="space-y-6">
               {/* Leave Type */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 flex justify-end">
-                  <span className="text-red-500 ml-1">*</span> نوع الإجازة
+                  <span className="text-red-500 ml-1">*</span> {t("نوع الإجازة")}
                 </label>
                 <select
                   name="leaveType"
                   value={formData.leaveType}
                   onChange={handleChange}
-                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right appearance-none"
-                  style={{ backgroundImage: "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"%239CA3AF\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"/></svg>')", backgroundPosition: "left 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em" }}
+                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start appearance-none"
+                  style={{
+                    backgroundImage:
+                      'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="%239CA3AF"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>\')',
+                    backgroundPosition: "left 0.5rem center",
+                    backgroundRepeat: "no-repeat",
+                    backgroundSize: "1.5em 1.5em",
+                  }}
                 >
                   <option value="" disabled></option>
-                  <option value="annual">إجازة سنوية</option>
-                  <option value="sick">إجازة مرضية</option>
-                  <option value="emergency">إجازة اضطرارية</option>
-                  <option value="unpaid">إجازة بدون راتب</option>
+                  <option value="annual">{t("إجازة سنوية")}</option>
+                  <option value="sick">{t("إجازة مرضية")}</option>
+                  <option value="emergency">{t("إجازة اضطرارية")}</option>
+                  <option value="unpaid">{t("إجازة بدون راتب")}</option>
                 </select>
               </div>
 
               {/* Start Date */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 flex justify-end">
-                  <span className="text-red-500 ml-1">*</span> تاريخ البداية
+                  <span className="text-red-500 ml-1">*</span> {t("تاريخ البداية")}
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -151,40 +178,42 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
                       name="startDate"
                       value={formData.startDate}
                       onChange={handleChange}
-                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right pr-10"
+                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start ps-10"
                     />
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                   </div>
                   <div className="relative flex-1">
                     <input
                       type="text"
-                      placeholder="هجري (اختياري)"
-                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right pr-10 bg-gray-50/50"
+                      placeholder={t("هجري (اختياري)")}
+                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start ps-10 bg-gray-50/50"
                     />
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
               </div>
 
               {/* Duration */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex justify-end">مدة الإجازة</label>
+                <label className="text-sm font-medium text-gray-700 flex justify-end">
+                  {t("مدة الإجازة")}
+                </label>
                 <div className="w-full h-10 px-3 border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-end text-sm text-gray-500">
-                  {duration > 0 ? `${duration} يوم` : ""}
+                  {duration > 0 ? `${duration} ${t("يوم")}` : ""}
                 </div>
               </div>
 
               {/* Phone */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 flex justify-end">
-                  <span className="text-red-500 ml-1">*</span> الهاتف
+                  <span className="text-red-500 ml-1">*</span> {t("الهاتف")}
                 </label>
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start"
                 />
               </div>
             </div>
@@ -192,11 +221,11 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
             {/* Left Column */}
             <div className="space-y-6 pt-[72px]">
               {/* Note: the pt-[72px] is to align with the start date row, leaving the first row blank as in screenshot */}
-              
+
               {/* End Date */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 flex justify-end">
-                  <span className="text-red-500 ml-1">*</span> تاريخ الانتهاء
+                  <span className="text-red-500 ml-1">*</span> {t("تاريخ الانتهاء")}
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -205,17 +234,17 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
                       name="endDate"
                       value={formData.endDate}
                       onChange={handleChange}
-                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right pr-10"
+                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start ps-10"
                     />
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                   </div>
                   <div className="relative flex-1">
                     <input
                       type="text"
-                      placeholder="هجري (اختياري)"
-                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right pr-10 bg-gray-50/50"
+                      placeholder={t("هجري (اختياري)")}
+                      className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start ps-10 bg-gray-50/50"
                     />
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
               </div>
@@ -223,28 +252,34 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
               {/* Address During Leave */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 flex justify-end">
-                  <span className="text-red-500 ml-1">*</span> عنوان الموظف أثناء الإجازة
+                  <span className="text-red-500 ml-1">*</span> {t("عنوان الموظف أثناء الإجازة")}
                 </label>
                 <input
                   type="text"
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start"
                 />
               </div>
 
               {/* Substitute Employee */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 flex justify-end">
-                  <span className="text-red-500 ml-1">*</span> الموظف البديل
+                  <span className="text-red-500 ml-1">*</span> {t("الموظف البديل")}
                 </label>
                 <select
                   name="substituteId"
                   value={formData.substituteId}
                   onChange={handleChange}
-                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right appearance-none"
-                  style={{ backgroundImage: "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"%239CA3AF\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"/></svg>')", backgroundPosition: "left 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em" }}
+                  className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start appearance-none"
+                  style={{
+                    backgroundImage:
+                      'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="%239CA3AF"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>\')',
+                    backgroundPosition: "left 0.5rem center",
+                    backgroundRepeat: "no-repeat",
+                    backgroundSize: "1.5em 1.5em",
+                  }}
                 >
                   <option value="" disabled></option>
                   <option value="1">عبدالمجيد شودري</option>
@@ -257,24 +292,23 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
 
           {/* Full Width Fields */}
           <div className="space-y-6 pt-4">
-            
             {/* Additional Data Button */}
             <button className="w-full py-3 border border-blue-200 rounded-lg text-blue-600 font-medium text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
-              <span>بيانات إضافية</span>
+              <span>{t("بيانات إضافية")}</span>
               <Plus className="h-4 w-4" />
             </button>
 
             {/* Reason */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 flex justify-end">
-                <span className="text-red-500 ml-1">*</span> السبب
+                <span className="text-red-500 ml-1">*</span> {t("السبب")}
               </label>
               <textarea
                 name="reason"
                 value={formData.reason}
                 onChange={handleChange}
                 rows={4}
-                className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-right resize-none"
+                className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start resize-none"
               />
             </div>
 
@@ -282,14 +316,15 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
 
             {/* Attachments */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex justify-end">المرفق</label>
+              <label className="text-sm font-medium text-gray-700 flex justify-end">
+                {t("المرفق")}
+              </label>
               <button className="w-full py-3 border border-blue-200 rounded-lg text-blue-600 font-medium text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
-                <span>إضافة مرفقات</span>
+                <span>{t("إضافة مرفقات")}</span>
                 <Plus className="h-4 w-4" />
               </button>
             </div>
           </div>
-
         </div>
 
         {/* Footer */}
@@ -299,10 +334,10 @@ export default function LeaveRequestForm({ open, onOpenChange, employeeInfo }: L
             disabled={loading}
             className={cn(
               "px-8 py-2 bg-[#004e89] hover:bg-[#003d6d] text-white font-medium rounded-lg text-sm transition-colors",
-              loading && "opacity-70 cursor-not-allowed"
+              loading && "opacity-70 cursor-not-allowed",
             )}
           >
-            {loading ? "جاري الإرسال..." : "إرسال"}
+            {loading ? t("جاري الإرسال...") : t("إرسال")}
           </button>
         </div>
       </DialogContent>

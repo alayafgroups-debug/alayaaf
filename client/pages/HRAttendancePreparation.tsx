@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,6 +23,19 @@ type Schedule = { id: string; name: string; hours: string };
 const today = () => new Date().toLocaleDateString("en-CA");
 const currentTime = () => new Date().toTimeString().slice(0, 5);
 
+function getInclusiveDates(fromDate: string, toDate: string) {
+  if (!fromDate || !toDate || fromDate > toDate) return [];
+  const dates: string[] = [];
+  const current = new Date(`${fromDate}T00:00:00Z`);
+  const end = new Date(`${toDate}T00:00:00Z`);
+
+  while (current <= end) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return dates;
+}
+
 export default function HRAttendancePreparation() {
   const session = readUserSession();
   const canPrepare = canManagePerm(
@@ -36,16 +49,19 @@ export default function HRAttendancePreparation() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const prepareInFlight = useRef(false);
   const [search, setSearch] = useState("");
   const [branch, setBranch] = useState("الكل");
   const [department, setDepartment] = useState("الكل");
   const [workLocation, setWorkLocation] = useState("الكل");
   const [scheduleId, setScheduleId] = useState("");
-  const [date, setDate] = useState(today());
+  const [fromDate, setFromDate] = useState(today());
+  const [toDate, setToDate] = useState(today());
   const [status, setStatus] = useState("حاضر");
   const [checkIn, setCheckIn] = useState(currentTime());
   const [checkOut, setCheckOut] = useState("");
   const [notes, setNotes] = useState("");
+  const [savingRecordCount, setSavingRecordCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -94,6 +110,12 @@ export default function HRAttendancePreparation() {
     return true;
   }), [employees, search, branch, department, workLocation, scheduleId, schedules]);
 
+  const selectedDates = useMemo(
+    () => getInclusiveDates(fromDate, toDate),
+    [fromDate, toDate],
+  );
+  const totalRecords = selected.size * selectedDates.length;
+
   const allVisibleSelected = filtered.length > 0 && filtered.every((employee) => selected.has(employee.id));
   const toggleAll = () => {
     setSelected((current) => {
@@ -113,36 +135,57 @@ export default function HRAttendancePreparation() {
   };
 
   const handlePrepare = async () => {
+    if (prepareInFlight.current) return;
     if (!canPrepare) return toast.error("ليس لديك صلاحية تسجيل حضور الموظفين");
     const chosen = employees.filter((employee) => selected.has(employee.id));
     if (chosen.length === 0) return toast.error("اختر موظفًا واحدًا على الأقل");
-    if (!date) return toast.error("حدد تاريخ التحضير");
+    if (!fromDate || !toDate) return toast.error("حدد تاريخ البداية وتاريخ النهاية");
+    if (fromDate > toDate) return toast.error("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية");
     if (status === "حاضر" && !checkIn) return toast.error("حدد وقت الحضور");
 
+    const dates = getInclusiveDates(fromDate, toDate);
+    const payload = dates.flatMap((attendanceDate) =>
+      chosen.map((employee) => ({
+        emp_id: employee.empId,
+        emp_name: employee.name,
+        department: employee.department,
+        date: attendanceDate,
+        check_in: status === "غائب" ? null : checkIn || null,
+        check_out: status === "غائب" ? null : checkOut || null,
+        status,
+        late_minutes: 0,
+        notes: notes.trim() || (chosen.length > 1 ? "تحضير جماعي من الإدارة" : "تحضير فردي من الإدارة"),
+        entry_source: "manager_manual",
+        prepared_by: session?.name || session?.email || "الإدارة",
+        schedule_id: scheduleId || null,
+        updated_at: new Date().toISOString(),
+      })),
+    );
+
+    prepareInFlight.current = true;
     setSaving(true);
-    const payload = chosen.map((employee) => ({
-      emp_id: employee.empId,
-      emp_name: employee.name,
-      department: employee.department,
-      date,
-      check_in: status === "غائب" ? null : checkIn || null,
-      check_out: status === "غائب" ? null : checkOut || null,
-      status,
-      late_minutes: 0,
-      notes: notes.trim() || (chosen.length > 1 ? "تحضير جماعي من الإدارة" : "تحضير فردي من الإدارة"),
-      entry_source: "manager_manual",
-      prepared_by: session?.name || session?.email || "الإدارة",
-      schedule_id: scheduleId || null,
-      updated_at: new Date().toISOString(),
-    }));
+    setSavingRecordCount(payload.length);
+    try {
+      const { error } = await supabase
+        .from("attendance")
+        .upsert(payload, { onConflict: "emp_id,date" });
+      if (error) {
+        toast.error(`تعذر حفظ التحضير: ${error.message}`);
+        return;
+      }
 
-    const { error } = await supabase.from("attendance").upsert(payload, { onConflict: "emp_id,date" });
-    setSaving(false);
-    if (error) return toast.error(`تعذر حفظ التحضير: ${error.message}`);
-
-    toast.success(`تم تسجيل التحضير لـ ${chosen.length} ${chosen.length === 1 ? "موظف" : "موظفين"}`);
-    setSelected(new Set());
-    setNotes("");
+      toast.success(
+        `تم تسجيل ${payload.length} سجل حضور لـ ${chosen.length} ${chosen.length === 1 ? "موظف" : "موظفين"} خلال ${dates.length} ${dates.length === 1 ? "يوم" : "أيام"}`,
+      );
+      setSelected(new Set());
+      setNotes("");
+    } catch (saveError) {
+      toast.error(saveError instanceof Error ? saveError.message : "حدث خطأ غير متوقع أثناء حفظ التحضير");
+    } finally {
+      prepareInFlight.current = false;
+      setSaving(false);
+      setSavingRecordCount(0);
+    }
   };
 
   return (
@@ -161,7 +204,12 @@ export default function HRAttendancePreparation() {
         <section className="rounded-xl border bg-white shadow-sm">
           <div className="border-b bg-slate-50 px-5 py-3 font-bold text-slate-800">بيانات التحضير</div>
           <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="تاريخ التحضير*"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+            <Field label="من تاريخ*">
+              <Input type="date" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} />
+            </Field>
+            <Field label="إلى تاريخ*">
+              <Input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} />
+            </Field>
             <Field label="حالة الدوام*">
               <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 w-full rounded-md border bg-white px-3 text-sm">
                 <option value="حاضر">حاضر</option><option value="غائب">غائب</option><option value="إجازة">إجازة</option><option value="عمل عن بعد">عمل عن بعد</option>
@@ -175,7 +223,10 @@ export default function HRAttendancePreparation() {
                 {schedules.map((item) => <option key={item.id} value={item.id}>{item.name}{item.hours ? ` — ${item.hours}` : ""}</option>)}
               </select>
             </Field>
-            <div className="sm:col-span-2 lg:col-span-3"><Field label="ملاحظات"><Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اختياري" /></Field></div>
+            <div className="sm:col-span-2"><Field label="ملاحظات"><Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اختياري" /></Field></div>
+            <div className="flex items-center rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-800 sm:col-span-2 lg:col-span-4">
+              سيتم إنشاء أو تحديث <strong className="mx-1">{totalRecords}</strong> سجل: {selected.size} موظف × {selectedDates.length} يوم
+            </div>
           </div>
         </section>
 
@@ -190,7 +241,7 @@ export default function HRAttendancePreparation() {
             <Filter value={workLocation} onChange={setWorkLocation} values={options("workLocation")} label="كل مواقع العمل" />
             <Button onClick={handlePrepare} disabled={saving || selected.size === 0 || !canPrepare} className="bg-[#0069a8] hover:bg-[#005486]">
               {saving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : selected.size > 1 ? <Users className="ml-2 h-4 w-4" /> : <CheckCheck className="ml-2 h-4 w-4" />}
-              {saving ? "جاري الحفظ..." : selected.size > 1 ? "تحضير جماعي" : "تحضير فردي"}
+              {saving ? `جاري حفظ ${savingRecordCount} سجل...` : selected.size > 1 ? `تحضير جماعي (${selectedDates.length} يوم)` : `تحضير فردي (${selectedDates.length} يوم)`}
             </Button>
           </div>
 

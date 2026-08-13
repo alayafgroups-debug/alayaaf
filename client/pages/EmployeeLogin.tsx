@@ -58,7 +58,7 @@ export default function EmployeeLogin() {
       const session: UserSession = {
         id: authData.user.id,
         email: authData.user.email ?? (resolvedEmail as string).toLowerCase(),
-        empId: (empData as any).account_title || empData.emp_id || empId,
+        empId: empData.emp_id || empId,
         name: empData.name,
         role: empData.employee_role ?? "موظف",
         permissions: (Array.isArray(empData.permissions) ? {} : empData.permissions ?? {}) as Record<string, boolean>,

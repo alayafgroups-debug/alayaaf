@@ -188,6 +188,37 @@ const formatRequestReason = (requestType: string, rawReason: unknown) => {
 const getLocalDate = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
+type AttendancePosition = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+};
+
+type AttendanceLocation = {
+  location_id: string;
+  location_name: string;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+};
+
+const distanceMeters = (
+  latitude1: number,
+  longitude1: number,
+  latitude2: number,
+  longitude2: number,
+) => {
+  const radians = (value: number) => (value * Math.PI) / 180;
+  const deltaLatitude = radians(latitude2 - latitude1);
+  const deltaLongitude = radians(longitude2 - longitude1);
+  const a =
+    Math.sin(deltaLatitude / 2) ** 2 +
+    Math.cos(radians(latitude1)) *
+      Math.cos(radians(latitude2)) *
+      Math.sin(deltaLongitude / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 const EMPLOYEE_MORE_OPTION_NAMES = new Set([
   "الملف الشخصي",
   "تقييم الأداء",
@@ -249,6 +280,12 @@ export default function EmployeePortal() {
   const [verifyStatus, setVerifyStatus] = useState<"idle" | "verifying" | "success">("idle");
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
   const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
+  const [attendanceLocation, setAttendanceLocation] = useState<AttendanceLocation | null>(null);
+  const [locationChecking, setLocationChecking] = useState(false);
+  const [locationAllowed, setLocationAllowed] = useState(false);
+  const [currentDistance, setCurrentDistance] = useState<number | null>(null);
+  const [locationMessage, setLocationMessage] = useState("جاري التحقق من موقع الحضور...");
+  const verifiedPositionRef = useRef<AttendancePosition | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -259,7 +296,74 @@ export default function EmployeePortal() {
     }
   };
 
+  const requestAttendanceLocation = async (showError = true) => {
+    if (!navigator.geolocation) {
+      setLocationAllowed(false);
+      setLocationMessage("هذا الجهاز لا يدعم تحديد الموقع الجغرافي");
+      if (showError) toast.error("هذا الجهاز لا يدعم تحديد الموقع الجغرافي");
+      return false;
+    }
+
+    setLocationChecking(true);
+    setLocationMessage("جاري تحديد موقعك الحالي...");
+    try {
+      const { data, error } = await supabase.rpc("get_employee_attendance_location");
+      const configured = (Array.isArray(data) ? data[0] : data) as AttendanceLocation | null;
+      if (error) throw error;
+      if (!configured) throw new Error("لم يتم إعداد موقع حضور صالح لك");
+      setAttendanceLocation(configured);
+
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+      });
+      const currentPosition = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+      };
+      const distance = distanceMeters(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        Number(configured.latitude),
+        Number(configured.longitude),
+      );
+      const allowed = distance <= Number(configured.radius_m) && currentPosition.accuracy <= 50;
+      verifiedPositionRef.current = allowed ? currentPosition : null;
+      setCurrentDistance(distance);
+      setLocationAllowed(allowed);
+      setLocationMessage(
+        allowed
+          ? `أنت داخل نطاق ${configured.location_name} — المسافة ${distance.toFixed(1)} متر`
+          : currentPosition.accuracy > 50
+            ? `دقة الموقع الحالية ${currentPosition.accuracy.toFixed(0)} متر وغير كافية`
+            : `أنت خارج نطاق الحضور — المسافة ${distance.toFixed(1)} متر`,
+      );
+      if (!allowed && showError) toast.error("زر الحضور يظهر فقط داخل نطاق موقع العمل المحدد");
+      return allowed;
+    } catch (locationError) {
+      verifiedPositionRef.current = null;
+      setLocationAllowed(false);
+      const isGeolocationError = typeof locationError === "object" && locationError !== null && "code" in locationError;
+      const message = isGeolocationError
+        ? "يرجى السماح بالوصول إلى الموقع وتفعيل الموقع الدقيق"
+        : locationError instanceof Error
+          ? locationError.message
+          : "تعذر التحقق من موقع الحضور";
+      setLocationMessage(message);
+      if (showError) toast.error(message);
+      return false;
+    } finally {
+      setLocationChecking(false);
+    }
+  };
+
   const openCamera = async (mode: "in" | "out") => {
+    const isInsideAttendanceLocation = await requestAttendanceLocation(true);
+    if (!isInsideAttendanceLocation) return;
     if (mode === "out" && !checkInTime) {
       toast.error("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف");
       return;
@@ -294,50 +398,31 @@ export default function EmployeePortal() {
     setVerifyStatus("idle");
   };
 
-  const saveAttendance = async (mode: "in" | "out", time: string, date: string) => {
-    if (!user) return false;
+  const saveAttendance = async (mode: "in" | "out") => {
+    const position = verifiedPositionRef.current;
+    if (!user || !position) {
+      toast.error("يجب التحقق من موقعك أولاً");
+      return null;
+    }
     try {
-      const { data: existing, error: lookupError } = await supabase
-        .from("attendance")
-        .select("id, check_in, check_out")
-        .eq("emp_id", user.empId)
-        .eq("date", date)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (lookupError) throw lookupError;
-
-      const rec = (existing ?? [])[0] as
-        | { id: string; check_in: string | null; check_out: string | null }
-        | undefined;
-
-      if (mode === "in") {
-        if (rec) {
-          const { error } = await supabase.from("attendance")
-            .update({ check_in: time, status: "حاضر", emp_name: user.name, department: employeeDepartment || null })
-            .eq("id", rec.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from("attendance").insert([{
-            emp_id: user.empId, emp_name: user.name,
-            department: employeeDepartment || null,
-            date, status: "حاضر", check_in: time,
-          }]);
-          if (error) throw error;
-        }
-      } else {
-        if (!rec?.check_in) {
-          toast.error("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف");
-          return false;
-        }
-        const { error } = await supabase.from("attendance")
-          .update({ check_out: time }).eq("id", rec.id);
-        if (error) throw error;
-      }
-      return true;
+      const { data, error } = await supabase.rpc("record_employee_attendance", {
+        p_mode: mode,
+        p_latitude: position.latitude,
+        p_longitude: position.longitude,
+        p_accuracy_m: position.accuracy,
+      });
+      if (error) throw error;
+      return data as {
+        attendanceId: string;
+        date: string;
+        time: string;
+        distanceMeters: number;
+        locationName: string;
+      };
     } catch (error: any) {
       console.error("Attendance save failed:", error);
       toast.error(error?.message || "تعذر حفظ الحضور في قاعدة البيانات");
-      return false;
+      return null;
     }
   };
 
@@ -345,11 +430,7 @@ export default function EmployeePortal() {
     setVerifyStatus("verifying");
     // Simulate face scan
     setTimeout(async () => {
-      const now = new Date();
-      const time = now.toLocaleTimeString("en-GB", { hour12: false });
-      const date = getLocalDate(now);
-
-      const saved = await saveAttendance(cameraMode, time, date);
+      const saved = await saveAttendance(cameraMode);
       if (!saved) {
         setVerifyStatus("idle");
         return;
@@ -357,9 +438,9 @@ export default function EmployeePortal() {
       if (user?.empId) await loadAttendanceOverview(user.empId);
 
       if (cameraMode === "in") {
-        setCheckInTime(`${time} ${date}`);
+        setCheckInTime(`${saved.time} ${saved.date}`);
       } else {
-        setCheckOutTime(`${time} ${date}`);
+        setCheckOutTime(`${saved.time} ${saved.date}`);
       }
 
       setVerifyStatus("success");
@@ -396,6 +477,10 @@ export default function EmployeePortal() {
       setLoading(false);
     }
   }, [navigate]);
+
+  useEffect(() => {
+    if (user?.id) void requestAttendanceLocation(false);
+  }, [user?.id]);
 
   // Intercept hardware/browser back button - prevent full exit on sub-pages
   useEffect(() => {
@@ -778,24 +863,41 @@ export default function EmployeePortal() {
                 </div>
 
                 {/* Action buttons */}
-                <div className="grid grid-cols-2 gap-2.5">
+                {locationAllowed ? (
+                  <>
+                    <div className="mb-2 flex items-center justify-center gap-1 rounded-xl bg-emerald-400/15 px-3 py-2 text-[11px] font-semibold text-emerald-200">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {locationMessage}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        onClick={() => openCamera("out")}
+                        disabled={!checkInTime}
+                        className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-all bg-white/10 text-white/70 border border-white/15 disabled:opacity-40"
+                      >
+                        <ScanFace className="h-4 w-4" />
+                        <span>تسجيل الانصراف</span>
+                      </button>
+                      <button
+                        onClick={() => openCamera("in")}
+                        disabled={!!checkInTime}
+                        className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-bold transition-all bg-gradient-to-l from-emerald-400 to-cyan-400 text-white shadow-lg shadow-emerald-500/25 disabled:opacity-50"
+                      >
+                        <ScanFace className="h-4 w-4" />
+                        <span>تسجيل الحضور</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
                   <button
-                    onClick={() => openCamera("out")}
-                    disabled={!checkInTime}
-                    className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-all bg-white/10 text-white/70 border border-white/15 disabled:opacity-40"
+                    onClick={() => requestAttendanceLocation(true)}
+                    disabled={locationChecking}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    <ScanFace className="h-4 w-4" />
-                    <span>تسجيل الانصراف</span>
+                    {locationChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                    <span>{locationChecking ? "جاري التحقق من الموقع..." : locationMessage}</span>
                   </button>
-                  <button
-                    onClick={() => openCamera("in")}
-                    disabled={!!checkInTime}
-                    className="relative overflow-hidden rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-bold transition-all bg-gradient-to-l from-emerald-400 to-cyan-400 text-white shadow-lg shadow-emerald-500/25 disabled:opacity-50"
-                  >
-                    <ScanFace className="h-4 w-4" />
-                    <span>تسجيل الحضور</span>
-                  </button>
-                </div>
+                )}
               </div>
 
               {/* Quick actions */}
@@ -1231,22 +1333,44 @@ export default function EmployeePortal() {
                       {checkOutTime || "لم يسجل بعد"}
                     </p>
                   </div>
-                  <div className="flex gap-3 items-end">
-                    <Button
-                      onClick={() => openCamera("out")}
-                      variant="outline"
-                      className="flex-1 gap-2"
-                    >
-                      <ScanFace className="h-4 w-4" />
-                      تسجيل الانصراف
-                    </Button>
-                    <Button
-                      onClick={() => openCamera("in")}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
-                    >
-                      <ScanFace className="h-4 w-4" />
-                      تسجيل الحضور
-                    </Button>
+                  <div className="flex items-end">
+                    {locationAllowed ? (
+                      <div className="w-full space-y-2">
+                        <div className="flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                          <MapPin className="h-3.5 w-3.5" />
+                          {locationMessage}
+                        </div>
+                        <div className="flex gap-3">
+                          <Button
+                            onClick={() => openCamera("out")}
+                            disabled={!checkInTime}
+                            variant="outline"
+                            className="flex-1 gap-2"
+                          >
+                            <ScanFace className="h-4 w-4" />
+                            تسجيل الانصراف
+                          </Button>
+                          <Button
+                            onClick={() => openCamera("in")}
+                            disabled={!!checkInTime}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                          >
+                            <ScanFace className="h-4 w-4" />
+                            تسجيل الحضور
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => requestAttendanceLocation(true)}
+                        disabled={locationChecking}
+                        variant="outline"
+                        className="w-full gap-2"
+                      >
+                        {locationChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                        {locationChecking ? "جاري التحقق من الموقع..." : locationMessage}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

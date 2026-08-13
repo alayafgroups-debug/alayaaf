@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { canManagePerm, readUserSession } from "@/lib/authSession";
-import { CheckCheck, Clock3, Loader2, Search, Users } from "lucide-react";
+import { CheckCheck, Clock3, Loader2, MapPin, Navigation, Search, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 type Employee = {
@@ -16,6 +16,17 @@ type Employee = {
   branch: string;
   workLocation: string;
   workSchedule: string;
+  attendanceLocationId: string;
+};
+
+type AttendanceLocation = {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  radius: number;
+  isDefault: boolean;
 };
 
 type Schedule = { id: string; name: string; hours: string };
@@ -44,8 +55,16 @@ export default function HRAttendancePreparation() {
     "hr.attendance",
     "module.hr"
   );
+  const canManageLocations = Boolean(
+    session && (
+      ["مدير النظام", "مدير عام", "المدير العام"].includes(session.role) ||
+      session.permissions["hr.attendance.location.manage"] === true ||
+      session.permissions["hr.attendance.location.manage"] === "manage"
+    ),
+  );
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [attendanceLocations, setAttendanceLocations] = useState<AttendanceLocation[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,19 +81,27 @@ export default function HRAttendancePreparation() {
   const [checkOut, setCheckOut] = useState("");
   const [notes, setNotes] = useState("");
   const [savingRecordCount, setSavingRecordCount] = useState(0);
+  const [showLocationManager, setShowLocationManager] = useState(false);
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [mainLocationName, setMainLocationName] = useState("مقر الشركة الرئيسي");
+  const [mainLocationAddress, setMainLocationAddress] = useState("");
+  const [mainLatitude, setMainLatitude] = useState("");
+  const [mainLongitude, setMainLongitude] = useState("");
+  const [assignedLocationId, setAssignedLocationId] = useState("");
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const [employeeResult, scheduleResult] = await Promise.all([
+      const [employeeResult, scheduleResult, locationResult] = await Promise.all([
         supabase
           .from("employees")
-          .select("id, emp_id, name, department, branch, work_location, work_schedule")
+          .select("id, emp_id, name, department, branch, work_location, work_schedule, attendance_location_id")
           .in("status", ["نشط", "فعال", "active"])
           .order("name"),
         supabase.from("attendance_schedules").select("id, name, hours").eq("status", "فعال").order("name"),
+        supabase.from("hr_work_locations").select("id, name, address, latitude, longitude, attendance_radius_m, is_company_default").eq("status", "فعال").order("name"),
       ]);
-      if (employeeResult.error || scheduleResult.error) {
+      if (employeeResult.error || scheduleResult.error || locationResult.error) {
         toast.error("تعذر تحميل بيانات الموظفين وجداول العمل");
       }
       setEmployees((employeeResult.data ?? []).map((row: any) => ({
@@ -85,14 +112,108 @@ export default function HRAttendancePreparation() {
         branch: String(row.branch ?? "غير محدد"),
         workLocation: String(row.work_location ?? "غير محدد"),
         workSchedule: String(row.work_schedule ?? "بدون جدول عمل"),
+        attendanceLocationId: String(row.attendance_location_id ?? ""),
       })));
       setSchedules((scheduleResult.data ?? []).map((row: any) => ({
         id: String(row.id), name: String(row.name), hours: String(row.hours ?? ""),
       })));
+      const mappedLocations = (locationResult.data ?? []).map((row: any) => ({
+        id: String(row.id),
+        name: String(row.name ?? ""),
+        address: String(row.address ?? ""),
+        latitude: row.latitude == null ? null : Number(row.latitude),
+        longitude: row.longitude == null ? null : Number(row.longitude),
+        radius: Number(row.attendance_radius_m ?? 10),
+        isDefault: Boolean(row.is_company_default),
+      }));
+      setAttendanceLocations(mappedLocations);
+      const mainLocation = mappedLocations.find((location) => location.isDefault);
+      if (mainLocation) {
+        setMainLocationName(mainLocation.name);
+        setMainLocationAddress(mainLocation.address);
+        setMainLatitude(mainLocation.latitude == null ? "" : String(mainLocation.latitude));
+        setMainLongitude(mainLocation.longitude == null ? "" : String(mainLocation.longitude));
+      }
       setLoading(false);
     };
     void load();
   }, []);
+
+  const captureCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("هذا الجهاز لا يدعم تحديد الموقع");
+      return;
+    }
+    setLocationSaving(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setMainLatitude(position.coords.latitude.toFixed(7));
+        setMainLongitude(position.coords.longitude.toFixed(7));
+        setLocationSaving(false);
+        toast.success("تم التقاط الموقع الحالي");
+      },
+      () => {
+        setLocationSaving(false);
+        toast.error("يرجى السماح بالوصول إلى الموقع");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
+
+  const saveMainAttendanceLocation = async () => {
+    const latitude = Number(mainLatitude);
+    const longitude = Number(mainLongitude);
+    if (!mainLocationName.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      toast.error("أدخل اسم الموقع وإحداثيات صحيحة");
+      return;
+    }
+    setLocationSaving(true);
+    try {
+      const { data, error } = await supabase.rpc("set_company_attendance_location", {
+        p_name: mainLocationName.trim(),
+        p_address: mainLocationAddress.trim(),
+        p_latitude: latitude,
+        p_longitude: longitude,
+      });
+      if (error) throw error;
+      const mainLocation: AttendanceLocation = {
+        id: String(data), name: mainLocationName.trim(), address: mainLocationAddress.trim(),
+        latitude, longitude, radius: 10, isDefault: true,
+      };
+      setAttendanceLocations((current) => [mainLocation, ...current.filter((location) => !location.isDefault && location.id !== mainLocation.id)]);
+      toast.success("تم حفظ موقع الشركة الرئيسي وتطبيقه افتراضياً على جميع الموظفين");
+    } catch (saveError) {
+      toast.error(saveError instanceof Error ? saveError.message : "تعذر حفظ موقع الشركة");
+    } finally {
+      setLocationSaving(false);
+    }
+  };
+
+  const assignAttendanceLocation = async () => {
+    const employeeIds = [...selected];
+    if (employeeIds.length === 0) {
+      toast.error("حدد موظفاً واحداً أو مجموعة موظفين أولاً");
+      return;
+    }
+    setLocationSaving(true);
+    try {
+      const { data, error } = await supabase.rpc("assign_employee_attendance_location", {
+        p_employee_ids: employeeIds,
+        p_location_id: assignedLocationId || null,
+      });
+      if (error) throw error;
+      setEmployees((current) => current.map((employee) => selected.has(employee.id)
+        ? { ...employee, attendanceLocationId: assignedLocationId }
+        : employee));
+      toast.success(assignedLocationId
+        ? `تم تعيين الموقع المخصص لـ ${Number(data ?? employeeIds.length)} موظف`
+        : `تمت إعادة ${Number(data ?? employeeIds.length)} موظف إلى موقع الشركة الرئيسي`);
+    } catch (assignError) {
+      toast.error(assignError instanceof Error ? assignError.message : "تعذر تعيين موقع الحضور");
+    } finally {
+      setLocationSaving(false);
+    }
+  };
 
   const options = (field: "branch" | "department" | "workLocation") =>
     [...new Set(employees.map((employee) => employee[field]))].sort();
@@ -196,10 +317,69 @@ export default function HRAttendancePreparation() {
             <h1 className="text-2xl font-bold text-slate-900">التحضير الفردي والجماعي</h1>
             <p className="mt-1 text-sm text-slate-500">تسجيل حضور موظف واحد أو مجموعة موظفين وربطه مباشرة بتقارير الحضور</p>
           </div>
-          <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800">
-            المحددون: {selected.size}
+          <div className="flex items-center gap-2">
+            {canManageLocations && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowLocationManager((current) => !current)}
+                className="gap-2 border-violet-200 text-violet-700 hover:bg-violet-50"
+              >
+                <MapPin className="h-4 w-4" />
+                موقع الحضور
+              </Button>
+            )}
+            <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800">
+              المحددون: {selected.size}
+            </div>
           </div>
         </div>
+
+        {showLocationManager && canManageLocations && (
+          <section className="rounded-xl border border-violet-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b bg-violet-50 px-5 py-3">
+              <div>
+                <h2 className="font-bold text-violet-900">إدارة موقع الحضور</h2>
+                <p className="text-xs text-violet-700">النطاق الثابت لتسجيل حضور الموظف هو 10 أمتار.</p>
+              </div>
+              <button onClick={() => setShowLocationManager(false)} className="rounded-lg p-2 text-violet-700 hover:bg-violet-100"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="grid gap-5 p-5 lg:grid-cols-2">
+              <div className="space-y-3 rounded-lg border p-4">
+                <h3 className="font-semibold text-slate-900">موقع الشركة الرئيسي</h3>
+                <Input value={mainLocationName} onChange={(event) => setMainLocationName(event.target.value)} placeholder="اسم الموقع" />
+                <Input value={mainLocationAddress} onChange={(event) => setMainLocationAddress(event.target.value)} placeholder="عنوان الشركة" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="number" step="any" value={mainLatitude} onChange={(event) => setMainLatitude(event.target.value)} placeholder="خط العرض" />
+                  <Input type="number" step="any" value={mainLongitude} onChange={(event) => setMainLongitude(event.target.value)} placeholder="خط الطول" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={captureCurrentLocation} disabled={locationSaving} className="gap-2">
+                    <Navigation className="h-4 w-4" /> استخدام موقعي الحالي
+                  </Button>
+                  <Button type="button" onClick={saveMainAttendanceLocation} disabled={locationSaving} className="gap-2 bg-violet-600 hover:bg-violet-700">
+                    {locationSaving && <Loader2 className="h-4 w-4 animate-spin" />} حفظ الموقع الرئيسي
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-3 rounded-lg border p-4">
+                <h3 className="font-semibold text-slate-900">تعيين موقع لموظفين محددين</h3>
+                <p className="text-sm text-slate-500">حدد الموظفين من الجدول، ثم اختر موقع الحضور الخاص بهم.</p>
+                <select value={assignedLocationId} onChange={(event) => setAssignedLocationId(event.target.value)} className="h-10 w-full rounded-md border bg-white px-3 text-sm">
+                  <option value="">موقع الشركة الرئيسي (الافتراضي)</option>
+                  {attendanceLocations.filter((location) => !location.isDefault && location.latitude != null && location.longitude != null).map((location) => (
+                    <option key={location.id} value={location.id}>{location.name} — نطاق {location.radius} م</option>
+                  ))}
+                </select>
+                <Button type="button" onClick={assignAttendanceLocation} disabled={locationSaving || selected.size === 0} className="gap-2 bg-violet-600 hover:bg-violet-700">
+                  {locationSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  تطبيق الموقع على {selected.size} موظف
+                </Button>
+                <p className="text-xs text-slate-500">يمكن إضافة المواقع الأخرى وإحداثياتها من صفحة مواقع العمل.</p>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="rounded-xl border bg-white shadow-sm">
           <div className="border-b bg-slate-50 px-5 py-3 font-bold text-slate-800">بيانات التحضير</div>

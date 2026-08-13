@@ -78,6 +78,79 @@ const allocateAmounts = (total: number, items: PatternItem[]) => {
   });
 };
 
+const buildMessageCopy = ({
+  style,
+  employeeName,
+  amountText,
+  reason,
+  description,
+  reportMonth,
+}: {
+  style: number;
+  employeeName: string;
+  amountText: string;
+  reason: string;
+  description: string;
+  reportMonth: string;
+}) => {
+  const notices = [
+    {
+      subject: `تفاصيل التسوية الشهرية — ${reason}`,
+      body: `الأستاذ/ة ${employeeName}،\n\nتحية طيبة،\nبعد مراجعة بيانات شهر ${reportMonth}، نود إحاطتكم بإدراج تسوية مالية بقيمة ${amountText} ريال تحت بند «${reason}».\n\nالتوضيح: ${description}\n\nأُرسل هذا الإشعار لتوضيح تفاصيل الاستحقاق وإتاحتها لكم بصورة واضحة.\n\nمع التحية،\nإدارة الموارد البشرية`,
+    },
+    {
+      subject: `إحاطة مالية لشهر ${reportMonth} — مبلغ ${amountText} ريال`,
+      body: `مرحباً ${employeeName}،\n\nنشارككم تفاصيل أحد بنود التسوية المسجلة ضمن تقرير هذا الشهر:\n• البند: ${reason}\n• القيمة: ${amountText} ريال\n• البيان: ${description}\n\nيمكنكم الرجوع إلى تقرير الموظف للاطلاع على الملخص المالي الكامل.\n\nإدارة الموارد البشرية`,
+    },
+    {
+      subject: `بيان خصم مسجل: ${reason}`,
+      body: `السلام عليكم ${employeeName}،\n\nنفيدكم بأنه تم توثيق مبلغ قدره ${amountText} ريال ضمن تسويات شهر ${reportMonth}.\nيرتبط المبلغ بسبب «${reason}»، وتفصيله: ${description}\n\nحرصنا على إرسال هذا البيان لتكون المعلومات المالية موضحة قبل إقفال التقرير الشهري.\n\nوتقبلوا تحيات إدارة الموارد البشرية.`,
+    },
+    {
+      subject: `توضيح بند مالي ضمن تقرير ${reportMonth}`,
+      body: `الأستاذ/ة ${employeeName}،\n\nضمن أعمال المراجعة الشهرية، أضيف البند التالي إلى تقريركم:\n\n${reason}\nالقيمة المعتمدة: ${amountText} ريال\n${description}\n\nهذا الإشعار جزء من تفصيل التقرير المالي، ويمكن مراجعة بقية البنود من صندوق البريد أو تقرير الموظف.\n\nمع خالص التقدير،\nفريق الموارد البشرية`,
+    },
+    {
+      subject: `إشعار بتفاصيل استحقاق مالي — ${reason}`,
+      body: `مرحباً ${employeeName}،\n\nنود إعلامكم بتسجيل تسوية مقدارها ${amountText} ريال لشهر ${reportMonth}، وذلك ضمن بند «${reason}».\n\nسبب التسجيل: ${description}\n\nتم إرسال هذه الرسالة لضمان وضوح جميع مكونات الراتب والتسويات المرتبطة به.\n\nإدارة الموارد البشرية`,
+    },
+    {
+      subject: `ملخص بند التسوية: ${reason} — ${amountText} ريال`,
+      body: `تحية طيبة ${employeeName}،\n\nيوضح هذا البريد أحد بنود تقريركم المالي لشهر ${reportMonth}:\n\nالبند: ${reason}\nالمبلغ: ${amountText} ريال\nالتفاصيل: ${description}\n\nنرجو الاطلاع على البيان، وستجدون القيمة نفسها مدرجة في تقرير الموظف الشهري.\n\nمع التحية والتقدير،\nإدارة الموارد البشرية`,
+    },
+  ];
+  const replies = [
+    {
+      subject: `تم الاطلاع — ${reason}`,
+      body: `السلام عليكم،\n\nاطلعت على بيان التسوية المتعلق ببند «${reason}» وقيمته ${amountText} ريال، وأؤكد استلام تفاصيله ضمن تقرير شهر ${reportMonth}.\n\n${employeeName}`,
+    },
+    {
+      subject: `تأكيد استلام البيان المالي لشهر ${reportMonth}`,
+      body: `تحية طيبة،\n\nتم استلام الإشعار ومراجعة المعلومات الموضحة فيه، بما في ذلك بند «${reason}» بمبلغ ${amountText} ريال.\n\nشكراً لتوضيح التفاصيل.\n${employeeName}`,
+    },
+    {
+      subject: `استلام تفاصيل بند: ${reason}`,
+      body: `السلام عليكم،\n\nأؤكد وصول الرسالة الخاصة بالتسوية الشهرية، وقد اطلعت على سبب البند وقيمته البالغة ${amountText} ريال.\n\nمع الشكر،\n${employeeName}`,
+    },
+    {
+      subject: `اطلعت على إشعار التسوية — ${reportMonth}`,
+      body: `إلى إدارة الموارد البشرية،\n\nتم الاطلاع على تفاصيل «${reason}» كما وردت في الإشعار، وعلى المبلغ المسجل وقدره ${amountText} ريال.\n\n${employeeName}`,
+    },
+    {
+      subject: `تأكيد وصول التوضيح المالي`,
+      body: `مرحباً،\n\nوصلني التوضيح المالي الخاص بشهر ${reportMonth}، وتمت مراجعة بند «${reason}» والمبلغ المرتبط به (${amountText} ريال).\n\nتحياتي،\n${employeeName}`,
+    },
+    {
+      subject: `رد على بيان ${reason}`,
+      body: `السلام عليكم ورحمة الله،\n\nأشكركم على إرسال البيان. أؤكد أنني اطلعت على تفاصيل البند وقيمته ${amountText} ريال ضمن تقرير الشهر.\n\n${employeeName}`,
+    },
+  ];
+  return {
+    notice: notices[style % notices.length],
+    reply: replies[(style + 2) % replies.length],
+  };
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return respond({ error: "Method not allowed" }, 405);
@@ -339,14 +412,32 @@ Deno.serve(async (req: Request) => {
       })),
     ];
 
+    const notificationSummaries = [
+      "أُرسل البيان المالي",
+      "تمت مشاركة تفاصيل التسوية",
+      "أُرسل توضيح البند المالي",
+      "تم إشعار الموظف بتفاصيل الاستحقاق",
+      "أُرسل ملخص التسوية الشهرية",
+      "تمت إحاطة الموظف بالبند المسجل",
+    ];
+    const acknowledgementSummaries = [
+      "تم الاطلاع على البيان",
+      "تم تأكيد وصول التفاصيل",
+      "تم تسجيل استلام الإشعار",
+      "اطلع الموظف على التوضيح المالي",
+      "تمت مراجعة البند وتأكيد وصوله",
+      "تم استلام ملخص التسوية",
+    ];
     const assignmentItemPayload = rawItems.map((item, index) => {
       const day = Math.min(preferredDays[index] ?? lastDay - 1, Math.max(1, lastDay - 1));
       const noticeDate = `${reportMonth}-${String(day).padStart(2, "0")}`;
+      const replyDate = `${reportMonth}-${String(Math.min(day + 1, lastDay)).padStart(2, "0")}`;
+      const style = (Number.parseInt(seed.slice(index * 2, index * 2 + 2), 16) + index) % 6;
       return {
         assignment_id: assignment.id,
         ...item,
-        notification_text: `أُرسل إشعار الخصم من ${primaryEmail} إلى ${generatedEmail} بتاريخ ${noticeDate}`,
-        acknowledgement_text: `تم تسجيل رد الاستلام بتاريخ ${reportMonth}-${String(Math.min(day + 1, lastDay)).padStart(2, "0")}`,
+        notification_text: `${notificationSummaries[style]} من ${primaryEmail} إلى ${generatedEmail} بتاريخ ${noticeDate}`,
+        acknowledgement_text: `${acknowledgementSummaries[(style + 2) % 6]} بتاريخ ${replyDate}`,
       };
     });
     const { data: savedItems, error: itemsError } = await adminClient
@@ -364,14 +455,23 @@ Deno.serve(async (req: Request) => {
       const noticeId = crypto.randomUUID();
       const replyId = crypto.randomUUID();
       const amountText = Number(item.amount).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const style = (Number.parseInt(seed.slice(index * 2, index * 2 + 2), 16) + index) % 6;
+      const copy = buildMessageCopy({
+        style,
+        employeeName: employee.name,
+        amountText,
+        reason: item.reason_name_snapshot,
+        description: item.reason_description_snapshot,
+        reportMonth,
+      });
       messages.push({
         id: noticeId,
         emp_id: empId,
         emp_name: employee.name,
         from_email: primaryEmail,
         to_email: generatedEmail,
-        subject: `إشعار خصم بمبلغ ${amountText} ريال — ${item.reason_name_snapshot}`,
-        body: `مرحباً ${employee.name}،\n\nتم تسجيل خصم بمبلغ ${amountText} ريال.\nالسبب: ${item.reason_name_snapshot}.\n${item.reason_description_snapshot}`,
+        subject: copy.notice.subject,
+        body: copy.notice.body,
         message_kind: "deduction_notice",
         deduction_reason_id: item.reason_code,
         deduction_amount: item.amount,
@@ -387,8 +487,8 @@ Deno.serve(async (req: Request) => {
         emp_name: employee.name,
         from_email: generatedEmail,
         to_email: primaryEmail,
-        subject: `رد استلام: ${item.reason_name_snapshot}`,
-        body: `السلام عليكم،\n\nتم استلام إشعار الخصم الخاص بسبب: ${item.reason_name_snapshot}.\n\n${employee.name}`,
+        subject: copy.reply.subject,
+        body: copy.reply.body,
         message_kind: "employee_reply",
         deduction_reason_id: item.reason_code,
         deduction_amount: item.amount,

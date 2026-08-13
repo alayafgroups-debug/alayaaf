@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3, Bell, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft,
   CircleDot, Clock3, FileBarChart, Filter, FolderKanban, Headphones, LayoutDashboard,
-  ListChecks, MessageSquare, Plus, RefreshCw, Search, Settings, Star, Ticket,
+  ListChecks, Menu, MessageSquare, Plus, RefreshCw, Search, Settings, Star, Ticket,
   Trash2, UserCheck, Users, X,
 } from "lucide-react";
 import Layout from "@/components/Layout";
@@ -56,6 +56,7 @@ const statusTone: Record<string, string> = {
 export default function TasksProjects() {
   const session = readUserSession();
   const [view, setView] = useState<View>("dashboard");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [modal, setModal] = useState<ModalName>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -241,6 +242,13 @@ export default function TasksProjects() {
   return (
     <Layout>
       <div className="mx-auto flex min-h-[760px] max-w-[1650px] gap-5" dir="rtl">
+        {mobileNavOpen && <div className="fixed inset-0 z-[90] bg-slate-950/50 xl:hidden" onClick={() => setMobileNavOpen(false)} />}
+        <aside className={`fixed inset-y-4 right-4 z-[95] w-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl transition-transform xl:hidden ${mobileNavOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>
+          <div className="mb-3 flex items-center justify-between"><p className="font-black text-slate-900">أقسام إدارة العمل</p><button onClick={() => setMobileNavOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+          <div className="mb-4 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 p-4 text-white"><BriefcaseBusiness className="mb-2 h-7 w-7" /><p className="font-bold">مركز العمل</p><p className="text-xs text-white/70">المهام والمشاريع والدعم والإعدادات</p></div>
+          {navGroups.map((group) => <div key={group.label} className="mb-4"><p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">{group.label}</p>{group.items.map((item) => { const Icon = item.icon; return <button key={item.id} onClick={() => { setView(item.id); setMobileNavOpen(false); }} className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === item.id ? "bg-slate-900 font-bold text-white shadow" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{item.label}</button>; })}</div>)}
+        </aside>
+
         <aside className="hidden w-64 shrink-0 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-sm xl:block">
           <div className="mb-4 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 p-4 text-white"><BriefcaseBusiness className="mb-2 h-7 w-7" /><p className="font-bold">مركز العمل</p><p className="text-xs text-white/70">المهام والمشاريع والدعم</p></div>
           {navGroups.map((group) => <div key={group.label} className="mb-4"><p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">{group.label}</p>{group.items.map((item) => { const Icon = item.icon; return <button key={item.id} onClick={() => setView(item.id as View)} className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === item.id ? "bg-slate-900 font-bold text-white shadow" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{item.label}</button>; })}</div>)}
@@ -248,7 +256,7 @@ export default function TasksProjects() {
 
         <main className="min-w-0 flex-1 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div><p className="text-xs font-bold text-cyan-600">وحدة التشغيل والمتابعة</p><h1 className="mt-1 text-2xl font-black text-slate-900">{navGroups.flatMap((group) => group.items).find((item) => item.id === view)?.label}</h1></div>
+            <div className="flex items-center gap-3"><button onClick={() => setMobileNavOpen(true)} className="flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2.5 text-sm font-bold text-white xl:hidden" title="عرض جميع الأقسام"><Menu className="h-5 w-5" /><span>الأقسام</span></button><div><p className="text-xs font-bold text-cyan-600">وحدة التشغيل والمتابعة</p><h1 className="mt-1 text-2xl font-black text-slate-900">{navGroups.flatMap((group) => group.items).find((item) => item.id === view)?.label}</h1></div></div>
             <div className="flex flex-wrap gap-2"><button onClick={load} className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 hover:bg-slate-50"><RefreshCw className="h-4 w-4" /></button>{["projects", "dashboard"].includes(view) && <PrimaryButton onClick={() => setModal("project")} label="مشروع جديد" />}{["tasks", "daily", "dashboard"].includes(view) && <PrimaryButton onClick={() => setModal("task")} label="مهمة جديدة" />}{view === "tickets" && <PrimaryButton onClick={() => setModal("ticket")} label="تذكرة جديدة" />}{view === "clients" && <PrimaryButton onClick={() => setModal("client")} label="عميل جديد" />}</div>
           </div>
 

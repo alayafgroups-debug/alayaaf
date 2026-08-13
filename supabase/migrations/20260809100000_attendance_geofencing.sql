@@ -177,8 +177,8 @@ begin
     p_latitude, p_longitude, v_location.latitude, v_location.longitude
   );
   v_allowed := v_distance is not null
-    and p_accuracy_m <= v_location.radius_m
-    and (v_distance + p_accuracy_m) <= v_location.radius_m;
+    and v_distance <= v_location.radius_m
+    and p_accuracy_m <= 100;
 
   return jsonb_build_object(
     'allowed', v_allowed,
@@ -236,8 +236,8 @@ begin
     p_latitude, p_longitude, v_location.latitude, v_location.longitude
   );
   if v_distance is null
-    or p_accuracy_m > v_location.radius_m
-    or (v_distance + p_accuracy_m) > v_location.radius_m then
+    or v_distance > v_location.radius_m
+    or p_accuracy_m > 100 then
     raise exception 'أنت خارج نطاق موقع الحضور المسموح أو دقة GPS غير كافية. المسافة % متر والدقة % متر',
       round(v_distance::numeric, 1), round(p_accuracy_m::numeric, 1);
   end if;

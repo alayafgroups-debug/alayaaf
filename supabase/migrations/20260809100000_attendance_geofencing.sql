@@ -66,7 +66,7 @@ alter table public.attendance
 
 create table if not exists public.attendance_location_assignment_audit (
   id uuid primary key default gen_random_uuid(),
-  employee_id uuid not null references public.employees(id) on delete cascade,
+  employee_id text not null references public.employees(id) on delete cascade,
   previous_location_id uuid references public.hr_work_locations(id) on delete set null,
   new_location_id uuid references public.hr_work_locations(id) on delete set null,
   assigned_by uuid not null references auth.users(id),
@@ -422,7 +422,7 @@ end;
 $$;
 
 create or replace function public.assign_employee_attendance_location(
-  p_employee_ids uuid[],
+  p_employee_ids text[],
   p_location_id uuid
 ) returns integer
 language plpgsql
@@ -478,9 +478,9 @@ revoke execute on function public.get_employee_attendance_location() from public
 revoke execute on function public.record_employee_attendance(text, double precision, double precision, double precision) from public, anon;
 revoke execute on function public.check_employee_attendance_location(double precision, double precision, double precision) from public, anon;
 revoke execute on function public.set_company_attendance_location(text, text, double precision, double precision) from public, anon;
-revoke execute on function public.assign_employee_attendance_location(uuid[], uuid) from public, anon;
+revoke execute on function public.assign_employee_attendance_location(text[], uuid) from public, anon;
 
 grant execute on function public.check_employee_attendance_location(double precision, double precision, double precision) to authenticated;
 grant execute on function public.record_employee_attendance(text, double precision, double precision, double precision) to authenticated;
 grant execute on function public.set_company_attendance_location(text, text, double precision, double precision) to authenticated;
-grant execute on function public.assign_employee_attendance_location(uuid[], uuid) to authenticated;
+grant execute on function public.assign_employee_attendance_location(text[], uuid) to authenticated;

@@ -119,6 +119,14 @@
     scroll-behavior: smooth;
   }
 
+  html[dir="ltr"] {
+    direction: ltr;
+  }
+
+  html[dir="rtl"] {
+    direction: rtl;
+  }
+
   * {
     @apply border-border;
   }
@@ -127,6 +135,10 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Tajawal', 'Inter', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  html[dir="ltr"] body {
+    font-family: 'Inter', 'Tajawal', sans-serif;
   }
 
   h1 {

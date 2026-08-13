@@ -111,12 +111,14 @@ import ZATCASettings from "./pages/ZATCASettings";
 import NotFound from "./pages/NotFound";
 import TasksProjects from "./pages/TasksProjects";
 import RequireAuth from "./components/RequireAuth";
+import { I18nProvider } from "./i18n";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+    <I18nProvider>
+      <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -265,7 +267,8 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </TooltipProvider>
+      </TooltipProvider>
+    </I18nProvider>
   </QueryClientProvider>
 );
 

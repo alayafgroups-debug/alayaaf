@@ -2,9 +2,10 @@ import Layout from "@/components/Layout";
 import { useState } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 
 export default function Settings() {
-  const [language, setLanguage] = useState("ar");
+  const { locale, setLocale } = useI18n();
 
   return (
     <Layout subMenu={null}>
@@ -188,9 +189,9 @@ export default function Settings() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => setLanguage("ar")}
+                    onClick={() => void setLocale("ar")}
                     className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                      language === "ar"
+                      locale === "ar"
                         ? "bg-primary text-primary-foreground"
                         : "border border-border bg-card text-foreground"
                     }`}
@@ -199,9 +200,9 @@ export default function Settings() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLanguage("en")}
+                    onClick={() => void setLocale("en")}
                     className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                      language === "en"
+                      locale === "en"
                         ? "bg-primary text-primary-foreground"
                         : "border border-border bg-card text-foreground"
                     }`}

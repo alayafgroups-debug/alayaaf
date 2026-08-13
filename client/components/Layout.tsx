@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { readUserSession, checkPerm, canManagePerm, permissionForMainPath, permissionForMainSubPath, permissionForHRPath } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import ReadOnlyBoundary from "@/components/permissions/ReadOnlyBoundary";
+import { useI18n } from "@/i18n";
 import QuickActionsBar from "@/components/QuickActionsBar";
 
 interface LayoutProps {
@@ -285,6 +286,7 @@ function HRSidebar({
   const navRef = useRef<HTMLElement>(null);
   const userSession = readUserSession();
   const { permissions: livePerms } = useRolePermissions();
+  const { t } = useI18n();
   const allowedHRItems = useMemo(() => {
     return hrNavItems
       .filter((item) => {
@@ -428,7 +430,7 @@ function HRSidebar({
             return (
               <div key={`header-${index}`} className="px-3 pt-4 pb-1">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300/30">
-                  {item.label}
+                  {t(item.label)}
                 </span>
               </div>
             );
@@ -470,7 +472,7 @@ function HRSidebar({
                     "flex items-center gap-3 min-w-0",
                     isToolsIcon ? "flex-none" : "flex-1"
                   )}
-                  title={item.label}
+                  title={t(item.label)}
                 >
                   <div
                     className={cn(
@@ -484,7 +486,7 @@ function HRSidebar({
                   </div>
                   {sidebarOpen && !isToolsIcon && (
                     <span className={cn("flex-1 text-right truncate", isItemActive && "font-semibold")}>
-                      {item.label}
+                      {t(item.label)}
                     </span>
                   )}
                 </button>
@@ -616,6 +618,7 @@ function MainSidebar({
   const navRef = useRef<HTMLElement>(null);
   const userSession = readUserSession();
   const { permissions: livePerms } = useRolePermissions();
+  const { t } = useI18n();
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -772,7 +775,7 @@ function MainSidebar({
                     "flex-1 text-right transition-colors duration-200",
                     isItemActive ? "text-white font-semibold" : ""
                   )}>
-                    {item.label}
+                    {t(item.label)}
                   </span>
                   {item.hasSubmenu && (
                     <ChevronDown
@@ -801,7 +804,7 @@ function MainSidebar({
                 <button
                   onClick={() => navigate("/hr/dashboard")}
                   className={baseClass}
-                  title={item.label}
+                  title={t(item.label)}
                 >
                   {btnContent}
                 </button>
@@ -811,12 +814,12 @@ function MainSidebar({
                     setExpandedMenu(expandedMenu === item.href ? null : item.href)
                   }
                   className={baseClass}
-                  title={item.label}
+                  title={t(item.label)}
                 >
                   {btnContent}
                 </button>
               ) : (
-                <Link to={item.href} className={baseClass} title={item.label}>
+                <Link to={item.href} className={baseClass} title={t(item.label)}>
                   {btnContent}
                 </Link>
               )}
@@ -832,7 +835,7 @@ function MainSidebar({
                       return (
                         <div key={index} className="px-3 pt-3 pb-1">
                           <span className={cn("text-[10px] font-bold uppercase tracking-widest opacity-40", colors.text)}>
-                            {subItem.label}
+                            {t(subItem.label)}
                           </span>
                         </div>
                       );
@@ -857,7 +860,7 @@ function MainSidebar({
                               : cn(colors.dot, "opacity-40")
                           )}
                         />
-                        <span>{subItem.label}</span>
+                        <span>{t(subItem.label)}</span>
                         {isSubActive && (
                           <span className={cn("mr-auto h-1 w-5 rounded-full bg-gradient-to-l opacity-60", colors.icon)} />
                         )}
@@ -921,6 +924,7 @@ function MainSidebar({
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { permissions: livePerms } = useRolePermissions();
+  const { t, direction, formatDate } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedHRMenus, setExpandedHRMenus] = useState<Set<string>>(() => {
     const parent = getActiveHRParent(location.pathname);
@@ -938,7 +942,7 @@ export default function Layout({ children }: LayoutProps) {
   const readOnly = checkPerm(livePerms, ...currentPermissionKeys) && !canManagePerm(livePerms, ...currentPermissionKeys);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background" dir={direction}>
       {/* ── Sidebar — switches between main and HR ── */}
       {isHRSection ? (
         <HRSidebar
@@ -962,17 +966,17 @@ export default function Layout({ children }: LayoutProps) {
         <header className="sticky top-0 z-40 h-[68px] flex items-center justify-between px-8 bg-white/80 backdrop-blur-xl border-b border-border/40 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <div className="flex items-center gap-4">
             <h1 className="text-[16px] font-extrabold text-foreground">
-              شركة لاكجري العياف
+              {t("شركة لاكجري العياف")}
             </h1>
             <span className="hidden sm:inline-block h-5 w-px bg-border/60" />
             <span className="hidden sm:inline-block text-[11px] text-muted-foreground font-bold">
-              {isHRSection ? "نظام الموارد البشرية" : "نظام إدارة الأعمال المتكامل"}
+              {isHRSection ? t("نظام الموارد البشرية") : t("نظام إدارة الأعمال المتكامل")}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/30 px-3.5 py-2 text-[11px] text-muted-foreground hover:bg-muted/60 transition-colors">
               <Search className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">بحث...</span>
+              <span className="hidden md:inline">{t("بحث...")}</span>
             </button>
             <button className="relative rounded-xl p-2.5 text-muted-foreground hover:bg-muted/50 transition-colors">
               <Bell className="h-[18px] w-[18px]" />
@@ -980,7 +984,7 @@ export default function Layout({ children }: LayoutProps) {
             </button>
             <div className="hidden lg:flex items-center gap-2 rounded-xl bg-muted/30 px-3.5 py-2">
               <span className="text-[11px] font-medium text-muted-foreground">
-                {new Date().toLocaleDateString("ar-SA", {
+                {formatDate(new Date(), {
                   weekday: "long",
                   year: "numeric",
                   month: "long",

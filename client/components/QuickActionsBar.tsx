@@ -7,6 +7,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { readUserSession } from "@/lib/authSession";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 
 type Panel = "contact" | "management" | "calculator" | "notifications" | "language" | "account" | null;
 type ContactSettings = { phone: string; email: string; whatsapp: string };
@@ -25,6 +26,7 @@ const actions = [
 
 export default function QuickActionsBar() {
   const navigate = useNavigate();
+  const { t, locale, direction, setLocale } = useI18n();
   const session = readUserSession();
   const [panel, setPanel] = useState<Panel>(null);
   const [contacts, setContacts] = useState<ContactSettings>({ phone: "", email: "", whatsapp: "" });
@@ -124,17 +126,7 @@ export default function QuickActionsBar() {
   };
 
   const changeLanguage = async (lang: "ar" | "en") => {
-    document.documentElement.lang = lang;
-    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
-    localStorage.setItem("app_language", lang);
-    if (session?.empId) {
-      const { data } = await supabase.from("user_preferences").select("preferences").eq("emp_id", session.empId).maybeSingle();
-      await supabase.from("user_preferences").upsert({
-        emp_id: session.empId,
-        preferences: { ...((data?.preferences as object) ?? {}), lang },
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "emp_id" });
-    }
+    await setLocale(lang);
     setPanel(null);
     toast.success(lang === "ar" ? "تم اختيار اللغة العربية" : "Language preference saved");
   };
@@ -151,7 +143,7 @@ export default function QuickActionsBar() {
     : secondNumber === 0 ? null : firstNumber / secondNumber;
 
   return (
-    <div className="relative z-30 border-b border-slate-200 bg-white px-3 py-2 shadow-sm" dir="rtl">
+    <div className="relative z-30 border-b border-slate-200 bg-white px-3 py-2 shadow-sm" dir={direction}>
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
         {actions.map(({ id, label, icon: Icon, color }) => (
           <button key={id} onClick={() => handleAction(id)} className="group relative flex min-w-[76px] flex-col items-center gap-1 rounded-xl px-2 py-1.5 hover:bg-slate-50">
@@ -159,7 +151,7 @@ export default function QuickActionsBar() {
               <Icon className="h-4 w-4" />
               {id === "notifications" && noticeCount > 0 && <span className="absolute -left-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{noticeCount}</span>}
             </span>
-            <span className="whitespace-nowrap text-[10px] font-semibold text-slate-600">{label}</span>
+            <span className="whitespace-nowrap text-[10px] font-semibold text-slate-600">{t(label)}</span>
           </button>
         ))}
         <div className="mr-auto h-10 w-px shrink-0 bg-slate-200" />
@@ -172,7 +164,7 @@ export default function QuickActionsBar() {
 
       {panel && (
         <div className="absolute left-3 top-full mt-2 w-[min(390px,calc(100vw-24px))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-          <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-800">{actions.find((action) => action.id === panel)?.label || "الحساب"}</h3><button onClick={() => setPanel(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
+          <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-800">{t(actions.find((action) => action.id === panel)?.label || "الحساب")}</h3><button onClick={() => setPanel(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
 
           {panel === "contact" && <div className="space-y-2 text-sm">
             {contacts.phone ? <a href={`tel:${contacts.phone}`} className="flex items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><Phone className="h-4 w-4 text-blue-600" /><span>{contacts.phone}</span></a> : <p className="rounded-xl bg-amber-50 p-3 text-amber-800">لم يتم إعداد رقم الاتصال بعد.</p>}
@@ -187,7 +179,7 @@ export default function QuickActionsBar() {
 
           {panel === "notifications" && <div className="max-h-80 space-y-2 overflow-y-auto">{notices.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">لا توجد إشعارات</p> : notices.map((notice) => <button key={notice.id} onClick={() => { setPanel(null); navigate("/hr/requests/incoming"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 text-right hover:bg-slate-50"><CheckCircle className={`h-4 w-4 ${["معلق", "معلقة", "pending"].includes(notice.status) ? "text-amber-500" : "text-emerald-500"}`} /><span className="flex-1"><span className="block text-sm font-medium">{notice.title}</span><span className="text-[10px] text-slate-400">{notice.date ? new Date(notice.date).toLocaleString("ar-SA") : ""}</span></span><span className="text-xs text-slate-500">{notice.status}</span></button>)}</div>}
 
-          {panel === "language" && <div className="grid grid-cols-2 gap-3"><button onClick={() => changeLanguage("ar")} className="rounded-xl border border-blue-200 bg-blue-50 p-4 font-bold text-blue-800">العربية</button><button onClick={() => changeLanguage("en")} className="rounded-xl border p-4 font-bold text-slate-700">English</button></div>}
+          {panel === "language" && <div className="grid grid-cols-2 gap-3"><button onClick={() => changeLanguage("ar")} className={`rounded-xl border p-4 font-bold ${locale === "ar" ? "border-blue-200 bg-blue-50 text-blue-800" : "text-slate-700"}`}>{t("العربية")}</button><button onClick={() => changeLanguage("en")} className={`rounded-xl border p-4 font-bold ${locale === "en" ? "border-blue-200 bg-blue-50 text-blue-800" : "text-slate-700"}`}>{t("English")}</button></div>}
 
           {panel === "account" && <div className="space-y-2 text-sm">
             <button onClick={() => { setPanel(null); navigate("/employee/dashboard?view=profile"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><User className="h-4 w-4 text-blue-600" /> الملف الشخصي</button>

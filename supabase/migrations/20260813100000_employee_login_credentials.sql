@@ -66,6 +66,7 @@ drop policy if exists employee_emails_select on public.employee_emails;
 drop policy if exists employee_emails_insert on public.employee_emails;
 drop policy if exists employee_emails_update on public.employee_emails;
 drop policy if exists employee_emails_delete on public.employee_emails;
+drop policy if exists employee_email_owner_select on public.employee_emails;
 
 create policy employee_email_owner_select
 on public.employee_emails

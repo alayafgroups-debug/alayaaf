@@ -73,6 +73,7 @@ type EmployeeReport = {
   payroll: Payroll[];
   deductionItems: DeductionItem[];
   generatedEmail: string;
+  additionalDeductionTotal: number;
   finalNet: number;
   isExample: boolean;
 };
@@ -383,6 +384,7 @@ export default function HREmployeeFullReport() {
               payroll: employeePayroll,
               deductionItems: [],
               generatedEmail: "",
+              additionalDeductionTotal: 0,
               finalNet: payrollTotals.gross - payrollTotals.deductions,
               isExample: false,
             };
@@ -413,7 +415,7 @@ export default function HREmployeeFullReport() {
             0,
           );
           const expectedTotal = Number(
-            aiResult.generatedDeductionTotal ?? generatedTotal,
+            aiResult.displayedDeductionTotal ?? generatedTotal,
           );
           if (
             Math.abs(generatedTotal - expectedTotal) > 0.01 ||
@@ -430,6 +432,7 @@ export default function HREmployeeFullReport() {
             payroll: employeePayroll,
             deductionItems: aiResult.deductionItems as DeductionItem[],
             generatedEmail: String(aiResult.generatedEmail ?? ""),
+            additionalDeductionTotal: Number(aiResult.additionalDeductionTotal ?? 0),
             finalNet: Number(aiResult.finalNet),
             isExample: false,
           };
@@ -475,11 +478,7 @@ export default function HREmployeeFullReport() {
         );
         const gross =
           payroll.basic + payroll.allowances + payroll.overtime + payroll.bonus;
-        const agentDeductions = report.deductionItems.reduce(
-          (sum, item) => sum + item.amount,
-          0,
-        );
-        const totalDeductions = payroll.deductions + agentDeductions;
+        const totalDeductions = Math.max(0, gross - report.finalNet);
         const notes = report.deductionItems.length
           ? `تم إرسال إشعارات الخصم إلى ${report.generatedEmail} واستلام ردود القبول خلال شهر التقرير.`
           : report.payroll
@@ -774,6 +773,7 @@ export default function HREmployeeFullReport() {
                 }),
                 { gross: 0, deductions: 0, net: 0 },
               );
+              const totalDeductions = Math.max(0, payroll.gross - report.finalNet);
               const monthlyAttendance = getMonthlyAttendance(
                 month,
                 report.attendance,
@@ -838,7 +838,7 @@ export default function HREmployeeFullReport() {
                     <div className="rounded-xl bg-amber-50 p-3">
                       <span className="text-xs text-amber-700">الخصومات</span>
                       <strong className="mt-1 block text-lg text-amber-800">
-                        {money(payroll.deductions)}
+                        {money(totalDeductions)}
                       </strong>
                     </div>
                     <div className="rounded-xl bg-slate-900 p-3 text-white">
@@ -847,7 +847,7 @@ export default function HREmployeeFullReport() {
                       </span>
                       <strong className="mt-1 block text-lg">
                         {money(
-                          payroll.net || payroll.gross - payroll.deductions,
+                          report.finalNet,
                         )}
                       </strong>
                     </div>
@@ -875,7 +875,7 @@ export default function HREmployeeFullReport() {
                           <tbody>
                             {report.deductionItems.map((item) => (
                               <tr
-                                key={item.title}
+                                key={`${item.reason}-${item.amount}`}
                                 className="border-t border-slate-100"
                               >
                                 <td className="p-2 font-bold text-slate-800">
@@ -904,13 +904,13 @@ export default function HREmployeeFullReport() {
                                 إجمالي الخصومات
                               </td>
                               <td className="p-2 font-bold text-rose-700">
-                                4,000.00 ر.س
+                                {money(totalDeductions)} ر.س
                               </td>
                               <td
                                 className="p-2 font-bold text-slate-700"
                                 colSpan={2}
                               >
-                                الراتب 5,000.00 ر.س — صافي المستحق 1,000.00 ر.س
+                                الراتب {money(payroll.gross)} ر.س — صافي المستحق {money(report.finalNet)} ر.س
                               </td>
                             </tr>
                           </tfoot>

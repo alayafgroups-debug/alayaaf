@@ -10,6 +10,23 @@ interface DeductionReason {
   created_at: string;
 }
 
+interface DeductionPatternItem {
+  id: string;
+  reason_name: string;
+  reason_description: string;
+  allocation_weight: number;
+  sort_order: number;
+}
+
+interface DeductionPattern {
+  id: string;
+  code: string;
+  name_ar: string;
+  description: string;
+  target_net: number;
+  items: DeductionPatternItem[];
+}
+
 interface GeneratedEmail {
   id: string;
   emp_id: string;
@@ -42,11 +59,12 @@ interface MailMessage {
 export default function DeductionSettingsPage() {
   const [activeTab, setActiveTab] = useState<"reasons" | "generate">("reasons");
   const [deductions, setDeductions] = useState<DeductionReason[]>([]);
+  const [patterns, setPatterns] = useState<DeductionPattern[]>([]);
   const [generatedEmails, setGeneratedEmails] = useState<GeneratedEmail[]>([]);
   const [newDeduction, setNewDeduction] = useState({ name: "", description: "" });
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [saudiEmployees, setSaudiEmployees] = useState<SaudiEmployee[]>([]);
-  const [primaryEmail, setPrimaryEmail] = useState("hr.alayaf.com");
+  const [primaryEmail, setPrimaryEmail] = useState("hr@alayaf.com");
   const [primaryConfigId, setPrimaryConfigId] = useState<string | null>(null);
   const [mailMessages, setMailMessages] = useState<MailMessage[]>([]);
   const [showAdminMailbox, setShowAdminMailbox] = useState(false);
@@ -56,6 +74,7 @@ export default function DeductionSettingsPage() {
   // تحميل أسباب الخصومات
   useEffect(() => {
     loadDeductions();
+    loadPatterns();
     loadSaudiEmployees();
     loadPrimaryEmail();
     loadGeneratedEmails();
@@ -80,6 +99,38 @@ export default function DeductionSettingsPage() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const loadPatterns = async () => {
+    const [patternsResult, itemsResult] = await Promise.all([
+      supabase
+        .from("deduction_patterns")
+        .select("id, code, name_ar, description, target_net")
+        .eq("status", "فعال")
+        .order("priority"),
+      supabase
+        .from("deduction_pattern_items")
+        .select("id, pattern_id, reason_name, reason_description, allocation_weight, sort_order")
+        .order("sort_order"),
+    ]);
+    if (patternsResult.error || itemsResult.error) return;
+
+    setPatterns((patternsResult.data ?? []).map((pattern: any) => ({
+      id: String(pattern.id),
+      code: String(pattern.code),
+      name_ar: String(pattern.name_ar),
+      description: String(pattern.description || ""),
+      target_net: Number(pattern.target_net || 1000),
+      items: (itemsResult.data ?? [])
+        .filter((item: any) => item.pattern_id === pattern.id)
+        .map((item: any) => ({
+          id: String(item.id),
+          reason_name: String(item.reason_name),
+          reason_description: String(item.reason_description || ""),
+          allocation_weight: Number(item.allocation_weight),
+          sort_order: Number(item.sort_order),
+        })),
+    })));
   };
 
   const loadSaudiEmployees = async () => {
@@ -107,7 +158,7 @@ export default function DeductionSettingsPage() {
 
     if (!error && data) {
       setPrimaryConfigId(String(data.id));
-      setPrimaryEmail(String(data.value || "hr.alayaf.com"));
+      setPrimaryEmail(String(data.value || "hr@alayaf.com"));
     }
   };
 
@@ -219,7 +270,7 @@ export default function DeductionSettingsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8 flex items-center gap-3">
           <Settings className="h-8 w-8 text-blue-400" />
           إعدادات الخصومات والإيميلات
@@ -281,7 +332,7 @@ export default function DeductionSettingsPage() {
               dir="ltr"
               value={primaryEmail}
               onChange={(event) => setPrimaryEmail(event.target.value)}
-              placeholder="hr.alayaf.com"
+              placeholder="hr@alayaf.com"
               className="flex-1 px-4 py-2.5 bg-gray-700 rounded-lg text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
@@ -305,7 +356,7 @@ export default function DeductionSettingsPage() {
                 : "text-gray-400 hover:text-white"
             }`}
           >
-            أسباب الخصومات
+            أنماط وأسباب الخصومات
           </button>
           <button
             onClick={() => setActiveTab("generate")}
@@ -323,10 +374,59 @@ export default function DeductionSettingsPage() {
         <div className="bg-gray-800 rounded-xl p-6 text-white">
           {/* أسباب الخصومات */}
           {activeTab === "reasons" && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold mb-4">أسباب الخصومات</h2>
-              
-              <div className="space-y-3">
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold">أنماط الخصومات المحفوظة</h2>
+                <p className="mt-1 text-sm text-gray-400">
+                  يختار النظام نمطاً ثابتاً لكل موظف وشهر، ويعيد النتيجة نفسها عند تكرار التقرير في الشهر ذاته.
+                </p>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                {patterns.map((pattern) => (
+                  <div key={pattern.id} className="overflow-hidden rounded-xl border border-gray-600 bg-gray-700/70">
+                    <div className="border-b border-gray-600 bg-gray-700 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold text-white">{pattern.name_ar}</h3>
+                          <p className="mt-1 text-xs leading-5 text-gray-300">{pattern.description}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                          {pattern.items.length} أسباب
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs font-semibold text-blue-300">
+                        النتيجة المستهدفة: صافي {pattern.target_net.toLocaleString("ar-SA")} ريال
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-600">
+                      {pattern.items.map((item) => (
+                        <div key={item.id} className="flex gap-3 p-3">
+                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-bold">
+                            {item.sort_order}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-white">{item.reason_name}</p>
+                              <span className="shrink-0 text-xs font-bold text-amber-300">{item.allocation_weight}%</span>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-gray-400">{item.reason_description}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {patterns.length === 0 && (
+                  <div className="col-span-full rounded-xl border border-dashed border-gray-600 p-6 text-center text-sm text-gray-400">
+                    ستظهر الأنماط المحفوظة هنا بعد تطبيق ملف الترحيل الجديد.
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-700 pt-6">
+                <h3 className="mb-3 font-bold">أسباب إضافية</h3>
+                <div className="space-y-3">
                 <input
                   type="text"
                   placeholder="اسم السبب"
@@ -348,6 +448,7 @@ export default function DeductionSettingsPage() {
                   <Plus className="h-5 w-5" />
                   إضافة سبب
                 </button>
+                </div>
               </div>
 
               <div className="space-y-2 mt-6">

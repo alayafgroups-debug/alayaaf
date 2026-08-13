@@ -77,11 +77,12 @@ grant select (id, employee_id, auth_user_id, emp_id, emp_name, generated_email, 
 on public.employee_emails to authenticated;
 
 insert into public.hr_config_items (config_type, name_ar, value, status)
-select 'primary_email_domain', 'الإيميل الرئيسي', 'alayaf.com', 'فعال'
+select 'primary_email_domain', 'الإيميل الرئيسي', 'hr@alayaf.com', 'فعال'
 where not exists (
   select 1 from public.hr_config_items where config_type = 'primary_email_domain'
 );
 
 update public.hr_config_items
-set value = 'alayaf.com'
-where config_type = 'primary_email_domain';
+set value = 'hr@alayaf.com'
+where config_type = 'primary_email_domain'
+  and value in ('alayaf.com', 'hr.alayaf.com');

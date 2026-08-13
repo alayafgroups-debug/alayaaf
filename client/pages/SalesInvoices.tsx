@@ -1798,7 +1798,7 @@ function InvoiceForm({
         buyerVat: data.buyer_vat ?? buyerVat,
         zatcaStatus: zatca.status ?? data.zatca_status ?? "pending",
         qrCodeData: zatca.qrCodeData ?? data.qr_code_data ?? "",
-        accountingStatus: accountingPosted ? "posted" : "unposted",
+        accountingStatus: accountingPosted ? "posted" : "failed",
         accountingJournalEntryId: String(accounting.data ?? data.accounting_journal_entry_id ?? ""),
         total: data.total ?? payload.total,
         paid: data.paid ?? payload.paid,

@@ -13,6 +13,11 @@ type DebitNoteItem = {
   unitPrice: number;
 };
 
+type ExpenseAccount = {
+  code: string;
+  nameAr: string;
+};
+
 type DebitNote = {
   id: string;
   noteNumber: string;
@@ -45,7 +50,7 @@ const START_NUMBER = 100;
 const emptyItem = (): DebitNoteItem => ({
   id: crypto.randomUUID(),
   description: "",
-  account: "",
+  account: "511",
   quantity: 1,
   unitPrice: 0,
 });
@@ -68,12 +73,14 @@ export default function PurchaseDebitNotes() {
   const [mode, setMode] = useState<"list" | "create">("list");
   const [rows, setRows] = useState<DebitNote[]>([]);
   const [invoices, setInvoices] = useState<PurchaseInvoiceOption[]>([]);
+  const [expenseAccounts, setExpenseAccounts] = useState<ExpenseAccount[]>([]);
+  const [defaultExpenseAccount, setDefaultExpenseAccount] = useState("511");
   const [nextNumber, setNextNumber] = useState(START_NUMBER);
   const [form, setForm] = useState<DebitNoteForm>(() => createEmptyForm(START_NUMBER));
 
   useEffect(() => {
     const load = async () => {
-      const [notesResult, invoicesResult] = await Promise.all([
+      const [notesResult, invoicesResult, accountsResult, ruleResult] = await Promise.all([
         supabase
           .from("invoice_adjustment_notes")
           .select("id, note_number, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items")
@@ -83,6 +90,16 @@ export default function PurchaseDebitNotes() {
           .from("purchase_invoices")
           .select("id, vendor, po_number, total, adjusted_total")
           .order("date", { ascending: false }),
+        supabase
+          .from("accounting_accounts")
+          .select("code, name_ar, parent_code")
+          .like("code", "5%")
+          .order("code"),
+        supabase
+          .from("accounting_posting_rules")
+          .select("purchase_account_code")
+          .eq("rule_code", "sales_default")
+          .maybeSingle(),
       ]);
 
       if (!notesResult.error) {
@@ -108,6 +125,20 @@ export default function PurchaseDebitNotes() {
           adjustedTotal: Number(row.adjusted_total ?? String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
         })));
       }
+      if (!accountsResult.error) {
+        const accountRows = accountsResult.data ?? [];
+        setExpenseAccounts(accountRows
+          .filter((account: any) => !accountRows.some((child: any) => child.parent_code === account.code))
+          .map((account: any) => ({ code: String(account.code), nameAr: String(account.name_ar) })));
+      }
+      if (!ruleResult.error && ruleResult.data?.purchase_account_code) {
+        const configuredAccount = String(ruleResult.data.purchase_account_code);
+        setDefaultExpenseAccount(configuredAccount);
+        setForm((current) => ({
+          ...current,
+          items: current.items.map((item) => ({ ...item, account: configuredAccount })),
+        }));
+      }
     };
     load();
   }, []);
@@ -126,7 +157,10 @@ export default function PurchaseDebitNotes() {
     }));
   };
 
-  const addItem = () => setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
+  const addItem = () => setForm((prev) => ({
+    ...prev,
+    items: [...prev.items, { ...emptyItem(), account: defaultExpenseAccount }],
+  }));
 
   const removeItem = (id: string) =>
     setForm((prev) => ({
@@ -135,7 +169,9 @@ export default function PurchaseDebitNotes() {
     }));
 
   const createNew = () => {
-    setForm(createEmptyForm(nextNumber));
+    const nextForm = createEmptyForm(nextNumber);
+    nextForm.items = nextForm.items.map((item) => ({ ...item, account: defaultExpenseAccount }));
+    setForm(nextForm);
     setMode("create");
   };
 
@@ -150,6 +186,10 @@ export default function PurchaseDebitNotes() {
     }
     if (total <= 0) {
       toast({ title: "مبلغ الإشعار غير صحيح", description: "أضف بنداً بقيمة أكبر من صفر" });
+      return;
+    }
+    if (form.items.some((item) => !item.account)) {
+      toast({ title: "الحساب المحاسبي مطلوب", description: "اختر حساب المصروف لكل بند من شجرة الحسابات" });
       return;
     }
 
@@ -183,7 +223,9 @@ export default function PurchaseDebitNotes() {
 
     const sequence = extractNumber(form.noteNumber) + 1;
     setNextNumber(sequence);
-    setForm(createEmptyForm(sequence));
+    const nextForm = createEmptyForm(sequence);
+    nextForm.items = nextForm.items.map((item) => ({ ...item, account: defaultExpenseAccount }));
+    setForm(nextForm);
     setMode("list");
     toast({ title: "تم ترحيل إشعار مدين", description: `تم ربط ${payload.noteNumber} بالفاتورة ${payload.originalInvoiceId} وتسجيل القيد المحاسبي` });
   };
@@ -372,12 +414,17 @@ export default function PurchaseDebitNotes() {
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <input
+                            <select
                               value={item.account}
                               onChange={(e) => updateItem(item.id, "account", e.target.value)}
-                              placeholder="مطلوب"
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
-                            />
+                            >
+                              {(expenseAccounts.length ? expenseAccounts : [{ code: "511", nameAr: "المشتريات والمصروفات" }]).map((account) => (
+                                <option key={account.code} value={account.code}>
+                                  {account.code} — {account.nameAr}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-3 py-2">
                             <input

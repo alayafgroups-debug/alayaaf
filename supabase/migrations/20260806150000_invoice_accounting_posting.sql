@@ -24,8 +24,11 @@ insert into public.accounting_accounts (
   account_type, level, is_system
 ) values
   ('112', 'شركة العياف التجارية', 'الذمم', 'Receivables', '11', 'التشغيليات', 'التشغيليات', 2, true),
+  ('2111', 'شركة العياف التجارية', 'ضريبة القيمة المضافة على المشتريات', 'Input VAT', '21', 'التشغيليات', 'التشغيليات', 2, true),
+  ('2112', 'شركة العياف التجارية', 'ذمم الموردين المستحقة', 'Accounts Payable', '21', 'التشغيليات', 'التشغيليات', 2, true),
   ('219', 'شركة العياف التجارية', 'ضريبة المبيعات المستحقة', 'Accrued Sales Tax', '21', 'التشغيليات', 'التشغيليات', 2, true),
-  ('411', 'شركة العياف التجارية', 'إيرادات المبيعات والخدمات', 'Sales and Services Revenue', '41', 'التشغيليات', 'التشغيليات', 2, true)
+  ('411', 'شركة العياف التجارية', 'إيرادات المبيعات والخدمات', 'Sales and Services Revenue', '41', 'التشغيليات', 'التشغيليات', 2, true),
+  ('511', 'شركة العياف التجارية', 'المشتريات والمصروفات', 'Purchases and Expenses', '51', 'التشغيليات', 'التشغيليات', 2, true)
 on conflict (code) do nothing;
 
 create table if not exists public.invoice_adjustment_notes (
@@ -100,13 +103,22 @@ create table if not exists public.accounting_posting_rules (
   receivable_account_code text not null,
   revenue_account_code text not null,
   output_vat_account_code text not null,
+  payable_account_code text not null default '2112',
+  purchase_account_code text not null default '511',
+  input_vat_account_code text not null default '2111',
   active boolean not null default true,
   updated_at timestamptz not null default now()
 );
 
+alter table public.accounting_posting_rules
+  add column if not exists payable_account_code text not null default '2112',
+  add column if not exists purchase_account_code text not null default '511',
+  add column if not exists input_vat_account_code text not null default '2111';
+
 insert into public.accounting_posting_rules (
-  rule_code, receivable_account_code, revenue_account_code, output_vat_account_code
-) values ('sales_default', '112', '411', '219')
+  rule_code, receivable_account_code, revenue_account_code, output_vat_account_code,
+  payable_account_code, purchase_account_code, input_vat_account_code
+) values ('sales_default', '112', '411', '219', '2112', '511', '2111')
 on conflict (rule_code) do nothing;
 
 alter table public.sales_invoices
@@ -114,6 +126,11 @@ alter table public.sales_invoices
   add column if not exists accounting_journal_entry_id uuid references public.accounting_journal_entries(id) on delete restrict,
   add column if not exists accounting_posted_at timestamptz,
   add column if not exists accounting_error text,
+  add column if not exists invoice_type text not null default 'standard',
+  add column if not exists buyer_vat text,
+  add column if not exists items jsonb not null default '[]'::jsonb,
+  add column if not exists subtotal numeric(14,2) not null default 0,
+  add column if not exists total_tax numeric(14,2) not null default 0,
   add column if not exists adjustment_total numeric(14,2) not null default 0,
   add column if not exists adjusted_total numeric(14,2),
   add column if not exists adjusted_remaining numeric(14,2);
@@ -302,7 +319,14 @@ security invoker
 set search_path = public
 as $$
 begin
-  perform public.post_sales_invoice_accounting(new.id::text);
+  begin
+    perform public.post_sales_invoice_accounting(new.id::text);
+  exception when others then
+    update public.sales_invoices
+    set accounting_status = 'failed',
+        accounting_error = sqlerrm
+    where id::text = new.id::text;
+  end;
   return new;
 end;
 $$;
@@ -368,6 +392,8 @@ declare
   v_note_id uuid;
   v_entry_id uuid;
   v_existing_note_id uuid;
+  v_existing_note_type text;
+  v_existing_invoice_id text;
   v_invoice_table text;
   v_base_total numeric;
   v_paid numeric;
@@ -383,6 +409,9 @@ declare
   v_items_total numeric(14,2) := 0;
   v_account_code text;
   v_original_journal_id uuid;
+  v_payable_code text;
+  v_default_purchase_code text;
+  v_input_vat_code text;
 begin
   if p_note_type not in ('sales_credit', 'sales_debit', 'purchase_debit') then
     raise exception 'نوع الإشعار غير مدعوم';
@@ -391,10 +420,14 @@ begin
     raise exception 'إجماليات الإشعار غير صحيحة';
   end if;
 
-  select id into v_existing_note_id
+  select id, note_type, original_invoice_id
+  into v_existing_note_id, v_existing_note_type, v_existing_invoice_id
   from public.invoice_adjustment_notes
   where note_number = p_note_number;
   if v_existing_note_id is not null then
+    if v_existing_note_type <> p_note_type or v_existing_invoice_id <> p_original_invoice_id then
+      raise exception 'رقم الإشعار مستخدم لمستند آخر';
+    end if;
     return v_existing_note_id;
   end if;
 
@@ -427,15 +460,25 @@ begin
   v_after := v_before + v_signed_amount;
   if v_after < 0 then raise exception 'قيمة الإشعار تتجاوز قيمة الفاتورة الأصلية'; end if;
 
-  select receivable_account_code, revenue_account_code, output_vat_account_code
-  into v_receivable_code, v_default_revenue_code, v_vat_code
+  select
+    receivable_account_code, revenue_account_code, output_vat_account_code,
+    payable_account_code, purchase_account_code, input_vat_account_code
+  into
+    v_receivable_code, v_default_revenue_code, v_vat_code,
+    v_payable_code, v_default_purchase_code, v_input_vat_code
   from public.accounting_posting_rules
   where rule_code = 'sales_default' and active = true;
 
-  if not found then raise exception 'قاعدة ترحيل المبيعات غير مفعلة'; end if;
-  perform public.account_name_for_posting(v_receivable_code);
-  perform public.account_name_for_posting(v_default_revenue_code);
-  perform public.account_name_for_posting(v_vat_code);
+  if not found then raise exception 'قاعدة الترحيل المحاسبي غير مفعلة'; end if;
+  if p_note_type in ('sales_credit', 'sales_debit') then
+    perform public.account_name_for_posting(v_receivable_code);
+    perform public.account_name_for_posting(v_default_revenue_code);
+    perform public.account_name_for_posting(v_vat_code);
+  else
+    perform public.account_name_for_posting(v_payable_code);
+    perform public.account_name_for_posting(v_default_purchase_code);
+    perform public.account_name_for_posting(v_input_vat_code);
+  end if;
 
   insert into public.invoice_adjustment_notes (
     note_number, note_type, original_invoice_table, original_invoice_id, counterparty,
@@ -504,6 +547,14 @@ begin
           v_entry_id, v_account_code, public.account_name_for_posting(v_account_code),
           0, v_line_amount, p_counterparty
         );
+      else
+        v_account_code := coalesce(nullif(v_item->>'account', ''), v_default_purchase_code);
+        insert into public.accounting_journal_lines (
+          journal_entry_id, account_code, account_name, debit, credit, counterparty
+        ) values (
+          v_entry_id, v_account_code, public.account_name_for_posting(v_account_code),
+          0, v_line_amount, p_counterparty
+        );
       end if;
       v_items_total := v_items_total + v_line_amount;
     end if;
@@ -546,7 +597,35 @@ begin
       p_counterparty
     );
   else
-    raise exception 'ترحيل إشعارات المشتريات يحتاج قاعدة ترحيل مشتريات مستقلة';
+    if v_items_total = 0 and p_subtotal > 0 then
+      insert into public.accounting_journal_lines (
+        journal_entry_id, account_code, account_name, debit, credit, counterparty
+      ) values (
+        v_entry_id, v_default_purchase_code, public.account_name_for_posting(v_default_purchase_code),
+        0, p_subtotal, p_counterparty
+      );
+      v_items_total := p_subtotal;
+    end if;
+
+    if abs(v_items_total - p_subtotal) > 0.02 then
+      raise exception 'مجموع حسابات بنود إشعار المشتريات لا يطابق المجموع الفرعي';
+    end if;
+
+    if p_tax > 0 then
+      insert into public.accounting_journal_lines (
+        journal_entry_id, account_code, account_name, debit, credit, counterparty
+      ) values (
+        v_entry_id, v_input_vat_code, public.account_name_for_posting(v_input_vat_code),
+        0, p_tax, p_counterparty
+      );
+    end if;
+
+    insert into public.accounting_journal_lines (
+      journal_entry_id, account_code, account_name, debit, credit, counterparty
+    ) values (
+      v_entry_id, v_payable_code, public.account_name_for_posting(v_payable_code),
+      p_total, 0, p_counterparty
+    );
   end if;
 
   if abs((

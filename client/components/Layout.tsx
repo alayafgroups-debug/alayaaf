@@ -697,8 +697,8 @@ function MainSidebar({
       <div className="pointer-events-none absolute bottom-20 -left-16 h-36 w-36 rounded-full bg-cyan-500/[0.05] blur-[60px]" />
 
       {/* ── Logo area ── */}
-      <div className="relative z-10 px-4 pt-5 pb-4">
-        <div className="flex items-center justify-between">
+      <div className={cn("relative z-10 pt-5 pb-4", sidebarOpen ? "px-4" : "px-2")}>
+        <div className={cn("flex items-center", sidebarOpen ? "justify-between" : "flex-col gap-2")}>
           <Link to="/" className="flex items-center gap-3 group">
             <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-600 text-white font-extrabold text-sm shadow-xl shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-all duration-300 group-hover:scale-105">
               <Crown className="h-5 w-5" />
@@ -717,9 +717,15 @@ function MainSidebar({
           </Link>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-xl p-2 text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-all duration-200"
+            className={cn(
+              "rounded-xl p-2 transition-all duration-200",
+              sidebarOpen
+                ? "text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
+                : "bg-white/10 text-white hover:bg-white/20"
+            )}
+            title={sidebarOpen ? "تصغير القائمة" : "توسيع القائمة"}
           >
-            {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
@@ -923,6 +929,11 @@ export default function Layout({ children }: LayoutProps) {
   const [expandedMainMenu, setExpandedMainMenu] = useState<string | null>(null);
 
   const isHRSection = location.pathname.startsWith("/hr");
+
+  useEffect(() => {
+    setSidebarOpen(true);
+  }, [location.pathname]);
+
   const currentPermissionKeys = isHRSection ? permissionForHRPath(location.pathname) : permissionForMainSubPath(location.pathname);
   const readOnly = checkPerm(livePerms, ...currentPermissionKeys) && !canManagePerm(livePerms, ...currentPermissionKeys);
 

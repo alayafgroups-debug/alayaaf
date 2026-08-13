@@ -559,7 +559,7 @@ export default function HREmployeeFullReport() {
             <div class="deduction"><span>إجمالي الخصومات</span><strong>− ${money(totalDeductions)} ر.س</strong></div>
           </div>
           <div class="section-title"><h3>تفصيل الخصومات وأسبابها</h3></div>
-          <table class="deductions-table"><thead><tr><th>نوع الخصم</th><th>المبلغ</th><th>السبب</th><th>الإبلاغ والتأكيد</th></tr></thead><tbody>${deductionRows}</tbody></table>
+          <table class="deductions-table"><thead><tr><th>المسؤول</th><th>المبلغ</th><th>السبب</th><th>الإبلاغ والتأكيد</th></tr></thead><tbody>${deductionRows}</tbody></table>
           <div class="reason"><span>تأكيد الإبلاغ المسبق</span><p>${escapeHtml(notes)}</p></div>
           <div class="net"><span>المتبقي والمستلم بعد الخصومات</span><strong>${money(report.finalNet)} ر.س</strong></div>
           <div class="signatures"><div>مسؤول الموارد البشرية</div><div>المدير المالي</div><div>توقيع الموظف</div></div>
@@ -866,7 +866,7 @@ export default function HREmployeeFullReport() {
                         <table className="w-full min-w-[760px] text-right text-xs">
                           <thead>
                             <tr className="bg-slate-50 text-slate-600">
-                              <th className="p-2">نوع الخصم</th>
+                              <th className="p-2">المسؤول</th>
                               <th className="p-2">المبلغ</th>
                               <th className="p-2">السبب</th>
                               <th className="p-2">الإبلاغ والتأكيد</th>

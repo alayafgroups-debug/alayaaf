@@ -185,7 +185,7 @@ Deno.serve(async (req: Request) => {
 
     const formatSavedAssignment = (saved: { assignment: any; items: AssignmentItem[] }) => ({
       deductionItems: saved.items.map((item) => ({
-        title: item.reason_code === "social-insurance" ? "التأمينات الاجتماعية" : "خصم وفق النمط المعتمد",
+        title: "hr@alayaf.com",
         amount: Number(item.amount),
         reason: item.reason_name_snapshot,
         notification: item.notification_text,

@@ -5,6 +5,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import ZatcaQrCode from "@/components/ZatcaQrCode";
+import { useI18n } from "@/i18n";
 
 const zatcaStatusLabels: Record<string, string> = {
   pending: "بانتظار الإرسال",
@@ -111,6 +112,7 @@ const createEmptyForm = (sequence: number): CreditNoteForm => ({
 });
 
 export default function SalesCreditNote() {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const [savedNotes, setSavedNotes] = useState<SavedCreditNote[]>([]);
   const [invoices, setInvoices] = useState<OriginalInvoice[]>([]);
   const [revenueAccounts, setRevenueAccounts] = useState<AccountingAccount[]>([]);
@@ -239,19 +241,19 @@ export default function SalesCreditNote() {
 
   const handleSave = async () => {
     if (!form.originalInvoiceId) {
-      toast({ title: "الفاتورة الأصلية مطلوبة", description: "كل إشعار يجب أن يكون مرتبطاً بفاتورة مبيعات" });
+      toast({ title: t("الفاتورة الأصلية مطلوبة"), description: t("كل إشعار يجب أن يكون مرتبطاً بفاتورة مبيعات") });
       return;
     }
     if (!form.customer.trim()) {
-      toast({ title: "العميل مطلوب", description: "اختر الفاتورة الأصلية أولاً" });
+      toast({ title: t("العميل مطلوب"), description: t("اختر الفاتورة الأصلية أولاً") });
       return;
     }
     if (total <= 0) {
-      toast({ title: "مبلغ الإشعار غير صحيح", description: "أضف بنداً بقيمة أكبر من صفر" });
+      toast({ title: t("مبلغ الإشعار غير صحيح"), description: t("أضف بنداً بقيمة أكبر من صفر") });
       return;
     }
     if (form.items.some((item) => !item.account)) {
-      toast({ title: "الحساب المحاسبي مطلوب", description: "اختر حساب الإيراد لكل بند من شجرة الحسابات" });
+      toast({ title: t("الحساب المحاسبي مطلوب"), description: t("اختر حساب الإيراد لكل بند من شجرة الحسابات") });
       return;
     }
 
@@ -273,7 +275,7 @@ export default function SalesCreditNote() {
     });
 
     if (error) {
-      toast({ title: "تعذر ترحيل الإشعار", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر ترحيل الإشعار"), description: error.message, variant: "destructive" });
       return;
     }
 
@@ -295,12 +297,12 @@ export default function SalesCreditNote() {
             .catch(() => null)
         : null;
       toast({
-        title: "تعذر إرسال الإشعار إلى ZATCA",
+        title: t("تعذر إرسال الإشعار إلى ZATCA"),
         description: String(
           payload?.error ??
             zatca.data?.error ??
             zatca.error?.message ??
-            "حدث خطأ غير متوقع",
+            t("حدث خطأ غير متوقع"),
         ),
         variant: "destructive",
       });
@@ -333,19 +335,19 @@ export default function SalesCreditNote() {
     setForm(nextForm);
     setMode("list");
     toast({
-      title: form.noteType === "sales_credit" ? "تم ترحيل الإشعار الدائن" : "تم ترحيل الإشعار المدين",
-      description: `تم ربط ${payload.noteNumber} بالفاتورة ${payload.originalInvoiceId} وتسجيل القيد المحاسبي`,
+      title: form.noteType === "sales_credit" ? t("تم ترحيل الإشعار الدائن") : t("تم ترحيل الإشعار المدين"),
+      description: `${t("تم ربط")} ${payload.noteNumber} ${t("بالفاتورة")} ${payload.originalInvoiceId} ${t("وتسجيل القيد المحاسبي")}`,
     });
   };
 
   return (
-    <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
-      <div className="mx-auto max-w-7xl space-y-6">
+    <Layout subMenu={{ title: t("المبيعات"), items: salesFeatures }}>
+      <div dir={direction} className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">إشعارات تعديل المبيعات</h1>
+            <h1 className="text-3xl font-bold text-foreground">{t("إشعارات تعديل المبيعات")}</h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list" ? "إشعارات دائنة ومدينة مرتبطة بالفواتير" : "إنشاء إشعار مرتبط بفاتورة مبيعات"}
+              {mode === "list" ? t("إشعارات دائنة ومدينة مرتبطة بالفواتير") : t("إنشاء إشعار مرتبط بفاتورة مبيعات")}
             </p>
           </div>
 
@@ -356,7 +358,7 @@ export default function SalesCreditNote() {
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
               >
                 <Plus className="h-4 w-4" />
-                إنشاء إشعار جديد
+                {t("إنشاء إشعار جديد")}
               </button>
             ) : (
               <>
@@ -364,15 +366,15 @@ export default function SalesCreditNote() {
                   onClick={() => setMode("list")}
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
                 >
-                  <ArrowRight className="h-4 w-4" />
-                  الرجوع للإشعارات
+                  <ArrowRight className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`} />
+                  {t("الرجوع للإشعارات")}
                 </button>
                 <button
                   onClick={handleSave}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
                 >
                   <Save className="h-4 w-4" />
-                  حفظ الإشعار
+                  {t("حفظ الإشعار")}
                 </button>
               </>
             )}
@@ -382,25 +384,25 @@ export default function SalesCreditNote() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              عدد الإشعارات المرحلة: <span className="font-semibold text-foreground">{savedNotes.length}</span>
+              {t("عدد الإشعارات المرحلة")}: <span className="font-semibold text-foreground">{formatNumber(savedNotes.length)}</span>
             </p>
 
             {savedNotes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">لا يوجد إشعارات محفوظة حالياً.</p>
+              <p className="text-sm text-muted-foreground">{t("لا يوجد إشعارات محفوظة حالياً.")}</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-right text-sm">
+                <table className={`w-full min-w-[700px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}>
                   <thead>
                     <tr className="bg-muted/40">
-                      <th className="px-3 py-2">رقم الإشعار</th>
-                      <th className="px-3 py-2">النوع</th>
-                      <th className="px-3 py-2">الفاتورة الأصلية</th>
-                      <th className="px-3 py-2">العميل</th>
-                      <th className="px-3 py-2">التاريخ</th>
-                      <th className="px-3 py-2">الإجمالي</th>
-                      <th className="px-3 py-2">الرصيد بعد الإشعار</th>
-                      <th className="px-3 py-2">القيد المحاسبي</th>
-                      <th className="px-3 py-2">حالة ZATCA</th>
+                      <th className="px-3 py-2">{t("رقم الإشعار")}</th>
+                      <th className="px-3 py-2">{t("النوع")}</th>
+                      <th className="px-3 py-2">{t("الفاتورة الأصلية")}</th>
+                      <th className="px-3 py-2">{t("العميل")}</th>
+                      <th className="px-3 py-2">{t("التاريخ")}</th>
+                      <th className="px-3 py-2">{t("الإجمالي")}</th>
+                      <th className="px-3 py-2">{t("الرصيد بعد الإشعار")}</th>
+                      <th className="px-3 py-2">{t("القيد المحاسبي")}</th>
+                      <th className="px-3 py-2">{t("حالة ZATCA")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -417,19 +419,19 @@ export default function SalesCreditNote() {
                             {note.noteNumber}
                           </button>
                         </td>
-                        <td className="px-3 py-2">{note.noteType === "sales_credit" ? "دائن −" : "مدين +"}</td>
+                        <td className="px-3 py-2">{note.noteType === "sales_credit" ? `${t("دائن")} −` : `${t("مدين")} +`}</td>
                         <td className="px-3 py-2 font-medium">{note.originalInvoiceId}</td>
                         <td className="px-3 py-2">{note.customer}</td>
-                        <td className="px-3 py-2">{note.date}</td>
-                        <td className="px-3 py-2">{note.total.toFixed(2)} {note.currency}</td>
-                        <td className="px-3 py-2 font-semibold">{note.balanceAfter.toFixed(2)} {note.currency}</td>
+                        <td className="px-3 py-2">{formatDate(note.date)}</td>
+                        <td className="px-3 py-2">{formatNumber(note.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {note.currency}</td>
+                        <td className="px-3 py-2 font-semibold">{formatNumber(note.balanceAfter, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {note.currency}</td>
                         <td className="px-3 py-2">
                           <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
                             note.accountingStatus === "posted"
                               ? "bg-blue-100 text-blue-700"
                               : "bg-amber-100 text-amber-700"
                           }`}>
-                            {accountingStatusLabels[note.accountingStatus] ?? note.accountingStatus}
+                            {t(accountingStatusLabels[note.accountingStatus] ?? note.accountingStatus)}
                           </span>
                         </td>
                         <td className="px-3 py-2">
@@ -443,7 +445,7 @@ export default function SalesCreditNote() {
                                   : "bg-slate-100 text-slate-600"
                             }`}
                           >
-                            {zatcaStatusLabels[note.zatcaStatus] ?? note.zatcaStatus}
+                            {t(zatcaStatusLabels[note.zatcaStatus] ?? note.zatcaStatus)}
                           </span>
                         </td>
                       </tr>
@@ -463,25 +465,25 @@ export default function SalesCreditNote() {
                 onClick={() => setMode("list")}
                 className="rounded-md border border-border px-4 py-2 text-sm font-semibold"
               >
-                رجوع للقائمة
+                {t("رجوع للقائمة")}
               </button>
             </div>
             <div className="grid gap-3 text-sm sm:grid-cols-2">
-              <p>النوع: {selectedNote.noteType === "sales_credit" ? "إشعار دائن" : "إشعار مدين"}</p>
-              <p>الفاتورة الأصلية: {selectedNote.originalInvoiceId}</p>
-              <p>العميل: {selectedNote.customer}</p>
-              <p>التاريخ: {selectedNote.date}</p>
-              <p>المجموع الفرعي: {selectedNote.subtotal.toFixed(2)} {selectedNote.currency}</p>
-              <p>الضريبة: {selectedNote.tax.toFixed(2)} {selectedNote.currency}</p>
-              <p>الإجمالي: {selectedNote.total.toFixed(2)} {selectedNote.currency}</p>
+              <p>{t("النوع")}: {selectedNote.noteType === "sales_credit" ? t("إشعار دائن") : t("إشعار مدين")}</p>
+              <p>{t("الفاتورة الأصلية")}: {selectedNote.originalInvoiceId}</p>
+              <p>{t("العميل")}: {selectedNote.customer}</p>
+              <p>{t("التاريخ")}: {formatDate(selectedNote.date)}</p>
+              <p>{t("المجموع الفرعي")}: {formatNumber(selectedNote.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedNote.currency}</p>
+              <p>{t("الضريبة")}: {formatNumber(selectedNote.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedNote.currency}</p>
+              <p>{t("الإجمالي")}: {formatNumber(selectedNote.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedNote.currency}</p>
               <p>
-                حالة ZATCA: {zatcaStatusLabels[selectedNote.zatcaStatus] ?? selectedNote.zatcaStatus}
+                {t("حالة ZATCA")}: {t(zatcaStatusLabels[selectedNote.zatcaStatus] ?? selectedNote.zatcaStatus)}
               </p>
               <p>
-                القيد المحاسبي: {accountingStatusLabels[selectedNote.accountingStatus] ?? selectedNote.accountingStatus}
+                {t("القيد المحاسبي")}: {t(accountingStatusLabels[selectedNote.accountingStatus] ?? selectedNote.accountingStatus)}
               </p>
               {selectedNote.accountingJournalEntryId && (
-                <p>رقم القيد: {selectedNote.accountingJournalEntryId}</p>
+                <p>{t("رقم القيد")}: {selectedNote.accountingJournalEntryId}</p>
               )}
             </div>
             <div className="flex items-center gap-4 border-t border-border pt-4">
@@ -489,11 +491,11 @@ export default function SalesCreditNote() {
                 <ZatcaQrCode value={selectedNote.qrCodeData} size={112} />
               ) : (
                 <div className="flex h-28 w-28 items-center justify-center rounded border border-dashed border-border text-xs text-muted-foreground">
-                  QR بعد الاعتماد
+                  {t("QR بعد الاعتماد")}
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                يظهر رمز الاستجابة السريعة بعد قبول ZATCA للإشعار.
+                {t("يظهر رمز الاستجابة السريعة بعد قبول ZATCA للإشعار.")}
               </p>
             </div>
           </div>
@@ -502,17 +504,17 @@ export default function SalesCreditNote() {
             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
-                  شركة لاكجري العياف
+                  {t("شركة لاكجري العياف")}
                 </div>
-                <h2 className="text-xl font-bold text-foreground">شركة لاكجري العياف</h2>
-                <p className="text-sm text-muted-foreground">الشيخ محمد بن جبير</p>
-                <p className="text-sm text-muted-foreground">مكة المكرمة</p>
-                <p className="text-sm text-muted-foreground">المملكة العربية السعودية</p>
-                <p className="text-sm text-muted-foreground">رقم التسجيل الضريبي: 314559705300003</p>
+                <h2 className="text-xl font-bold text-foreground">{t("شركة لاكجري العياف")}</h2>
+                <p className="text-sm text-muted-foreground">{t("الشيخ محمد بن جبير")}</p>
+                <p className="text-sm text-muted-foreground">{t("مكة المكرمة")}</p>
+                <p className="text-sm text-muted-foreground">{t("المملكة العربية السعودية")}</p>
+                <p className="text-sm text-muted-foreground">{t("رقم التسجيل الضريبي")}: {formatNumber(314559705300003, { useGrouping: false })}</p>
               </div>
 
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                <Field label="رقم الإشعار">
+                <Field label={t("رقم الإشعار")}>
                   <input
                     value={form.noteNumber}
                     readOnly
@@ -521,17 +523,17 @@ export default function SalesCreditNote() {
                 </Field>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="نوع الإشعار*">
+                  <Field label={t("نوع الإشعار*")}>
                     <select
                       value={form.noteType}
                       onChange={(e) => setForm({ ...form, noteType: e.target.value as "sales_credit" | "sales_debit" })}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     >
-                      <option value="sales_credit">إشعار دائن — يخفض رصيد الفاتورة</option>
-                      <option value="sales_debit">إشعار مدين — يزيد رصيد الفاتورة</option>
+                      <option value="sales_credit">{t("إشعار دائن — يخفض رصيد الفاتورة")}</option>
+                      <option value="sales_debit">{t("إشعار مدين — يزيد رصيد الفاتورة")}</option>
                     </select>
                   </Field>
-                  <Field label="الفاتورة الأصلية*">
+                  <Field label={t("الفاتورة الأصلية*")}>
                     <select
                       value={form.originalInvoiceId}
                       onChange={(e) => {
@@ -540,32 +542,32 @@ export default function SalesCreditNote() {
                       }}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     >
-                      <option value="">اختر الفاتورة</option>
+                      <option value="">{t("اختر الفاتورة")}</option>
                       {invoices.map((invoice) => (
-                        <option key={invoice.id} value={invoice.id}>{invoice.id} — {invoice.customer} — الرصيد {invoice.adjustedTotal.toFixed(2)} SAR</option>
+                        <option key={invoice.id} value={invoice.id}>{invoice.id} — {invoice.customer} — {t("الرصيد")} {formatNumber(invoice.adjustedTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} SAR</option>
                       ))}
                     </select>
                   </Field>
                 </div>
 
-                <Field label="العميل المرتبط بالفاتورة">
+                <Field label={t("العميل المرتبط بالفاتورة")}>
                   <input
                     value={form.customer}
                     readOnly
-                    placeholder="يُحدد تلقائياً من الفاتورة"
+                    placeholder={t("يُحدد تلقائياً من الفاتورة")}
                     className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                   />
                 </Field>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="العملة*">
+                  <Field label={t("العملة*")}>
                     <input
                       value={form.currency}
                       onChange={(e) => setForm({ ...form, currency: e.target.value })}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
-                  <Field label="التاريخ*">
+                  <Field label={t("التاريخ*")}>
                     <input
                       type="date"
                       value={form.date}
@@ -576,38 +578,38 @@ export default function SalesCreditNote() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="أمر الشراء">
+                  <Field label={t("أمر الشراء")}>
                     <input
                       value={form.orderRef}
                       onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
-                      placeholder="اختياري"
+                      placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
-                  <Field label="مرجع الفاتورة">
+                  <Field label={t("مرجع الفاتورة")}>
                     <input
                       value={form.reference}
                       readOnly
-                      placeholder="يُحدد من الفاتورة الأصلية"
+                      placeholder={t("يُحدد من الفاتورة الأصلية")}
                       className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                     />
                   </Field>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="المشروع">
+                  <Field label={t("المشروع")}>
                     <input
                       value={form.project}
                       onChange={(e) => setForm({ ...form, project: e.target.value })}
-                      placeholder="اختياري"
+                      placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
-                  <Field label="المستودع">
+                  <Field label={t("المستودع")}>
                     <input
                       value={form.warehouse}
                       onChange={(e) => setForm({ ...form, warehouse: e.target.value })}
-                      placeholder="اختياري"
+                      placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
@@ -616,17 +618,17 @@ export default function SalesCreditNote() {
             </div>
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold text-foreground">السعر شامل من الضريبة</p>
+              <p className="text-sm font-semibold text-foreground">{t("السعر شامل من الضريبة")}</p>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-right text-sm">
+                <table className={`w-full min-w-[900px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}>
                   <thead>
                     <tr className="bg-muted/40">
-                      <th className="px-3 py-2">الوصف</th>
-                      <th className="px-3 py-2">حساب*</th>
-                      <th className="px-3 py-2">الكمية*</th>
-                      <th className="px-3 py-2">السعر*</th>
-                      <th className="px-3 py-2">المجموع</th>
+                      <th className="px-3 py-2">{t("الوصف")}</th>
+                      <th className="px-3 py-2">{t("حساب*")}</th>
+                      <th className="px-3 py-2">{t("الكمية*")}</th>
+                      <th className="px-3 py-2">{t("السعر*")}</th>
+                      <th className="px-3 py-2">{t("المجموع")}</th>
                       <th className="px-3 py-2" />
                     </tr>
                   </thead>
@@ -639,7 +641,7 @@ export default function SalesCreditNote() {
                             <input
                               value={item.description}
                               onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                              placeholder="مفتاح أو خدمة"
+                              placeholder={t("مفتاح أو خدمة")}
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
                             />
                           </td>
@@ -651,7 +653,7 @@ export default function SalesCreditNote() {
                             >
                               {(revenueAccounts.length ? revenueAccounts : [{ code: "411", nameAr: "إيرادات المبيعات والخدمات" }]).map((account) => (
                                 <option key={account.code} value={account.code}>
-                                  {account.code} — {account.nameAr}
+                                  {account.code} — {t(account.nameAr)}
                                 </option>
                               ))}
                             </select>
@@ -674,11 +676,12 @@ export default function SalesCreditNote() {
                               className="h-10 w-32 rounded-md border border-border bg-background px-3"
                             />
                           </td>
-                          <td className="px-3 py-2 font-semibold">{lineTotal.toFixed(2)} ﷼</td>
+                          <td className="px-3 py-2 font-semibold">{formatNumber(lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</td>
                           <td className="px-3 py-2">
                             <button
                               onClick={() => removeItem(item.id)}
                               className="rounded-md border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50"
+                              aria-label={t("حذف البند")}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -696,28 +699,28 @@ export default function SalesCreditNote() {
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
                 >
                   <Plus className="h-4 w-4" />
-                  أضف بند
+                  {t("أضف بند")}
                 </button>
               </div>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-                رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.
+                {t("رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.")}
               </div>
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
                 <div className="flex items-center justify-between">
-                  <span>المجموع الفرعي</span>
-                  <span>{subtotal.toFixed(2)} ﷼</span>
+                  <span>{t("المجموع الفرعي")}</span>
+                  <span>{formatNumber(subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>إجمالي ضريبة القيمة المضافة</span>
-                  <span>{tax.toFixed(2)} ﷼</span>
+                  <span>{t("إجمالي ضريبة القيمة المضافة")}</span>
+                  <span>{formatNumber(tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold">
-                  <span>المجموع</span>
-                  <span>{total.toFixed(2)} ﷼</span>
+                  <span>{t("المجموع")}</span>
+                  <span>{formatNumber(total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</span>
                 </div>
               </div>
             </div>

@@ -3,6 +3,7 @@ import { salesFeatures } from "./Sales";
 import { Plus, Save, Trash2, ArrowRight } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type DeliveryNoteItem = {
   id: string;
@@ -71,6 +72,7 @@ const createEmptyForm = (sequence: number): DeliveryNoteForm => ({
 });
 
 export default function SalesDeliveryNote() {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const [savedNotes, setSavedNotes] = useState<SavedDeliveryNote[]>([]);
   const [nextSequence, setNextSequence] = useState(START_NUMBER);
   const [mode, setMode] = useState<"list" | "create">("list");
@@ -106,6 +108,8 @@ export default function SalesDeliveryNote() {
   );
   const tax = useMemo(() => subtotal * 0.15, [subtotal]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
+  const formatAmount = (value: number) =>
+    `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ﷼`;
 
   const updateItem = (id: string, key: keyof DeliveryNoteItem, value: string | number) => {
     setForm((prev) => ({
@@ -129,7 +133,7 @@ export default function SalesDeliveryNote() {
 
   const handleSave = () => {
     if (!form.customer.trim()) {
-      toast({ title: "العميل مطلوب", description: "يرجى إدخال اسم العميل قبل الحفظ" });
+      toast({ title: t("العميل مطلوب"), description: t("يرجى إدخال اسم العميل قبل الحفظ") });
       return;
     }
 
@@ -163,19 +167,19 @@ export default function SalesDeliveryNote() {
     setMode("list");
 
     toast({
-      title: "تم حفظ إشعار تسليم",
-      description: `تم حفظ الإشعار ${payload.noteNumber} بنجاح`,
+      title: t("تم حفظ إشعار تسليم"),
+      description: t("تم حفظ الإشعار {noteNumber} بنجاح").replace("{noteNumber}", payload.noteNumber),
     });
   };
 
   return (
-    <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
-      <div className="mx-auto max-w-7xl space-y-6">
+    <Layout subMenu={{ title: t("المبيعات"), items: salesFeatures }}>
+      <div dir={direction} className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">إشعار تسليم</h1>
+            <h1 className="text-3xl font-bold text-foreground">{t("إشعار تسليم")}</h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list" ? "عرض إشعارات التسليم" : "إنشاء إشعار تسليم جديد"}
+              {mode === "list" ? t("عرض إشعارات التسليم") : t("إنشاء إشعار تسليم جديد")}
             </p>
           </div>
 
@@ -186,7 +190,7 @@ export default function SalesDeliveryNote() {
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
               >
                 <Plus className="h-4 w-4" />
-                إنشاء إشعار تسليم جديد
+                {t("إنشاء إشعار تسليم جديد")}
               </button>
             ) : (
               <>
@@ -194,15 +198,15 @@ export default function SalesDeliveryNote() {
                   onClick={() => setMode("list")}
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
                 >
-                  <ArrowRight className="h-4 w-4" />
-                  الرجوع للإشعارات
+                  <ArrowRight className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`} />
+                  {t("الرجوع للإشعارات")}
                 </button>
                 <button
                   onClick={handleSave}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
                 >
                   <Save className="h-4 w-4" />
-                  حفظ الإشعار
+                  {t("حفظ الإشعار")}
                 </button>
               </>
             )}
@@ -212,21 +216,21 @@ export default function SalesDeliveryNote() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              عدد الإشعارات المحفوظة: <span className="font-semibold text-foreground">{savedNotes.length}</span>
+              {t("عدد الإشعارات المحفوظة:")} <span className="font-semibold text-foreground">{formatNumber(savedNotes.length)}</span>
             </p>
 
             {savedNotes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">لا يوجد إشعارات محفوظة حالياً.</p>
+              <p className="text-sm text-muted-foreground">{t("لا يوجد إشعارات محفوظة حالياً.")}</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-right text-sm">
+                <table className="w-full min-w-[700px] text-start text-sm">
                   <thead>
                     <tr className="bg-muted/40">
-                      <th className="px-3 py-2">رقم الإشعار</th>
-                      <th className="px-3 py-2">العميل</th>
-                      <th className="px-3 py-2">التاريخ</th>
-                      <th className="px-3 py-2">العملة</th>
-                      <th className="px-3 py-2">الإجمالي</th>
+                      <th className="px-3 py-2">{t("رقم الإشعار")}</th>
+                      <th className="px-3 py-2">{t("العميل")}</th>
+                      <th className="px-3 py-2">{t("التاريخ")}</th>
+                      <th className="px-3 py-2">{t("العملة")}</th>
+                      <th className="px-3 py-2">{t("الإجمالي")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -234,9 +238,9 @@ export default function SalesDeliveryNote() {
                       <tr key={note.id} className="border-t border-border">
                         <td className="px-3 py-2 font-semibold text-primary">{note.noteNumber}</td>
                         <td className="px-3 py-2">{note.customer}</td>
-                        <td className="px-3 py-2">{note.date}</td>
+                        <td className="px-3 py-2">{formatDate(note.date, { dateStyle: "medium" })}</td>
                         <td className="px-3 py-2">{note.currency}</td>
-                        <td className="px-3 py-2">{note.total.toFixed(2)} ﷼</td>
+                        <td className="px-3 py-2">{formatAmount(note.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -249,26 +253,28 @@ export default function SalesDeliveryNote() {
             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
-                  شركة لاكجري العياف
+                  {t("شركة لاكجري العياف")}
                 </div>
-                <h2 className="text-xl font-bold text-foreground">شركة لاكجري العياف</h2>
-                <p className="text-sm text-muted-foreground">الشيخ محمد بن جبير</p>
-                <p className="text-sm text-muted-foreground">مكة المكرمة</p>
-                <p className="text-sm text-muted-foreground">المملكة العربية السعودية</p>
-                <p className="text-sm text-muted-foreground">رقم التسجيل الضريبي: 314559705300003</p>
+                <h2 className="text-xl font-bold text-foreground">{t("شركة لاكجري العياف")}</h2>
+                <p className="text-sm text-muted-foreground">{t("الشيخ محمد بن جبير")}</p>
+                <p className="text-sm text-muted-foreground">{t("مكة المكرمة")}</p>
+                <p className="text-sm text-muted-foreground">{t("المملكة العربية السعودية")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("رقم التسجيل الضريبي:")} {formatNumber(314559705300003, { useGrouping: false })}
+                </p>
               </div>
 
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                <Field label="العميل*">
+                <Field label={t("العميل*")}>
                   <input
                     value={form.customer}
                     onChange={(e) => setForm({ ...form, customer: e.target.value })}
-                    placeholder="مطلوب"
+                    placeholder={t("مطلوب")}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
                 </Field>
 
-                <Field label="رقم إشعار التسليم">
+                <Field label={t("رقم إشعار التسليم")}>
                   <input
                     value={form.noteNumber}
                     readOnly
@@ -277,14 +283,14 @@ export default function SalesDeliveryNote() {
                 </Field>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="العملة*">
+                  <Field label={t("العملة*")}>
                     <input
                       value={form.currency}
                       onChange={(e) => setForm({ ...form, currency: e.target.value })}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
-                  <Field label="التاريخ*">
+                  <Field label={t("التاريخ*")}>
                     <input
                       type="date"
                       value={form.date}
@@ -295,29 +301,29 @@ export default function SalesDeliveryNote() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="رقم الطلب">
+                  <Field label={t("رقم الطلب")}>
                     <input
                       value={form.orderRef}
                       onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
-                      placeholder="اختياري"
+                      placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
-                  <Field label="المرجع">
+                  <Field label={t("المرجع")}>
                     <input
                       value={form.reference}
                       onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                      placeholder="اختياري"
+                      placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
                 </div>
 
-                <Field label="المشروع">
+                <Field label={t("المشروع")}>
                   <input
                     value={form.project}
                     onChange={(e) => setForm({ ...form, project: e.target.value })}
-                    placeholder="تحديد"
+                    placeholder={t("تحديد")}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
                 </Field>
@@ -325,16 +331,16 @@ export default function SalesDeliveryNote() {
             </div>
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold text-foreground">السعر شامل من الضريبة</p>
+              <p className="text-sm font-semibold text-foreground">{t("السعر شامل من الضريبة")}</p>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-right text-sm">
+                <table className="w-full min-w-[900px] text-start text-sm">
                   <thead>
                     <tr className="bg-muted/40">
-                      <th className="px-3 py-2">الوصف*</th>
-                      <th className="px-3 py-2">الكمية*</th>
-                      <th className="px-3 py-2">السعر*</th>
-                      <th className="px-3 py-2">المجموع</th>
+                      <th className="px-3 py-2">{t("الوصف*")}</th>
+                      <th className="px-3 py-2">{t("الكمية*")}</th>
+                      <th className="px-3 py-2">{t("السعر*")}</th>
+                      <th className="px-3 py-2">{t("المجموع")}</th>
                       <th className="px-3 py-2" />
                     </tr>
                   </thead>
@@ -347,7 +353,7 @@ export default function SalesDeliveryNote() {
                             <input
                               value={item.description}
                               onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                              placeholder="مفتاح أو خدمة"
+                              placeholder={t("مفتاح أو خدمة")}
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
                             />
                           </td>
@@ -369,10 +375,11 @@ export default function SalesDeliveryNote() {
                               className="h-10 w-32 rounded-md border border-border bg-background px-3"
                             />
                           </td>
-                          <td className="px-3 py-2 font-semibold">{lineTotal.toFixed(2)} ﷼</td>
+                          <td className="px-3 py-2 font-semibold">{formatAmount(lineTotal)}</td>
                           <td className="px-3 py-2">
                             <button
                               onClick={() => removeItem(item.id)}
+                              aria-label={t("حذف البند")}
                               className="rounded-md border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -391,28 +398,28 @@ export default function SalesDeliveryNote() {
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
                 >
                   <Plus className="h-4 w-4" />
-                  أضف بند
+                  {t("أضف بند")}
                 </button>
               </div>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-                يتم توليد البيانات لعرض متطلبات ضريبة القيمة المضافة في إشعار التسليم.
+                {t("يتم توليد البيانات لعرض متطلبات ضريبة القيمة المضافة في إشعار التسليم.")}
               </div>
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
                 <div className="flex items-center justify-between">
-                  <span>المجموع الفرعي</span>
-                  <span>{subtotal.toFixed(2)} ﷼</span>
+                  <span>{t("المجموع الفرعي")}</span>
+                  <span>{formatAmount(subtotal)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>إجمالي ضريبة القيمة المضافة</span>
-                  <span>{tax.toFixed(2)} ﷼</span>
+                  <span>{t("إجمالي ضريبة القيمة المضافة")}</span>
+                  <span>{formatAmount(tax)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold">
-                  <span>المجموع</span>
-                  <span>{total.toFixed(2)} ﷼</span>
+                  <span>{t("المجموع")}</span>
+                  <span>{formatAmount(total)}</span>
                 </div>
               </div>
             </div>

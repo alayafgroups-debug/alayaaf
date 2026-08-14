@@ -31,6 +31,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import QRCode from "qrcode";
 import ZatcaQrCode from "@/components/ZatcaQrCode";
+import { useI18n } from "@/i18n";
 
 const COMPANY_LOGO_URL =
   "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200";
@@ -65,7 +66,10 @@ const parseCurrency = (value: string) =>
 
 const initialInvoices: Invoice[] = [];
 
-async function submitInvoiceToZatca(invoiceId: string) {
+async function submitInvoiceToZatca(
+  invoiceId: string,
+  t: (value: string) => string,
+) {
   const { data, error } = await supabase.functions.invoke("zatca-invoice", {
     body: { invoiceId },
   });
@@ -78,9 +82,9 @@ async function submitInvoiceToZatca(invoiceId: string) {
           .catch(() => null)
       : null;
     toast({
-      title: "تعذر إرسال الفاتورة إلى ZATCA",
+      title: t("تعذر إرسال الفاتورة إلى ZATCA"),
       description: String(
-        payload?.error ?? data?.error ?? error?.message ?? "حدث خطأ غير متوقع",
+        payload?.error ?? data?.error ?? error?.message ?? t("حدث خطأ غير متوقع"),
       ),
       variant: "destructive",
     });
@@ -113,6 +117,7 @@ type Invoice = {
 };
 
 export default function SalesInvoices() {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const [view, setView] = useState<
     "list" | "create" | "details" | "edit" | "payment"
   >("list");
@@ -180,7 +185,7 @@ export default function SalesInvoices() {
       p_invoice_id: invoice.id,
     });
     if (error) {
-      toast({ title: "تعذر ترحيل الفاتورة", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر ترحيل الفاتورة"), description: error.message, variant: "destructive" });
       return;
     }
     setInvoices((current) => current.map((item) => item.id === invoice.id ? {
@@ -188,7 +193,10 @@ export default function SalesInvoices() {
       accountingStatus: "posted",
       accountingJournalEntryId: String(data),
     } : item));
-    toast({ title: "تم ترحيل الفاتورة محاسبياً", description: `تم إنشاء القيد المتوازن للفاتورة ${invoice.id}` });
+    toast({
+      title: t("تم ترحيل الفاتورة محاسبياً"),
+      description: `${t("تم إنشاء القيد المتوازن للفاتورة")} ${invoice.id}`,
+    });
   };
 
   const handleDelete = async (invoiceId: string) => {
@@ -200,13 +208,13 @@ export default function SalesInvoices() {
     if (!error) {
       setInvoices((prev) => prev.filter((invoice) => invoice.id !== invoiceId));
       toast({
-        title: "تم حذف الفاتورة",
-        description: `الفاتورة: ${invoiceId}`,
+        title: t("تم حذف الفاتورة"),
+        description: `${t("الفاتورة")}: ${invoiceId}`,
       });
     } else {
       toast({
-        title: "تعذر حذف الفاتورة",
-        description: error.message || "الفاتورة المُرحّلة تُعكس بإشعار دائن ولا تُحذف",
+        title: t("تعذر حذف الفاتورة"),
+        description: error.message || t("الفاتورة المُرحّلة تُعكس بإشعار دائن ولا تُحذف"),
         variant: "destructive",
       });
     }
@@ -285,13 +293,13 @@ export default function SalesInvoices() {
       .map(
         (row) => `
           <tr>
-            <td>${row.idx}</td>
+            <td>${formatNumber(row.idx)}</td>
             <td>${escapeHtml(row.description)}</td>
-            <td>${row.qty}</td>
-            <td>${row.price.toFixed(2)}</td>
-            <td>${row.taxable.toFixed(2)}</td>
-            <td>${row.vat.toFixed(2)}<div class="vat-rate">${row.taxPercent}%</div></td>
-            <td>${row.total.toFixed(2)}</td>
+            <td>${formatNumber(row.qty)}</td>
+            <td>${formatNumber(row.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${formatNumber(row.taxable, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${formatNumber(row.vat, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<div class="vat-rate">${formatNumber(row.taxPercent)}%</div></td>
+            <td>${formatNumber(row.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         `,
       )
@@ -307,10 +315,10 @@ export default function SalesInvoices() {
 
     printWindow.document.open();
     printWindow.document.write(`
-      <html dir="rtl" lang="ar">
+      <html dir="${direction}" lang="${direction === "rtl" ? "ar" : "en"}">
         <head>
           <meta charset="utf-8" />
-          <title>فاتورة ${escapeHtml(invoice.id)}</title>
+          <title>${escapeHtml(t("فاتورة"))} ${escapeHtml(invoice.id)}</title>
           <style>
             @page { size: A4 portrait; margin: 10mm; }
             * { box-sizing: border-box; }
@@ -454,8 +462,8 @@ export default function SalesInvoices() {
   };
 
   return (
-    <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
-      <div className="mx-auto max-w-7xl">
+    <Layout subMenu={{ title: t("المبيعات"), items: salesFeatures }}>
+      <div dir={direction} className="mx-auto max-w-7xl">
         {view === "list" && (
           <InvoicesList
             onCreateClick={() => setView("create")}
@@ -528,6 +536,7 @@ function InvoicesList({
   onDownloadPdf: (invoice: Invoice) => void;
   invoices: Invoice[];
 }) {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const notifyAction = (title: string, description?: string) => {
     toast({ title, description });
   };
@@ -536,40 +545,40 @@ function InvoicesList({
     <div className="space-y-6">
       <PageHeader
         icon={FileText}
-        title="فواتير المبيعات"
-        subtitle="إدارة وتتبع جميع فواتير المبيعات والمدفوعات"
-        actionLabel="إضافة فاتورة مبيعات جديدة"
+        title={t("فواتير المبيعات")}
+        subtitle={t("إدارة وتتبع جميع فواتير المبيعات والمدفوعات")}
+        actionLabel={t("إضافة فاتورة مبيعات جديدة")}
         onAction={onCreateClick}
         gradient="from-emerald-600 to-teal-700"
       />
 
       <FilterBar>
         <FilterInput
-          label="البحث"
-          placeholder="رقم الفاتورة، المرجع، اسم العميل..."
+          label={t("البحث")}
+          placeholder={t("رقم الفاتورة، المرجع، اسم العميل...")}
           colSpan={2}
         />
-        <FilterSelect label="العميل" options={["الكل"]} />
+        <FilterSelect label={t("العميل")} options={[t("الكل")]} />
         <FilterSelect
-          label="الحالة"
-          options={["الكل", "مفتوحة", "مدفوعة جزئياً", "مدفوعة بالكامل"]}
+          label={t("الحالة")}
+          options={[t("الكل"), t("مفتوحة"), t("مدفوعة جزئياً"), t("مدفوعة بالكامل")]}
         />
         <FilterActions />
       </FilterBar>
 
       <DataTable
         headers={[
-          "الإجراءات",
-          "حالة ZATCA",
-          "القيد المحاسبي",
-          "الحالة",
-          "المبلغ المتبقي",
-          "المبلغ المدفوع",
-          "الإجمالي",
-          "العميل",
-          "تاريخ الاستحقاق",
-          "تاريخ الفاتورة",
-          "رقم الفاتورة",
+          t("الإجراءات"),
+          t("حالة ZATCA"),
+          t("القيد المحاسبي"),
+          t("الحالة"),
+          t("المبلغ المتبقي"),
+          t("المبلغ المدفوع"),
+          t("الإجمالي"),
+          t("العميل"),
+          t("تاريخ الاستحقاق"),
+          t("تاريخ الفاتورة"),
+          t("رقم الفاتورة"),
         ]}
         gradient="from-[#1e293b] to-[#334155]"
       >
@@ -585,19 +594,19 @@ function InvoicesList({
               <div className="flex items-center gap-1.5 flex-wrap">
                 <ActionBtn
                   icon={Eye}
-                  label="عرض"
+                  label={t("عرض")}
                   color="blue"
                   onClick={() => onView(invoice)}
                 />
                 <ActionBtn
                   icon={Edit}
-                  label={invoice.accountingStatus === "posted" ? "استخدم إشعار تعديل" : "تعديل"}
+                  label={t(invoice.accountingStatus === "posted" ? "استخدم إشعار تعديل" : "تعديل")}
                   color="emerald"
                   onClick={() => {
                     if (invoice.accountingStatus === "posted") {
                       toast({
-                        title: "الفاتورة مُرحّلة محاسبياً",
-                        description: "استخدم إشعاراً دائناً أو مديناً لتعديل المبالغ دون كسر القيد المحاسبي.",
+                        title: t("الفاتورة مُرحّلة محاسبياً"),
+                        description: t("استخدم إشعاراً دائناً أو مديناً لتعديل المبالغ دون كسر القيد المحاسبي."),
                       });
                       return;
                     }
@@ -606,21 +615,21 @@ function InvoicesList({
                 />
                 <ActionBtn
                   icon={CreditCard}
-                  label="تسديد"
+                  label={t("تسديد")}
                   color="indigo"
                   onClick={() => onPayment(invoice)}
                 />
                 {invoice.accountingStatus !== "posted" && (
                   <ActionBtn
                     icon={FileText}
-                    label="ترحيل محاسبي"
+                    label={t("ترحيل محاسبي")}
                     color="blue"
                     onClick={() => onPostAccounting(invoice)}
                   />
                 )}
                 <ActionBtn
                   icon={Trash2}
-                  label="حذف"
+                  label={t("حذف")}
                   color="red"
                   onClick={() => onDelete(invoice.id)}
                 />
@@ -630,7 +639,7 @@ function InvoicesList({
                   color="slate"
                   onClick={() => {
                     onDownloadPdf(invoice);
-                    notifyAction("تحميل PDF", `الفاتورة: ${invoice.id}`);
+                    notifyAction(t("تحميل PDF"), `${t("الفاتورة")}: ${invoice.id}`);
                   }}
                 />
               </div>
@@ -644,7 +653,7 @@ function InvoicesList({
                     ? "bg-rose-50 text-rose-700 border-rose-200"
                     : "bg-slate-50 text-slate-600 border-slate-200",
               )}>
-                {zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ?? invoice.zatcaStatus}
+                {t(zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ?? invoice.zatcaStatus ?? "")}
               </span>
             </td>
             <td className="px-5 py-3.5 align-middle text-right">
@@ -654,7 +663,7 @@ function InvoicesList({
                   ? "bg-blue-50 text-blue-700 border-blue-200"
                   : "bg-amber-50 text-amber-700 border-amber-200",
               )}>
-                {accountingStatusLabels[invoice.accountingStatus ?? "unposted"] ?? invoice.accountingStatus}
+                {t(accountingStatusLabels[invoice.accountingStatus ?? "unposted"] ?? invoice.accountingStatus ?? "")}
               </span>
             </td>
             <td className="px-5 py-3.5 align-middle text-right">
@@ -668,26 +677,26 @@ function InvoicesList({
                       : "bg-sky-50 text-sky-700 border-sky-200",
                 )}
               >
-                {invoice.status}
+                {t(invoice.status)}
               </span>
             </td>
             <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap text-red-500 font-semibold text-[13px]">
-              {invoice.remaining}
+              {formatNumber(parseCurrency(invoice.remaining))} {t("ريال")}
             </td>
             <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap text-emerald-600 font-semibold text-[13px]">
-              {invoice.paid}
+              {formatNumber(parseCurrency(invoice.paid))} {t("ريال")}
             </td>
             <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap font-bold text-primary">
-              {invoice.total}
+              {formatNumber(parseCurrency(invoice.total))} {t("ريال")}
             </td>
             <td className="px-5 py-3.5 align-middle text-right text-foreground font-medium">
               {invoice.customer}
             </td>
             <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
-              {invoice.dueDate}
+              {invoice.dueDate ? formatDate(invoice.dueDate) : "-"}
             </td>
             <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
-              {invoice.date}
+              {invoice.date ? formatDate(invoice.date) : "-"}
             </td>
             <td className="px-5 py-3.5 align-middle text-right font-bold text-primary hover:underline cursor-pointer">
               {invoice.id}
@@ -706,6 +715,7 @@ function InvoiceDetails({
   invoice: Invoice;
   onBack: () => void;
 }) {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const [lineItems, setLineItems] = useState<
     Array<{
       id: number;
@@ -887,13 +897,13 @@ function InvoiceDetails({
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">التاريخ</span>
                     <span className="text-sm font-bold text-foreground">
-                      {invoice.date}
+                      {invoice.date ? formatDate(invoice.date) : "-"}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-600">تاريخ الاستحقاق</span>
                     <span className="text-sm font-bold text-foreground">
-                      {invoice.dueDate}
+                      {invoice.dueDate ? formatDate(invoice.dueDate) : "-"}
                     </span>
                   </div>
                 </div>
@@ -1019,6 +1029,7 @@ function InvoiceEdit({
   onBack: () => void;
   onUpdated: (invoice: Invoice) => void;
 }) {
+  const { t, direction, formatNumber } = useI18n();
   const [invoiceDate, setInvoiceDate] = useState(invoice.date);
   const [dueDate, setDueDate] = useState(invoice.dueDate);
   const [customer, setCustomer] = useState(invoice.customer);
@@ -1454,6 +1465,7 @@ function InvoicePayment({
   onBack: () => void;
   onUpdated: (invoice: Invoice) => void;
 }) {
+  const { t, direction, formatNumber } = useI18n();
   const totalValue = parseCurrency(invoice.total);
   const paidValue = parseCurrency(invoice.paid);
   const remainingValue = parseCurrency(invoice.remaining);
@@ -1549,7 +1561,7 @@ function InvoicePayment({
                 المتبقي
               </label>
               <div className="text-base text-sm font-bold text-foreground text-right">
-                {invoice.remaining}
+                {formatNumber(parseCurrency(invoice.remaining))} {t("ريال")}
               </div>
             </div>
             <div className="space-y-1">
@@ -1593,6 +1605,7 @@ function InvoiceForm({
   onSaved: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice, targetWindow?: Window | null) => Promise<void>;
 }) {
+  const { t, direction, formatNumber } = useI18n();
   const [items, setItems] = useState([
     {
       id: 1,
@@ -1810,7 +1823,7 @@ function InvoiceForm({
         });
       }
       const zatca = accountingPosted
-        ? await submitInvoiceToZatca(savedInvoiceId)
+        ? await submitInvoiceToZatca(savedInvoiceId, t)
         : { status: "pending", qrCodeData: "" };
       const savedInvoice: Invoice = {
         id: data.id ?? attemptId,

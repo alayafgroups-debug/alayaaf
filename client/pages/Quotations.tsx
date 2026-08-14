@@ -25,6 +25,7 @@ import {
 } from "@/components/SalesPageUI";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { useI18n } from "@/i18n";
 
 type QuotationItem = {
   id: number;
@@ -155,6 +156,7 @@ function mapRow(row: Record<string, unknown>): QuotationRow {
 }
 
 export default function Quotations() {
+  const { t, locale, direction, formatDate, formatNumber } = useI18n();
   const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
   const [quotations, setQuotations] = useState<QuotationRow[]>([]);
   const [selectedQuotation, setSelectedQuotation] = useState<QuotationRow | null>(null);
@@ -178,15 +180,15 @@ export default function Quotations() {
   const refresh = () => setRefreshKey((k) => k + 1);
 
   const handleDelete = async (quotationId: string) => {
-    if (!confirm("هل تريد حذف عرض السعر؟")) return;
+    if (!confirm(t("هل تريد حذف عرض السعر؟"))) return;
 
     const { error } = await supabase.from("sales_quotations").delete().eq("id", quotationId);
 
     if (!error) {
       setQuotations((prev) => prev.filter((row) => row.id !== quotationId));
-      toast({ title: "تم حذف عرض السعر", description: `العرض: ${quotationId}` });
+      toast({ title: t("تم حذف عرض السعر"), description: `${t("العرض")}: ${quotationId}` });
     } else {
-      toast({ title: "تعذر حذف عرض السعر", description: error.message });
+      toast({ title: t("تعذر حذف عرض السعر"), description: error.message });
     }
   };
 
@@ -204,23 +206,23 @@ export default function Quotations() {
           <tr>
             <td>${item.itemLabel || "-"}</td>
             <td>${item.description || "-"}</td>
-            <td>${item.unitPrice.toFixed(2)}</td>
-            <td>${item.quantity}</td>
-            <td>${item.discount.toFixed(2)}</td>
-            <td>${subtotal.toFixed(2)}</td>
-            <td>${item.taxPercent}%</td>
-            <td>${taxVal.toFixed(2)}</td>
-            <td>${lineTotal.toFixed(2)}</td>
+            <td>${formatNumber(item.unitPrice, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${formatNumber(item.quantity)}</td>
+            <td>${formatNumber(item.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${formatNumber(subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${formatNumber(item.taxPercent)}%</td>
+            <td>${formatNumber(taxVal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${formatNumber(lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         `;
       })
       .join("");
 
     printWindow.document.write(`
-      <html dir="rtl" lang="ar">
+      <html dir="${direction}" lang="${locale}">
         <head>
           <meta charset="utf-8" />
-          <title>عرض سعر ${quotation.id}</title>
+          <title>${t("عرض سعر")} ${quotation.id}</title>
           <style>
             @page{size:A4 landscape;margin:10mm}
             *{box-sizing:border-box}
@@ -230,7 +232,7 @@ export default function Quotations() {
             .logo{width:105px;height:72px;object-fit:contain}
             .title{font-size:23px;font-weight:700;margin:0 0 4px}
             .meta{font-size:11px;line-height:1.6}
-            .customer{margin:10px 0;padding:8px 12px;border:1px solid #dbeafe;border-radius:6px;background:#f8fafc;font-size:12px;text-align:right;line-height:1.7}
+            .customer{margin:10px 0;padding:8px 12px;border:1px solid #dbeafe;border-radius:6px;background:#f8fafc;font-size:12px;text-align:${direction === "rtl" ? "right" : "left"};line-height:1.7}
             table{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed}
             th,td{border:1px solid #cbd5e1;padding:6px 4px;text-align:center;vertical-align:middle;overflow-wrap:anywhere}
             th{background:#e2e8f0;font-weight:700;color:#0f172a}
@@ -246,13 +248,13 @@ export default function Quotations() {
           <div class="sheet">
             <div class="top">
               <div>
-                <h1 class="title">عرض سعر</h1>
-                <div class="meta">الرقم ${quotation.id}<br/>التاريخ ${quotation.date || "-"}</div>
+                <h1 class="title">${t("عرض سعر")}</h1>
+                <div class="meta">${t("الرقم")} ${quotation.id}<br/>${t("التاريخ")} ${quotation.date ? formatDate(quotation.date) : "-"}</div>
               </div>
               <div class="meta" style="text-align:center">
                 <div style="font-size:28px;font-weight:700">${COMPANY_INFO.nameAr}</div>
-                السجل التجاري: ${COMPANY_INFO.commercialNo}<br/>
-                الرقم الضريبي: ${COMPANY_INFO.vatNo}<br/>
+                ${t("السجل التجاري")}: ${COMPANY_INFO.commercialNo}<br/>
+                ${t("الرقم الضريبي")}: ${COMPANY_INFO.vatNo}<br/>
                 ${COMPANY_INFO.city}
               </div>
               <div style="text-align:left">
@@ -262,43 +264,43 @@ export default function Quotations() {
             </div>
 
             <div class="customer">
-              العميل: ${quotation.customer || "-"}<br/>
-              الرقم الضريبي: ${quotation.customerVat || "-"}<br/>
-              العنوان: ${quotation.customerAddress || "-"}
+              ${t("العميل")}: ${quotation.customer || "-"}<br/>
+              ${t("الرقم الضريبي")}: ${quotation.customerVat || "-"}<br/>
+              ${t("العنوان")}: ${quotation.customerAddress || "-"}
             </div>
 
             <table>
               <thead>
                 <tr>
-                  <th>البند</th>
-                  <th>الوصف</th>
-                  <th>السعر</th>
-                  <th>الكمية</th>
-                  <th>الخصم</th>
-                  <th>المجموع بدون الضريبة</th>
-                  <th>نسبة الضريبة</th>
-                  <th>قيمة الضريبة</th>
-                  <th>المجموع</th>
+                  <th>${t("البند")}</th>
+                  <th>${t("الوصف")}</th>
+                  <th>${t("السعر")}</th>
+                  <th>${t("الكمية")}</th>
+                  <th>${t("الخصم")}</th>
+                  <th>${t("المجموع بدون الضريبة")}</th>
+                  <th>${t("نسبة الضريبة")}</th>
+                  <th>${t("قيمة الضريبة")}</th>
+                  <th>${t("المجموع")}</th>
                 </tr>
               </thead>
               <tbody>${rowsHtml}</tbody>
             </table>
 
             <div class="totals">
-              <div><span>${totals.subtotal.toFixed(2)}</span><span>الإجمالي قبل الضريبة</span></div>
-              <div><span>${totals.tax.toFixed(2)}</span><span>القيمة المضافة %15</span></div>
-              <div><span>${totals.total.toFixed(2)}</span><span>الإجمالي (﷼)</span></div>
-              <div><span>${totals.total.toFixed(2)}</span><span>المستحق (﷼)</span></div>
+              <div><span>${formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>${t("الإجمالي قبل الضريبة")}</span></div>
+              <div><span>${formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>${t("القيمة المضافة %15")}</span></div>
+              <div><span>${formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>${t("الإجمالي (﷼)")}</span></div>
+              <div><span>${formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>${t("المستحق (﷼)")}</span></div>
             </div>
 
             <div class="bank">
               <div>
-                <strong>ملاحظة</strong><br/>
-                <strong>البيانات البنكية</strong><br/>
-                *اسم البنك: ${COMPANY_INFO.bankName}<br/>
-                *اسم المستفيد: ${COMPANY_INFO.beneficiary}<br/>
-                *رقم الحساب: ${COMPANY_INFO.accountNo}<br/>
-                *رقم الايبان: ${COMPANY_INFO.iban}
+                <strong>${t("ملاحظة")}</strong><br/>
+                <strong>${t("البيانات البنكية")}</strong><br/>
+                *${t("اسم البنك")}: ${COMPANY_INFO.bankName}<br/>
+                *${t("اسم المستفيد")}: ${COMPANY_INFO.beneficiary}<br/>
+                *${t("رقم الحساب")}: ${COMPANY_INFO.accountNo}<br/>
+                *${t("رقم الايبان")}: ${COMPANY_INFO.iban}
               </div>
             </div>
           </div>
@@ -312,7 +314,7 @@ export default function Quotations() {
   };
 
   return (
-    <Layout subMenu={{ title: "المبيعات", items: salesFeatures }}>
+    <Layout subMenu={{ title: t("المبيعات"), items: salesFeatures }}>
       <div className="mx-auto max-w-7xl">
         {view === "list" && (
           <QuotationsList
@@ -385,45 +387,47 @@ function QuotationsList({
   onDelete: (quotationId: string) => void;
   onDownloadPdf: (quotation: QuotationRow) => void;
 }) {
+  const { t, direction, formatDate, formatNumber } = useI18n();
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={direction}>
       <PageHeader
         icon={FileSpreadsheet}
-        title="عروض الأسعار"
-        subtitle="إدارة وتتبع جميع عروض الأسعار"
-        actionLabel="إضافة عرض سعر جديد"
+        title={t("عروض الأسعار")}
+        subtitle={t("إدارة وتتبع جميع عروض الأسعار")}
+        actionLabel={t("إضافة عرض سعر جديد")}
         onAction={onCreateClick}
         gradient="from-blue-600 to-indigo-700"
       />
 
       <FilterBar>
-        <FilterInput label="البحث" placeholder="رقم العرض، العميل..." colSpan={2} />
-        <FilterSelect label="العميل" options={["الكل"]} />
-        <FilterSelect label="الحالة" options={["الكل", "مفتوح", "مرسل", "مغلق"]} />
+        <FilterInput label={t("البحث")} placeholder={t("رقم العرض، العميل...")} colSpan={2} />
+        <FilterSelect label={t("العميل")} options={[t("الكل")]} />
+        <FilterSelect label={t("الحالة")} options={[t("الكل"), t("مفتوح"), t("مرسل"), t("مغلق")]} />
         <FilterActions />
       </FilterBar>
 
       <DataTable
-        headers={["الإجراءات", "الحالة", "الإجمالي", "العميل", "تاريخ الصلاحية", "تاريخ العرض", "رقم العرض"]}
+        headers={[t("الإجراءات"), t("الحالة"), t("الإجمالي"), t("العميل"), t("تاريخ الصلاحية"), t("تاريخ العرض"), t("رقم العرض")]}
         gradient="from-[#1e293b] to-[#334155]"
       >
         {quotations.map((row, idx) => (
           <tr key={row.id} className={cn("hover:bg-muted/30", idx % 2 !== 0 && "bg-muted/10")}>
             <td className="px-5 py-3.5 align-middle">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(row)} />
-                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(row)} />
+                <ActionBtn icon={Eye} label={t("عرض")} color="blue" onClick={() => onView(row)} />
+                <ActionBtn icon={Edit} label={t("تعديل")} color="emerald" onClick={() => onEdit(row)} />
                 <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(row)} />
-                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(row.id)} />
+                <ActionBtn icon={Trash2} label={t("حذف")} color="red" onClick={() => onDelete(row.id)} />
               </div>
             </td>
             <td className="px-5 py-3.5 text-right">
-              <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold", row.statusColor)}>{row.status}</span>
+              <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold", row.statusColor)}>{t(row.status)}</span>
             </td>
-            <td className="px-5 py-3.5 font-bold text-primary whitespace-nowrap">{row.total} ريال</td>
+            <td className="px-5 py-3.5 font-bold text-primary whitespace-nowrap">{formatNumber(parseCurrency(row.total), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}</td>
             <td className="px-5 py-3.5">{row.customer || "-"}</td>
-            <td className="px-5 py-3.5 text-muted-foreground">{row.validity || "-"}</td>
-            <td className="px-5 py-3.5 text-muted-foreground">{row.date || "-"}</td>
+            <td className="px-5 py-3.5 text-muted-foreground">{row.validity ? formatDate(row.validity) : "-"}</td>
+            <td className="px-5 py-3.5 text-muted-foreground">{row.date ? formatDate(row.date) : "-"}</td>
             <td className="px-5 py-3.5 font-bold text-primary">{row.id}</td>
           </tr>
         ))}
@@ -443,6 +447,7 @@ function QuotationEditor({
   onBack: () => void;
   onSaved: (quotation: QuotationRow) => void;
 }) {
+  const { t, direction, formatNumber } = useI18n();
   const [quotationId, setQuotationId] = useState(initialData?.id ?? "");
   const [date, setDate] = useState(initialData?.date ?? "");
   const [validity, setValidity] = useState(initialData?.validity ?? "");
@@ -503,7 +508,7 @@ function QuotationEditor({
 
   const handleSave = async (nextStatus: string) => {
     if (!quotationId || !customer || !date) {
-      toast({ title: "بيانات ناقصة", description: "يرجى إدخال رقم العرض والعميل والتاريخ" });
+      toast({ title: t("بيانات ناقصة"), description: t("يرجى إدخال رقم العرض والعميل والتاريخ") });
       return;
     }
 
@@ -538,36 +543,36 @@ function QuotationEditor({
     setSaving(false);
 
     if (error || !data) {
-      toast({ title: "تعذر حفظ عرض السعر", description: error?.message ?? "حدث خطأ غير متوقع" });
+      toast({ title: t("تعذر حفظ عرض السعر"), description: error?.message ?? t("حدث خطأ غير متوقع") });
       return;
     }
 
     const mapped = mapRow(data as Record<string, unknown>);
     onSaved(mapped);
-    toast({ title: mode === "create" ? "تم حفظ عرض السعر" : "تم تحديث عرض السعر", description: `العرض: ${mapped.id}` });
+    toast({ title: mode === "create" ? t("تم حفظ عرض السعر") : t("تم تحديث عرض السعر"), description: `${t("العرض")}: ${mapped.id}` });
   };
 
   return (
-    <div className="space-y-5" dir="rtl">
+    <div className="space-y-5" dir={direction}>
       <div className="flex items-center justify-between rounded-xl border border-border/60 bg-white px-4 py-3">
         <button onClick={onBack} className="px-4 py-2 rounded-lg border border-border text-sm font-semibold flex items-center gap-2">
-          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
+          {t("العودة للقائمة")} <ArrowLeftRight className="h-4 w-4" />
         </button>
-        <h1 className="text-lg font-bold">{mode === "create" ? "عرض سعر" : "تعديل عرض سعر"}</h1>
+        <h1 className="text-lg font-bold">{mode === "create" ? t("عرض سعر") : t("تعديل عرض سعر")}</h1>
         <div className="flex gap-2">
           <button
             onClick={() => handleSave("مفتوح")}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-60"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} حفظ
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {t("حفظ")}
           </button>
           <button
             onClick={() => handleSave("مرسل")}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-60"
           >
-            <Send className="h-4 w-4" /> حفظ ثم إرسال
+            <Send className="h-4 w-4" /> {t("حفظ ثم إرسال")}
           </button>
         </div>
       </div>
@@ -593,36 +598,36 @@ function QuotationEditor({
 
         <div className="rounded-xl border border-border/60 bg-white p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="رقم عرض السعر">
+            <Field label={t("رقم عرض السعر")}>
               <input value={quotationId} onChange={(e) => setQuotationId(e.target.value)} className={INPUT_CLASS} />
             </Field>
-            <Field label="العميل">
+            <Field label={t("العميل")}>
               <div className="space-y-2">
                 <select value={customer} onChange={(e) => setCustomer(e.target.value)} className={INPUT_CLASS}>
-                  <option value="">اختر العميل</option>
+                  <option value="">{t("اختر العميل")}</option>
                   {customers.map((name) => (
                     <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
-                <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="أو اكتب اسم عميل جديد" className={INPUT_CLASS} />
+                <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder={t("أو اكتب اسم عميل جديد")} className={INPUT_CLASS} />
               </div>
             </Field>
-            <Field label="التاريخ">
+            <Field label={t("التاريخ")}>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={INPUT_CLASS} />
             </Field>
-            <Field label="تاريخ الصلاحية">
+            <Field label={t("تاريخ الصلاحية")}>
               <input type="date" value={validity} onChange={(e) => setValidity(e.target.value)} className={INPUT_CLASS} />
             </Field>
-            <Field label="الرقم الضريبي للعميل">
+            <Field label={t("الرقم الضريبي للعميل")}>
               <input value={customerVat} onChange={(e) => setCustomerVat(e.target.value)} className={INPUT_CLASS} />
             </Field>
-            <Field label="رقم المرجع">
+            <Field label={t("رقم المرجع")}>
               <input value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} className={INPUT_CLASS} />
             </Field>
-            <Field label="العنوان" className="md:col-span-2">
+            <Field label={t("العنوان")} className="md:col-span-2">
               <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className={INPUT_CLASS} />
             </Field>
-            <Field label="المشروع" className="md:col-span-2">
+            <Field label={t("المشروع")} className="md:col-span-2">
               <input value={projectName} onChange={(e) => setProjectName(e.target.value)} className={INPUT_CLASS} />
             </Field>
           </div>
@@ -631,14 +636,14 @@ function QuotationEditor({
             <table className="w-full text-sm text-right">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-2 py-2 border">الإجراءات</th>
-                  <th className="px-2 py-2 border">البند</th>
-                  <th className="px-2 py-2 border">الوصف</th>
-                  <th className="px-2 py-2 border">السعر</th>
-                  <th className="px-2 py-2 border">الكمية</th>
-                  <th className="px-2 py-2 border">الخصم</th>
-                  <th className="px-2 py-2 border">الضريبة %</th>
-                  <th className="px-2 py-2 border">المجموع</th>
+                  <th className="px-2 py-2 border">{t("الإجراءات")}</th>
+                  <th className="px-2 py-2 border">{t("البند")}</th>
+                  <th className="px-2 py-2 border">{t("الوصف")}</th>
+                  <th className="px-2 py-2 border">{t("السعر")}</th>
+                  <th className="px-2 py-2 border">{t("الكمية")}</th>
+                  <th className="px-2 py-2 border">{t("الخصم")}</th>
+                  <th className="px-2 py-2 border">{t("الضريبة %")}</th>
+                  <th className="px-2 py-2 border">{t("المجموع")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -660,7 +665,7 @@ function QuotationEditor({
                       <td className="border px-2 py-2"><input type="number" value={item.quantity} onChange={(e) => updateItem(item.id, { quantity: toNum(e.target.value) })} className={`${INPUT_CLASS} h-9`} /></td>
                       <td className="border px-2 py-2"><input type="number" value={item.discount} onChange={(e) => updateItem(item.id, { discount: toNum(e.target.value) })} className={`${INPUT_CLASS} h-9`} /></td>
                       <td className="border px-2 py-2"><input type="number" value={item.taxPercent} onChange={(e) => updateItem(item.id, { taxPercent: toNum(e.target.value) })} className={`${INPUT_CLASS} h-9`} /></td>
-                      <td className="border px-2 py-2 font-semibold whitespace-nowrap">{formatMoney(lineTotal)}</td>
+                      <td className="border px-2 py-2 font-semibold whitespace-nowrap">{formatNumber(lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                   );
                 })}
@@ -670,16 +675,16 @@ function QuotationEditor({
 
           <div className="flex justify-between items-center">
             <button onClick={addItem} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold flex items-center gap-1.5">
-              <Plus className="h-4 w-4" /> إضافة بند
+              <Plus className="h-4 w-4" /> {t("إضافة بند")}
             </button>
             <div className="text-sm space-y-1 text-right">
-              <p>الإجمالي قبل الضريبة: <strong>{formatMoney(totals.subtotal)}</strong></p>
-              <p>الضريبة: <strong>{formatMoney(totals.tax)}</strong></p>
-              <p className="text-base">الإجمالي: <strong>{formatMoney(totals.total)}</strong></p>
+              <p>{t("الإجمالي قبل الضريبة")}: <strong>{formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
+              <p>{t("الضريبة")}: <strong>{formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
+              <p className="text-base">{t("الإجمالي")}: <strong>{formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
             </div>
           </div>
 
-          <Field label="ملاحظات">
+          <Field label={t("ملاحظات")}>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${INPUT_CLASS} h-auto py-2 min-h-[88px]`} />
           </Field>
         </div>
@@ -699,19 +704,21 @@ function QuotationDetails({
   onEdit: () => void;
   onDownloadPdf: (quotation: QuotationRow) => void;
 }) {
+  const { t, direction } = useI18n();
+
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-4" dir={direction}>
       <div className="flex items-center justify-between rounded-xl border border-border/60 bg-white px-4 py-3">
         <button onClick={onBack} className="px-4 py-2 rounded-lg border border-border text-sm font-semibold flex items-center gap-2">
-          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
+          {t("العودة للقائمة")} <ArrowLeftRight className="h-4 w-4" />
         </button>
-        <h1 className="text-lg font-bold">تفاصيل عرض السعر</h1>
+        <h1 className="text-lg font-bold">{t("تفاصيل عرض السعر")}</h1>
         <div className="flex gap-2">
           <button onClick={() => onDownloadPdf(quotation)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-semibold flex items-center gap-1.5">
             <Download className="h-4 w-4" /> PDF
           </button>
           <button onClick={onEdit} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold flex items-center gap-1.5">
-            <Edit className="h-4 w-4" /> تعديل
+            <Edit className="h-4 w-4" /> {t("تعديل")}
           </button>
         </div>
       </div>
@@ -722,49 +729,50 @@ function QuotationDetails({
 }
 
 function QuotePreview({ quotation }: { quotation: QuotationRow }) {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const totals = calculateTotals(quotation.items);
 
   return (
-    <div className="rounded-xl border border-slate-300 bg-white p-4 overflow-x-auto" dir="rtl">
+    <div className="rounded-xl border border-slate-300 bg-white p-4 overflow-x-auto" dir={direction}>
       <div className="min-w-[760px] space-y-4">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-3xl font-bold">عرض سعر</h2>
-            <p className="text-sm mt-1">الرقم {quotation.id || "-"}</p>
-            <p className="text-sm">التاريخ {quotation.date || "-"}</p>
+            <h2 className="text-3xl font-bold">{t("عرض سعر")}</h2>
+            <p className="text-sm mt-1">{t("الرقم")} {quotation.id || "-"}</p>
+            <p className="text-sm">{t("التاريخ")} {quotation.date ? formatDate(quotation.date) : "-"}</p>
           </div>
 
           <div className="text-center text-sm leading-7">
             <h3 className="text-2xl font-bold">{COMPANY_INFO.nameAr}</h3>
-            <p>السجل التجاري: {COMPANY_INFO.commercialNo}</p>
-            <p>الرقم الضريبي: {COMPANY_INFO.vatNo}</p>
+            <p>{t("السجل التجاري")}: {COMPANY_INFO.commercialNo}</p>
+            <p>{t("الرقم الضريبي")}: {COMPANY_INFO.vatNo}</p>
             <p>{COMPANY_INFO.city}</p>
           </div>
 
           <div className="text-left">
-            <img src={COMPANY_LOGO_URL} alt="Company Logo" className="w-28 h-20 object-contain" />
+            <img src={COMPANY_LOGO_URL} alt={t("شعار الشركة")} className="w-28 h-20 object-contain" />
             <p className="text-xs mt-1">{COMPANY_INFO.nameEn}</p>
           </div>
         </div>
 
         <div className="text-center text-xl leading-9">
-          <p>العميل: {quotation.customer || "-"}</p>
-          <p>الرقم الضريبي: {quotation.customerVat || "-"}</p>
-          <p>العنوان: {quotation.customerAddress || "-"}</p>
+          <p>{t("العميل")}: {quotation.customer || "-"}</p>
+          <p>{t("الرقم الضريبي")}: {quotation.customerVat || "-"}</p>
+          <p>{t("العنوان")}: {quotation.customerAddress || "-"}</p>
         </div>
 
         <table className="w-full border-collapse text-lg">
           <thead>
             <tr className="bg-slate-200">
-              <th className="border border-slate-300 px-2 py-2">البند</th>
-              <th className="border border-slate-300 px-2 py-2">الوصف</th>
-              <th className="border border-slate-300 px-2 py-2">السعر</th>
-              <th className="border border-slate-300 px-2 py-2">الكمية</th>
-              <th className="border border-slate-300 px-2 py-2">الخصم</th>
-              <th className="border border-slate-300 px-2 py-2">المجموع بدون الضريبة</th>
-              <th className="border border-slate-300 px-2 py-2">نسبة الضريبة</th>
-              <th className="border border-slate-300 px-2 py-2">قيمة الضريبة</th>
-              <th className="border border-slate-300 px-2 py-2">المجموع</th>
+              <th className="border border-slate-300 px-2 py-2">{t("البند")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("الوصف")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("السعر")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("الكمية")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("الخصم")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("المجموع بدون الضريبة")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("نسبة الضريبة")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("قيمة الضريبة")}</th>
+              <th className="border border-slate-300 px-2 py-2">{t("المجموع")}</th>
             </tr>
           </thead>
           <tbody>
@@ -777,13 +785,13 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
                 <tr key={item.id}>
                   <td className="border border-slate-300 px-2 py-2 text-center">{item.itemLabel || "-"}</td>
                   <td className="border border-slate-300 px-2 py-2 text-center">{item.description || "-"}</td>
-                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(item.unitPrice)}</td>
-                  <td className="border border-slate-300 px-2 py-2 text-center">{item.quantity}</td>
-                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(item.discount)}</td>
-                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(lineSubtotal)}</td>
-                  <td className="border border-slate-300 px-2 py-2 text-center">{item.taxPercent}%</td>
-                  <td className="border border-slate-300 px-2 py-2 text-center">{formatMoney(lineTax)}</td>
-                  <td className="border border-slate-300 px-2 py-2 text-center font-semibold">{formatMoney(lineTotal)}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatNumber(item.unitPrice, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatNumber(item.quantity)}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatNumber(item.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatNumber(lineSubtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatNumber(item.taxPercent)}%</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center">{formatNumber(lineTax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="border border-slate-300 px-2 py-2 text-center font-semibold">{formatNumber(lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
               );
             })}
@@ -791,21 +799,21 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
         </table>
 
         <div className="max-w-md mr-auto text-2xl leading-10 border-t border-slate-300 pt-2">
-          <div className="flex justify-between"><span>{formatMoney(totals.subtotal)}</span><span>الإجمالي قبل الضريبة</span></div>
-          <div className="flex justify-between"><span>{formatMoney(totals.tax)}</span><span>القيمة المضافة %15</span></div>
-          <div className="flex justify-between font-bold"><span>{formatMoney(totals.total)}</span><span>الإجمالي (﷼)</span></div>
-          <div className="flex justify-between font-bold"><span>{formatMoney(totals.total)}</span><span>المستحق (﷼)</span></div>
+          <div className="flex justify-between"><span>{formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>{t("الإجمالي قبل الضريبة")}</span></div>
+          <div className="flex justify-between"><span>{formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>{t("القيمة المضافة %15")}</span></div>
+          <div className="flex justify-between font-bold"><span>{formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>{t("الإجمالي (﷼)")}</span></div>
+          <div className="flex justify-between font-bold"><span>{formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>{t("المستحق (﷼)")}</span></div>
         </div>
 
         <div className="pt-3 text-lg leading-8">
           <div>
-            <h4 className="font-bold">ملاحظة</h4>
+            <h4 className="font-bold">{t("ملاحظة")}</h4>
             <p>{quotation.notes || "-"}</p>
-            <h4 className="font-bold mt-2">البيانات البنكية</h4>
-            <p>*اسم البنك : {COMPANY_INFO.bankName}</p>
-            <p>*اسم المستفيد : {COMPANY_INFO.beneficiary}</p>
-            <p>*رقم الحساب : {COMPANY_INFO.accountNo}</p>
-            <p>*رقم الايبان : {COMPANY_INFO.iban}</p>
+            <h4 className="font-bold mt-2">{t("البيانات البنكية")}</h4>
+            <p>*{t("اسم البنك")} : {COMPANY_INFO.bankName}</p>
+            <p>*{t("اسم المستفيد")} : {COMPANY_INFO.beneficiary}</p>
+            <p>*{t("رقم الحساب")} : {COMPANY_INFO.accountNo}</p>
+            <p>*{t("رقم الايبان")} : {COMPANY_INFO.iban}</p>
           </div>
         </div>
       </div>

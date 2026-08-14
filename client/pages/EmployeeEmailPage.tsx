@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Mail, Trash2, Send, Settings as SettingsIcon, ChevronLeft, Lock, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 
 interface MailMessage {
   id: string;
@@ -30,6 +31,7 @@ export default function EmployeeEmailPage({
   empId?: string;
   employeeName?: string;
 }) {
+  const { t, direction, formatDate } = useI18n();
   const [activeFolder, setActiveFolder] = useState<Folder>("inbox");
   const [employeeEmail, setEmployeeEmail] = useState("");
   const [messages, setMessages] = useState<MailMessage[]>([]);
@@ -99,10 +101,10 @@ export default function EmployeeEmailPage({
   const visibleMessages = activeFolder === "inbox" ? inbox : activeFolder === "sent" ? sent : activeFolder === "trash" ? trash : [];
 
   const folders: { id: Folder; label: string; count: number }[] = [
-    { id: "inbox", label: "صندوق الوارد", count: inbox.filter((message) => !message.read_at).length },
-    { id: "sent", label: "المرسل", count: sent.length },
-    { id: "trash", label: "المهملات", count: trash.length },
-    { id: "settings", label: "الإعدادات", count: 0 },
+    { id: "inbox", label: t("صندوق الوارد"), count: inbox.filter((message) => !message.read_at).length },
+    { id: "sent", label: t("المرسل"), count: sent.length },
+    { id: "trash", label: t("المهملات"), count: trash.length },
+    { id: "settings", label: t("الإعدادات"), count: 0 },
   ];
 
   const markMessagesRead = async (messageIds: string[]) => {
@@ -227,30 +229,30 @@ export default function EmployeeEmailPage({
 
   if (isLoadingEmail) {
     return (
-      <div className="h-screen bg-gray-900 text-white flex items-center justify-center" dir="rtl">
-        <p className="text-gray-400">جاري تحميل البريد الإلكتروني...</p>
+      <div className="h-screen bg-gray-900 text-white flex items-center justify-center" dir={direction}>
+        <p className="text-gray-400">{t("جاري تحميل البريد الإلكتروني...")}</p>
       </div>
     );
   }
 
   if (!mailboxAuthenticated) {
     return (
-      <div className="h-screen bg-gray-900 text-white flex items-center justify-center p-4" dir="rtl">
+      <div className="h-screen bg-gray-900 text-white flex items-center justify-center p-4" dir={direction}>
         <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-800 p-6 shadow-2xl">
           <button onClick={onBack} className="mb-6 flex items-center gap-1 text-sm text-gray-400 hover:text-white">
-            <ChevronLeft className="h-4 w-4 rotate-180" />
-            رجوع
+            <ChevronLeft className={`h-4 w-4 ${direction === "rtl" ? "rotate-180" : ""}`} />
+            {t("رجوع")}
           </button>
           <div className="mb-6 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600/20">
               <Mail className="h-7 w-7 text-blue-400" />
             </div>
-            <h1 className="text-xl font-bold">الدخول إلى البريد الإلكتروني</h1>
-            <p className="mt-2 text-sm text-gray-400">البريد مثبت لحسابك، أدخل كلمة المرور فقط</p>
+            <h1 className="text-xl font-bold">{t("الدخول إلى البريد الإلكتروني")}</h1>
+            <p className="mt-2 text-sm text-gray-400">{t("البريد مثبت لحسابك، أدخل كلمة المرور فقط")}</p>
           </div>
           <form onSubmit={handleMailboxLogin} className="space-y-4">
             <div>
-              <label className="mb-2 block text-sm text-gray-300">البريد الإلكتروني</label>
+              <label className="mb-2 block text-sm text-gray-300">{t("البريد الإلكتروني")}</label>
               <input
                 dir="ltr"
                 type="email"
@@ -260,7 +262,7 @@ export default function EmployeeEmailPage({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm text-gray-300">كلمة مرور البريد</label>
+              <label className="mb-2 block text-sm text-gray-300">{t("كلمة مرور البريد")}</label>
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                 <input
@@ -272,7 +274,7 @@ export default function EmployeeEmailPage({
                   }}
                   disabled={!employeeEmail || isSigningIn}
                   autoComplete="current-password"
-                  placeholder="أدخل كلمة المرور"
+                  placeholder={t("أدخل كلمة المرور")}
                   className="w-full rounded-lg border border-gray-600 bg-gray-900 py-3 pr-10 pl-10 text-white outline-none focus:border-blue-500"
                 />
                 <button
@@ -290,7 +292,7 @@ export default function EmployeeEmailPage({
               disabled={!employeeEmail || isSigningIn}
               className="w-full rounded-lg bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSigningIn ? "جاري الدخول..." : "دخول البريد"}
+              {isSigningIn ? t("جاري الدخول...") : t("دخول البريد")}
             </button>
           </form>
         </div>
@@ -299,12 +301,12 @@ export default function EmployeeEmailPage({
   }
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col md:flex-row" dir="rtl">
+    <div className="h-screen bg-gray-900 text-white flex flex-col md:flex-row" dir={direction}>
       <div className="hidden md:flex w-64 bg-gray-800 flex-col border-l border-gray-700">
         <div className="p-4 border-b border-gray-700">
           <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2">
             <Send className="h-4 w-4" />
-            إرسال
+            {t("إرسال")}
           </button>
         </div>
         <nav className="flex-1 p-2">
@@ -324,12 +326,12 @@ export default function EmployeeEmailPage({
       <div className="flex-1 flex flex-col min-w-0">
         <div className="bg-gray-800 border-b border-gray-700 p-4 flex items-center justify-between md:justify-start md:gap-4">
           <button onClick={onBack} className="text-gray-400 hover:text-white">
-            <ChevronLeft className="h-6 w-6 rotate-180" />
+            <ChevronLeft className={`h-6 w-6 ${direction === "rtl" ? "rotate-180" : ""}`} />
           </button>
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Mail className="h-5 w-5 text-blue-400" />
-              المراسلات
+              {t("المراسلات")}
             </h1>
             {employeeEmail && <p dir="ltr" className="text-xs text-blue-300 font-mono mt-1 text-left">{employeeEmail}</p>}
           </div>
@@ -357,7 +359,7 @@ export default function EmployeeEmailPage({
                             <p className="mt-1 truncate text-sm text-gray-300">{message.subject}</p>
                             <p className="mt-2 truncate text-xs text-gray-500">{message.body}</p>
                           </div>
-                          <span className="whitespace-nowrap text-xs text-gray-500">{new Date(message.created_at).toLocaleDateString("ar-SA")}</span>
+                          <span className="whitespace-nowrap text-xs text-gray-500">{formatDate(message.created_at, { dateStyle: "medium" })}</span>
                         </div>
                       </button>
                       <button
@@ -370,24 +372,24 @@ export default function EmployeeEmailPage({
                       </button>
                     </div>
                   ))}
-                  {visibleMessages.length === 0 && <div className="p-8 text-center text-gray-400">لا توجد رسائل</div>}
+                  {visibleMessages.length === 0 && <div className="p-8 text-center text-gray-400">{t("لا توجد رسائل")}</div>}
                 </div>
               )}
 
               {activeFolder === "settings" && (
                 <div className="p-6 space-y-4">
-                  <h2 className="text-lg font-semibold">إعدادات البريد الإلكتروني</h2>
+                  <h2 className="text-lg font-semibold">{t("إعدادات البريد الإلكتروني")}</h2>
                   <div className="bg-gray-800 p-4 rounded-lg">
-                    <label className="text-sm text-gray-400">عنوانك البريدي</label>
-                    <p dir="ltr" className="text-white font-mono mt-1 text-left">{employeeEmail || "لم يتم إنشاء إيميل لهذا الموظف"}</p>
+                    <label className="text-sm text-gray-400">{t("عنوانك البريدي")}</label>
+                    <p dir="ltr" className="text-white font-mono mt-1 text-left">{employeeEmail || t("لم يتم إنشاء إيميل لهذا الموظف")}</p>
                   </div>
                   <label className="flex items-center gap-2 bg-gray-800 p-4 rounded-lg cursor-pointer">
                     <input type="checkbox" defaultChecked className="rounded" />
-                    إشعارات البريد الجديد
+                    {t("إشعارات البريد الجديد")}
                   </label>
                   <label className="flex items-center gap-2 bg-gray-800 p-4 rounded-lg cursor-pointer">
                     <input type="checkbox" defaultChecked className="rounded" />
-                    اشتراك في رسائل الخصومات
+                    {t("اشتراك في رسائل الخصومات")}
                   </label>
                 </div>
               )}
@@ -396,8 +398,8 @@ export default function EmployeeEmailPage({
             <div className="h-full overflow-y-auto p-6">
               <div className="max-w-2xl">
                 <button onClick={() => setSelectedEmail(null)} className="text-gray-400 hover:text-white mb-4 flex items-center gap-1">
-                  <ChevronLeft className="h-4 w-4 rotate-180" />
-                  رجوع
+                  <ChevronLeft className={`h-4 w-4 ${direction === "rtl" ? "rotate-180" : ""}`} />
+                  {t("رجوع")}
                 </button>
                 <div className="bg-gray-800 rounded-lg p-6">
                   <div className="flex items-start justify-between border-b border-gray-700 pb-4 mb-4">
@@ -417,7 +419,7 @@ export default function EmployeeEmailPage({
                     </button>
                   </div>
                   <h2 className="text-xl font-bold mb-2">{selectedEmail.subject}</h2>
-                  <div className="text-sm text-gray-400 mb-6">{new Date(selectedEmail.created_at).toLocaleString("ar-SA")}</div>
+                  <div className="text-sm text-gray-400 mb-6">{formatDate(selectedEmail.created_at, { dateStyle: "medium", timeStyle: "short" })}</div>
                   <div className="bg-gray-900 p-4 rounded text-white leading-relaxed whitespace-pre-line">{selectedEmail.body}</div>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ClipboardList, Users, CalendarDays, BarChart3, Megaphone, BadgeDollarSign } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { useI18n } from "@/i18n";
 
 type Mode = "performance" | "team" | "attendance" | "my-reports" | "reports" | "circulars" | "commissions" | "announcements";
 type Props = {
@@ -34,6 +35,7 @@ const modeIcon = (mode: Mode) => {
 };
 
 export default function PortalDataPage({ mode, empId, employeeName, isManager, onBack }: Props) {
+  const { t, direction, formatDate } = useI18n();
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -122,7 +124,7 @@ export default function PortalDataPage({ mode, empId, employeeName, isManager, o
           next = (data ?? []).map((row: any) => ({
             id: String(row.id),
             title: isManager ? String(row.emp_name || row.emp_id) : "طلب صرف عمولة",
-            subtitle: new Date(row.created_at).toLocaleDateString("ar-SA"),
+            subtitle: formatDate(row.created_at, { dateStyle: "medium" }),
             meta: row.details?.amount ? `القيمة: ${row.details.amount}` : "تفاصيل العمولة محفوظة في الطلب",
             status: String(row.status ?? "معلق"),
           }));
@@ -139,7 +141,7 @@ export default function PortalDataPage({ mode, empId, employeeName, isManager, o
             id: String(row.id),
             title: String(row.title),
             subtitle: String(row.content || ""),
-            meta: `${new Date(row.created_at).toLocaleDateString("ar-SA")} • ${row.created_by || ""}`,
+            meta: `${formatDate(row.created_at, { dateStyle: "medium" })} • ${row.created_by || ""}`,
             status: String(row.status),
           }));
         }
@@ -148,7 +150,7 @@ export default function PortalDataPage({ mode, empId, employeeName, isManager, o
       } catch (loadError: any) {
         if (!cancelled) {
           setCards([]);
-          setError(loadError?.message || "تعذر تحميل البيانات");
+          setError(loadError?.message || t("تعذر تحميل البيانات"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -163,19 +165,19 @@ export default function PortalDataPage({ mode, empId, employeeName, isManager, o
   const meta = PAGE_META[mode];
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50" dir={direction}>
       <div className="flex items-center gap-3 p-4 bg-white border-b sticky top-0 z-10">
-        <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className="h-6 w-6 rotate-180" /></button>
+        <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className={`h-6 w-6 ${direction === "rtl" ? "rotate-180" : ""}`} /></button>
         <Icon className="h-5 w-5 text-[#004e89]" />
-        <h2 className="font-bold text-lg text-gray-900">{meta.title}</h2>
+        <h2 className="font-bold text-lg text-gray-900">{t(meta.title)}</h2>
       </div>
       <div className="flex-1 overflow-y-auto p-4 pb-24">
         {loading ? (
-          <div className="text-center py-12 text-gray-400">جاري تحميل البيانات...</div>
+          <div className="text-center py-12 text-gray-400">{t("جاري تحميل البيانات...")}</div>
         ) : error ? (
-          <div className="bg-red-50 text-red-700 rounded-xl p-4 text-center text-sm">{error}</div>
+          <div className="bg-red-50 text-red-700 rounded-xl p-4 text-center text-sm">{t(error)}</div>
         ) : cards.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 p-10 text-center text-gray-400">{meta.empty}</div>
+          <div className="bg-white rounded-xl border border-gray-100 p-10 text-center text-gray-400">{t(meta.empty)}</div>
         ) : cards.map((card) => (
           <div key={card.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
             <div className="flex items-start justify-between gap-3">
@@ -184,7 +186,7 @@ export default function PortalDataPage({ mode, empId, employeeName, isManager, o
                 {card.subtitle && <p className="text-sm text-gray-600 mt-1">{card.subtitle}</p>}
                 {card.meta && <p className="text-xs text-gray-400 mt-2">{card.meta}</p>}
               </div>
-              {card.status && <span className="bg-blue-50 text-[#004e89] px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap">{card.status}</span>}
+              {card.status && <span className="bg-blue-50 text-[#004e89] px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap">{t(card.status)}</span>}
             </div>
           </div>
         ))}

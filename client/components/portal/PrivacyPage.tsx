@@ -1,5 +1,7 @@
 import { ChevronLeft, Lock } from "lucide-react";
 
+import { useI18n } from "@/i18n";
+
 type Props = { onBack: () => void };
 
 const SECTIONS = [
@@ -26,23 +28,25 @@ const SECTIONS = [
 ];
 
 export default function PrivacyPage({ onBack }: Props) {
+  const { t, direction } = useI18n();
+
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50" dir={direction}>
       <div className="flex items-center gap-3 p-4 bg-white border-b sticky top-0 z-10">
-        <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className="h-6 w-6 rotate-180" /></button>
+        <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className={`h-6 w-6 ${direction === "rtl" ? "rotate-180" : ""}`} /></button>
         <Lock className="h-5 w-5 text-[#004e89]" />
-        <h2 className="font-bold text-lg text-gray-900">سياسة الخصوصية</h2>
+        <h2 className="font-bold text-lg text-gray-900">{t("سياسة الخصوصية")}</h2>
       </div>
       <div className="flex-1 overflow-y-auto p-4 pb-24 space-y-4">
-        <div className="bg-gradient-to-l from-[#004e89] to-[#0066b3] rounded-xl p-5 text-white">
+        <div className="bg-gradient-to-r from-[#004e89] to-[#0066b3] rounded-xl p-5 text-white">
           <Lock className="h-8 w-8 mb-2 text-white/80" />
-          <p className="font-bold text-lg">سياسة حماية بيانات الموظفين</p>
-          <p className="text-xs text-blue-200 mt-1">آخر تحديث: 2024</p>
+          <p className="font-bold text-lg">{t("سياسة حماية بيانات الموظفين")}</p>
+          <p className="text-xs text-blue-200 mt-1">{t("آخر تحديث")}: 2024</p>
         </div>
         {SECTIONS.map((sec) => (
           <div key={sec.title} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <p className="font-semibold text-[#004e89] mb-2">{sec.title}</p>
-            <p className="text-sm text-gray-600 leading-relaxed">{sec.content}</p>
+            <p className="font-semibold text-[#004e89] mb-2">{t(sec.title)}</p>
+            <p className="text-sm text-gray-600 leading-relaxed">{t(sec.content)}</p>
           </div>
         ))}
       </div>

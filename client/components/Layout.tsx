@@ -374,7 +374,7 @@ function HRSidebar({
             {sidebarOpen && (
               <div className="flex flex-col">
                 <span className="text-[14px] font-extrabold text-white tracking-tight leading-tight">
-                  الموارد البشرية
+                  {t("الموارد البشرية")}
                 </span>
                 <span className="text-[10px] font-medium text-emerald-300/60 tracking-wide">
                   {t("نظام الموارد البشرية")}

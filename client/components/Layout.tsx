@@ -377,7 +377,7 @@ function HRSidebar({
                   الموارد البشرية
                 </span>
                 <span className="text-[10px] font-medium text-emerald-300/60 tracking-wide">
-                  HUMAN RESOURCES
+                  {t("نظام الموارد البشرية")}
                 </span>
               </div>
             )}
@@ -406,7 +406,7 @@ function HRSidebar({
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 flex-shrink-0">
             <ArrowRight className="h-4 w-4" />
           </div>
-          {sidebarOpen && <span>العودة للقائمة الرئيسية</span>}
+          {sidebarOpen && <span>{t("العودة للقائمة الرئيسية")}</span>}
         </button>
       </div>
 
@@ -421,7 +421,7 @@ function HRSidebar({
       >
         {sidebarOpen && (
           <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300/25">
-            أقسام الموارد البشرية
+            {t("أقسام الموارد البشرية")}
           </p>
         )}
         {allowedHRItems.map((item, index) => {
@@ -485,7 +485,7 @@ function HRSidebar({
                     <Icon className="h-4 w-4" />
                   </div>
                   {sidebarOpen && !isToolsIcon && (
-                    <span className={cn("flex-1 text-right truncate", isItemActive && "font-semibold")}>
+                    <span className={cn("flex-1 text-start truncate", isItemActive && "font-semibold")}>
                       {t(item.label)}
                     </span>
                   )}
@@ -518,7 +518,7 @@ function HRSidebar({
 
               {/* Children sub-menu */}
               {item.hasChildren && isExpanded && sidebarOpen && item.children && (
-                <div className="mt-1.5 mr-4 ml-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border bg-emerald-500/[0.06] border-emerald-400/15">
+                <div className="mt-1.5 me-4 ms-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border bg-emerald-500/[0.06] border-emerald-400/15">
                   {item.children.map((child) => {
                     const ChildIcon = child.icon;
                     const isChildActive = location.pathname === child.href;
@@ -527,7 +527,7 @@ function HRSidebar({
                         key={child.href}
                         onClick={() => navigateKeepingScroll(child.href)}
                         className={cn(
-                          "w-full text-right flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
+                          "w-full text-start flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
                           isChildActive
                             ? "text-white bg-emerald-500/15 border border-emerald-500/25"
                             : "text-emerald-300 opacity-60 hover:opacity-100 hover:bg-white/[0.05] border border-transparent"
@@ -541,9 +541,9 @@ function HRSidebar({
                               : "bg-emerald-400 opacity-40"
                           )}
                         />
-                        <span>{child.label}</span>
+                        <span>{t(child.label)}</span>
                         {isChildActive && (
-                          <span className="mr-auto h-1 w-5 rounded-full bg-gradient-to-l from-emerald-400 to-teal-500 opacity-60" />
+                          <span className="ms-auto h-1 w-5 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 opacity-60" />
                         )}
                       </button>
                     );
@@ -846,7 +846,7 @@ function MainSidebar({
                         key={index}
                         onClick={() => navigate(subItem.href)}
                         className={cn(
-                          "w-full text-right flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
+                          "w-full text-start flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
                           isSubActive
                             ? cn("text-white", colors.active)
                             : cn("hover:bg-white/[0.05]", colors.text, "opacity-60 hover:opacity-100")

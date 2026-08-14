@@ -26,7 +26,7 @@ const actions = [
 
 export default function QuickActionsBar() {
   const navigate = useNavigate();
-  const { t, locale, direction, setLocale } = useI18n();
+  const { t, locale, direction, setLocale, formatDate, formatNumber } = useI18n();
   const session = readUserSession();
   const [panel, setPanel] = useState<Panel>(null);
   const [contacts, setContacts] = useState<ContactSettings>({ phone: "", email: "", whatsapp: "" });
@@ -64,7 +64,7 @@ export default function QuickActionsBar() {
 
   const handleAction = (id: string) => {
     if (id === "refresh") {
-      toast.success("جاري تحديث بيانات النظام...");
+      toast.success(t("جاري تحديث بيانات النظام..."));
       window.setTimeout(() => window.location.reload(), 250);
       return;
     }
@@ -88,18 +88,18 @@ export default function QuickActionsBar() {
     });
     setContactSaving(false);
     if (error) return toast.error(error.message);
-    toast.success("تم حفظ بيانات الاتصال");
+    toast.success(t("تم حفظ بيانات الاتصال"));
   };
 
   const sendToManagement = async () => {
     if (!session?.empId || !subject.trim() || !message.trim()) {
-      toast.error("أدخل الموضوع والرسالة وتأكد من ارتباط الحساب بموظف");
+      toast.error(t("أدخل الموضوع والرسالة وتأكد من ارتباط الحساب بموظف"));
       return;
     }
     setSending(true);
     try {
       const { data: signature } = await supabase.rpc("get_my_employee_signature");
-      if (!signature?.signatureData) throw new Error("يجب حفظ توقيعك الإلكتروني من نموذج طلب موظف أولاً");
+      if (!signature?.signatureData) throw new Error(t("يجب حفظ توقيعك الإلكتروني من نموذج طلب موظف أولاً"));
       const { error } = await supabase.from("hr_requests").insert({
         id: crypto.randomUUID(),
         emp_id: session.empId,
@@ -117,9 +117,9 @@ export default function QuickActionsBar() {
       setMessage("");
       setPanel(null);
       await loadNotices();
-      toast.success("تم إرسال رسالتك إلى الإدارة");
+      toast.success(t("تم إرسال رسالتك إلى الإدارة"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر إرسال الرسالة");
+      toast.error(error instanceof Error ? error.message : t("تعذر إرسال الرسالة"));
     } finally {
       setSending(false);
     }
@@ -154,39 +154,39 @@ export default function QuickActionsBar() {
             <span className="whitespace-nowrap text-[10px] font-semibold text-slate-600">{t(label)}</span>
           </button>
         ))}
-        <div className="mr-auto h-10 w-px shrink-0 bg-slate-200" />
-        <button onClick={() => setPanel(panel === "account" ? null : "account")} className="flex min-w-[155px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right hover:bg-slate-100">
+        <div className="ms-auto h-10 w-px shrink-0 bg-slate-200" />
+        <button onClick={() => setPanel(panel === "account" ? null : "account")} className="flex min-w-[155px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-start hover:bg-slate-100">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#004e89] text-white"><User className="h-4 w-4" /></span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold text-slate-800">{session?.name || "الحساب"}</span><span className="block text-[10px] text-slate-500">{session?.empId || session?.role || "مستخدم"}</span></span>
+          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold text-slate-800">{session?.name || t("الحساب")}</span><span className="block text-[10px] text-slate-500">{session?.empId || session?.role || t("مستخدم")}</span></span>
           <ChevronDown className="h-4 w-4 text-slate-400" />
         </button>
       </div>
 
       {panel && (
-        <div className="absolute left-3 top-full mt-2 w-[min(390px,calc(100vw-24px))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+        <div className="absolute end-3 top-full mt-2 w-[min(390px,calc(100vw-24px))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
           <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-800">{t(actions.find((action) => action.id === panel)?.label || "الحساب")}</h3><button onClick={() => setPanel(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
 
           {panel === "contact" && <div className="space-y-2 text-sm">
-            {contacts.phone ? <a href={`tel:${contacts.phone}`} className="flex items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><Phone className="h-4 w-4 text-blue-600" /><span>{contacts.phone}</span></a> : <p className="rounded-xl bg-amber-50 p-3 text-amber-800">لم يتم إعداد رقم الاتصال بعد.</p>}
-            {contacts.email ? <a href={`mailto:${contacts.email}`} className="flex items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><Mail className="h-4 w-4 text-blue-600" /><span>{contacts.email}</span></a> : <p className="rounded-xl bg-slate-50 p-3 text-slate-500">لم يتم إعداد البريد الإلكتروني.</p>}
-            {contacts.whatsapp && <a href={`https://wa.me/${contacts.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border p-3 hover:bg-emerald-50"><MessageSquare className="h-4 w-4 text-emerald-600" /><span>واتساب: {contacts.whatsapp}</span></a>}
-            {["مدير النظام", "مدير عام", "المدير العام"].includes(session?.role ?? "") && <div className="mt-3 space-y-2 border-t pt-3"><p className="text-xs font-bold text-slate-600">إعداد بيانات الاتصال</p><input value={contacts.phone} onChange={(event) => setContacts((current) => ({ ...current, phone: event.target.value }))} placeholder="رقم الهاتف" className="w-full rounded-lg border px-3 py-2" /><input value={contacts.email} onChange={(event) => setContacts((current) => ({ ...current, email: event.target.value }))} placeholder="البريد الإلكتروني" className="w-full rounded-lg border px-3 py-2" /><input value={contacts.whatsapp} onChange={(event) => setContacts((current) => ({ ...current, whatsapp: event.target.value }))} placeholder="رقم واتساب" className="w-full rounded-lg border px-3 py-2" /><button onClick={saveContacts} disabled={contactSaving} className="w-full rounded-lg bg-[#004e89] py-2 font-semibold text-white disabled:opacity-50">{contactSaving ? "جاري الحفظ..." : "حفظ بيانات الاتصال"}</button></div>}
+            {contacts.phone ? <a href={`tel:${contacts.phone}`} className="flex items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><Phone className="h-4 w-4 text-blue-600" /><span>{contacts.phone}</span></a> : <p className="rounded-xl bg-amber-50 p-3 text-amber-800">{t("لم يتم إعداد رقم الاتصال بعد.")}</p>}
+            {contacts.email ? <a href={`mailto:${contacts.email}`} className="flex items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><Mail className="h-4 w-4 text-blue-600" /><span>{contacts.email}</span></a> : <p className="rounded-xl bg-slate-50 p-3 text-slate-500">{t("لم يتم إعداد البريد الإلكتروني.")}</p>}
+            {contacts.whatsapp && <a href={`https://wa.me/${contacts.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border p-3 hover:bg-emerald-50"><MessageSquare className="h-4 w-4 text-emerald-600" /><span>{t("واتساب")}: {contacts.whatsapp}</span></a>}
+            {["مدير النظام", "مدير عام", "المدير العام"].includes(session?.role ?? "") && <div className="mt-3 space-y-2 border-t pt-3"><p className="text-xs font-bold text-slate-600">{t("إعداد بيانات الاتصال")}</p><input value={contacts.phone} onChange={(event) => setContacts((current) => ({ ...current, phone: event.target.value }))} placeholder={t("رقم الهاتف")} className="w-full rounded-lg border px-3 py-2" /><input value={contacts.email} onChange={(event) => setContacts((current) => ({ ...current, email: event.target.value }))} placeholder={t("البريد الإلكتروني")} className="w-full rounded-lg border px-3 py-2" /><input value={contacts.whatsapp} onChange={(event) => setContacts((current) => ({ ...current, whatsapp: event.target.value }))} placeholder={t("رقم واتساب")} className="w-full rounded-lg border px-3 py-2" /><button onClick={saveContacts} disabled={contactSaving} className="w-full rounded-lg bg-[#004e89] py-2 font-semibold text-white disabled:opacity-50">{contactSaving ? t("جاري الحفظ...") : t("حفظ بيانات الاتصال")}</button></div>}
           </div>}
 
-          {panel === "management" && <div className="space-y-3"><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="موضوع الرسالة" className="w-full rounded-lg border px-3 py-2 text-sm" /><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="اكتب رسالتك إلى الإدارة" rows={4} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" /><button onClick={sendToManagement} disabled={sending} className="w-full rounded-lg bg-[#004e89] py-2 text-sm font-semibold text-white disabled:opacity-50">{sending ? "جاري الإرسال..." : "إرسال إلى الإدارة"}</button></div>}
+          {panel === "management" && <div className="space-y-3"><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={t("موضوع الرسالة")} className="w-full rounded-lg border px-3 py-2 text-sm" /><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t("اكتب رسالتك إلى الإدارة")} rows={4} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" /><button onClick={sendToManagement} disabled={sending} className="w-full rounded-lg bg-[#004e89] py-2 text-sm font-semibold text-white disabled:opacity-50">{sending ? t("جاري الإرسال...") : t("إرسال إلى الإدارة")}</button></div>}
 
-          {panel === "calculator" && <div className="space-y-3"><div className="grid grid-cols-[1fr_70px_1fr] gap-2"><input type="number" value={firstNumber} onChange={(event) => setFirstNumber(Number(event.target.value))} className="rounded-lg border px-3 py-2" /><select value={operator} onChange={(event) => setOperator(event.target.value as typeof operator)} className="rounded-lg border bg-white px-2"><option>+</option><option>-</option><option>×</option><option>÷</option></select><input type="number" value={secondNumber} onChange={(event) => setSecondNumber(Number(event.target.value))} className="rounded-lg border px-3 py-2" /></div><div className="rounded-xl bg-slate-900 p-4 text-center text-2xl font-bold text-white">{result === null ? "لا يمكن القسمة على صفر" : result.toLocaleString("ar-SA")}</div></div>}
+          {panel === "calculator" && <div className="space-y-3"><div className="grid grid-cols-[1fr_70px_1fr] gap-2"><input type="number" value={firstNumber} onChange={(event) => setFirstNumber(Number(event.target.value))} className="rounded-lg border px-3 py-2" /><select value={operator} onChange={(event) => setOperator(event.target.value as typeof operator)} className="rounded-lg border bg-white px-2"><option>+</option><option>-</option><option>×</option><option>÷</option></select><input type="number" value={secondNumber} onChange={(event) => setSecondNumber(Number(event.target.value))} className="rounded-lg border px-3 py-2" /></div><div className="rounded-xl bg-slate-900 p-4 text-center text-2xl font-bold text-white">{result === null ? t("لا يمكن القسمة على صفر") : formatNumber(result)}</div></div>}
 
-          {panel === "notifications" && <div className="max-h-80 space-y-2 overflow-y-auto">{notices.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">لا توجد إشعارات</p> : notices.map((notice) => <button key={notice.id} onClick={() => { setPanel(null); navigate("/hr/requests/incoming"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 text-right hover:bg-slate-50"><CheckCircle className={`h-4 w-4 ${["معلق", "معلقة", "pending"].includes(notice.status) ? "text-amber-500" : "text-emerald-500"}`} /><span className="flex-1"><span className="block text-sm font-medium">{notice.title}</span><span className="text-[10px] text-slate-400">{notice.date ? new Date(notice.date).toLocaleString("ar-SA") : ""}</span></span><span className="text-xs text-slate-500">{notice.status}</span></button>)}</div>}
+          {panel === "notifications" && <div className="max-h-80 space-y-2 overflow-y-auto">{notices.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">{t("لا توجد إشعارات")}</p> : notices.map((notice) => <button key={notice.id} onClick={() => { setPanel(null); navigate("/hr/requests/incoming"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 text-right hover:bg-slate-50"><CheckCircle className={`h-4 w-4 ${["معلق", "معلقة", "pending"].includes(notice.status) ? "text-amber-500" : "text-emerald-500"}`} /><span className="flex-1"><span className="block text-sm font-medium">{notice.title}</span><span className="text-[10px] text-slate-400">{notice.date ? formatDate(notice.date, { dateStyle: "medium", timeStyle: "short" }) : ""}</span></span><span className="text-xs text-slate-500">{t(notice.status)}</span></button>)}</div>}
 
           {panel === "language" && <div className="grid grid-cols-2 gap-3"><button onClick={() => changeLanguage("ar")} className={`rounded-xl border p-4 font-bold ${locale === "ar" ? "border-blue-200 bg-blue-50 text-blue-800" : "text-slate-700"}`}>{t("العربية")}</button><button onClick={() => changeLanguage("en")} className={`rounded-xl border p-4 font-bold ${locale === "en" ? "border-blue-200 bg-blue-50 text-blue-800" : "text-slate-700"}`}>{t("English")}</button></div>}
 
           {panel === "account" && <div className="space-y-2 text-sm">
-            <button onClick={() => { setPanel(null); navigate("/employee/dashboard?view=profile"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><User className="h-4 w-4 text-blue-600" /> الملف الشخصي</button>
-            <button onClick={() => { setPanel(null); navigate("/"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><BriefcaseBusiness className="h-4 w-4 text-violet-600" /> لوحة إدارة الأعمال</button>
-            <button onClick={() => { setPanel(null); navigate("/hr/dashboard"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><BriefcaseBusiness className="h-4 w-4 text-emerald-600" /> لوحة الموارد البشرية</button>
-            <button onClick={() => { localStorage.removeItem("user_session"); navigate("/login"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><LogIn className="h-4 w-4 text-slate-600" /> تغيير الحساب / تسجيل الدخول</button>
-            <button onClick={logout} className="flex w-full items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-700 hover:bg-red-100"><LogOut className="h-4 w-4" /> تسجيل الخروج</button>
+            <button onClick={() => { setPanel(null); navigate("/employee/dashboard?view=profile"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><User className="h-4 w-4 text-blue-600" /> {t("الملف الشخصي")}</button>
+            <button onClick={() => { setPanel(null); navigate("/"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><BriefcaseBusiness className="h-4 w-4 text-violet-600" /> {t("لوحة إدارة الأعمال")}</button>
+            <button onClick={() => { setPanel(null); navigate("/hr/dashboard"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><BriefcaseBusiness className="h-4 w-4 text-emerald-600" /> {t("لوحة الموارد البشرية")}</button>
+            <button onClick={() => { localStorage.removeItem("user_session"); navigate("/login"); }} className="flex w-full items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"><LogIn className="h-4 w-4 text-slate-600" /> {t("تغيير الحساب / تسجيل الدخول")}</button>
+            <button onClick={logout} className="flex w-full items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-700 hover:bg-red-100"><LogOut className="h-4 w-4" /> {t("تسجيل الخروج")}</button>
           </div>}
         </div>
       )}

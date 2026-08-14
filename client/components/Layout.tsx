@@ -576,7 +576,7 @@ function HRSidebar({
           {sidebarOpen && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || "مدير النظام"}</p>
+                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || t("مدير النظام")}</p>
                 <p className="text-[10px] text-emerald-300/30 truncate">{userSession?.role || ""}</p>
               </div>
               <button
@@ -587,7 +587,7 @@ function HRSidebar({
                   navigate("/login");
                 }}
                 className="rounded-lg p-1.5 text-white/20 hover:text-red-400 hover:bg-white/[0.06] transition-all"
-                title="تسجيل الخروج"
+                title={t("تسجيل الخروج")}
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -710,10 +710,10 @@ function MainSidebar({
             {sidebarOpen && (
               <div className="flex flex-col">
                 <span className="text-[14px] font-extrabold text-white tracking-tight leading-tight">
-                  لاكجري العياف
+                  {t("لاكجري العياف")}
                 </span>
                 <span className="text-[10px] font-medium text-blue-300/60 tracking-wide">
-                  LUXURY AL AYAF
+                  {t("لاكجري العياف")}
                 </span>
               </div>
             )}
@@ -726,7 +726,7 @@ function MainSidebar({
                 ? "text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
                 : "bg-white/10 text-white hover:bg-white/20"
             )}
-            title={sidebarOpen ? "تصغير القائمة" : "توسيع القائمة"}
+            title={t(sidebarOpen ? "تصغير القائمة" : "توسيع القائمة")}
           >
             {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -744,7 +744,7 @@ function MainSidebar({
       >
         {sidebarOpen && (
           <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white/25">
-            القائمة الرئيسية
+            {t("القائمة الرئيسية")}
           </p>
         )}
         {navItems.map((item) => {
@@ -772,7 +772,7 @@ function MainSidebar({
               {sidebarOpen && (
                 <>
                   <span className={cn(
-                    "flex-1 text-right transition-colors duration-200",
+                    "flex-1 text-start transition-colors duration-200",
                     isItemActive ? "text-white font-semibold" : ""
                   )}>
                     {t(item.label)}
@@ -827,7 +827,7 @@ function MainSidebar({
               {/* Submenu */}
               {isExpanded && sidebarOpen && subItems && (
                 <div className={cn(
-                  "mt-1.5 mr-4 ml-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border",
+                  "mt-1.5 me-4 ms-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border",
                   colors.subBg, colors.border
                 )}>
                   {subItems.map((subItem, index) => {
@@ -862,7 +862,7 @@ function MainSidebar({
                         />
                         <span>{t(subItem.label)}</span>
                         {isSubActive && (
-                          <span className={cn("mr-auto h-1 w-5 rounded-full bg-gradient-to-l opacity-60", colors.icon)} />
+                          <span className={cn("ms-auto h-1 w-5 rounded-full bg-gradient-to-r opacity-60", colors.icon)} />
                         )}
                       </button>
                     );
@@ -895,7 +895,7 @@ function MainSidebar({
           {sidebarOpen && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || "مدير النظام"}</p>
+                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || t("مدير النظام")}</p>
                 <p className="text-[10px] text-white/30 truncate">{userSession?.role || ""}</p>
               </div>
               <button
@@ -906,7 +906,7 @@ function MainSidebar({
                   navigate("/login");
                 }}
                 className="rounded-lg p-1.5 text-white/20 hover:text-red-400 hover:bg-white/[0.06] transition-all"
-                title="تسجيل الخروج"
+                title={t("تسجيل الخروج")}
               >
                 <LogOut className="h-4 w-4" />
               </button>

@@ -5,6 +5,7 @@ import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type PartyRow = {
   id: string;
@@ -59,6 +60,141 @@ const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
   status: String(row.status ?? "نشط"),
 });
 
+const crmTranslations: Record<string, string> = {
+  "العملاء والموردين": "Customers and vendors",
+  "العملاء": "Customers",
+  "الموردين": "Vendors",
+  "التقارير": "Reports",
+  "ملخصات وتقارير العملاء والموردين في مكان واحد.": "Customer and vendor summaries and reports in one place.",
+  "إدارة بيانات الموردين ومتابعة الحالة المالية.": "Manage vendor data and monitor financial status.",
+  "إدارة قاعدة بيانات العملاء ومتابعة الحالة المالية.": "Manage the customer database and monitor financial status.",
+  "توليد تقرير جديد": "Generate new report",
+  "إضافة مورد جديد": "Add new vendor",
+  "إضافة عميل جديد": "Add new customer",
+  "رقم المورد": "Vendor number",
+  "رقم العميل": "Customer number",
+  "نوع المورد": "Vendor type",
+  "نوع العميل": "Customer type",
+  "ابحث بالاسم أو رقم المورد": "Search by name or vendor number",
+  "ابحث بالاسم أو رقم العميل": "Search by name or customer number",
+  "مورد محلي": "Local vendor",
+  "مورد دولي": "International vendor",
+  "مورد خدمات": "Service vendor",
+  "شركة": "Company",
+  "فرد": "Individual",
+  "جهة حكومية": "Government entity",
+  "نشط": "Active",
+  "غير نشط": "Inactive",
+  "تنبيهات": "alerts",
+  "تنبيه": "Alert",
+  "أدخل الاسم": "Enter a name",
+  "تم التحديث": "Updated",
+  "تم تحديث بيانات المورد": "Vendor data updated",
+  "تم تحديث بيانات العميل": "Customer data updated",
+  "فشل التحديث": "Update failed",
+  "تعذر الاتصال بقاعدة البيانات": "Unable to connect to the database",
+  "تعذر تحديث البيانات": "Unable to update data",
+  "تم الحفظ": "Saved",
+  "تمت إضافة المورد": "Vendor added",
+  "تمت إضافة العميل": "Customer added",
+  "فشل الحفظ": "Save failed",
+  "تعذر الاتصال بقاعدة البيانات، تحقق من الاتصال": "Unable to connect to the database; check the connection",
+  "تعذر حفظ البيانات": "Unable to save data",
+  "هل متأكد من حذف المورد؟": "Are you sure you want to delete the vendor?",
+  "هل متأكد من حذف العميل؟": "Are you sure you want to delete the customer?",
+  "تم الحذف": "Deleted",
+  "تم حذف المورد": "Vendor deleted",
+  "تم حذف العميل": "Customer deleted",
+  "فشل الحذف": "Delete failed",
+  "تعذر حذف البيانات": "Unable to delete data",
+  "تعديل بيانات المورد": "Edit vendor data",
+  "تعديل بيانات العميل": "Edit customer data",
+  "المنشأة والتسجيل الضريبي مطلوب": "Establishment and tax registration are required",
+  "اسم المورد": "Vendor name",
+  "اسم العميل": "Customer name",
+  "اسم المنشأة *": "Establishment name *",
+  "اختياري": "Optional",
+  "المملكة العربية السعودية": "Saudi Arabia",
+  "الإمارات العربية المتحدة": "United Arab Emirates",
+  "قطر": "Qatar",
+  "الكويت": "Kuwait",
+  "البلد": "Country",
+  "غير مسجل في ضريبة القيمة المضافة": "Not registered for VAT",
+  "جهة اتصال مسجلة في ضريبة القيمة المضافة في السعودية": "Contact registered for VAT in Saudi Arabia",
+  "التسجيل في ضريبة القيمة المضافة *": "VAT registration *",
+  "رقم التسجيل الضريبي": "Tax registration number",
+  "العنوان اختياري": "Address (optional)",
+  "المدينة": "City",
+  "الشارع": "Street",
+  "رقم المبنى": "Building number",
+  "الحي": "District",
+  "الرمز البريدي": "Postal code",
+  "بيانات الفوترة اختياري": "Billing data (optional)",
+  "المعرّف": "Identifier",
+  "البريد الإلكتروني": "Email",
+  "الهاتف": "Phone",
+  "العملة": "Currency",
+  "شروط الدفع": "Payment terms",
+  "تحديد": "Select",
+  "فوري": "Immediate",
+  "15 يوم": "15 days",
+  "30 يوم": "30 days",
+  "رقم الترخيص": "License number",
+  "نوع ورقم ترخيص جهة الاتصال": "Contact license type and number",
+  "الرصيد الافتتاحي": "Opening balance",
+  "حد الائتمان": "Credit limit",
+  "جاري الحفظ...": "Saving...",
+  "حفظ": "Save",
+  "إلغاء": "Cancel",
+  "التدقيق والمتابعة": "Audit and follow-up",
+  "تحكم": "Control",
+  "إعدادات نُظم الضريبة": "Tax system settings",
+  "فواتير المبيعات المستحقة": "Due sales invoices",
+  "تقارير أعمار المديونية": "Receivables aging reports",
+  "مؤشرات الأداء (KPIs)": "Key performance indicators (KPIs)",
+  "تقارير الموردين (AP)": "Vendor reports (AP)",
+  "قيد التطوير": "Under development",
+  "تقرير أعمار الموردين": "Vendor aging report",
+  "تقرير أرصدة الموردين (AP Aging)": "Vendor balance report (AP Aging)",
+  "تقييمات المستحقات المتأخرة": "Overdue receivables assessments",
+  "تقارير العملاء (AR)": "Customer reports (AR)",
+  "نشطة": "Active",
+  "تقرير أعمار العملاء": "Customer aging report",
+  "تقرير أرصدة العملاء (AR Aging)": "Customer balance report (AR Aging)",
+  "حالات التحصيل": "Collection statuses",
+  "تنبيهات التأخر في الدفع": "Late payment alerts",
+  "ملخصات عامة للتقارير": "General report summaries",
+  "إجمالي المديونية": "Total receivables",
+  "المدفوعات الأخيرة": "Recent payments",
+  "المستحقات المتأخرة": "Overdue receivables",
+  "تنبيهات المتابعة": "Follow-up alerts",
+  "5 تنبيهات": "5 alerts",
+  "تصفية متقدمة": "Advanced filtering",
+  "الرياض": "Riyadh",
+  "جدة": "Jeddah",
+  "الدمام": "Dammam",
+  "الحالة": "Status",
+  "الاسم": "Name",
+  "الإجراءات": "Actions",
+  "ريال": "SAR",
+  "عرض التفاصيل": "View details",
+  "تعديل": "Edit",
+  "حذف": "Delete",
+  "تفاصيل المورد": "Vendor details",
+  "تفاصيل العميل": "Customer details",
+  "الرقم": "Number",
+  "إغلاق": "Close",
+};
+
+function useCrmI18n() {
+  const i18n = useI18n();
+  return {
+    ...i18n,
+    t: (value: string) =>
+      i18n.locale === "en" ? crmTranslations[value] ?? i18n.t(value) : i18n.t(value),
+  };
+}
+
 const emptyForm = (isVendor: boolean): PartyForm => ({
   id: undefined,
   name: "",
@@ -86,6 +222,7 @@ const emptyForm = (isVendor: boolean): PartyForm => ({
 });
 
 export default function CRM() {
+  const { t, direction, formatNumber } = useCrmI18n();
   const location = useLocation();
   const isVendors = location.pathname.includes("/crm/vendors");
   const isReports = location.pathname.includes("/crm/reports");
@@ -132,27 +269,28 @@ export default function CRM() {
     }
   }, [isVendors, isReports]);
 
-  const title = isReports
-    ? "التقارير"
-    : isVendors
-      ? "الموردين"
-      : "العملاء";
-  const description = isReports
-    ? "ملخصات وتقارير العملاء والموردين في مكان واحد."
-    : isVendors
-      ? "إدارة بيانات الموردين ومتابعة الحالة المالية."
-      : "إدارة قاعدة بيانات العملاء ومتابعة الحالة المالية.";
-  const actionLabel = isReports
-    ? "توليد تقرير جديد"
-    : isVendors
-      ? "إضافة مورد جديد"
-      : "إضافة عميل جديد";
+  const title = t(isReports ? "التقارير" : isVendors ? "الموردين" : "العملاء");
+  const description = t(
+    isReports
+      ? "ملخصات وتقارير العملاء والموردين في مكان واحد."
+      : isVendors
+        ? "إدارة بيانات الموردين ومتابعة الحالة المالية."
+        : "إدارة قاعدة بيانات العملاء ومتابعة الحالة المالية."
+  );
+  const actionLabel = t(
+    isReports ? "توليد تقرير جديد" : isVendors ? "إضافة مورد جديد" : "إضافة عميل جديد"
+  );
   const tableData = isVendors ? vendorRows : customerRows;
-  const idLabel = isVendors ? "رقم المورد" : "رقم العميل";
-  const typeLabel = isVendors ? "نوع المورد" : "نوع العميل";
-  const searchPlaceholder = isVendors
-    ? "ابحث بالاسم أو رقم المورد"
-    : "ابحث بالاسم أو رقم العميل";
+  const idLabel = t(isVendors ? "رقم المورد" : "رقم العميل");
+  const typeLabel = t(isVendors ? "نوع المورد" : "نوع العميل");
+  const searchPlaceholder = t(
+    isVendors ? "ابحث بالاسم أو رقم المورد" : "ابحث بالاسم أو رقم العميل"
+  );
+  const formatAmount = (value: string) =>
+    `${formatNumber(Number.parseFloat(value) || 0, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} ${t("ريال")}`;
 
   const typeOptions = isVendors
     ? ["مورد محلي", "مورد دولي", "مورد خدمات"]
@@ -170,7 +308,7 @@ export default function CRM() {
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast({ title: "تنبيه", description: "أدخل الاسم", variant: "destructive" });
+      toast({ title: t("تنبيه"), description: t("أدخل الاسم"), variant: "destructive" });
       return;
     }
 
@@ -215,13 +353,16 @@ export default function CRM() {
         }
 
         setIsFormOpen(false);
-        toast({ title: "تم التحديث", description: isVendors ? "تم تحديث بيانات المورد" : "تم تحديث بيانات العميل" });
+        toast({
+          title: t("تم التحديث"),
+          description: t(isVendors ? "تم تحديث بيانات المورد" : "تم تحديث بيانات العميل"),
+        });
       } else {
         toast({
-          title: "فشل التحديث",
-          description: result.failed
-            ? "تعذر الاتصال بقاعدة البيانات"
-            : "تعذر تحديث البيانات",
+          title: t("فشل التحديث"),
+          description: t(
+            result.failed ? "تعذر الاتصال بقاعدة البيانات" : "تعذر تحديث البيانات"
+          ),
           variant: "destructive",
         });
       }
@@ -258,13 +399,18 @@ export default function CRM() {
         }
 
         setIsFormOpen(false);
-        toast({ title: "تم الحفظ", description: isVendors ? "تمت إضافة المورد" : "تمت إضافة العميل" });
+        toast({
+          title: t("تم الحفظ"),
+          description: t(isVendors ? "تمت إضافة المورد" : "تمت إضافة العميل"),
+        });
       } else {
         toast({
-          title: "فشل الحفظ",
-          description: result.failed
-            ? "تعذر الاتصال بقاعدة البيانات، تحقق من الاتصال"
-            : "تعذر حفظ البيانات",
+          title: t("فشل الحفظ"),
+          description: t(
+            result.failed
+              ? "تعذر الاتصال بقاعدة البيانات، تحقق من الاتصال"
+              : "تعذر حفظ البيانات"
+          ),
           variant: "destructive",
         });
       }
@@ -293,7 +439,7 @@ export default function CRM() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(isVendors ? "هل متأكد من حذف المورد؟" : "هل متأكد من حذف العميل؟")) {
+    if (!confirm(t(isVendors ? "هل متأكد من حذف المورد؟" : "هل متأكد من حذف العميل؟"))) {
       return;
     }
 
@@ -318,13 +464,16 @@ export default function CRM() {
       } else {
         setCustomerRows((prev) => prev.filter((row) => row.id !== id));
       }
-      toast({ title: "تم الحذف", description: isVendors ? "تم حذف المورد" : "تم حذف العميل" });
+      toast({
+        title: t("تم الحذف"),
+        description: t(isVendors ? "تم حذف المورد" : "تم حذف العميل"),
+      });
     } else {
       toast({
-        title: "فشل الحذف",
-        description: result.failed
-          ? "تعذر الاتصال بقاعدة البيانات"
-          : "تعذر حذف البيانات",
+        title: t("فشل الحذف"),
+        description: t(
+          result.failed ? "تعذر الاتصال بقاعدة البيانات" : "تعذر حذف البيانات"
+        ),
         variant: "destructive",
       });
     }
@@ -335,15 +484,15 @@ export default function CRM() {
   return (
     <Layout
       subMenu={{
-        title: "العملاء والموردين",
+        title: t("العملاء والموردين"),
         items: [
-          { label: "العملاء", href: "/crm/customers" },
-          { label: "الموردين", href: "/crm/vendors" },
-          { label: "التقارير", href: "/crm/reports" },
+          { label: t("العملاء"), href: "/crm/customers" },
+          { label: t("الموردين"), href: "/crm/vendors" },
+          { label: t("التقارير"), href: "/crm/reports" },
         ],
       }}
     >
-      <div className="space-y-6">
+      <div className="space-y-6" dir={direction}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
@@ -361,53 +510,57 @@ export default function CRM() {
 
         {!isReports && isFormOpen ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-6">
-            <h3 className="text-2xl font-semibold text-slate-900 text-right">
-              {form.id
-                ? isVendors
-                  ? "تعديل بيانات المورد"
-                  : "تعديل بيانات العميل"
-                : isVendors
-                  ? "إضافة مورد جديد"
-                  : "إضافة عميل جديد"}
+            <h3 className="text-2xl font-semibold text-slate-900 text-end">
+              {t(
+                form.id
+                  ? isVendors
+                    ? "تعديل بيانات المورد"
+                    : "تعديل بيانات العميل"
+                  : isVendors
+                    ? "إضافة مورد جديد"
+                    : "إضافة عميل جديد"
+              )}
             </h3>
 
             <div className="space-y-5">
-              <div className="rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-right">المنشأة والتسجيل الضريبي مطلوب</div>
+              <div className="rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-end">
+                {t("المنشأة والتسجيل الضريبي مطلوب")}
+              </div>
 
               <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
                 <input
                   value={form.name ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                  placeholder={isVendors ? "اسم المورد" : "اسم العميل"}
+                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  placeholder={t(isVendors ? "اسم المورد" : "اسم العميل")}
                 />
-                <label className="text-sm font-medium text-slate-700 text-right">اسم المنشأة *</label>
+                <label className="text-sm font-medium text-slate-700 text-end">{t("اسم المنشأة *")}</label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
                 <select
                   value={form.country ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
-                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right focus:border-slate-400 focus:outline-none"
+                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end focus:border-slate-400 focus:outline-none"
                 >
-                  <option value="">اختياري</option>
-                  <option value="المملكة العربية السعودية">المملكة العربية السعودية</option>
-                  <option value="الإمارات العربية المتحدة">الإمارات العربية المتحدة</option>
-                  <option value="قطر">قطر</option>
-                  <option value="الكويت">الكويت</option>
+                  <option value="">{t("اختياري")}</option>
+                  <option value="المملكة العربية السعودية">{t("المملكة العربية السعودية")}</option>
+                  <option value="الإمارات العربية المتحدة">{t("الإمارات العربية المتحدة")}</option>
+                  <option value="قطر">{t("قطر")}</option>
+                  <option value="الكويت">{t("الكويت")}</option>
                 </select>
-                <label className="text-sm font-medium text-slate-700 text-right">البلد</label>
+                <label className="text-sm font-medium text-slate-700 text-end">{t("البلد")}</label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-[1fr_220px] items-start">
-                <div className="space-y-2 text-right">
+                <div className="space-y-2 text-end">
                   <label className="flex items-center justify-end gap-2 text-sm text-slate-700">
                     <input
                       type="radio"
                       checked={form.taxRegistrationMode === "not_registered"}
                       onChange={() => setForm((prev) => ({ ...prev, taxRegistrationMode: "not_registered" }))}
                     />
-                    غير مسجل في ضريبة القيمة المضافة
+                    {t("غير مسجل في ضريبة القيمة المضافة")}
                   </label>
                   <label className="flex items-center justify-end gap-2 text-sm text-slate-700">
                     <input
@@ -415,108 +568,108 @@ export default function CRM() {
                       checked={form.taxRegistrationMode === "registered_sa"}
                       onChange={() => setForm((prev) => ({ ...prev, taxRegistrationMode: "registered_sa" }))}
                     />
-                    جهة اتصال مسجلة في ضريبة القيمة المضافة في السعودية
+                    {t("جهة اتصال مسجلة في ضريبة القيمة المضافة في السعودية")}
                   </label>
                 </div>
-                <label className="text-sm font-medium text-slate-700 text-right">التسجيل في ضريبة القيمة المضافة *</label>
+                <label className="text-sm font-medium text-slate-700 text-end">{t("التسجيل في ضريبة القيمة المضافة *")}</label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
                 <input
                   value={form.taxNumber ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, taxNumber: e.target.value }))}
-                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                  placeholder="اختياري"
+                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  placeholder={t("اختياري")}
                 />
-                <label className="text-sm font-medium text-slate-700 text-right">رقم التسجيل الضريبي</label>
+                <label className="text-sm font-medium text-slate-700 text-end">{t("رقم التسجيل الضريبي")}</label>
               </div>
 
               <details open className="space-y-3">
-                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-right">العنوان اختياري</summary>
+                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-end">{t("العنوان اختياري")}</summary>
                 <div className="space-y-3 pt-2">
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.city ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">المدينة</label>
+                    <input value={form.city ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("المدينة")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.street ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">الشارع</label>
+                    <input value={form.street ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("الشارع")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.buildingNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, buildingNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">رقم المبنى</label>
+                    <input value={form.buildingNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, buildingNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("رقم المبنى")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.district ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">الحي</label>
+                    <input value={form.district ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("الحي")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.postalCode ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, postalCode: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">الرمز البريدي</label>
+                    <input value={form.postalCode ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, postalCode: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("الرمز البريدي")}</label>
                   </div>
                 </div>
               </details>
 
               <details open className="space-y-3">
-                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-right">بيانات الفوترة اختياري</summary>
+                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-end">{t("بيانات الفوترة اختياري")}</summary>
                 <div className="space-y-3 pt-2">
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.invoiceRef ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceRef: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">المعرّف</label>
+                    <input value={form.invoiceRef ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceRef: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("المعرّف")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.invoiceEmail ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceEmail: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">البريد الإلكتروني</label>
+                    <input value={form.invoiceEmail ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceEmail: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("البريد الإلكتروني")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <input value={form.invoicePhone ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoicePhone: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="اختياري" />
-                    <label className="text-sm font-medium text-slate-700 text-right">الهاتف</label>
+                    <input value={form.invoicePhone ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoicePhone: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("الهاتف")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <select value={form.currency ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
+                    <select value={form.currency ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end">
                       <option value="SAR">SAR</option>
                       <option value="USD">USD</option>
                       <option value="EUR">EUR</option>
                     </select>
-                    <label className="text-sm font-medium text-slate-700 text-right">العملة</label>
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("العملة")}</label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
-                    <select value={form.paymentTerms ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, paymentTerms: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
-                      <option value="">تحديد</option>
-                      <option value="فوري">فوري</option>
-                      <option value="15 يوم">15 يوم</option>
-                      <option value="30 يوم">30 يوم</option>
+                    <select value={form.paymentTerms ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, paymentTerms: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end">
+                      <option value="">{t("تحديد")}</option>
+                      <option value="فوري">{t("فوري")}</option>
+                      <option value="15 يوم">{t("15 يوم")}</option>
+                      <option value="30 يوم">{t("30 يوم")}</option>
                     </select>
-                    <label className="text-sm font-medium text-slate-700 text-right">شروط الدفع</label>
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("شروط الدفع")}</label>
                   </div>
                   <div className="grid gap-3 md:grid-cols-[1fr_1fr_220px] items-center">
-                    <input value={form.licenseNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, licenseNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" placeholder="رقم الترخيص" />
-                    <select value={form.businessType ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
-                      <option value="">تحديد</option>
-                      <option value="فرد">فرد</option>
-                      <option value="شركة">شركة</option>
+                    <input value={form.licenseNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, licenseNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("رقم الترخيص")} />
+                    <select value={form.businessType ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end">
+                      <option value="">{t("تحديد")}</option>
+                      <option value="فرد">{t("فرد")}</option>
+                      <option value="شركة">{t("شركة")}</option>
                     </select>
-                    <label className="text-sm font-medium text-slate-700 text-right">نوع ورقم ترخيص جهة الاتصال</label>
+                    <label className="text-sm font-medium text-slate-700 text-end">{t("نوع ورقم ترخيص جهة الاتصال")}</label>
                   </div>
                 </div>
               </details>
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="text-sm font-medium text-slate-700 text-right block">{typeLabel}</label>
-                  <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right">
+                  <label className="text-sm font-medium text-slate-700 text-end block">{typeLabel}</label>
+                  <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end">
                     {typeOptions.map((option) => (
-                      <option key={option}>{option}</option>
+                      <option key={option} value={option}>{t(option)}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-700 text-right block">الرصيد الافتتاحي</label>
-                  <input type="number" value={form.openingBalance ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, openingBalance: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" />
+                  <label className="text-sm font-medium text-slate-700 text-end block">{t("الرصيد الافتتاحي")}</label>
+                  <input type="number" value={form.openingBalance ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, openingBalance: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-700 text-right block">حد الائتمان</label>
-                  <input type="number" value={form.creditLimit ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-right" />
+                  <label className="text-sm font-medium text-slate-700 text-end block">{t("حد الائتمان")}</label>
+                  <input type="number" value={form.creditLimit ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" />
                 </div>
               </div>
             </div>
@@ -528,7 +681,7 @@ export default function CRM() {
                 className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success/90 disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />
-                {saving ? "جاري الحفظ..." : "حفظ"}
+                {t(saving ? "جاري الحفظ..." : "حفظ")}
               </button>
 
               <button
@@ -536,7 +689,7 @@ export default function CRM() {
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
               >
                 <X className="h-4 w-4" />
-                إلغاء
+                {t("إلغاء")}
               </button>
             </div>
           </div>
@@ -547,71 +700,71 @@ export default function CRM() {
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="overflow-hidden rounded-xl border border-border bg-card">
                 <div className="flex items-center justify-between bg-rose-600 px-4 py-3 text-sm font-semibold text-white">
-                  <span>التدقيق والمتابعة</span>
-                  <span className="text-xs">تحكم</span>
+                  <span>{t("التدقيق والمتابعة")}</span>
+                  <span className="text-xs">{t("تحكم")}</span>
                 </div>
                 <div className="space-y-3 p-4 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    إعدادات نُظم الضريبة
+                    {t("إعدادات نُظم الضريبة")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    فواتير المبيعات المستحقة
+                    {t("فواتير المبيعات المستحقة")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    تقارير أعمار المديونية
+                    {t("تقارير أعمار المديونية")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    مؤشرات الأداء (KPIs)
+                    {t("مؤشرات الأداء (KPIs)")}
                   </div>
                 </div>
               </div>
 
               <div className="overflow-hidden rounded-xl border border-border bg-card">
                 <div className="flex items-center justify-between bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">
-                  <span>تقارير الموردين (AP)</span>
-                  <span className="text-xs">قيد التطوير</span>
+                  <span>{t("تقارير الموردين (AP)")}</span>
+                  <span className="text-xs">{t("قيد التطوير")}</span>
                 </div>
                 <div className="space-y-3 p-4 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    تقرير أعمار الموردين
+                    {t("تقرير أعمار الموردين")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    تقرير أرصدة الموردين (AP Aging)
+                    {t("تقرير أرصدة الموردين (AP Aging)")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    تقييمات المستحقات المتأخرة
+                    {t("تقييمات المستحقات المتأخرة")}
                   </div>
                 </div>
               </div>
 
               <div className="overflow-hidden rounded-xl border border-border bg-card">
                 <div className="flex items-center justify-between bg-sky-600 px-4 py-3 text-sm font-semibold text-white">
-                  <span>تقارير العملاء (AR)</span>
-                  <span className="text-xs">نشطة</span>
+                  <span>{t("تقارير العملاء (AR)")}</span>
+                  <span className="text-xs">{t("نشطة")}</span>
                 </div>
                 <div className="space-y-3 p-4 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    تقرير أعمار العملاء
+                    {t("تقرير أعمار العملاء")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    تقرير أرصدة العملاء (AR Aging)
+                    {t("تقرير أرصدة العملاء (AR Aging)")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    حالات التحصيل
+                    {t("حالات التحصيل")}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    تنبيهات التأخر في الدفع
+                    {t("تنبيهات التأخر في الدفع")}
                   </div>
                 </div>
               </div>
@@ -619,24 +772,24 @@ export default function CRM() {
 
             <div className="overflow-hidden rounded-xl border border-border bg-card">
               <div className="bg-slate-700 px-4 py-3 text-sm font-semibold text-white">
-                ملخصات عامة للتقارير
+                {t("ملخصات عامة للتقارير")}
               </div>
               <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">إجمالي المديونية</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">﷼ 120,000</p>
+                  <p className="text-xs text-muted-foreground">{t("إجمالي المديونية")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount("120000")}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">المدفوعات الأخيرة</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">﷼ 48,000</p>
+                  <p className="text-xs text-muted-foreground">{t("المدفوعات الأخيرة")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount("48000")}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">المستحقات المتأخرة</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">﷼ 18,500</p>
+                  <p className="text-xs text-muted-foreground">{t("المستحقات المتأخرة")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount("18500")}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">تنبيهات المتابعة</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">5 تنبيهات</p>
+                  <p className="text-xs text-muted-foreground">{t("تنبيهات المتابعة")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">5 {t("تنبيهات")}</p>
                 </div>
               </div>
             </div>
@@ -645,7 +798,7 @@ export default function CRM() {
           <div className="erp-card">
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <div className="relative w-full max-w-xs">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   placeholder={searchPlaceholder}
                   className="w-full rounded-lg border border-border bg-background px-9 py-2 text-sm"
@@ -655,23 +808,23 @@ export default function CRM() {
                 <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                   <option>{typeLabel}</option>
                   {typeOptions.map((option) => (
-                    <option key={option}>{option}</option>
+                    <option key={option} value={option}>{t(option)}</option>
                   ))}
                 </select>
                 <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>المدينة</option>
-                  <option>الرياض</option>
-                  <option>جدة</option>
-                  <option>الدمام</option>
+                  <option>{t("المدينة")}</option>
+                  <option value="الرياض">{t("الرياض")}</option>
+                  <option value="جدة">{t("جدة")}</option>
+                  <option value="الدمام">{t("الدمام")}</option>
                 </select>
                 <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>الحالة</option>
-                  <option>نشط</option>
-                  <option>غير نشط</option>
+                  <option>{t("الحالة")}</option>
+                  <option value="نشط">{t("نشط")}</option>
+                  <option value="غير نشط">{t("غير نشط")}</option>
                 </select>
                 <button className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground">
                   <Filter className="h-4 w-4" />
-                  تصفية متقدمة
+                  {t("تصفية متقدمة")}
                 </button>
               </div>
             </div>
@@ -680,21 +833,21 @@ export default function CRM() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-900 text-white">
-                    <th className="px-4 py-3 text-right font-semibold">{idLabel}</th>
-                    <th className="px-4 py-3 text-right font-semibold">الاسم</th>
-                    <th className="px-4 py-3 text-right font-semibold">{typeLabel}</th>
-                    <th className="px-4 py-3 text-right font-semibold">
-                      البريد الإلكتروني
+                    <th className="px-4 py-3 text-end font-semibold">{idLabel}</th>
+                    <th className="px-4 py-3 text-end font-semibold">{t("الاسم")}</th>
+                    <th className="px-4 py-3 text-end font-semibold">{typeLabel}</th>
+                    <th className="px-4 py-3 text-end font-semibold">
+                      {t("البريد الإلكتروني")}
                     </th>
-                    <th className="px-4 py-3 text-right font-semibold">الهاتف</th>
-                    <th className="px-4 py-3 text-right font-semibold">
-                      الرصيد الافتتاحي
+                    <th className="px-4 py-3 text-end font-semibold">{t("الهاتف")}</th>
+                    <th className="px-4 py-3 text-end font-semibold">
+                      {t("الرصيد الافتتاحي")}
                     </th>
-                    <th className="px-4 py-3 text-right font-semibold">
-                      حد الائتمان
+                    <th className="px-4 py-3 text-end font-semibold">
+                      {t("حد الائتمان")}
                     </th>
-                    <th className="px-4 py-3 text-right font-semibold">الحالة</th>
-                    <th className="px-4 py-3 text-right font-semibold">الإجراءات</th>
+                    <th className="px-4 py-3 text-end font-semibold">{t("الحالة")}</th>
+                    <th className="px-4 py-3 text-end font-semibold">{t("الإجراءات")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -711,7 +864,7 @@ export default function CRM() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                          {customer.type}
+                          {t(customer.type)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
@@ -721,28 +874,28 @@ export default function CRM() {
                         {customer.phone}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {customer.openingBalance} ريال
+                        {formatAmount(customer.openingBalance)}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {customer.creditLimit} ريال
+                        {formatAmount(customer.creditLimit)}
                       </td>
                       <td className="px-4 py-3">
                         <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
-                          {customer.status}
+                          {t(customer.status)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleView(customer)}
-                            title="عرض التفاصيل"
+                            title={t("عرض التفاصيل")}
                             className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
                           >
                             <Eye className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleEdit(customer)}
-                            title="تعديل"
+                            title={t("تعديل")}
                             className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
                           >
                             <Pencil className="h-4 w-4" />
@@ -750,7 +903,7 @@ export default function CRM() {
                           <button
                             onClick={() => handleDelete(customer.id)}
                             disabled={deleting}
-                            title="حذف"
+                            title={t("حذف")}
                             className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-destructive transition disabled:opacity-50"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -769,17 +922,17 @@ export default function CRM() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="rounded-xl border border-border bg-card p-6 w-full max-w-md space-y-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-lg font-semibold text-foreground">
-                {isVendors ? "تفاصيل المورد" : "تفاصيل العميل"}
+                {t(isVendors ? "تفاصيل المورد" : "تفاصيل العميل")}
               </h3>
 
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs text-muted-foreground">الرقم</p>
+                  <p className="text-xs text-muted-foreground">{t("الرقم")}</p>
                   <p className="text-sm font-medium text-foreground">{viewModal.id}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">الاسم</p>
+                  <p className="text-xs text-muted-foreground">{t("الاسم")}</p>
                   <p className="text-sm font-medium text-foreground">{viewModal.name}</p>
                 </div>
 
@@ -789,30 +942,30 @@ export default function CRM() {
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
+                  <p className="text-xs text-muted-foreground">{t("البريد الإلكتروني")}</p>
                   <p className="text-sm font-medium text-foreground">{viewModal.email || "—"}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">الهاتف</p>
+                  <p className="text-xs text-muted-foreground">{t("الهاتف")}</p>
                   <p className="text-sm font-medium text-foreground">{viewModal.phone}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">الرصيد الافتتاحي</p>
-                  <p className="text-sm font-medium text-foreground">{viewModal.openingBalance} ريال</p>
+                  <p className="text-xs text-muted-foreground">{t("الرصيد الافتتاحي")}</p>
+                  <p className="text-sm font-medium text-foreground">{formatAmount(viewModal.openingBalance)}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">حد الائتمان</p>
-                  <p className="text-sm font-medium text-foreground">{viewModal.creditLimit} ريال</p>
+                  <p className="text-xs text-muted-foreground">{t("حد الائتمان")}</p>
+                  <p className="text-sm font-medium text-foreground">{formatAmount(viewModal.creditLimit)}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <p className="text-xs text-muted-foreground">{t("الحالة")}</p>
                   <p className="text-sm">
                     <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
-                      {viewModal.status}
+                      {t(viewModal.status)}
                     </span>
                   </p>
                 </div>
@@ -827,7 +980,7 @@ export default function CRM() {
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90"
                 >
                   <Pencil className="h-4 w-4" />
-                  تعديل
+                  {t("تعديل")}
                 </button>
 
                 <button
@@ -835,7 +988,7 @@ export default function CRM() {
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground"
                 >
                   <X className="h-4 w-4" />
-                  إغلاق
+                  {t("إغلاق")}
                 </button>
               </div>
             </div>

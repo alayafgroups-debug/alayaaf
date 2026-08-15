@@ -3,6 +3,7 @@ import { purchasesFeatures } from "./Purchases";
 import { ArrowRight, Plus, Save, Trash2 } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 
 type DebitNoteItem = {
@@ -70,6 +71,9 @@ const createEmptyForm = (num: number): DebitNoteForm => ({
 });
 
 export default function PurchaseDebitNotes() {
+  const { t, direction, formatDate, formatNumber } = useI18n();
+  const formatAmount = (value: number) =>
+    formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [mode, setMode] = useState<"list" | "create">("list");
   const [rows, setRows] = useState<DebitNote[]>([]);
   const [invoices, setInvoices] = useState<PurchaseInvoiceOption[]>([]);
@@ -120,7 +124,7 @@ export default function PurchaseDebitNotes() {
       if (!invoicesResult.error) {
         setInvoices((invoicesResult.data ?? []).map((row: any) => ({
           id: String(row.id),
-          supplier: String(row.vendor || "مورد غير محدد"),
+          supplier: String(row.vendor || t("مورد غير محدد")),
           purchaseOrder: String(row.po_number || ""),
           adjustedTotal: Number(row.adjusted_total ?? String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
         })));
@@ -177,19 +181,19 @@ export default function PurchaseDebitNotes() {
 
   const handleSave = async () => {
     if (!form.originalInvoiceId) {
-      toast({ title: "الفاتورة الأصلية مطلوبة", description: "كل إشعار مدين يجب أن يرتبط بفاتورة مشتريات" });
+      toast({ title: t("الفاتورة الأصلية مطلوبة"), description: t("كل إشعار مدين يجب أن يرتبط بفاتورة مشتريات") });
       return;
     }
     if (!form.supplier.trim()) {
-      toast({ title: "المورد مطلوب", description: "اختر الفاتورة الأصلية أولاً" });
+      toast({ title: t("المورد مطلوب"), description: t("اختر الفاتورة الأصلية أولاً") });
       return;
     }
     if (total <= 0) {
-      toast({ title: "مبلغ الإشعار غير صحيح", description: "أضف بنداً بقيمة أكبر من صفر" });
+      toast({ title: t("مبلغ الإشعار غير صحيح"), description: t("أضف بنداً بقيمة أكبر من صفر") });
       return;
     }
     if (form.items.some((item) => !item.account)) {
-      toast({ title: "الحساب المحاسبي مطلوب", description: "اختر حساب المصروف لكل بند من شجرة الحسابات" });
+      toast({ title: t("الحساب المحاسبي مطلوب"), description: t("اختر حساب المصروف لكل بند من شجرة الحسابات") });
       return;
     }
 
@@ -207,7 +211,7 @@ export default function PurchaseDebitNotes() {
       p_items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
     });
     if (error) {
-      toast({ title: "تعذر ترحيل الإشعار", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر ترحيل الإشعار"), description: error.message, variant: "destructive" });
       return;
     }
 
@@ -227,17 +231,20 @@ export default function PurchaseDebitNotes() {
     nextForm.items = nextForm.items.map((item) => ({ ...item, account: defaultExpenseAccount }));
     setForm(nextForm);
     setMode("list");
-    toast({ title: "تم ترحيل إشعار مدين", description: `تم ربط ${payload.noteNumber} بالفاتورة ${payload.originalInvoiceId} وتسجيل القيد المحاسبي` });
+    toast({
+      title: t("تم ترحيل إشعار مدين"),
+      description: `${t("تم ربط")} ${payload.noteNumber} ${t("بالفاتورة")} ${payload.originalInvoiceId} ${t("وتسجيل القيد المحاسبي")}`,
+    });
   };
 
   return (
-    <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
-      <div className="mx-auto max-w-7xl space-y-6">
+    <Layout subMenu={{ title: t("المشتريات"), items: purchasesFeatures }}>
+      <div dir={direction} className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">إشعار مدين</h1>
+            <h1 className="text-3xl font-bold text-foreground">{t("إشعار مدين")}</h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list" ? "عرض الإشعارات المدينة" : "إنشاء إشعار مدين جديد"}
+              {mode === "list" ? t("عرض الإشعارات المدينة") : t("إنشاء إشعار مدين جديد")}
             </p>
           </div>
 
@@ -248,7 +255,7 @@ export default function PurchaseDebitNotes() {
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
               >
                 <Plus className="h-4 w-4" />
-                إنشاء إشعار مدين جديد
+                {t("إنشاء إشعار مدين جديد")}
               </button>
             ) : (
               <>
@@ -256,15 +263,15 @@ export default function PurchaseDebitNotes() {
                   onClick={() => setMode("list")}
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
                 >
-                  <ArrowRight className="h-4 w-4" />
-                  الرجوع للإشعارات
+                  <ArrowRight className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`} />
+                  {t("الرجوع لإشعارات المدين")}
                 </button>
                 <button
                   onClick={handleSave}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
                 >
                   <Save className="h-4 w-4" />
-                  حفظ الإشعار
+                  {t("حفظ إشعار المدين")}
                 </button>
               </>
             )}
@@ -274,21 +281,21 @@ export default function PurchaseDebitNotes() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              عدد الإشعارات المدينة: <span className="font-semibold text-foreground">{rows.length}</span>
+              {t("عدد الإشعارات المدينة")}: <span className="font-semibold text-foreground">{formatNumber(rows.length)}</span>
             </p>
             {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">لا توجد إشعارات محفوظة حالياً.</p>
+              <p className="text-sm text-muted-foreground">{t("لا توجد إشعارات محفوظة حالياً.")}</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-right text-sm">
+                <table className={`w-full min-w-[700px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}>
                   <thead>
                     <tr className="bg-muted/40">
-                      <th className="px-3 py-2">رقم الإشعار</th>
-                      <th className="px-3 py-2">الفاتورة الأصلية</th>
-                      <th className="px-3 py-2">المورد</th>
-                      <th className="px-3 py-2">التاريخ</th>
-                      <th className="px-3 py-2">الإجمالي</th>
-                      <th className="px-3 py-2">الرصيد بعد الإشعار</th>
+                      <th className="px-3 py-2">{t("رقم الإشعار")}</th>
+                      <th className="px-3 py-2">{t("الفاتورة الأصلية")}</th>
+                      <th className="px-3 py-2">{t("المورد")}</th>
+                      <th className="px-3 py-2">{t("التاريخ")}</th>
+                      <th className="px-3 py-2">{t("الإجمالي")}</th>
+                      <th className="px-3 py-2">{t("الرصيد بعد الإشعار")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -297,9 +304,9 @@ export default function PurchaseDebitNotes() {
                         <td className="px-3 py-2 font-semibold text-primary">{row.noteNumber}</td>
                         <td className="px-3 py-2 font-medium">{row.originalInvoiceId}</td>
                         <td className="px-3 py-2">{row.supplier}</td>
-                        <td className="px-3 py-2">{row.date}</td>
-                        <td className="px-3 py-2">{row.total.toFixed(2)} {row.currency}</td>
-                        <td className="px-3 py-2 font-semibold">{row.balanceAfter.toFixed(2)} {row.currency}</td>
+                        <td className="px-3 py-2">{formatDate(row.date)}</td>
+                        <td className="px-3 py-2">{formatAmount(row.total)} {row.currency}</td>
+                        <td className="px-3 py-2 font-semibold">{formatAmount(row.balanceAfter)} {row.currency}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -312,20 +319,20 @@ export default function PurchaseDebitNotes() {
             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
-                  شركة لاكجري العياف
+                  {t("شركة لاكجري العياف")}
                 </div>
-                <h2 className="text-xl font-bold text-foreground">شركة لاكجري العياف</h2>
-                <p className="text-sm text-muted-foreground">الشيخ محمد بن جبير</p>
-                <p className="text-sm text-muted-foreground">مكة المكرمة</p>
-                <p className="text-sm text-muted-foreground">المملكة العربية السعودية</p>
-                <p className="text-sm text-muted-foreground">رقم التسجيل الضريبي: 314559705300003</p>
+                <h2 className="text-xl font-bold text-foreground">{t("شركة لاكجري العياف")}</h2>
+                <p className="text-sm text-muted-foreground">{t("الشيخ محمد بن جبير")}</p>
+                <p className="text-sm text-muted-foreground">{t("مكة المكرمة")}</p>
+                <p className="text-sm text-muted-foreground">{t("المملكة العربية السعودية")}</p>
+                <p className="text-sm text-muted-foreground">{t("رقم التسجيل الضريبي:")} {formatNumber(314559705300003, { useGrouping: false })}</p>
               </div>
 
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                <Field label="رقم الإشعار">
+                <Field label={t("رقم الإشعار")}>
                   <input value={form.noteNumber} readOnly className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm" />
                 </Field>
-                <Field label="الفاتورة الأصلية*">
+                <Field label={t("الفاتورة الأصلية*")}>
                   <select
                     value={form.originalInvoiceId}
                     onChange={(e) => {
@@ -334,31 +341,31 @@ export default function PurchaseDebitNotes() {
                     }}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   >
-                    <option value="">اختر رقم الفاتورة واسم المورد</option>
+                    <option value="">{t("اختر رقم الفاتورة واسم المورد")}</option>
                     {invoices.map((invoice) => (
                       <option key={invoice.id} value={invoice.id}>
-                        فاتورة {invoice.id} — المورد: {invoice.supplier}{invoice.purchaseOrder ? ` — أمر الشراء: ${invoice.purchaseOrder}` : ""} — الرصيد: {invoice.adjustedTotal.toFixed(2)} SAR
+                        {t("فاتورة")} {invoice.id} — {t("المورد")}: {invoice.supplier || t("مورد غير محدد")}{invoice.purchaseOrder ? ` — ${t("أمر الشراء")}: ${invoice.purchaseOrder}` : ""} — {t("الرصيد")}: {formatAmount(invoice.adjustedTotal)} SAR
                       </option>
                     ))}
                   </select>
                 </Field>
-                <Field label="المورد المرتبط بالفاتورة">
+                <Field label={t("المورد المرتبط بالفاتورة")}>
                   <input
                     value={form.supplier}
                     readOnly
-                    placeholder="يُحدد تلقائياً من الفاتورة"
+                    placeholder={t("يُحدد تلقائياً من الفاتورة")}
                     className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                   />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="العملة*">
+                  <Field label={t("العملة*")}>
                     <input
                       value={form.currency}
                       onChange={(e) => setForm({ ...form, currency: e.target.value })}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
-                  <Field label="التاريخ*">
+                  <Field label={t("التاريخ*")}>
                     <input
                       type="date"
                       value={form.date}
@@ -367,19 +374,19 @@ export default function PurchaseDebitNotes() {
                     />
                   </Field>
                 </div>
-                <Field label="أمر شراء">
+                <Field label={t("أمر الشراء")}>
                   <input
                     value={form.orderRef}
                     onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
-                    placeholder="اختياري"
+                    placeholder={t("اختياري")}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
                 </Field>
-                <Field label="المشروع">
+                <Field label={t("المشروع")}>
                   <input
                     value={form.project}
                     onChange={(e) => setForm({ ...form, project: e.target.value })}
-                    placeholder="اختياري"
+                    placeholder={t("اختياري")}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
                 </Field>
@@ -387,16 +394,16 @@ export default function PurchaseDebitNotes() {
             </div>
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold text-foreground">السعر شامل من الضريبة</p>
+              <p className="text-sm font-semibold text-foreground">{t("السعر شامل من الضريبة")}</p>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-right text-sm">
+                <table className={`w-full min-w-[900px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}>
                   <thead>
                     <tr className="bg-muted/40">
-                      <th className="px-3 py-2">الوصف*</th>
-                      <th className="px-3 py-2">حساب*</th>
-                      <th className="px-3 py-2">الكمية*</th>
-                      <th className="px-3 py-2">السعر*</th>
-                      <th className="px-3 py-2">المجموع</th>
+                      <th className="px-3 py-2">{t("الوصف*")}</th>
+                      <th className="px-3 py-2">{t("حساب*")}</th>
+                      <th className="px-3 py-2">{t("الكمية*")}</th>
+                      <th className="px-3 py-2">{t("السعر*")}</th>
+                      <th className="px-3 py-2">{t("المجموع")}</th>
                       <th className="px-3 py-2" />
                     </tr>
                   </thead>
@@ -409,7 +416,7 @@ export default function PurchaseDebitNotes() {
                             <input
                               value={item.description}
                               onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                              placeholder="مطلوب"
+                              placeholder={t("مطلوب")}
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
                             />
                           </td>
@@ -421,7 +428,7 @@ export default function PurchaseDebitNotes() {
                             >
                               {(expenseAccounts.length ? expenseAccounts : [{ code: "511", nameAr: "المشتريات والمصروفات" }]).map((account) => (
                                 <option key={account.code} value={account.code}>
-                                  {account.code} — {account.nameAr}
+                                  {account.code} — {t(account.nameAr)}
                                 </option>
                               ))}
                             </select>
@@ -444,11 +451,12 @@ export default function PurchaseDebitNotes() {
                               className="h-10 w-32 rounded-md border border-border bg-background px-3"
                             />
                           </td>
-                          <td className="px-3 py-2 font-semibold">{lineTotal.toFixed(2)} ﷼</td>
+                          <td className="px-3 py-2 font-semibold">{formatAmount(lineTotal)} {t("ريال")}</td>
                           <td className="px-3 py-2">
                             <button
                               onClick={() => removeItem(item.id)}
                               className="rounded-md border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50"
+                              aria-label={t("حذف البند")}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -466,28 +474,28 @@ export default function PurchaseDebitNotes() {
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
                 >
                   <Plus className="h-4 w-4" />
-                  أضف بند
+                  {t("أضف بند")}
                 </button>
               </div>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-                يتم توليد البيانات لعرض متطلبات ضريبة القيمة المضافة في الإشعار.
+                {t("يتم توليد البيانات لعرض متطلبات ضريبة القيمة المضافة في الإشعار.")}
               </div>
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
                 <div className="flex items-center justify-between">
-                  <span>المجموع الفرعي</span>
-                  <span>{subtotal.toFixed(2)} ﷼</span>
+                  <span>{t("المجموع الفرعي")}</span>
+                  <span>{formatAmount(subtotal)} {t("ريال")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>إجمالي ضريبة القيمة المضافة</span>
-                  <span>{tax.toFixed(2)} ﷼</span>
+                  <span>{t("إجمالي ضريبة القيمة المضافة")}</span>
+                  <span>{formatAmount(tax)} {t("ريال")}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold">
-                  <span>المجموع</span>
-                  <span>{total.toFixed(2)} ﷼</span>
+                  <span>{t("المجموع")}</span>
+                  <span>{formatAmount(total)} {t("ريال")}</span>
                 </div>
               </div>
             </div>

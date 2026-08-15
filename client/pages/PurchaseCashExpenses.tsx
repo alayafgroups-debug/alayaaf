@@ -3,6 +3,7 @@ import { purchasesFeatures } from "./Purchases";
 import { ArrowRight, Plus, Save, UploadCloud } from "lucide-react";
 import { ChangeEvent, useEffect, useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type CashExpense = {
   id: string;
@@ -48,10 +49,13 @@ const getEmptyForm = (num: number): ExpenseForm => ({
 });
 
 export default function PurchaseCashExpenses() {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const [mode, setMode] = useState<"list" | "create">("list");
   const [rows, setRows] = useState<CashExpense[]>([]);
   const [nextNumber, setNextNumber] = useState(START_NUMBER);
   const [form, setForm] = useState<ExpenseForm>(() => getEmptyForm(START_NUMBER));
+  const formatCurrency = (currency: string) =>
+    currency.trim().toUpperCase() === "SAR" ? t("ر.س") : currency;
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -84,7 +88,7 @@ export default function PurchaseCashExpenses() {
 
   const handleSave = () => {
     if (!form.vendor.trim()) {
-      toast({ title: "المورد مطلوب", description: "يرجى إدخال المورد قبل الحفظ" });
+      toast({ title: t("المورد مطلوب"), description: t("يرجى إدخال المورد قبل الحفظ") });
       return;
     }
 
@@ -102,17 +106,20 @@ export default function PurchaseCashExpenses() {
     setForm(getEmptyForm(sequence));
     setMode("list");
 
-    toast({ title: "تم حفظ المصروف النقدي", description: `تم حفظ ${payload.expenseNumber}` });
+    toast({
+      title: t("تم حفظ المصروف النقدي"),
+      description: t("تم حفظ المصروف {expenseNumber}").replace("{expenseNumber}", payload.expenseNumber),
+    });
   };
 
   return (
-    <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
-      <div className="mx-auto max-w-7xl space-y-6">
+    <Layout subMenu={{ title: t("المشتريات"), items: purchasesFeatures }}>
+      <div dir={direction} className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">مصروفات نقدية</h1>
+            <h1 className="text-3xl font-bold text-foreground">{t("مصروفات نقدية")}</h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list" ? "عرض المصروفات النقدية" : "إدخال مصروف نقدي"}
+              {mode === "list" ? t("عرض المصروفات النقدية") : t("إدخال مصروف نقدي")}
             </p>
           </div>
 
@@ -123,7 +130,7 @@ export default function PurchaseCashExpenses() {
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
               >
                 <Plus className="h-4 w-4" />
-                إضافة مصروف نقدي
+                {t("إضافة مصروف نقدي")}
               </button>
             ) : (
               <>
@@ -131,15 +138,15 @@ export default function PurchaseCashExpenses() {
                   onClick={() => setMode("list")}
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
                 >
-                  <ArrowRight className="h-4 w-4" />
-                  الرجوع للقائمة
+                  <ArrowRight className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`} />
+                  {t("الرجوع للقائمة")}
                 </button>
                 <button
                   onClick={handleSave}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
                 >
                   <Save className="h-4 w-4" />
-                  حفظ المصروف
+                  {t("حفظ المصروف")}
                 </button>
               </>
             )}
@@ -149,20 +156,20 @@ export default function PurchaseCashExpenses() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              عدد المصروفات: <span className="font-semibold text-foreground">{rows.length}</span>
+              {t("عدد المصروفات:")} <span className="font-semibold text-foreground">{formatNumber(rows.length)}</span>
             </p>
             {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">لا توجد مصروفات محفوظة حالياً.</p>
+              <p className="text-sm text-muted-foreground">{t("لا توجد مصروفات محفوظة حالياً.")}</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-right text-sm">
+                <table className="w-full min-w-[700px] text-start text-sm">
                   <thead>
                     <tr className="bg-muted/40">
-                      <th className="px-3 py-2">رقم المصروف</th>
-                      <th className="px-3 py-2">المورد</th>
-                      <th className="px-3 py-2">التاريخ</th>
-                      <th className="px-3 py-2">العملة</th>
-                      <th className="px-3 py-2">المستفيد</th>
+                      <th className="px-3 py-2">{t("رقم المصروف")}</th>
+                      <th className="px-3 py-2">{t("المورد")}</th>
+                      <th className="px-3 py-2">{t("التاريخ")}</th>
+                      <th className="px-3 py-2">{t("العملة")}</th>
+                      <th className="px-3 py-2">{t("المستفيد")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -170,8 +177,8 @@ export default function PurchaseCashExpenses() {
                       <tr key={row.id} className="border-t border-border">
                         <td className="px-3 py-2 font-semibold text-primary">{row.expenseNumber}</td>
                         <td className="px-3 py-2">{row.vendor}</td>
-                        <td className="px-3 py-2">{row.date}</td>
-                        <td className="px-3 py-2">{row.currency}</td>
+                        <td className="px-3 py-2">{formatDate(row.date, { dateStyle: "medium" })}</td>
+                        <td className="px-3 py-2">{formatCurrency(row.currency)}</td>
                         <td className="px-3 py-2">{row.beneficiary || "—"}</td>
                       </tr>
                     ))}
@@ -183,12 +190,12 @@ export default function PurchaseCashExpenses() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
             <label className="rounded-xl border border-border bg-card p-3 block cursor-pointer">
-              <p className="mb-3 text-sm font-semibold text-foreground text-center">تحميل مصروف من الجهاز</p>
+              <p className="mb-3 text-sm font-semibold text-foreground text-center">{t("تحميل مصروف من الجهاز")}</p>
               <input type="file" onChange={handleFileChange} className="hidden" />
               <div className="flex h-[340px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-center">
                 <UploadCloud className="mb-3 h-8 w-8 text-muted-foreground" />
-                <p className="text-sm text-foreground">اسحب الملفات هنا أو انقر للتصفح</p>
-                <p className="mt-1 text-xs text-muted-foreground">أنواع مدعومة: PDF, PNG, JPG</p>
+                <p className="text-sm text-foreground">{t("اسحب الملفات هنا أو انقر للتصفح")}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("أنواع مدعومة: PDF, PNG, JPG")}</p>
                 {form.attachmentName && (
                   <p className="mt-3 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">{form.attachmentName}</p>
                 )}
@@ -197,41 +204,41 @@ export default function PurchaseCashExpenses() {
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
               <div className="grid gap-3 md:grid-cols-[160px_1fr] items-center">
-                <label className="text-sm font-medium text-foreground">المورد*</label>
-                <input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="مطلوب" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("المورد*")}</label>
+                <input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder={t("مطلوب")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">رقم مرجع العقد</label>
-                <input value={form.contractRef} onChange={(e) => setForm({ ...form, contractRef: e.target.value })} placeholder="اختياري" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("رقم مرجع العقد")}</label>
+                <input value={form.contractRef} onChange={(e) => setForm({ ...form, contractRef: e.target.value })} placeholder={t("اختياري")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">الفئة</label>
-                <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="اختياري" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("الفئة")}</label>
+                <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder={t("اختياري")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">فرع</label>
-                <input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} placeholder="اختياري" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("فرع")}</label>
+                <input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} placeholder={t("اختياري")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">التاريخ*</label>
+                <label className="text-sm font-medium text-foreground">{t("التاريخ*")}</label>
                 <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">العملة</label>
+                <label className="text-sm font-medium text-foreground">{t("العملة")}</label>
                 <input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">الحساب الرئيسي</label>
-                <input value={form.mainAccount} onChange={(e) => setForm({ ...form, mainAccount: e.target.value })} placeholder="اختياري" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("الحساب الرئيسي")}</label>
+                <input value={form.mainAccount} onChange={(e) => setForm({ ...form, mainAccount: e.target.value })} placeholder={t("اختياري")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">المستفيد</label>
-                <input value={form.beneficiary} onChange={(e) => setForm({ ...form, beneficiary: e.target.value })} placeholder="اختياري" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("المستفيد")}</label>
+                <input value={form.beneficiary} onChange={(e) => setForm({ ...form, beneficiary: e.target.value })} placeholder={t("اختياري")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">فئة</label>
-                <input value={form.subCategory} onChange={(e) => setForm({ ...form, subCategory: e.target.value })} placeholder="اختياري" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("فئة")}</label>
+                <input value={form.subCategory} onChange={(e) => setForm({ ...form, subCategory: e.target.value })} placeholder={t("اختياري")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">مركز تكلفة</label>
-                <input value={form.costCenter} onChange={(e) => setForm({ ...form, costCenter: e.target.value })} placeholder="اختياري" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("مركز تكلفة")}</label>
+                <input value={form.costCenter} onChange={(e) => setForm({ ...form, costCenter: e.target.value })} placeholder={t("اختياري")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">الوصف</label>
-                <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="غير محدد" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
+                <label className="text-sm font-medium text-foreground">{t("الوصف")}</label>
+                <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("غير محدد")} className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
 
-                <label className="text-sm font-medium text-foreground">توضيح</label>
-                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="غير محدد" className="rounded-md border border-border bg-background px-3 py-2 text-sm resize-none" />
+                <label className="text-sm font-medium text-foreground">{t("توضيح")}</label>
+                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder={t("غير محدد")} className="rounded-md border border-border bg-background px-3 py-2 text-sm resize-none" />
               </div>
 
               <div className="pt-2 flex justify-end">

@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -94,7 +95,24 @@ function mapRow(row: Record<string, unknown>): PurchaseOrderRow {
   };
 }
 
+const formatDecimal = (
+  value: number,
+  formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string
+) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const formatCurrency = (
+  value: number,
+  formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string,
+  t: (value: string) => string
+) => `${formatDecimal(value, formatNumber)} ${t("ريال")}`;
+
+const formatOrderDate = (
+  value: string,
+  formatDate: (value: Date | string | number, options?: Intl.DateTimeFormatOptions) => string
+) => (value ? formatDate(value, { dateStyle: "medium" }) : "-");
+
 export default function PurchaseOrders() {
+  const { t, locale, direction, formatDate, formatNumber } = useI18n();
   const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
   const [orders, setOrders] = useState<PurchaseOrderRow[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrderRow | null>(null);
@@ -116,13 +134,13 @@ export default function PurchaseOrders() {
   const refresh = () => setRefreshKey((k) => k + 1);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("هل تريد حذف هذا الأمر؟")) return;
+    if (!confirm(t("هل تريد حذف هذا الأمر؟"))) return;
     const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
     if (!error) {
       setOrders((prev) => prev.filter((o) => o.id !== id));
-      toast({ title: "تم الحذف", description: `الأمر: ${id}` });
+      toast({ title: t("تم الحذف"), description: `${t("الأمر")}: ${id}` });
     } else {
-      toast({ title: "تعذّر الحذف", description: error.message });
+      toast({ title: t("تعذّر الحذف"), description: error.message });
     }
   };
 
@@ -140,18 +158,18 @@ export default function PurchaseOrders() {
       return `<tr>
         <td>${item.description || "-"}</td>
         <td>${item.unit || "-"}</td>
-        <td>${item.quantity}</td>
-        <td>${item.price.toFixed(2)}</td>
-        <td>${item.discount.toFixed(2)}</td>
-        <td>${item.taxPercent}%</td>
-        <td>${(sub + tax).toFixed(2)}</td>
+        <td>${formatNumber(item.quantity)}</td>
+        <td>${formatCurrency(item.price, formatNumber, t)}</td>
+        <td>${formatCurrency(item.discount, formatNumber, t)}</td>
+        <td>${formatNumber(item.taxPercent)}%</td>
+        <td>${formatCurrency(sub + tax, formatNumber, t)}</td>
       </tr>`;
     }).join("");
 
     printWindow.document.write(`
-      <html dir="rtl" lang="ar">
+      <html dir="${direction}" lang="${locale}">
         <head>
-          <title>أمر شراء ${order.id}</title>
+          <title>${t("أمر شراء")} ${order.id}</title>
           <meta charset="utf-8"/>
           <style>
             body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#0f172a}
@@ -168,22 +186,22 @@ export default function PurchaseOrders() {
         </head>
         <body>
           <div class="header">
-            <div class="title">أمر الشراء</div>
-            <div>رقم الأمر: <strong>${order.id}</strong></div>
+            <div class="title">${t("أمر الشراء")}</div>
+            <div>${t("رقم الأمر")}: <strong>${order.id}</strong></div>
           </div>
           <div class="grid">
-            <div class="card"><div class="label">المورد</div><div class="value">${order.vendor || "-"}</div></div>
-            <div class="card"><div class="label">تاريخ الأمر</div><div class="value">${order.date}</div></div>
-            <div class="card"><div class="label">تاريخ الاستلام المتوقع</div><div class="value">${order.expectedDate || "-"}</div></div>
-            <div class="card"><div class="label">مرجع الأمر</div><div class="value">${order.referenceNo || "-"}</div></div>
-            <div class="card"><div class="label">مركز التكلفة</div><div class="value">${order.costCenter || "-"}</div></div>
-            <div class="card"><div class="label">الإجمالي</div><div class="value">${order.total} ريال</div></div>
+            <div class="card"><div class="label">${t("المورد")}</div><div class="value">${order.vendor || "-"}</div></div>
+            <div class="card"><div class="label">${t("تاريخ الأمر")}</div><div class="value">${formatOrderDate(order.date, formatDate)}</div></div>
+            <div class="card"><div class="label">${t("تاريخ الاستلام المتوقع")}</div><div class="value">${order.expectedDate ? formatOrderDate(order.expectedDate, formatDate) : "-"}</div></div>
+            <div class="card"><div class="label">${t("مرجع الأمر")}</div><div class="value">${order.referenceNo || "-"}</div></div>
+            <div class="card"><div class="label">${t("مركز التكلفة")}</div><div class="value">${order.costCenter ? t(order.costCenter) : "-"}</div></div>
+            <div class="card"><div class="label">${t("الإجمالي")}</div><div class="value">${formatCurrency(Number(order.total) || 0, formatNumber, t)}</div></div>
           </div>
           <table>
-            <thead><tr><th>وصف البند</th><th>الوحدة</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الضريبة</th><th>الإجمالي</th></tr></thead>
+            <thead><tr><th>${t("وصف البند")}</th><th>${t("الوحدة")}</th><th>${t("الكمية")}</th><th>${t("السعر")}</th><th>${t("الخصم")}</th><th>${t("الضريبة")}</th><th>${t("الإجمالي")}</th></tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
-          ${order.notes ? `<p style="margin-top:16px;font-size:13px"><strong>ملاحظات:</strong> ${order.notes}</p>` : ""}
+          ${order.notes ? `<p style="margin-top:16px;font-size:13px"><strong>${t("ملاحظات")}:</strong> ${order.notes}</p>` : ""}
         </body>
       </html>
     `);
@@ -193,8 +211,8 @@ export default function PurchaseOrders() {
   };
 
   return (
-    <Layout subMenu={{ title: "المشتريات", items: purchasesFeatures }}>
-      <div className="mx-auto max-w-7xl">
+    <Layout subMenu={{ title: t("المشتريات"), items: purchasesFeatures }}>
+      <div dir={direction} className="mx-auto max-w-7xl">
         {view === "list" && (
           <OrdersList
             orders={orders}
@@ -210,7 +228,7 @@ export default function PurchaseOrders() {
             onBack={() => setView("list")}
             onSaved={(order) => {
               setOrders((prev) => [order, ...prev]);
-              toast({ title: "تم حفظ أمر الشراء", description: `الأمر: ${order.id}` });
+              toast({ title: t("تم حفظ أمر الشراء"), description: `${t("الأمر")}: ${order.id}` });
               setView("list");
             }}
           />
@@ -225,7 +243,7 @@ export default function PurchaseOrders() {
             onUpdated={(updated) => {
               setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
               setSelectedOrder(updated);
-              toast({ title: "تم تحديث أمر الشراء" });
+              toast({ title: t("تم تحديث أمر الشراء") });
               setView("list");
             }}
           />
@@ -251,41 +269,43 @@ function OrdersList({
   onDelete: (id: string) => void;
   onPrintPdf: (o: PurchaseOrderRow) => void;
 }) {
+  const { t, formatDate, formatNumber } = useI18n();
+
   return (
     <div className="space-y-6">
       <PageHeader
         icon={ClipboardCheck}
-        title="أوامر الشراء"
-        subtitle="إدارة وتتبع جميع أوامر الشراء من الموردين"
-        actionLabel="إنشاء أمر شراء جديد"
+        title={t("أوامر الشراء")}
+        subtitle={t("إدارة وتتبع جميع أوامر الشراء من الموردين")}
+        actionLabel={t("إنشاء أمر شراء جديد")}
         onAction={onCreateClick}
         gradient="from-violet-600 to-purple-700"
       />
 
       <FilterBar>
-        <FilterInput placeholder="رقم أمر الشراء، المرجع، اسم المورد..." />
-        <FilterSelect label="المورد">
-          <option>الكل</option>
+        <FilterInput placeholder={t("رقم أمر الشراء، المرجع، اسم المورد...")} />
+        <FilterSelect label={t("المورد")}>
+          <option>{t("الكل")}</option>
         </FilterSelect>
-        <FilterSelect label="الحالة">
-          <option>الكل</option>
+        <FilterSelect label={t("الحالة")}>
+          <option>{t("الكل")}</option>
         </FilterSelect>
         <FilterActions onReset={() => {}} onSearch={() => {}} />
       </FilterBar>
 
       <DataTable
-        headers={["الإجراءات", "الحالة", "المجموع", "المورد", "تاريخ الأمر", "رقم الأمر"]}
+        headers={[t("الإجراءات"), t("الحالة"), t("المجموع"), t("المورد"), t("تاريخ الأمر"), t("رقم الأمر")]}
         gradient="from-violet-800 to-purple-900"
       >
         {orders.map((order) => (
           <tr key={order.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
             <td className="px-5 py-3.5 align-middle">
               <div className="flex items-center gap-1">
-                <ActionBtn icon={Eye} label="عرض" color="blue" onClick={() => onView(order)} />
-                <ActionBtn icon={Edit} label="تعديل" color="emerald" onClick={() => onEdit(order)} />
-                <ActionBtn icon={Trash2} label="حذف" color="red" onClick={() => onDelete(order.id)} />
+                <ActionBtn icon={Eye} label={t("عرض")} color="blue" onClick={() => onView(order)} />
+                <ActionBtn icon={Edit} label={t("تعديل")} color="emerald" onClick={() => onEdit(order)} />
+                <ActionBtn icon={Trash2} label={t("حذف")} color="red" onClick={() => onDelete(order.id)} />
                 <button
-                  title="طباعة PDF"
+                  title={t("طباعة PDF")}
                   onClick={() => onPrintPdf(order)}
                   className="px-2.5 py-1.5 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs font-semibold"
                 >
@@ -295,12 +315,12 @@ function OrdersList({
             </td>
             <td className="px-5 py-3.5 align-middle">
               <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", order.statusColor)}>
-                {order.status}
+                {t(order.status)}
               </span>
             </td>
-            <td className="px-5 py-3.5 align-middle font-medium whitespace-nowrap">{order.total}</td>
+            <td className="px-5 py-3.5 align-middle font-medium whitespace-nowrap">{formatCurrency(Number(order.total) || 0, formatNumber, t)}</td>
             <td className="px-5 py-3.5 align-middle">{order.vendor}</td>
-            <td className="px-5 py-3.5 align-middle text-muted-foreground">{order.date}</td>
+            <td className="px-5 py-3.5 align-middle text-muted-foreground">{formatOrderDate(order.date, formatDate)}</td>
             <td
               className="px-5 py-3.5 align-middle font-semibold text-violet-600 hover:underline cursor-pointer"
               onClick={() => onView(order)}
@@ -312,7 +332,7 @@ function OrdersList({
         {orders.length === 0 && (
           <tr>
             <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
-              لا توجد أوامر شراء
+              {t("لا توجد أوامر شراء")}
             </td>
           </tr>
         )}
@@ -333,6 +353,7 @@ function OrderDetails({
   onEdit: () => void;
   onPrintPdf: (o: PurchaseOrderRow) => void;
 }) {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const items: OrderItem[] = order.items.length > 0
     ? order.items
     : [{ id: 1, description: "-", unit: "", quantity: 1, price: Number(order.total) || 0, discount: 0, taxPercent: 0 }];
@@ -347,21 +368,21 @@ function OrderDetails({
   );
 
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12">
+    <div dir={direction} className="space-y-6 bg-slate-50 min-h-screen pb-12">
       <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
         <button onClick={onBack} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 flex items-center gap-2">
-          العودة للقائمة <ArrowLeftRight className="h-4 w-4" />
+          {t("العودة للقائمة")} <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-slate-800">تفاصيل أمر الشراء</h1>
+          <h1 className="text-xl font-bold text-slate-800">{t("تفاصيل أمر الشراء")}</h1>
           <ClipboardCheck className="h-5 w-5 text-blue-600" />
         </div>
         <div className="flex gap-2">
           <button onClick={() => onPrintPdf(order)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded hover:bg-slate-50 flex items-center gap-2">
-            طباعة PDF
+            {t("طباعة PDF")}
           </button>
           <button onClick={onEdit} className="px-4 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 flex items-center gap-2">
-            <Edit className="h-4 w-4" /> تعديل
+            <Edit className="h-4 w-4" /> {t("تعديل")}
           </button>
         </div>
       </div>
@@ -369,18 +390,18 @@ function OrderDetails({
       <div className="p-4 space-y-6">
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800 text-right">بيانات الأمر</h2>
+            <h2 className="font-semibold text-slate-800 text-right">{t("بيانات الأمر")}</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
-              { label: "رقم الأمر", value: order.id },
-              { label: "المورد", value: order.vendor },
-              { label: "تاريخ الأمر", value: order.date },
-              { label: "تاريخ الاستلام المتوقع", value: order.expectedDate || "-" },
-              { label: "مرجع الأمر", value: order.referenceNo || "-" },
-              { label: "مركز التكلفة", value: order.costCenter || "-" },
-              { label: "الإجمالي", value: `${order.total} ريال` },
-              { label: "الحالة", value: order.status },
+              { label: t("رقم الأمر"), value: order.id },
+              { label: t("المورد"), value: order.vendor },
+              { label: t("تاريخ الأمر"), value: formatOrderDate(order.date, formatDate) },
+              { label: t("تاريخ الاستلام المتوقع"), value: order.expectedDate ? formatOrderDate(order.expectedDate, formatDate) : "-" },
+              { label: t("مرجع الأمر"), value: order.referenceNo || "-" },
+              { label: t("مركز التكلفة"), value: order.costCenter ? t(order.costCenter) : "-" },
+              { label: t("الإجمالي"), value: formatCurrency(Number(order.total) || 0, formatNumber, t) },
+              { label: t("الحالة"), value: t(order.status) },
             ].map(({ label, value }) => (
               <div key={label} className="space-y-1">
                 <div className="text-xs text-slate-500 text-right">{label}</div>
@@ -389,7 +410,7 @@ function OrderDetails({
             ))}
             {order.notes && (
               <div className="md:col-span-3 space-y-1">
-                <div className="text-xs text-slate-500 text-right">ملاحظات</div>
+                <div className="text-xs text-slate-500 text-right">{t("ملاحظات")}</div>
                 <div className="text-sm text-right">{order.notes}</div>
               </div>
             )}
@@ -398,19 +419,19 @@ function OrderDetails({
 
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800 text-right">بنود الأمر</h2>
+            <h2 className="font-semibold text-slate-800 text-right">{t("بنود الأمر")}</h2>
           </div>
           <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right">
+            <table dir={direction} className="w-full text-sm text-right">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-3 py-2 border border-slate-200">وصف البند</th>
-                  <th className="px-3 py-2 border border-slate-200">الوحدة</th>
-                  <th className="px-3 py-2 border border-slate-200">الكمية</th>
-                  <th className="px-3 py-2 border border-slate-200">السعر</th>
-                  <th className="px-3 py-2 border border-slate-200">الخصم</th>
-                  <th className="px-3 py-2 border border-slate-200">الضريبة</th>
-                  <th className="px-3 py-2 border border-slate-200">الإجمالي</th>
+                  <th className="px-3 py-2 border border-slate-200">{t("وصف البند")}</th>
+                  <th className="px-3 py-2 border border-slate-200">{t("الوحدة")}</th>
+                  <th className="px-3 py-2 border border-slate-200">{t("الكمية")}</th>
+                  <th className="px-3 py-2 border border-slate-200">{t("السعر")}</th>
+                  <th className="px-3 py-2 border border-slate-200">{t("الخصم")}</th>
+                  <th className="px-3 py-2 border border-slate-200">{t("الضريبة")}</th>
+                  <th className="px-3 py-2 border border-slate-200">{t("الإجمالي")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -421,11 +442,11 @@ function OrderDetails({
                     <tr key={idx}>
                       <td className="px-3 py-2 border border-slate-200">{item.description || "-"}</td>
                       <td className="px-3 py-2 border border-slate-200">{item.unit || "-"}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.quantity}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.price.toFixed(2)}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.discount.toFixed(2)}</td>
-                      <td className="px-3 py-2 border border-slate-200">{item.taxPercent}%</td>
-                      <td className="px-3 py-2 border border-slate-200">{(sub + tax).toFixed(2)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{formatNumber(item.quantity)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{formatCurrency(item.price, formatNumber, t)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{formatCurrency(item.discount, formatNumber, t)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{formatNumber(item.taxPercent)}%</td>
+                      <td className="px-3 py-2 border border-slate-200">{formatCurrency(sub + tax, formatNumber, t)}</td>
                     </tr>
                   );
                 })}
@@ -435,18 +456,18 @@ function OrderDetails({
             <div className="flex justify-end mt-6">
               <div className="w-72 space-y-2 text-sm">
                 {[
-                  { label: "المجموع الفرعي", value: totals.subtotal },
-                  { label: "الخصم", value: totals.discount },
-                  { label: "الضريبة", value: totals.tax },
+                  { label: t("المجموع الفرعي"), value: totals.subtotal },
+                  { label: t("الخصم"), value: totals.discount },
+                  { label: t("الضريبة"), value: totals.tax },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between">
-                    <span className="font-semibold">{value.toFixed(2)} ريال</span>
+                    <span className="font-semibold">{formatCurrency(value, formatNumber, t)}</span>
                     <span className="text-slate-600">{label}</span>
                   </div>
                 ))}
                 <div className="flex justify-between border-t border-slate-200 pt-2">
-                  <span className="font-bold text-blue-600">{totals.total.toFixed(2)} ريال</span>
-                  <span className="font-bold text-slate-800">الإجمالي الكلي</span>
+                  <span className="font-bold text-blue-600">{formatCurrency(totals.total, formatNumber, t)}</span>
+                  <span className="font-bold text-slate-800">{t("الإجمالي الكلي")}</span>
                 </div>
               </div>
             </div>
@@ -467,6 +488,7 @@ function OrderEdit({
   onBack: () => void;
   onUpdated: (o: PurchaseOrderRow) => void;
 }) {
+  const { t, direction, formatNumber } = useI18n();
   const [form, setForm] = useState({
     vendor: order.vendor,
     date: order.date,
@@ -551,27 +573,27 @@ function OrderEdit({
         items,
       });
     } else {
-      setError("تعذّر التحديث: " + updateError.message);
+      setError(`${t("تعذّر التحديث")}: ${updateError.message}`);
     }
   };
 
   const companyProfile = getCompanyProfile();
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div dir={direction} className="mx-auto max-w-5xl">
       <div className="space-y-6 bg-white min-h-screen pb-12">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-slate-200">
           <div className="flex gap-2">
             <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
-              <X className="h-4 w-4" /> إلغاء
+              <X className="h-4 w-4" /> {t("إلغاء")}
             </button>
             <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-emerald-600 text-white text-sm rounded flex items-center gap-2 hover:bg-emerald-700 disabled:opacity-60">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {saving ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+                {saving ? t("جارٍ الحفظ...") : t("حفظ التعديلات")}
               </button>
             </div>
-            <h1 className="text-2xl font-bold text-slate-800 text-right">أمر شراء</h1>
+            <h1 className="text-2xl font-bold text-slate-800 text-right">{t("أمر شراء")}</h1>
           </div>
 
           {error && (
@@ -582,12 +604,12 @@ function OrderEdit({
             {/* Company Info Section */}
             <div className="rounded-lg border border-slate-200 p-4 flex justify-between items-start bg-white">
               <div className="text-right space-y-1 text-slate-700">
-                <div className="text-xs opacity-75">رقم التسجيل التجاري</div>
+                <div className="text-xs opacity-75">{t("رقم السجل التجاري")}</div>
                 <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
               </div>
               <div className="text-right space-y-2 text-slate-900">
-                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || "اسم الشركة"}</div>
-                <div className="text-xs opacity-75">{companyProfile.country || "الدولة"}</div>
+                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || t("اسم الشركة")}</div>
+                <div className="text-xs opacity-75">{companyProfile.country || t("الدولة")}</div>
               </div>
             </div>
 
@@ -595,7 +617,7 @@ function OrderEdit({
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">رقم امر الشراء *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("رقم امر الشراء")} *</label>
                   <input
                     type="text"
                     value={form.referenceNo ?? ""}
@@ -605,12 +627,12 @@ function OrderEdit({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">المورد *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("المورد")} *</label>
                   <input
                     type="text"
                     value={form.vendor ?? ""}
                     onChange={(e) => setField("vendor", e.target.value)}
-                    placeholder="مطلوب"
+                    placeholder={t("مطلوب")}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
                 </div>
@@ -618,7 +640,7 @@ function OrderEdit({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">العملة *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("العملة")} *</label>
                   <input
                     type="text"
                     value="SAR"
@@ -627,7 +649,7 @@ function OrderEdit({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">التاريخ *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("التاريخ")} *</label>
                   <input
                     type="date"
                     value={form.date ?? ""}
@@ -639,20 +661,20 @@ function OrderEdit({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">المشروع</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("المشروع")}</label>
                   <input
                     value={form.project ?? ""}
                     onChange={(e) => setField("project", e.target.value)}
-                    placeholder="اختياري"
+                    placeholder={t("اختياري")}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">المرجع</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("المرجع")}</label>
                   <input
                     value={form.notes ?? ""}
                     onChange={(e) => setField("notes", e.target.value)}
-                    placeholder="اختياري"
+                    placeholder={t("اختياري")}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                   />
                 </div>
@@ -665,23 +687,23 @@ function OrderEdit({
                     onClick={addItem}
                     className="bg-[#1b8c56] text-white px-3 py-2 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-2"
                   >
-                    <Plus className="h-4 w-4" /> أضافة بند أو خدمة
+                    <Plus className="h-4 w-4" /> {t("إضافة بند")}
                   </button>
-                  <h3 className="text-sm font-semibold text-slate-800">مثال وصف الخدمة</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">{t("مثال وصف الخدمة")}</h3>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-right">
+                  <table dir={direction} className="w-full text-sm text-right">
                     <thead className="bg-slate-100 border border-slate-300">
                       <tr>
                         <th className="px-3 py-2 border border-slate-300"></th>
-                        <th className="px-3 py-2 border border-slate-300">المجموع</th>
-                        <th className="px-3 py-2 border border-slate-300">ض %</th>
-                        <th className="px-3 py-2 border border-slate-300">خصم</th>
-                        <th className="px-3 py-2 border border-slate-300">السعر</th>
-                        <th className="px-3 py-2 border border-slate-300">الوحدة</th>
-                        <th className="px-3 py-2 border border-slate-300">الكم</th>
-                        <th className="px-3 py-2 border border-slate-300">الوصف</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("المجموع")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الضريبة %")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الخصم")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("السعر")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الوحدة")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الكمية")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الوصف")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -692,12 +714,12 @@ function OrderEdit({
                         return (
                           <tr key={item.id} className="border border-slate-300">
                             <td className="px-3 py-2 border border-slate-300 text-center">
-                              <button onClick={() => removeItem(item.id)} className="w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600 text-xs">
+                              <button aria-label={t("حذف البند")} onClick={() => removeItem(item.id)} className="w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600 text-xs">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={lineTotal.toFixed(2)} readOnly disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
+                              <input type="text" value={formatDecimal(lineTotal, formatNumber)} readOnly disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
                               <input type="number" value={item.taxPercent ?? 0} onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-emerald-500 outline-none" />
@@ -727,8 +749,8 @@ function OrderEdit({
               <div className="flex justify-end pt-4">
                 <div className="w-64 space-y-2 text-sm border-t border-slate-200 pt-4">
                   <div className="flex justify-between text-right">
-                    <span>{totals.total.toFixed(2)} ريال</span>
-                    <span className="text-slate-600">المجموع الكلي</span>
+                    <span>{formatCurrency(totals.total, formatNumber, t)}</span>
+                    <span className="text-slate-600">{t("المجموع الكلي")}</span>
                   </div>
                 </div>
               </div>
@@ -748,6 +770,7 @@ function OrderForm({
   onBack: () => void;
   onSaved: (order: PurchaseOrderRow) => void;
 }) {
+  const { t, direction, formatNumber } = useI18n();
   const today = new Date().toISOString().split("T")[0];
   const defaultExpected = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
@@ -796,7 +819,7 @@ function OrderForm({
   );
 
   const handleSave = async () => {
-    if (!form.date) { setError("يرجى إدخال تاريخ أمر الشراء"); return; }
+    if (!form.date) { setError(t("يرجى إدخال تاريخ أمر الشراء")); return; }
     setSaving(true);
     setError(null);
 
@@ -827,7 +850,7 @@ function OrderForm({
     setSaving(false);
 
     if (insertError) {
-      setError("حدث خطأ أثناء الحفظ: " + insertError.message);
+      setError(`${t("حدث خطأ أثناء الحفظ")}: ${insertError.message}`);
       return;
     }
 
@@ -850,20 +873,20 @@ function OrderForm({
   const companyProfile = getCompanyProfile();
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div dir={direction} className="mx-auto max-w-5xl">
       <div className="space-y-6 bg-white min-h-screen pb-12">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-slate-200">
           <div className="flex gap-2">
             <button onClick={onBack} disabled={saving} className="px-4 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600 flex items-center gap-1 disabled:opacity-50">
-              <X className="h-4 w-4" /> إلغاء
+              <X className="h-4 w-4" /> {t("إلغاء")}
             </button>
             <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white text-sm rounded flex items-center gap-2 hover:bg-blue-700 disabled:opacity-60">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {saving ? "جارٍ الحفظ..." : "حفظ أمر الشراء"}
+                {saving ? t("جارٍ الحفظ...") : t("حفظ أمر الشراء")}
               </button>
             </div>
-            <h1 className="text-2xl font-bold text-slate-800 text-right">أمر شراء</h1>
+            <h1 className="text-2xl font-bold text-slate-800 text-right">{t("أمر شراء")}</h1>
           </div>
 
           {error && (
@@ -874,12 +897,12 @@ function OrderForm({
             {/* Company Info Section */}
             <div className="rounded-lg border border-slate-200 p-4 flex justify-between items-start bg-white">
               <div className="text-right space-y-1 text-slate-700">
-                <div className="text-xs opacity-75">رقم التسجيل التجاري</div>
+                <div className="text-xs opacity-75">{t("رقم السجل التجاري")}</div>
                 <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
               </div>
               <div className="text-right space-y-2 text-slate-900">
-                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || "اسم الشركة"}</div>
-                <div className="text-xs opacity-75">{companyProfile.country || "الدولة"}</div>
+                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || t("اسم الشركة")}</div>
+                <div className="text-xs opacity-75">{companyProfile.country || t("الدولة")}</div>
               </div>
             </div>
 
@@ -887,7 +910,7 @@ function OrderForm({
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">رقم امر الشراء *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("رقم امر الشراء")} *</label>
                   <input
                     type="text"
                     value={form.referenceNo ?? ""}
@@ -897,12 +920,12 @@ function OrderForm({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">المورد *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("المورد")} *</label>
                   <input
                     type="text"
                     value={form.vendor ?? ""}
                     onChange={(e) => setField("vendor", e.target.value)}
-                    placeholder="مطلوب"
+                    placeholder={t("مطلوب")}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
                 </div>
@@ -910,7 +933,7 @@ function OrderForm({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">العملة *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("العملة")} *</label>
                   <input
                     type="text"
                     value="SAR"
@@ -919,7 +942,7 @@ function OrderForm({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">التاريخ *</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("التاريخ")} *</label>
                   <input
                     type="date"
                     value={form.date ?? ""}
@@ -931,20 +954,20 @@ function OrderForm({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">المشروع</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("المشروع")}</label>
                   <input
                     value={form.project ?? ""}
                     onChange={(e) => setField("project", e.target.value)}
-                    placeholder="اختياري"
+                    placeholder={t("اختياري")}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 text-right block">المرجع</label>
+                  <label className="text-sm font-medium text-slate-700 text-right block">{t("المرجع")}</label>
                   <input
                     value={form.notes ?? ""}
                     onChange={(e) => setField("notes", e.target.value)}
-                    placeholder="اختياري"
+                    placeholder={t("اختياري")}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
                 </div>
@@ -957,23 +980,23 @@ function OrderForm({
                     onClick={addItem}
                     className="bg-[#1b8c56] text-white px-3 py-2 rounded text-sm font-medium hover:bg-[#157347] flex items-center gap-2"
                   >
-                    <Plus className="h-4 w-4" /> أضافة بند أو خدمة
+                    <Plus className="h-4 w-4" /> {t("إضافة بند")}
                   </button>
-                  <h3 className="text-sm font-semibold text-slate-800">مثال وصف الخدمة</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">{t("مثال وصف الخدمة")}</h3>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-right">
+                  <table dir={direction} className="w-full text-sm text-right">
                     <thead className="bg-slate-100 border border-slate-300">
                       <tr>
                         <th className="px-3 py-2 border border-slate-300"></th>
-                        <th className="px-3 py-2 border border-slate-300">المجموع</th>
-                        <th className="px-3 py-2 border border-slate-300">ض %</th>
-                        <th className="px-3 py-2 border border-slate-300">خصم</th>
-                        <th className="px-3 py-2 border border-slate-300">السعر</th>
-                        <th className="px-3 py-2 border border-slate-300">الوحدة</th>
-                        <th className="px-3 py-2 border border-slate-300">الكم</th>
-                        <th className="px-3 py-2 border border-slate-300">الوصف</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("المجموع")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الضريبة %")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الخصم")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("السعر")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الوحدة")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الكمية")}</th>
+                        <th className="px-3 py-2 border border-slate-300">{t("الوصف")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -984,12 +1007,12 @@ function OrderForm({
                         return (
                           <tr key={item.id} className="border border-slate-300">
                             <td className="px-3 py-2 border border-slate-300 text-center">
-                              <button onClick={() => removeItem(item.id)} className="w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600 text-xs">
+                              <button aria-label={t("حذف البند")} onClick={() => removeItem(item.id)} className="w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600 text-xs">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
-                              <input type="text" value={lineTotal.toFixed(2)} readOnly disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
+                              <input type="text" value={formatDecimal(lineTotal, formatNumber)} readOnly disabled className="w-full px-2 py-1 border border-slate-200 bg-slate-100 rounded text-xs text-right outline-none" />
                             </td>
                             <td className="px-3 py-2 border border-slate-300">
                               <input type="number" value={item.taxPercent ?? 0} onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) || 0 })} className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-right focus:border-blue-500 outline-none" />
@@ -1019,8 +1042,8 @@ function OrderForm({
               <div className="flex justify-end pt-4">
                 <div className="w-64 space-y-2 text-sm border-t border-slate-200 pt-4">
                   <div className="flex justify-between text-right">
-                    <span>0.00</span>
-                    <span className="text-slate-600">المجموع</span>
+                    <span>{formatCurrency(totals.total, formatNumber, t)}</span>
+                    <span className="text-slate-600">{t("المجموع")}</span>
                   </div>
                 </div>
               </div>

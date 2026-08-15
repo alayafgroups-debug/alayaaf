@@ -56,6 +56,165 @@ const accountingStatusLabels: Record<string, string> = {
   reversed: "قيد معكوس",
 };
 
+const invoiceTranslations: Record<string, string> = {
+  "فواتير المبيعات": "Sales invoices",
+  "الإجراءات": "Actions",
+  "الإجمالي": "Total",
+  "البحث": "Search",
+  "تاريخ الاستحقاق": "Due date",
+  "إدارة وتتبع جميع فواتير المبيعات والمدفوعات": "Manage and track all sales invoices and payments",
+  "إضافة فاتورة مبيعات جديدة": "Add new sales invoice",
+  "رقم الفاتورة، المرجع، اسم العميل...": "Invoice number, reference, customer name...",
+  "الكل": "All",
+  "مفتوحة": "Open",
+  "مدفوعة جزئياً": "Partially paid",
+  "مدفوعة بالكامل": "Paid in full",
+  "حالة ZATCA": "ZATCA status",
+  "القيد المحاسبي": "Accounting entry",
+  "المبلغ المتبقي": "Remaining amount",
+  "المبلغ المدفوع": "Paid amount",
+  "تاريخ الفاتورة": "Invoice date",
+  "رقم الفاتورة": "Invoice number",
+  "عرض": "View",
+  "استخدم إشعار تعديل": "Use adjustment note",
+  "تعديل": "Edit",
+  "الفاتورة مُرحّلة محاسبياً": "Invoice posted to accounting",
+  "استخدم إشعاراً دائناً أو مديناً لتعديل المبالغ دون كسر القيد المحاسبي.": "Use a credit or debit note to adjust amounts without breaking the accounting entry.",
+  "تسديد": "Record payment",
+  "ترحيل محاسبي": "Post to accounting",
+  "حذف": "Delete",
+  "تحميل PDF": "Download PDF",
+  "فاتورة": "Invoice",
+  "بانتظار الإرسال": "Awaiting submission",
+  "مصادق من ZATCA": "Cleared by ZATCA",
+  "مُبلّغ لـ ZATCA": "Reported to ZATCA",
+  "مرفوض من ZATCA": "Rejected by ZATCA",
+  "غير مُرحّلة": "Unposted",
+  "قيد مُرحّل": "Posted entry",
+  "فشل الترحيل": "Posting failed",
+  "قيد معكوس": "Reversed entry",
+  "ريال": "SAR",
+  "تعذر ترحيل الفاتورة": "Unable to post invoice",
+  "تم ترحيل الفاتورة محاسبياً": "Invoice posted to accounting",
+  "تم إنشاء القيد المتوازن للفاتورة": "A balanced entry was created for invoice",
+  "تم حذف الفاتورة": "Invoice deleted",
+  "الفاتورة": "Invoice",
+  "تعذر حذف الفاتورة": "Unable to delete invoice",
+  "الفاتورة المُرحّلة تُعكس بإشعار دائن ولا تُحذف": "A posted invoice must be reversed with a credit note and cannot be deleted",
+  "تعذر إرسال الفاتورة إلى ZATCA": "Unable to submit invoice to ZATCA",
+  "حدث خطأ غير متوقع": "An unexpected error occurred",
+  "العودة للقائمة": "Back to list",
+  "تفاصيل الفاتورة الضريبية": "Tax invoice details",
+  "شركة لاكجري العياف": "Luxury Al Ayaf Company",
+  "8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة": "8529 Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca",
+  "24351 المملكة العربية السعودية": "24351, Kingdom of Saudi Arabia",
+  "رقم التسجيل الضريبي": "VAT registration number",
+  "رقم السجل التجاري": "Commercial registration number",
+  "شعار الشركة": "Company logo",
+  "فاتورة ضريبية": "Tax Invoice",
+  "المحاسبة": "Accounting",
+  "رقم القيد": "Entry number",
+  "العنوان الوطني": "National address",
+  "التاريخ": "Date",
+  "الوصف": "Description",
+  "الكمية": "Quantity",
+  "السعر": "Price",
+  "المبلغ الخاضع للضريبة": "Taxable amount",
+  "القيمة المضافة": "VAT",
+  "المجموع": "Total",
+  "تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية": "This code is encoded in accordance with ZATCA e-invoicing requirements",
+  "ملاحظات": "Notes",
+  "يتم عرض تفاصيل الفاتورة وفق نموذج الفاتورة الضريبية المعتمد.": "Invoice details are shown using the approved tax invoice format.",
+  "المجموع الفرعي": "Subtotal",
+  "إجمالي ضريبة القيمة المضافة": "Total VAT",
+  "المجموع شامل القيمة المضافة": "Total including VAT",
+  "بيانات الحساب البنكي": "Bank account details",
+  "اسم المستفيد": "Beneficiary name",
+  "رقم الحساب": "Account number",
+  "رقم الآيبان": "IBAN",
+  "بنك الرياض": "Riyad Bank",
+  "تعديل الفاتورة": "Edit invoice",
+  "حفظ التعديلات": "Save changes",
+  "معلومات الفاتورة": "Invoice information",
+  "رقم المبنى، الشارع، الحي، المدينة، الرمز البريدي": "Building number, street, district, city, postal code",
+  "إضافة بند": "Add item",
+  "بنود الفاتورة": "Invoice items",
+  "الضريبة": "Tax",
+  "خصم": "Discount",
+  "سعر الوحدة *": "Unit price *",
+  "الكمية *": "Quantity *",
+  "حساب الإيراد *": "Revenue account *",
+  "وصف البند": "Item description",
+  "إيرادات المبيعات والخدمات": "Sales and service revenue",
+  "اكتب وصف البند...": "Enter item description...",
+  "المجموع الكلي": "Grand total",
+  "الخصم": "Discount",
+  "تم تحديث الفاتورة": "Invoice updated",
+  "تعذر تحديث الفاتورة": "Unable to update invoice",
+  "يرجى المحاولة لاحقاً": "Please try again later",
+  "تسديد الفاتورة": "Invoice payment",
+  "حفظ السداد": "Save payment",
+  "معلومات السداد": "Payment information",
+  "المتبقي": "Remaining",
+  "المبلغ المدفوع الآن": "Amount paid now",
+  "تم تسديد الفاتورة": "Invoice payment recorded",
+  "تعذر تسديد الفاتورة": "Unable to record invoice payment",
+  "العميل مطلوب": "Customer is required",
+  "اختر العميل قبل حفظ الفاتورة": "Select a customer before saving the invoice",
+  "حساب الإيراد مطلوب": "Revenue account is required",
+  "اختر حساباً من شجرة الحسابات لكل بند": "Select an account from the chart of accounts for each item",
+  "رقم ضريبي مطلوب": "VAT number is required",
+  "الفاتورة المعيارية B2B تتطلب رقم ضريبة العميل المكون من 15 رقمًا": "A standard B2B invoice requires the customer's 15-digit VAT number",
+  "جارٍ حفظ وتجهيز الفاتورة للطباعة...": "Saving and preparing the invoice for printing...",
+  "تعذر حفظ الفاتورة": "Unable to save invoice",
+  "رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى.": "The invoice number is already in use. Refresh the list and try again.",
+  "حاول مرة أخرى": "Try again",
+  "تعذر تأكيد القيد المحاسبي": "Unable to confirm accounting entry",
+  "تم حفظ الفاتورة وتعذرت الطباعة": "Invoice saved, but printing failed",
+  "يمكن طباعتها لاحقاً من قائمة الفواتير": "You can print it later from the invoice list",
+  "تعذر إكمال حفظ الفاتورة": "Unable to complete invoice save",
+  "إلغاء": "Cancel",
+  "جارٍ حفظ الفاتورة...": "Saving invoice...",
+  "حفظ الفاتورة": "Save invoice",
+  "جارٍ الحفظ والطباعة...": "Saving and printing...",
+  "حفظ وطباعة": "Save and print",
+  "إنشاء فاتورة مبيعات جديدة": "Create new sales invoice",
+  "الشارع رقم 20": "Street No. 20",
+  "المملكة العربية السعودية": "Kingdom of Saudi Arabia",
+  "الرقم الضريبي": "VAT number",
+  "اختر العميل": "Select customer",
+  "نوع الفاتورة": "Invoice type",
+  "مبسطة B2C — Reporting": "Simplified B2C — Reporting",
+  "معيارية B2B — Clearance": "Standard B2B — Clearance",
+  "الرقم الضريبي للعميل": "Customer VAT number",
+  "مطلوب لفاتورة B2B": "Required for B2B invoice",
+  "اختياري لـ B2C": "Optional for B2C",
+  "العملة": "Currency",
+  "أمر الشراء": "Purchase order",
+  "اختياري": "Optional",
+  "المرجع": "Reference",
+  "المشروع": "Project",
+  "المستودع": "Warehouse",
+  "QR بعد الاعتماد": "QR after approval",
+  "الهاتف": "Phone",
+  "المدفوع": "Paid",
+  "فندي بن سالم": "Fendi bin Salem",
+  "فندي كوزوبد": "Fendi Kozobed",
+  "إعدادات البند": "Item settings",
+  "حذف البند": "Delete item",
+};
+
+function useSalesInvoicesI18n() {
+  const i18n = useI18n();
+  return {
+    ...i18n,
+    t: (value: string) =>
+      i18n.locale === "en"
+        ? invoiceTranslations[value] ?? i18n.t(value)
+        : i18n.t(value),
+  };
+}
+
 type RevenueAccount = {
   code: string;
   nameAr: string;
@@ -117,7 +276,7 @@ type Invoice = {
 };
 
 export default function SalesInvoices() {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, locale, direction, formatDate, formatNumber } = useSalesInvoicesI18n();
   const [view, setView] = useState<
     "list" | "create" | "details" | "edit" | "payment"
   >("list");
@@ -315,7 +474,7 @@ export default function SalesInvoices() {
 
     printWindow.document.open();
     printWindow.document.write(`
-      <html dir="${direction}" lang="${direction === "rtl" ? "ar" : "en"}">
+      <html dir="${direction}" lang="${locale}">
         <head>
           <meta charset="utf-8" />
           <title>${escapeHtml(t("فاتورة"))} ${escapeHtml(invoice.id)}</title>
@@ -360,12 +519,12 @@ export default function SalesInvoices() {
             <div class="head">
               <div class="company-row">
                 <div class="company-ar">
-                  <strong>شركة لاكجري العياف</strong><br />
-                  8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة، المملكة العربية السعودية 24351<br />
-                  رقم التسجيل الضريبي 314559705300003<br />
-                  رقم السجل التجاري 7053358979
+                  <strong>${escapeHtml(t("شركة لاكجري العياف"))}</strong><br />
+                  ${escapeHtml(t("8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة"))}, ${escapeHtml(t("24351 المملكة العربية السعودية"))}<br />
+                  ${escapeHtml(t("رقم التسجيل الضريبي"))} 314559705300003<br />
+                  ${escapeHtml(t("رقم السجل التجاري"))} 7053358979
                 </div>
-                <img src="${COMPANY_LOGO_URL}" class="company-logo" alt="شعار الشركة" />
+                <img src="${COMPANY_LOGO_URL}" class="company-logo" alt="${escapeHtml(t("شعار الشركة"))}" />
                 <div class="company-en">
                   <strong>Luxury Al Ayaf company</strong><br />
                   8529, Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca, 24351, Kingdom of Saudi Arabia<br />
@@ -374,21 +533,21 @@ export default function SalesInvoices() {
                 </div>
               </div>
 
-              <div class="title">فاتورة ضريبية Tax Invoice</div>
+              <div class="title">${escapeHtml(t("فاتورة ضريبية"))}</div>
 
               <div class="meta">
                 <div class="meta-grid">
                   <div class="meta-cell">
-                    <div class="row"><span class="label">العميل</span><span class="value">${escapeHtml(invoice.customer)}</span></div>
-                    <div class="row"><span class="label">العنوان الوطني</span><span class="value">${escapeHtml(invoice.customerAddress || "-")}</span></div>
-                    <div class="row"><span class="label">الهاتف</span><span class="value">0507089850</span></div>
-                    <div class="row"><span class="label">رقم التسجيل الضريبي</span><span class="value">312731286200003</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("العميل"))}</span><span class="value">${escapeHtml(invoice.customer)}</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("العنوان الوطني"))}</span><span class="value">${escapeHtml(invoice.customerAddress || "-")}</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("الهاتف"))}</span><span class="value">0507089850</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("رقم التسجيل الضريبي"))}</span><span class="value">312731286200003</span></div>
                   </div>
                   <div class="meta-cell">
-                    <div class="row"><span class="label">رقم الفاتورة</span><span class="value">${escapeHtml(invoice.id)}</span></div>
-                    <div class="row"><span class="label">التاريخ</span><span class="value">${escapeHtml(invoice.date)}</span></div>
-                    <div class="row"><span class="label">تاريخ الاستحقاق</span><span class="value">${escapeHtml(invoice.dueDate)}</span></div>
-                    <div class="row"><span class="label">الحالة</span><span class="value">${escapeHtml(invoice.status)}</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("رقم الفاتورة"))}</span><span class="value">${escapeHtml(invoice.id)}</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("التاريخ"))}</span><span class="value">${escapeHtml(invoice.date ? formatDate(invoice.date) : "-")}</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("تاريخ الاستحقاق"))}</span><span class="value">${escapeHtml(invoice.dueDate ? formatDate(invoice.dueDate) : "-")}</span></div>
+                    <div class="row"><span class="label">${escapeHtml(t("الحالة"))}</span><span class="value">${escapeHtml(t(invoice.status))}</span></div>
                   </div>
                 </div>
               </div>
@@ -397,12 +556,12 @@ export default function SalesInvoices() {
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>الوصف<br/>Description</th>
-                    <th>الكمية<br/>Qty</th>
-                    <th>السعر<br/>Price</th>
-                    <th>المبلغ الخاضع للضريبة<br/>Taxable amount</th>
-                    <th>المبلغ المضافة<br/>VAT amount</th>
-                    <th>المجموع<br/>Line amount</th>
+                    <th>${escapeHtml(t("الوصف"))}</th>
+                    <th>${escapeHtml(t("الكمية"))}</th>
+                    <th>${escapeHtml(t("السعر"))}</th>
+                    <th>${escapeHtml(t("المبلغ الخاضع للضريبة"))}</th>
+                    <th>${escapeHtml(t("القيمة المضافة"))}</th>
+                    <th>${escapeHtml(t("المجموع"))}</th>
                   </tr>
                 </thead>
                 <tbody>${rowsHtml}</tbody>
@@ -411,28 +570,28 @@ export default function SalesInvoices() {
               <div class="bottom">
                 <div>
                   <div class="qr-note">
-                    ${qrDataUrl ? `<img src="${qrDataUrl}" class="qr-box" alt="QR ZATCA" />` : `<div class="qr-box">QR بعد الاعتماد</div>`}
-                    <div class="qr-text">تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية</div>
+                    ${qrDataUrl ? `<img src="${qrDataUrl}" class="qr-box" alt="QR ZATCA" />` : `<div class="qr-box">${escapeHtml(t("QR بعد الاعتماد"))}</div>`}
+                    <div class="qr-text">${escapeHtml(t("تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية"))}</div>
                   </div>
                   <div class="notes">
-                    <strong>ملاحظات</strong><br/>
-                    بيانات الحساب البنكي:<br/>
-                    اسم المستفيد: شركة لاكجري العياف<br/>
-                    رقم الحساب: 1575917249940<br/>
-                    رقم الايبان: SA3520000001575917249940<br/>
-                    بنك الرياض
+                    <strong>${escapeHtml(t("ملاحظات"))}</strong><br/>
+                    ${escapeHtml(t("بيانات الحساب البنكي"))}:<br/>
+                    ${escapeHtml(t("اسم المستفيد"))}: ${escapeHtml(t("شركة لاكجري العياف"))}<br/>
+                    ${escapeHtml(t("رقم الحساب"))}: 1575917249940<br/>
+                    ${escapeHtml(t("رقم الآيبان"))}: SA3520000001575917249940<br/>
+                    ${escapeHtml(t("بنك الرياض"))}
                   </div>
                 </div>
                 <div class="totals">
-                  <div class="row"><span>المجموع الفرعي Subtotal</span><strong>${totals.taxable.toFixed(2)} ﷼</strong></div>
-                  <div class="row"><span>إجمالي ضريبة القيمة المضافة Total VAT</span><strong>${totals.vat.toFixed(2)} ﷼</strong></div>
-                  <div class="row final"><span>المجموع شامل القيمة المضافة Total</span><strong>${totals.total.toFixed(2)} ﷼</strong></div>
+                  <div class="row"><span>${escapeHtml(t("المجموع الفرعي"))}</span><strong>${formatNumber(totals.taxable, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(t("ريال"))}</strong></div>
+                  <div class="row"><span>${escapeHtml(t("إجمالي ضريبة القيمة المضافة"))}</span><strong>${formatNumber(totals.vat, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(t("ريال"))}</strong></div>
+                  <div class="row final"><span>${escapeHtml(t("المجموع شامل القيمة المضافة"))}</span><strong>${formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(t("ريال"))}</strong></div>
                 </div>
               </div>
 
               <div class="bank">
-                المدفوع: ${escapeHtml(invoice.paid)}<br/>
-                المتبقي: ${escapeHtml(invoice.remaining)}
+                ${escapeHtml(t("المدفوع"))}: ${formatNumber(parseCurrency(invoice.paid), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(t("ريال"))}<br/>
+                ${escapeHtml(t("المتبقي"))}: ${formatNumber(parseCurrency(invoice.remaining), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(t("ريال"))}
               </div>
             </div>
           </div>
@@ -536,7 +695,7 @@ function InvoicesList({
   onDownloadPdf: (invoice: Invoice) => void;
   invoices: Invoice[];
 }) {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, direction, formatDate, formatNumber } = useSalesInvoicesI18n();
   const notifyAction = (title: string, description?: string) => {
     toast({ title, description });
   };
@@ -644,7 +803,7 @@ function InvoicesList({
                 />
               </div>
             </td>
-            <td className="px-5 py-3.5 align-middle text-right">
+            <td className="px-5 py-3.5 align-middle text-start">
               <span className={cn(
                 "inline-flex rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
                 invoice.zatcaStatus === "cleared" || invoice.zatcaStatus === "reported"
@@ -656,7 +815,7 @@ function InvoicesList({
                 {t(zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ?? invoice.zatcaStatus ?? "")}
               </span>
             </td>
-            <td className="px-5 py-3.5 align-middle text-right">
+            <td className="px-5 py-3.5 align-middle text-start">
               <span className={cn(
                 "inline-flex rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
                 invoice.accountingStatus === "posted"
@@ -666,7 +825,7 @@ function InvoicesList({
                 {t(accountingStatusLabels[invoice.accountingStatus ?? "unposted"] ?? invoice.accountingStatus ?? "")}
               </span>
             </td>
-            <td className="px-5 py-3.5 align-middle text-right">
+            <td className="px-5 py-3.5 align-middle text-start">
               <span
                 className={cn(
                   "inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap",
@@ -680,25 +839,25 @@ function InvoicesList({
                 {t(invoice.status)}
               </span>
             </td>
-            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap text-red-500 font-semibold text-[13px]">
+            <td className="px-5 py-3.5 align-middle text-start whitespace-nowrap text-red-500 font-semibold text-[13px]">
               {formatNumber(parseCurrency(invoice.remaining))} {t("ريال")}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap text-emerald-600 font-semibold text-[13px]">
+            <td className="px-5 py-3.5 align-middle text-start whitespace-nowrap text-emerald-600 font-semibold text-[13px]">
               {formatNumber(parseCurrency(invoice.paid))} {t("ريال")}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap font-bold text-primary">
+            <td className="px-5 py-3.5 align-middle text-start whitespace-nowrap font-bold text-primary">
               {formatNumber(parseCurrency(invoice.total))} {t("ريال")}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right text-foreground font-medium">
+            <td className="px-5 py-3.5 align-middle text-start text-foreground font-medium">
               {invoice.customer}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+            <td className="px-5 py-3.5 align-middle text-start text-muted-foreground text-[13px]">
               {invoice.dueDate ? formatDate(invoice.dueDate) : "-"}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+            <td className="px-5 py-3.5 align-middle text-start text-muted-foreground text-[13px]">
               {invoice.date ? formatDate(invoice.date) : "-"}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right font-bold text-primary hover:underline cursor-pointer">
+            <td className="px-5 py-3.5 align-middle text-start font-bold text-primary hover:underline cursor-pointer">
               {invoice.id}
             </td>
           </tr>
@@ -715,7 +874,7 @@ function InvoiceDetails({
   invoice: Invoice;
   onBack: () => void;
 }) {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, direction, formatDate, formatNumber } = useSalesInvoicesI18n();
   const [lineItems, setLineItems] = useState<
     Array<{
       id: number;
@@ -783,18 +942,18 @@ function InvoiceDetails({
   );
 
   return (
-    <div className="space-y-6 pb-12">
+    <div dir={direction} className="space-y-6 pb-12">
       <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
           className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
-          العودة للقائمة
+          {t("العودة للقائمة")}
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-extrabold text-foreground">
-            تفاصيل الفاتورة الضريبية
+            {t("تفاصيل الفاتورة الضريبية")}
           </h1>
           <FileText className="h-5 w-5 text-blue-600" />
         </div>
@@ -804,31 +963,31 @@ function InvoiceDetails({
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-              <div className="space-y-2 text-right">
+              <div className="space-y-2 text-start">
                 <h2 className="text-lg text-sm font-bold text-foreground">
-                  شركة لاكجري العياف
+                  {t("شركة لاكجري العياف")}
                 </h2>
                 <p className="text-sm text-slate-600">
-                  8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة
+                  {t("8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة")}
                 </p>
                 <p className="text-sm text-slate-600">
-                  24351 المملكة العربية السعودية
+                  {t("24351 المملكة العربية السعودية")}
                 </p>
                 <p className="text-sm text-slate-600">
-                  رقم التسجيل الضريبي 314559705300003
+                  {t("رقم التسجيل الضريبي")} 314559705300003
                 </p>
                 <p className="text-sm text-slate-600">
-                  رقم السجل التجاري 7053358979
+                  {t("رقم السجل التجاري")} 7053358979
                 </p>
               </div>
               <div className="flex items-center justify-center">
                 <img
                   src={COMPANY_LOGO_URL}
-                  alt="شعار الشركة"
+                  alt={t("شعار الشركة")}
                   className="h-24 w-32 object-contain"
                 />
               </div>
-              <div className="space-y-2 text-left md:text-right">
+              <div className="space-y-2 text-end md:text-start">
                 <h2 className="text-lg text-sm font-bold text-foreground">
                   Luxury Al Ayaf Company
                 </h2>
@@ -847,19 +1006,19 @@ function InvoiceDetails({
 
             <div className="text-center border-t border-b border-slate-200 py-4">
               <h3 className="text-2xl font-bold text-slate-800">
-                فاتورة ضريبية
+                {t("فاتورة ضريبية")}
               </h3>
               <p className="text-sm text-slate-500">Tax Invoice</p>
               <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs font-semibold">
                 <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
-                  المحاسبة: {accountingStatusLabels[invoice.accountingStatus ?? "unposted"] ?? invoice.accountingStatus}
+                  {t("المحاسبة")}: {t(accountingStatusLabels[invoice.accountingStatus ?? "unposted"] ?? invoice.accountingStatus ?? "")}
                 </span>
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
-                  ZATCA: {zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ?? invoice.zatcaStatus}
+                  ZATCA: {t(zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ?? invoice.zatcaStatus ?? "")}
                 </span>
                 {invoice.accountingJournalEntryId && (
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-                    رقم القيد: {invoice.accountingJournalEntryId}
+                    {t("رقم القيد")}: {invoice.accountingJournalEntryId}
                   </span>
                 )}
               </div>
@@ -867,41 +1026,41 @@ function InvoiceDetails({
 
             <div className="border border-slate-200 rounded">
               <div className="grid grid-cols-1 md:grid-cols-2 text-sm">
-                <div className="p-3 border-b md:border-b-0 md:border-l border-slate-200 space-y-2 text-right">
+                <div className="p-3 border-b md:border-b-0 md:border-l border-slate-200 space-y-2 text-start">
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-600">العميل</span>
+                    <span className="text-slate-600">{t("العميل")}</span>
                     <span className="text-sm font-bold text-foreground">
                       {invoice.customer}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-600">العنوان الوطني</span>
+                    <span className="text-slate-600">{t("العنوان الوطني")}</span>
                     <span className="text-sm font-bold text-foreground">
                       {invoice.customerAddress || "-"}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-600">رقم التسجيل الضريبي</span>
+                    <span className="text-slate-600">{t("رقم التسجيل الضريبي")}</span>
                     <span className="text-sm font-bold text-foreground">
                       300726885600003
                     </span>
                   </div>
                 </div>
-                <div className="p-3 space-y-2 text-right">
+                <div className="p-3 space-y-2 text-start">
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-600">رقم الفاتورة</span>
+                    <span className="text-slate-600">{t("رقم الفاتورة")}</span>
                     <span className="text-sm font-bold text-foreground">
                       {invoice.id}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-600">التاريخ</span>
+                    <span className="text-slate-600">{t("التاريخ")}</span>
                     <span className="text-sm font-bold text-foreground">
                       {invoice.date ? formatDate(invoice.date) : "-"}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-600">تاريخ الاستحقاق</span>
+                    <span className="text-slate-600">{t("تاريخ الاستحقاق")}</span>
                     <span className="text-sm font-bold text-foreground">
                       {invoice.dueDate ? formatDate(invoice.dueDate) : "-"}
                     </span>
@@ -911,23 +1070,23 @@ function InvoiceDetails({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-right border border-slate-200">
+              <table className="w-full text-sm text-start border border-slate-200">
                 <thead className="bg-slate-100 text-slate-700">
                   <tr>
                     <th className="px-3 py-2 border border-slate-200">#</th>
-                    <th className="px-3 py-2 border border-slate-200">الوصف</th>
+                    <th className="px-3 py-2 border border-slate-200">{t("الوصف")}</th>
                     <th className="px-3 py-2 border border-slate-200">
-                      الكمية
+                      {t("الكمية")}
                     </th>
-                    <th className="px-3 py-2 border border-slate-200">السعر</th>
+                    <th className="px-3 py-2 border border-slate-200">{t("السعر")}</th>
                     <th className="px-3 py-2 border border-slate-200">
-                      المبلغ الخاضع للضريبة
-                    </th>
-                    <th className="px-3 py-2 border border-slate-200">
-                      القيمة المضافة
+                      {t("المبلغ الخاضع للضريبة")}
                     </th>
                     <th className="px-3 py-2 border border-slate-200">
-                      المجموع
+                      {t("القيمة المضافة")}
+                    </th>
+                    <th className="px-3 py-2 border border-slate-200">
+                      {t("المجموع")}
                     </th>
                   </tr>
                 </thead>
@@ -935,26 +1094,26 @@ function InvoiceDetails({
                   {lineItems.map((item) => (
                     <tr key={item.id}>
                       <td className="px-3 py-2 border border-slate-200">
-                        {item.id}
+                        {formatNumber(item.id)}
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
                         {item.description}
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
-                        {item.qty}
+                        {formatNumber(item.qty)}
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
-                        {item.price.toFixed(2)}
+                        {formatNumber(item.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
-                        {item.taxable.toFixed(2)}
+                        {formatNumber(item.taxable, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
-                        {item.vat.toFixed(2)}
-                        <div className="text-xs text-slate-500">15%</div>
+                        {formatNumber(item.vat, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <div className="text-xs text-slate-500">{formatNumber(15)}%</div>
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
-                        {item.total.toFixed(2)}
+                        {formatNumber(item.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   ))}
@@ -971,46 +1130,45 @@ function InvoiceDetails({
                     className="rounded"
                   />
                   <div className="text-xs text-slate-500">
-                    تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة
-                    والجمارك للفوترة الإلكترونية
+                    {t("تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية")}
                   </div>
                 </div>
                 <div className="space-y-2 text-sm text-slate-700">
-                  <h4 className="font-semibold">ملاحظات</h4>
+                  <h4 className="font-semibold">{t("ملاحظات")}</h4>
                   <p>
-                    يتم عرض تفاصيل الفاتورة وفق نموذج الفاتورة الضريبية المعتمد.
+                    {t("يتم عرض تفاصيل الفاتورة وفق نموذج الفاتورة الضريبية المعتمد.")}
                   </p>
                 </div>
               </div>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-600">المجموع الفرعي</span>
+                  <span className="text-slate-600">{t("المجموع الفرعي")}</span>
                   <span className="text-sm font-bold text-foreground">
-                    {totals.taxable.toFixed(2)} ﷼
+                    {formatNumber(totals.taxable, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">
-                    إجمالي ضريبة القيمة المضافة
+                    {t("إجمالي ضريبة القيمة المضافة")}
                   </span>
                   <span className="text-sm font-bold text-foreground">
-                    {totals.vat.toFixed(2)} ﷼
+                    {formatNumber(totals.vat, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                   </span>
                 </div>
                 <div className="flex justify-between text-blue-600 font-bold">
-                  <span>المجموع شامل القيمة المضافة</span>
-                  <span>{totals.total.toFixed(2)} ﷼</span>
+                  <span>{t("المجموع شامل القيمة المضافة")}</span>
+                  <span>{formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}</span>
                 </div>
               </div>
             </div>
 
             <div className="border-t border-slate-200 pt-4 text-sm text-slate-700">
-              <h4 className="font-semibold mb-2">بيانات الحساب البنكي</h4>
+              <h4 className="font-semibold mb-2">{t("بيانات الحساب البنكي")}</h4>
               <div className="space-y-1">
-                <div>اسم المستفيد: شركة لاكجري العياف</div>
-                <div>رقم الحساب: 1575917249940</div>
-                <div>رقم الآيبان: SA3520000001575917249940</div>
-                <div>بنك الرياض</div>
+                <div>{t("اسم المستفيد")}: {t("شركة لاكجري العياف")}</div>
+                <div>{t("رقم الحساب")}: 1575917249940</div>
+                <div>{t("رقم الآيبان")}: SA3520000001575917249940</div>
+                <div>{t("بنك الرياض")}</div>
               </div>
             </div>
           </div>
@@ -1029,7 +1187,7 @@ function InvoiceEdit({
   onBack: () => void;
   onUpdated: (invoice: Invoice) => void;
 }) {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, direction, formatNumber } = useSalesInvoicesI18n();
   const [invoiceDate, setInvoiceDate] = useState(invoice.date);
   const [dueDate, setDueDate] = useState(invoice.dueDate);
   const [customer, setCustomer] = useState(invoice.customer);
@@ -1173,31 +1331,31 @@ function InvoiceEdit({
         statusColor: statusColors[status] ?? "bg-slate-500 text-white",
       });
       toast({
-        title: "تم تحديث الفاتورة",
-        description: `الفاتورة: ${invoice.id}`,
+        title: t("تم تحديث الفاتورة"),
+        description: `${t("الفاتورة")}: ${invoice.id}`,
       });
       onBack();
     } else {
       toast({
-        title: "تعذر تحديث الفاتورة",
-        description: "يرجى المحاولة لاحقاً",
+        title: t("تعذر تحديث الفاتورة"),
+        description: t("يرجى المحاولة لاحقاً"),
       });
     }
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div dir={direction} className="space-y-6 pb-12">
       <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
           className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
-          العودة للقائمة
+          {t("العودة للقائمة")}
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-extrabold text-foreground">
-            تعديل الفاتورة
+            {t("تعديل الفاتورة")}
           </h1>
           <Edit className="h-5 w-5 text-emerald-600" />
         </div>
@@ -1205,7 +1363,7 @@ function InvoiceEdit({
           onClick={handleSave}
           className="px-5 py-2.5 rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:shadow-lg transition-all"
         >
-          حفظ التعديلات
+          {t("حفظ التعديلات")}
         </button>
       </div>
 
@@ -1213,67 +1371,67 @@ function InvoiceEdit({
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
             <h2 className="text-sm font-bold text-foreground">
-              معلومات الفاتورة
+              {t("معلومات الفاتورة")}
             </h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                تاريخ الفاتورة
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("تاريخ الفاتورة")}
               </label>
               <input
                 type="date"
                 value={invoiceDate}
                 onChange={(event) => setInvoiceDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                تاريخ الاستحقاق
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("تاريخ الاستحقاق")}
               </label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                العميل
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("العميل")}
               </label>
               <input
                 type="text"
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                العنوان الوطني
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("العنوان الوطني")}
               </label>
               <input
                 type="text"
                 value={customerAddress}
                 onChange={(event) => setCustomerAddress(event.target.value)}
-                placeholder="رقم المبنى، الشارع، الحي، المدينة، الرمز البريدي"
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                placeholder={t("رقم المبنى، الشارع، الحي، المدينة، الرمز البريدي")}
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                الحالة
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("الحالة")}
               </label>
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-white"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-white"
               >
-                <option value="مفتوحة">مفتوحة</option>
-                <option value="مدفوعة جزئياً">مدفوعة جزئياً</option>
-                <option value="مدفوعة بالكامل">مدفوعة بالكامل</option>
+                <option value="مفتوحة">{t("مفتوحة")}</option>
+                <option value="مدفوعة جزئياً">{t("مدفوعة جزئياً")}</option>
+                <option value="مدفوعة بالكامل">{t("مدفوعة بالكامل")}</option>
               </select>
             </div>
           </div>
@@ -1286,22 +1444,22 @@ function InvoiceEdit({
               className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
             >
               <Plus className="h-4 w-4" />
-              إضافة بند
+              {t("إضافة بند")}
             </button>
-            <h2 className="text-sm font-bold text-foreground">بنود الفاتورة</h2>
+            <h2 className="text-sm font-bold text-foreground">{t("بنود الفاتورة")}</h2>
           </div>
           <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right mb-4">
+            <table className="w-full text-sm text-start mb-4">
               <thead>
                 <tr className="text-slate-600 border-b border-slate-200">
                   <th className="pb-2 font-medium w-16 text-center"></th>
-                  <th className="pb-2 font-medium w-24">المجموع</th>
-                  <th className="pb-2 font-medium w-24">الضريبة</th>
-                  <th className="pb-2 font-medium w-20">خصم</th>
-                  <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
-                  <th className="pb-2 font-medium w-20">الكمية *</th>
-                  <th className="pb-2 font-medium w-52">حساب الإيراد *</th>
-                  <th className="pb-2 font-medium w-[320px]">وصف البند</th>
+                  <th className="pb-2 font-medium w-24">{t("المجموع")}</th>
+                  <th className="pb-2 font-medium w-24">{t("الضريبة")}</th>
+                  <th className="pb-2 font-medium w-20">{t("خصم")}</th>
+                  <th className="pb-2 font-medium w-24">{t("سعر الوحدة *")}</th>
+                  <th className="pb-2 font-medium w-20">{t("الكمية *")}</th>
+                  <th className="pb-2 font-medium w-52">{t("حساب الإيراد *")}</th>
+                  <th className="pb-2 font-medium w-[320px]">{t("وصف البند")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1316,6 +1474,9 @@ function InvoiceEdit({
                       <td className="pt-4 align-top">
                         <div className="flex items-center justify-center gap-1 h-10">
                           <button
+                            type="button"
+                            title={t("حذف البند")}
+                            aria-label={t("حذف البند")}
                             onClick={() => removeItem(item.id)}
                             className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
@@ -1328,7 +1489,7 @@ function InvoiceEdit({
                           type="text"
                           value={lineTotal.toFixed(2)}
                           disabled
-                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-start outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1340,7 +1501,7 @@ function InvoiceEdit({
                               taxPercent: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1352,7 +1513,7 @@ function InvoiceEdit({
                               discount: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1364,7 +1525,7 @@ function InvoiceEdit({
                               unitPrice: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1376,7 +1537,7 @@ function InvoiceEdit({
                               quantity: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top min-w-[210px]">
@@ -1387,7 +1548,7 @@ function InvoiceEdit({
                         >
                           {(revenueAccounts.length ? revenueAccounts : [{ code: "411", nameAr: "إيرادات المبيعات والخدمات" }]).map((account) => (
                             <option key={account.code} value={account.code}>
-                              {account.code} — {account.nameAr}
+                              {account.code} — {t(account.nameAr)}
                             </option>
                           ))}
                         </select>
@@ -1395,14 +1556,14 @@ function InvoiceEdit({
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
                         <textarea
                           rows={3}
-                          placeholder="اكتب وصف البند..."
+                          placeholder={t("اكتب وصف البند...")}
                           value={item.description}
                           onChange={(event) =>
                             updateItem(item.id, {
                               description: event.target.value,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                         />
                       </td>
                     </tr>
@@ -1413,39 +1574,39 @@ function InvoiceEdit({
 
             <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">
               <div className="w-96 flex justify-between">
-                <div className="space-y-2 text-left">
+                <div className="space-y-2 text-end">
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
-                      {totals.tax.toFixed(2)} ريال
+                      {formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                   <div className="text-sm">
                     <span className="font-bold text-emerald-600">
-                      {totals.total.toFixed(2)} ريال
+                      {formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2 text-right">
-                  <div className="text-sm text-slate-600">الضريبة</div>
+                <div className="space-y-2 text-start">
+                  <div className="text-sm text-slate-600">{t("الضريبة")}</div>
                   <div className="text-sm font-bold text-slate-800">
-                    المجموع الكلي
+                    {t("المجموع الكلي")}
                   </div>
                 </div>
-                <div className="space-y-2 text-left">
+                <div className="space-y-2 text-end">
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
-                      {totals.subtotal.toFixed(2)} ريال
+                      {formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
-                      {totals.discount.toFixed(2)} ريال
+                      {formatNumber(totals.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2 text-right">
-                  <div className="text-sm text-slate-600">المجموع الفرعي</div>
-                  <div className="text-sm text-slate-600">الخصم</div>
+                <div className="space-y-2 text-start">
+                  <div className="text-sm text-slate-600">{t("المجموع الفرعي")}</div>
+                  <div className="text-sm text-slate-600">{t("الخصم")}</div>
                 </div>
               </div>
             </div>
@@ -1465,7 +1626,7 @@ function InvoicePayment({
   onBack: () => void;
   onUpdated: (invoice: Invoice) => void;
 }) {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, direction, formatNumber } = useSalesInvoicesI18n();
   const totalValue = parseCurrency(invoice.total);
   const paidValue = parseCurrency(invoice.paid);
   const remainingValue = parseCurrency(invoice.remaining);
@@ -1504,31 +1665,31 @@ function InvoicePayment({
         statusColor: statusColors[nextStatus] ?? "bg-slate-500 text-white",
       });
       toast({
-        title: "تم تسديد الفاتورة",
-        description: `الفاتورة: ${invoice.id}`,
+        title: t("تم تسديد الفاتورة"),
+        description: `${t("الفاتورة")}: ${invoice.id}`,
       });
       onBack();
     } else {
       toast({
-        title: "تعذر تسديد الفاتورة",
-        description: "يرجى المحاولة لاحقاً",
+        title: t("تعذر تسديد الفاتورة"),
+        description: t("يرجى المحاولة لاحقاً"),
       });
     }
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div dir={direction} className="space-y-6 pb-12">
       <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <button
           onClick={onBack}
           className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2"
         >
-          العودة للقائمة
+          {t("العودة للقائمة")}
           <ArrowLeftRight className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-extrabold text-foreground">
-            تسديد الفاتورة
+            {t("تسديد الفاتورة")}
           </h1>
           <CreditCard className="h-5 w-5 text-indigo-600" />
         </div>
@@ -1536,7 +1697,7 @@ function InvoicePayment({
           onClick={handleSave}
           className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
         >
-          حفظ السداد
+          {t("حفظ السداد")}
         </button>
       </div>
 
@@ -1544,49 +1705,49 @@ function InvoicePayment({
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="px-6 py-4 border-b border-border/40 bg-muted/20 flex items-center justify-end gap-2">
             <h2 className="text-sm font-bold text-foreground">
-              معلومات السداد
+              {t("معلومات السداد")}
             </h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                رقم الفاتورة
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("رقم الفاتورة")}
               </label>
-              <div className="text-base text-sm font-bold text-foreground text-right">
+              <div className="text-base text-sm font-bold text-foreground text-start">
                 {invoice.id}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                المتبقي
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("المتبقي")}
               </label>
-              <div className="text-base text-sm font-bold text-foreground text-right">
+              <div className="text-base text-sm font-bold text-foreground text-start">
                 {formatNumber(parseCurrency(invoice.remaining))} {t("ريال")}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                المبلغ المدفوع الآن
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("المبلغ المدفوع الآن")}
               </label>
               <input
                 type="number"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-start focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">
-                الحالة
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">
+                {t("الحالة")}
               </label>
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-start focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
               >
-                <option value="مفتوحة">مفتوحة</option>
-                <option value="مدفوعة جزئياً">مدفوعة جزئياً</option>
-                <option value="مدفوعة بالكامل">مدفوعة بالكامل</option>
+                <option value="مفتوحة">{t("مفتوحة")}</option>
+                <option value="مدفوعة جزئياً">{t("مدفوعة جزئياً")}</option>
+                <option value="مدفوعة بالكامل">{t("مدفوعة بالكامل")}</option>
               </select>
             </div>
           </div>
@@ -1605,7 +1766,7 @@ function InvoiceForm({
   onSaved: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice, targetWindow?: Window | null) => Promise<void>;
 }) {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, direction, formatNumber } = useSalesInvoicesI18n();
   const [items, setItems] = useState([
     {
       id: 1,
@@ -1729,18 +1890,19 @@ function InvoiceForm({
     if (saveInFlight.current) return;
     const invoiceId = invoiceNumber || `INV-${Date.now()}`;
     if (!customer.trim()) {
-      toast({ title: "العميل مطلوب", description: "اختر العميل قبل حفظ الفاتورة", variant: "destructive" });
+      toast({ title: t("العميل مطلوب"), description: t("اختر العميل قبل حفظ الفاتورة"), variant: "destructive" });
       return;
     }
     if (items.some((item) => !item.accountCode)) {
-      toast({ title: "حساب الإيراد مطلوب", description: "اختر حساباً من شجرة الحسابات لكل بند", variant: "destructive" });
+      toast({ title: t("حساب الإيراد مطلوب"), description: t("اختر حساباً من شجرة الحسابات لكل بند"), variant: "destructive" });
       return;
     }
     if (invoiceType === "standard" && !/^3\d{14}$/.test(buyerVat)) {
       toast({
-        title: "رقم ضريبي مطلوب",
-        description:
+        title: t("رقم ضريبي مطلوب"),
+        description: t(
           "الفاتورة المعيارية B2B تتطلب رقم ضريبة العميل المكون من 15 رقمًا",
+        ),
         variant: "destructive",
       });
       return;
@@ -1750,7 +1912,7 @@ function InvoiceForm({
     setSaveIntent(intent);
     const printWindow = intent === "print" ? window.open("", "_blank") : null;
     if (printWindow) {
-      printWindow.document.write('<div dir="rtl" style="font-family:Arial;padding:32px;text-align:center">جارٍ حفظ وتجهيز الفاتورة للطباعة...</div>');
+      printWindow.document.write(`<html dir="${direction}" lang="${direction === "rtl" ? "ar" : "en"}"><meta charset="utf-8"><body style="font-family:Arial;padding:32px;text-align:center">${t("جارٍ حفظ وتجهيز الفاتورة للطباعة...")}</body></html>`);
     }
 
     try {
@@ -1792,10 +1954,10 @@ function InvoiceForm({
     if (error) {
       printWindow?.close();
       toast({
-        title: "تعذر حفظ الفاتورة",
+        title: t("تعذر حفظ الفاتورة"),
         description: error.code === "23505"
-          ? "رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى."
-          : String(error.message ?? "حاول مرة أخرى"),
+          ? t("رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى.")
+          : String(error.message ?? t("حاول مرة أخرى")),
         variant: "destructive",
       });
       return;
@@ -1817,7 +1979,7 @@ function InvoiceForm({
       const accountingPosted = !accounting.error;
       if (accounting.error) {
         toast({
-          title: "تعذر تأكيد القيد المحاسبي",
+          title: t("تعذر تأكيد القيد المحاسبي"),
           description: accounting.error.message,
           variant: "destructive",
         });
@@ -1851,8 +2013,8 @@ function InvoiceForm({
         } catch (printError) {
           printWindow?.close();
           toast({
-            title: "تم حفظ الفاتورة وتعذرت الطباعة",
-            description: printError instanceof Error ? printError.message : "يمكن طباعتها لاحقاً من قائمة الفواتير",
+            title: t("تم حفظ الفاتورة وتعذرت الطباعة"),
+            description: printError instanceof Error ? printError.message : t("يمكن طباعتها لاحقاً من قائمة الفواتير"),
             variant: "destructive",
           });
         }
@@ -1862,8 +2024,8 @@ function InvoiceForm({
     } catch (saveError) {
       printWindow?.close();
       toast({
-        title: "تعذر إكمال حفظ الفاتورة",
-        description: saveError instanceof Error ? saveError.message : "حدث خطأ غير متوقع",
+        title: t("تعذر إكمال حفظ الفاتورة"),
+        description: saveError instanceof Error ? saveError.message : t("حدث خطأ غير متوقع"),
         variant: "destructive",
       });
     } finally {
@@ -1873,7 +2035,7 @@ function InvoiceForm({
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div dir={direction} className="space-y-6 pb-12">
       {/* Header */}
       <div className="flex justify-between items-center rounded-2xl bg-white border border-border/50 shadow-sm px-6 py-4 animate-fade-in-up">
         <div className="flex gap-2">
@@ -1883,7 +2045,7 @@ function InvoiceForm({
             className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-foreground hover:bg-muted/30 transition-all flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <X className="h-4 w-4" />
-            إلغاء
+            {t("إلغاء")}
           </button>
           <button
             onClick={() => handleSave("save")}
@@ -1895,7 +2057,7 @@ function InvoiceForm({
             ) : (
               <Save className="h-4 w-4" />
             )}
-            {saveIntent === "save" ? "جارٍ حفظ الفاتورة..." : "حفظ الفاتورة"}
+            {saveIntent === "save" ? t("جارٍ حفظ الفاتورة...") : t("حفظ الفاتورة")}
           </button>
           <button
             onClick={() => handleSave("print")}
@@ -1907,12 +2069,12 @@ function InvoiceForm({
             ) : (
               <Printer className="h-4 w-4" />
             )}
-            {saveIntent === "print" ? "جارٍ الحفظ والطباعة..." : "حفظ وطباعة"}
+            {saveIntent === "print" ? t("جارٍ الحفظ والطباعة...") : t("حفظ وطباعة")}
           </button>
         </div>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-extrabold text-foreground">
-            إنشاء فاتورة مبيعات جديدة
+            {t("إنشاء فاتورة مبيعات جديدة")}
           </h1>
           <CreditCard className="h-5 w-5 text-blue-600" />
         </div>
@@ -1921,7 +2083,7 @@ function InvoiceForm({
           disabled={saveIntent !== null}
           className="px-5 py-2.5 rounded-xl border-2 border-border/60 bg-white text-sm font-semibold text-muted-foreground hover:bg-muted/30 transition-all flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          العودة للقائمة
+          {t("العودة للقائمة")}
           <ArrowLeftRight className="h-4 w-4" />
         </button>
       </div>
@@ -1931,20 +2093,20 @@ function InvoiceForm({
           <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
               <div className="h-16 w-16 rounded-lg bg-slate-700 text-white text-[11px] font-bold flex items-center justify-center text-center">
-                شركة لاكجري العياف
+                {t("شركة لاكجري العياف")}
               </div>
               <div>
                 <p className="text-base font-bold text-foreground">
-                  شركة لاكجري العياف
+                  {t("شركة لاكجري العياف")}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  الشارع رقم 20
+                  {t("الشارع رقم 20")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  المملكة العربية السعودية
+                  {t("المملكة العربية السعودية")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  315597905300003 : الرقم الضريبي
+                  {t("الرقم الضريبي")}: 315597905300003
                 </p>
               </div>
             </div>
@@ -1952,26 +2114,26 @@ function InvoiceForm({
             <div className="lg:col-span-2 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    العميل
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("العميل")}
                   </label>
                   <select
                     value={customer}
                     onChange={(event) => setCustomer(event.target.value)}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   >
-                    <option value="">اختر العميل</option>
+                    <option value="">{t("اختر العميل")}</option>
                     {customerOptions.map((option) => (
                       <option key={option} value={option}>
-                        {option}
+                        {t(option)}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    نوع الفاتورة
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("نوع الفاتورة")}
                   </label>
                   <select
                     value={invoiceType}
@@ -1980,16 +2142,16 @@ function InvoiceForm({
                         event.target.value as "standard" | "simplified",
                       )
                     }
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   >
-                    <option value="simplified">مبسطة B2C — Reporting</option>
-                    <option value="standard">معيارية B2B — Clearance</option>
+                    <option value="simplified">{t("مبسطة B2C — Reporting")}</option>
+                    <option value="standard">{t("معيارية B2B — Clearance")}</option>
                   </select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    الرقم الضريبي للعميل
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("الرقم الضريبي للعميل")}
                   </label>
                   <input
                     type="text"
@@ -2001,124 +2163,124 @@ function InvoiceForm({
                     }
                     placeholder={
                       invoiceType === "standard"
-                        ? "مطلوب لفاتورة B2B"
-                        : "اختياري لـ B2C"
+                        ? t("مطلوب لفاتورة B2B")
+                        : t("اختياري لـ B2C")
                     }
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                     dir="ltr"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    العنوان الوطني
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("العنوان الوطني")}
                   </label>
                   <input
                     type="text"
                     value={customerAddress}
                     onChange={(event) => setCustomerAddress(event.target.value)}
-                    placeholder="رقم المبنى، الشارع، الحي، المدينة، الرمز البريدي"
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-white"
+                    placeholder={t("رقم المبنى، الشارع، الحي، المدينة، الرمز البريدي")}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    رقم الفاتورة
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("رقم الفاتورة")}
                   </label>
                   <input
                     type="text"
                     value={invoiceNumber}
                     readOnly
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-muted/30"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-muted/30"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    العملة
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("العملة")}
                   </label>
                   <input
                     type="text"
                     value="SAR"
                     disabled
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right bg-muted/30"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-muted/30"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    تاريخ الفاتورة
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("تاريخ الفاتورة")}
                   </label>
                   <input
                     type="date"
                     value={invoiceDate}
                     onChange={(event) => setInvoiceDate(event.target.value)}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    تاريخ الاستحقاق
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("تاريخ الاستحقاق")}
                   </label>
                   <input
                     type="date"
                     value={dueDate}
                     onChange={(event) => setDueDate(event.target.value)}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    أمر الشراء
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("أمر الشراء")}
                   </label>
                   <input
                     type="text"
                     value={purchaseOrder}
                     onChange={(event) => setPurchaseOrder(event.target.value)}
-                    placeholder="اختياري"
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                    placeholder={t("اختياري")}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    المرجع
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("المرجع")}
                   </label>
                   <input
                     type="text"
                     value={notes}
                     onChange={(event) => setNotes(event.target.value)}
-                    placeholder="اختياري"
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                    placeholder={t("اختياري")}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    المشروع
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("المشروع")}
                   </label>
                   <input
                     type="text"
                     value={project}
                     onChange={(event) => setProject(event.target.value)}
-                    placeholder="اختياري"
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                    placeholder={t("اختياري")}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
 
                 <div className="space-y-1 md:col-span-2">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-right block">
-                    المستودع
+                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
+                    {t("المستودع")}
                   </label>
                   <input
                     type="text"
                     value={warehouse}
                     onChange={(event) => setWarehouse(event.target.value)}
-                    placeholder="اختياري"
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-right"
+                    placeholder={t("اختياري")}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
               </div>
@@ -2134,11 +2296,11 @@ function InvoiceForm({
               className="rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 px-4 py-2 text-[12px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:shadow-md transition-all flex items-center gap-1.5"
             >
               <Plus className="h-4 w-4" />
-              إضافة بند
+              {t("إضافة بند")}
             </button>
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-bold text-foreground">
-                بنود الفاتورة
+                {t("بنود الفاتورة")}
               </h2>
               <svg
                 className="h-5 w-5 text-slate-500"
@@ -2156,17 +2318,17 @@ function InvoiceForm({
             </div>
           </div>
           <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right mb-4">
+            <table className="w-full text-sm text-start mb-4">
               <thead>
                 <tr className="text-slate-600 border-b border-slate-200">
                   <th className="pb-2 font-medium w-16 text-center"></th>
-                  <th className="pb-2 font-medium w-24">المجموع</th>
-                  <th className="pb-2 font-medium w-24">الضريبة</th>
-                  <th className="pb-2 font-medium w-20">خصم</th>
-                  <th className="pb-2 font-medium w-24">سعر الوحدة *</th>
-                  <th className="pb-2 font-medium w-20">الكمية *</th>
-                  <th className="pb-2 font-medium w-52">حساب الإيراد *</th>
-                  <th className="pb-2 font-medium w-[320px]">وصف البند</th>
+                  <th className="pb-2 font-medium w-24">{t("المجموع")}</th>
+                  <th className="pb-2 font-medium w-24">{t("الضريبة")}</th>
+                  <th className="pb-2 font-medium w-20">{t("خصم")}</th>
+                  <th className="pb-2 font-medium w-24">{t("سعر الوحدة *")}</th>
+                  <th className="pb-2 font-medium w-20">{t("الكمية *")}</th>
+                  <th className="pb-2 font-medium w-52">{t("حساب الإيراد *")}</th>
+                  <th className="pb-2 font-medium w-[320px]">{t("وصف البند")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2180,10 +2342,13 @@ function InvoiceForm({
                     <tr key={item.id}>
                       <td className="pt-4 align-top">
                         <div className="flex items-center justify-center gap-1 h-10">
-                          <button className="w-7 h-7 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
+                          <button type="button" title={t("إعدادات البند")} aria-label={t("إعدادات البند")} className="w-7 h-7 flex items-center justify-center bg-cyan-500 text-white rounded hover:bg-cyan-600">
                             <Settings className="w-3.5 h-3.5" />
                           </button>
                           <button
+                            type="button"
+                            title={t("حذف البند")}
+                            aria-label={t("حذف البند")}
                             onClick={() => removeItem(item.id)}
                             className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
@@ -2196,7 +2361,7 @@ function InvoiceForm({
                           type="text"
                           value={lineTotal.toFixed(2)}
                           disabled
-                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-start outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -2208,7 +2373,7 @@ function InvoiceForm({
                               taxPercent: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -2220,7 +2385,7 @@ function InvoiceForm({
                               discount: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -2232,7 +2397,7 @@ function InvoiceForm({
                               unitPrice: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -2244,7 +2409,7 @@ function InvoiceForm({
                               quantity: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top min-w-[210px]">
@@ -2255,7 +2420,7 @@ function InvoiceForm({
                         >
                           {(revenueAccounts.length ? revenueAccounts : [{ code: "411", nameAr: "إيرادات المبيعات والخدمات" }]).map((account) => (
                             <option key={account.code} value={account.code}>
-                              {account.code} — {account.nameAr}
+                              {account.code} — {t(account.nameAr)}
                             </option>
                           ))}
                         </select>
@@ -2263,14 +2428,14 @@ function InvoiceForm({
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
                         <textarea
                           rows={3}
-                          placeholder="اكتب وصف البند..."
+                          placeholder={t("اكتب وصف البند...")}
                           value={item.description}
                           onChange={(event) =>
                             updateItem(item.id, {
                               description: event.target.value,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                         />
                       </td>
                     </tr>
@@ -2282,39 +2447,39 @@ function InvoiceForm({
             {/* Totals */}
             <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">
               <div className="w-96 flex justify-between">
-                <div className="space-y-2 text-left">
+                <div className="space-y-2 text-end">
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
-                      {totals.tax.toFixed(2)} ريال
+                      {formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                   <div className="text-sm">
                     <span className="font-bold text-blue-600">
-                      {totals.total.toFixed(2)} ريال
+                      {formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2 text-right">
-                  <div className="text-sm text-slate-600">الضريبة</div>
+                <div className="space-y-2 text-start">
+                  <div className="text-sm text-slate-600">{t("الضريبة")}</div>
                   <div className="text-sm font-bold text-slate-800">
-                    المجموع الكلي
+                    {t("المجموع الكلي")}
                   </div>
                 </div>
-                <div className="space-y-2 text-left">
+                <div className="space-y-2 text-end">
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
-                      {totals.subtotal.toFixed(2)} ريال
+                      {formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
-                      {totals.discount.toFixed(2)} ريال
+                      {formatNumber(totals.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2 text-right">
-                  <div className="text-sm text-slate-600">المجموع الفرعي</div>
-                  <div className="text-sm text-slate-600">الخصم</div>
+                <div className="space-y-2 text-start">
+                  <div className="text-sm text-slate-600">{t("المجموع الفرعي")}</div>
+                  <div className="text-sm text-slate-600">{t("الخصم")}</div>
                 </div>
               </div>
             </div>

@@ -109,7 +109,7 @@ export default function SalesDeliveryNote() {
   const tax = useMemo(() => subtotal * 0.15, [subtotal]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
   const formatAmount = (value: number) =>
-    `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ﷼`;
+    `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}`;
 
   const updateItem = (id: string, key: keyof DeliveryNoteItem, value: string | number) => {
     setForm((prev) => ({

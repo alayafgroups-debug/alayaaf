@@ -53,12 +53,128 @@ const statusColors: Record<string, string> = {
   delivered: "bg-slate-600 text-white",
 };
 
+const salesOrderTranslations: Record<string, string> = {
+  "أمر بيع": "Sales order",
+  "تفاصيل أمر البيع": "Sales order details",
+  "رقم الأمر": "Order number",
+  "العميل": "Customer",
+  "رقم عرض السعر": "Quotation number",
+  "تاريخ الأمر": "Order date",
+  "تاريخ التسليم": "Delivery date",
+  "وصف البند": "Item description",
+  "الكمية": "Quantity",
+  "السعر": "Price",
+  "الخصم": "Discount",
+  "الضريبة": "Tax",
+  "الإجمالي": "Total",
+  "المبيعات": "Sales",
+  "أوامر البيع": "Sales orders",
+  "إدارة وتتبع جميع أوامر البيع": "Manage and track all sales orders",
+  "إضافة أمر بيع جديد": "Add new sales order",
+  "البحث": "Search",
+  "رقم الأمر، المرجع، اسم العميل...": "Order number, reference, customer name...",
+  "الكل": "All",
+  "الحالة": "Status",
+  "مؤكد": "Confirmed",
+  "تم التسليم": "Delivered",
+  "مسودة": "Draft",
+  "قيد الانتظار": "Pending",
+  "ملغي": "Cancelled",
+  "الإجراءات": "Actions",
+  "عرض": "View",
+  "تعديل": "Edit",
+  "العودة للقائمة": "Back to list",
+  "بيانات الأمر": "Order information",
+  "بنود الأمر": "Order items",
+  "ريال": "SAR",
+  "المجموع الفرعي": "Subtotal",
+  "تعديل أمر البيع": "Edit sales order",
+  "حفظ التعديلات": "Save changes",
+  "معلومات الأمر": "Order information",
+  "رقم الفاتورة/الاستعراض": "Invoice/quotation number",
+  "أدخل رقم الفاتورة": "Enter invoice number",
+  "المستودع": "Warehouse",
+  "اختر المستودع": "Select warehouse",
+  "اسم العميل": "Customer name",
+  "ملاحظات": "Notes",
+  "أدخل أي ملاحظات إضافية": "Enter any additional notes",
+  "تم تحديث أمر البيع": "Sales order updated",
+  "الأمر": "Order",
+  "تعذر تحديث أمر البيع": "Unable to update sales order",
+  "يرجى المحاولة لاحقاً": "Please try again later",
+  "إضافة صنف": "Add item",
+  "البنود": "Items",
+  "لا توجد بنود": "No items",
+  "وصف المنتج": "Product description",
+  "حذف": "Delete",
+  "الخصم الكلي": "Total discount",
+  "الإجمالي النهائي": "Grand total",
+  "تم حفظ أمر البيع": "Sales order saved",
+  "تعذر حفظ أمر البيع": "Unable to save sales order",
+  "إلغاء": "Cancel",
+  "حفظ الأمر": "Save order",
+  "إنشاء أمر بيع جديد": "Create new sales order",
+  "معلومات الأمر الأساسية": "Basic order information",
+  "العرض المرجع": "Reference quotation",
+  "المفتوحة فقط": "Open only",
+  "اكتب رقم عرض السعر...": "Enter the quotation number...",
+  "المخزن": "Warehouse",
+  "اكتب اسم المخزن...": "Enter the warehouse name...",
+  "تاريخ التسليم المتوقع": "Expected delivery date",
+  "اكتب اسم العميل...": "Enter the customer name...",
+  "ملاحظات...": "Notes...",
+  "مرجع الأمر": "Order reference",
+  "تلقائي": "Automatic",
+  "إضافة بند": "Add item",
+  "المجموع": "Total",
+  "خصم": "Discount",
+  "سعر الوحدة": "Unit price",
+  "اختياري": "Optional",
+  "اكتب وصف البند (اختياري)...": "Enter the item description (optional)...",
+  "المجموع الكلي": "Grand total",
+};
+
+const statusLabelKeys: Record<string, string> = {
+  confirmed: "مؤكد",
+  delivered: "تم التسليم",
+  draft: "مسودة",
+  pending: "قيد الانتظار",
+  cancelled: "ملغي",
+  canceled: "ملغي",
+};
+
+function useSalesOrdersI18n() {
+  const i18n = useI18n();
+  return {
+    ...i18n,
+    t: (value: string) =>
+      i18n.locale === "en"
+        ? salesOrderTranslations[value] ?? i18n.t(value)
+        : i18n.t(value),
+  };
+}
+
+const getStatusLabel = (status: string, t: (value: string) => string) =>
+  t(statusLabelKeys[status] ?? status);
+
 const initialOrders: SalesOrder[] = [];
 
 const parseCurrency = (value: string) => Number(value.replace(/[^0-9.]/g, "")) || 0;
 
+const formatStoredTotal = (
+  value: string,
+  formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string,
+  t: (value: string) => string
+) => {
+  if (!value || !/[0-9]/.test(value)) return value;
+  return `${formatNumber(parseCurrency(value), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${t("ريال")}`;
+};
+
 export default function SalesOrders() {
-  const { t, locale, direction, formatDate, formatNumber } = useI18n();
+  const { t, locale, direction, formatDate, formatNumber } = useSalesOrdersI18n();
   const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
   const [orders, setOrders] = useState<SalesOrder[]>(initialOrders);
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
@@ -181,6 +297,8 @@ export default function SalesOrders() {
               <div class="card"><div class="label">${t("رقم عرض السعر")}</div><div class="value">${order.quotationId || "-"}</div></div>
               <div class="card"><div class="label">${t("تاريخ الأمر")}</div><div class="value">${order.date ? formatDate(order.date) : "-"}</div></div>
               <div class="card"><div class="label">${t("تاريخ التسليم")}</div><div class="value">${order.deliveryDate ? formatDate(order.deliveryDate) : "-"}</div></div>
+              <div class="card"><div class="label">${t("الحالة")}</div><div class="value">${getStatusLabel(order.status, t)}</div></div>
+              <div class="card"><div class="label">${t("الإجمالي")}</div><div class="value">${formatStoredTotal(order.total, formatNumber, t)}</div></div>
             </div>
             <table>
               <thead>
@@ -246,7 +364,7 @@ function OrdersList({
   onDownloadPdf: (order: SalesOrder) => void;
   orders: SalesOrder[];
 }) {
-  const { t, direction, formatDate } = useI18n();
+  const { t, direction, formatDate, formatNumber } = useSalesOrdersI18n();
 
   return (
     <div className="space-y-6" dir={direction}>
@@ -279,32 +397,32 @@ function OrdersList({
                 <ActionBtn icon={Download} label="PDF" color="slate" onClick={() => onDownloadPdf(order)} />
               </div>
             </td>
-            <td className="px-5 py-3.5 align-middle text-right space-y-1">
+            <td className="px-5 py-3.5 align-middle text-start space-y-1">
               <span className="inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap bg-slate-50 text-slate-700 border-slate-200">
-                {t(order.status)}
+                {getStatusLabel(order.status, t)}
               </span>
               {order.subStatus && (
                 <span className={cn("inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-[11px] font-bold whitespace-nowrap block mt-1", order.subStatusColor)}>
-                  {t(order.subStatus)}
+                  {getStatusLabel(order.subStatus, t)}
                 </span>
               )}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right text-primary hover:underline cursor-pointer font-medium">
+            <td className="px-5 py-3.5 align-middle text-start text-primary hover:underline cursor-pointer font-medium">
               {order.quotationId}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right whitespace-nowrap font-bold text-primary">
-              {order.total}
+            <td className="px-5 py-3.5 align-middle text-start whitespace-nowrap font-bold text-primary">
+              {formatStoredTotal(order.total, formatNumber, t)}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right text-foreground font-medium">
+            <td className="px-5 py-3.5 align-middle text-start text-foreground font-medium">
               {order.customer}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+            <td className="px-5 py-3.5 align-middle text-start text-muted-foreground text-[13px]">
               {order.deliveryDate ? formatDate(order.deliveryDate) : "-"}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right text-muted-foreground text-[13px]">
+            <td className="px-5 py-3.5 align-middle text-start text-muted-foreground text-[13px]">
               {order.date ? formatDate(order.date) : "-"}
             </td>
-            <td className="px-5 py-3.5 align-middle text-right font-bold text-primary hover:underline cursor-pointer">
+            <td className="px-5 py-3.5 align-middle text-start font-bold text-primary hover:underline cursor-pointer">
               {order.id}
             </td>
           </tr>
@@ -321,7 +439,7 @@ function OrderDetails({
   order: SalesOrder;
   onBack: () => void;
 }) {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, direction, formatDate, formatNumber } = useSalesOrdersI18n();
   const [items, setItems] = useState<
     Array<{
       id: number;
@@ -409,24 +527,24 @@ function OrderDetails({
       <div className="p-4 space-y-6">
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="px-6 py-4 border-b border-border/40 bg-muted/20">
-            <h2 className="text-sm font-bold text-foreground text-right">{t("بيانات الأمر")}</h2>
+            <h2 className="text-sm font-bold text-foreground text-start">{t("بيانات الأمر")}</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("رقم الأمر")}</label><div className="text-right font-semibold">{order.id}</div></div>
-            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("العميل")}</label><div className="text-right font-semibold">{order.customer}</div></div>
-            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("تاريخ الأمر")}</label><div className="text-right font-semibold">{order.date ? formatDate(order.date) : "-"}</div></div>
-            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("تاريخ التسليم")}</label><div className="text-right font-semibold">{order.deliveryDate ? formatDate(order.deliveryDate) : "-"}</div></div>
-            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("رقم عرض السعر")}</label><div className="text-right font-semibold">{order.quotationId || "-"}</div></div>
-            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("الإجمالي")}</label><div className="text-right font-semibold">{order.total}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("رقم الأمر")}</label><div className="text-start font-semibold">{order.id}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("العميل")}</label><div className="text-start font-semibold">{order.customer}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("تاريخ الأمر")}</label><div className="text-start font-semibold">{order.date ? formatDate(order.date) : "-"}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("تاريخ التسليم")}</label><div className="text-start font-semibold">{order.deliveryDate ? formatDate(order.deliveryDate) : "-"}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("رقم عرض السعر")}</label><div className="text-start font-semibold">{order.quotationId || "-"}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("الإجمالي")}</label><div className="text-start font-semibold">{formatStoredTotal(order.total, formatNumber, t)}</div></div>
           </div>
         </div>
 
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="px-6 py-4 border-b border-border/40 bg-muted/20">
-            <h2 className="text-sm font-bold text-foreground text-right">{t("بنود الأمر")}</h2>
+            <h2 className="text-sm font-bold text-foreground text-start">{t("بنود الأمر")}</h2>
           </div>
           <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right">
+            <table className="w-full text-sm text-start">
               <thead className="bg-slate-100">
                 <tr>
                   <th className="px-3 py-2 border border-slate-200">#</th>
@@ -489,7 +607,7 @@ function OrderEdit({
   onBack: () => void;
   onUpdated: (order: SalesOrder) => void;
 }) {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, direction, formatNumber } = useSalesOrdersI18n();
   const [deliveryDate, setDeliveryDate] = useState(order.deliveryDate);
   const [orderDate, setOrderDate] = useState(order.date);
   const [customer, setCustomer] = useState(order.customer);
@@ -609,65 +727,65 @@ function OrderEdit({
       <div className="p-4 space-y-6">
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="px-6 py-4 border-b border-border/40 bg-muted/20">
-            <h2 className="text-sm font-bold text-foreground text-right">{t("معلومات الأمر")}</h2>
+            <h2 className="text-sm font-bold text-foreground text-start">{t("معلومات الأمر")}</h2>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("رقم الفاتورة/الاستعراض")}</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("رقم الفاتورة/الاستعراض")}</label>
               <input
                 type="text"
                 value={quotationId}
                 onChange={(event) => setQuotationId(event.target.value)}
                 placeholder={t("أدخل رقم الفاتورة")}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("المستودع")}</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("المستودع")}</label>
               <input
                 type="text"
                 value={warehouse}
                 onChange={(event) => setWarehouse(event.target.value)}
                 placeholder={t("اختر المستودع")}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("تاريخ الأمر")}</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("تاريخ الأمر")}</label>
               <input
                 type="date"
                 value={orderDate}
                 onChange={(event) => setOrderDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("تاريخ التسليم")}</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("تاريخ التسليم")}</label>
               <input
                 type="date"
                 value={deliveryDate}
                 onChange={(event) => setDeliveryDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("العميل")}</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("العميل")}</label>
               <input
                 type="text"
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
                 placeholder={t("اسم العميل")}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("ملاحظات")}</label>
+              <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("ملاحظات")}</label>
               <textarea
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder={t("أدخل أي ملاحظات إضافية")}
                 rows={3}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none"
               />
             </div>
           </div>
@@ -682,7 +800,7 @@ function OrderEdit({
               <Plus className="h-3.5 w-3.5" />
               {t("إضافة صنف")}
             </button>
-            <h2 className="text-sm font-bold text-foreground text-right">{t("البنود")}</h2>
+            <h2 className="text-sm font-bold text-foreground text-start">{t("البنود")}</h2>
           </div>
           <div className="p-6">
             {items.length === 0 ? (
@@ -693,55 +811,55 @@ function OrderEdit({
                   <div key={item.id} className="border border-border/50 rounded-xl p-4 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="md:col-span-2 space-y-1">
-                        <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("وصف البند")}</label>
+                        <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("وصف البند")}</label>
                         <input
                           type="text"
                           value={item.description}
                           onChange={(e) => updateItem(item.id, { description: e.target.value })}
                           placeholder={t("وصف المنتج")}
-                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 outline-none"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("الكمية")}</label>
+                        <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("الكمية")}</label>
                         <input
                           type="number"
                           value={item.quantity}
                           onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
                           min="1"
-                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 outline-none"
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("السعر")}</label>
+                        <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("السعر")}</label>
                         <input
                           type="number"
                           value={item.price}
                           onChange={(e) => updateItem(item.id, { price: Number(e.target.value) })}
                           min="0"
-                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 outline-none"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("الخصم")}</label>
+                        <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("الخصم")}</label>
                         <input
                           type="number"
                           value={item.discount}
                           onChange={(e) => updateItem(item.id, { discount: Number(e.target.value) })}
                           min="0"
-                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 outline-none"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[12px] font-semibold text-muted-foreground block text-right">{t("الضريبة")} %</label>
+                        <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("الضريبة")} %</label>
                         <input
                           type="number"
                           value={item.taxPercent}
                           onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) })}
                           min="0"
-                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 outline-none"
                         />
                       </div>
                       <div className="flex items-end">
@@ -762,10 +880,10 @@ function OrderEdit({
 
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">
           <div className="px-6 py-4 border-b border-border/40 bg-muted/20">
-            <h2 className="text-sm font-bold text-foreground text-right">{t("الإجمالي")}</h2>
+            <h2 className="text-sm font-bold text-foreground text-start">{t("الإجمالي")}</h2>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-right">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-start">
               <div>
                 <p className="text-[12px] text-muted-foreground mb-1">{t("المجموع الفرعي")}</p>
                 <p className="text-lg font-bold text-foreground">{t("ريال")} {formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -797,7 +915,7 @@ function OrderForm({
   onBack: () => void;
   onSaved: (order: SalesOrder) => void;
 }) {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, direction, formatNumber } = useSalesOrdersI18n();
   const [quotationId, setQuotationId] = useState("");
   const [warehouse, setWarehouse] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("2026-03-12");
@@ -947,7 +1065,7 @@ function OrderForm({
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                 {t("العرض المرجع")} <span className="text-slate-400 font-normal">({t("المفتوحة فقط")})</span>
               </label>
               <input
@@ -955,12 +1073,12 @@ function OrderForm({
                 value={quotationId}
                 onChange={(event) => setQuotationId(event.target.value)}
                 placeholder={t("اكتب رقم عرض السعر...")}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                 {t("المخزن")} <span className="text-red-500">*</span>
               </label>
               <input
@@ -968,36 +1086,36 @@ function OrderForm({
                 value={warehouse}
                 onChange={(event) => setWarehouse(event.target.value)}
                 placeholder={t("اكتب اسم المخزن...")}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                 {t("تاريخ التسليم المتوقع")}
               </label>
               <input
                 type="date"
                 value={deliveryDate}
                 onChange={(event) => setDeliveryDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                 {t("تاريخ الأمر")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={orderDate}
                 onChange={(event) => setOrderDate(event.target.value)}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-span-4">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                 {t("العميل")} <span className="text-red-500">*</span>
               </label>
               <input
@@ -1005,12 +1123,12 @@ function OrderForm({
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
                 placeholder={t("اكتب اسم العميل...")}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-span-3">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                 {t("ملاحظات")}
               </label>
               <input
@@ -1018,19 +1136,19 @@ function OrderForm({
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder={t("ملاحظات...")}
-                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
 
             <div className="space-y-1 md:col-start-4">
-              <label className="text-[12px] font-semibold text-muted-foreground text-right block">
+              <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                 {t("مرجع الأمر")}
               </label>
               <input
                 type="text"
                 placeholder={t("تلقائي")}
                 disabled
-                className="w-full px-3 py-2 border border-slate-300 bg-slate-50 rounded text-sm text-right outline-none text-slate-500"
+                className="w-full px-3 py-2 border border-slate-300 bg-slate-50 rounded text-sm text-start outline-none text-slate-500"
               />
             </div>
           </div>
@@ -1050,7 +1168,7 @@ function OrderForm({
             </div>
           </div>
           <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-right mb-4">
+            <table className="w-full text-sm text-start mb-4">
               <thead>
                 <tr className="text-slate-600 border-b border-slate-200">
                   <th className="pb-2 font-medium w-16 text-center"></th>
@@ -1086,7 +1204,7 @@ function OrderForm({
                           type="text"
                           value={formatNumber(lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           disabled
-                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-right outline-none h-10"
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-start outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1098,7 +1216,7 @@ function OrderForm({
                               taxPercent: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1110,7 +1228,7 @@ function OrderForm({
                               discount: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1122,7 +1240,7 @@ function OrderForm({
                               price: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1135,7 +1253,7 @@ function OrderForm({
                             })
                           }
                           placeholder={t("اختياري")}
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1147,7 +1265,7 @@ function OrderForm({
                               quantity: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>
                       <td className="pt-4 pl-1 align-top min-w-[320px]">
@@ -1160,7 +1278,7 @@ function OrderForm({
                             })
                           }
                           placeholder={t("اكتب وصف البند (اختياري)...")}
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-right focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
+                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[88px] resize-y"
                         />
                       </td>
                     </tr>
@@ -1171,7 +1289,7 @@ function OrderForm({
 
             <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">
               <div className="w-96 flex justify-between">
-                <div className="space-y-2 text-left">
+                <div className="space-y-2 text-end">
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
                       {formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
@@ -1183,11 +1301,11 @@ function OrderForm({
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2 text-right">
+                <div className="space-y-2 text-start">
                   <div className="text-sm text-slate-600">{t("الضريبة")}</div>
                   <div className="text-sm font-bold text-slate-800">{t("المجموع الكلي")}</div>
                 </div>
-                <div className="space-y-2 text-left">
+                <div className="space-y-2 text-end">
                   <div className="text-sm">
                     <span className="text-sm font-bold text-foreground">
                       {formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}
@@ -1199,7 +1317,7 @@ function OrderForm({
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2 text-right">
+                <div className="space-y-2 text-start">
                   <div className="text-sm text-slate-600">{t("المجموع الفرعي")}</div>
                   <div className="text-sm text-slate-600">{t("الخصم")}</div>
                 </div>

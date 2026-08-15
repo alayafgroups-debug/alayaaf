@@ -236,8 +236,8 @@ export default function Quotations() {
             table{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed}
             th,td{border:1px solid #cbd5e1;padding:6px 4px;text-align:center;vertical-align:middle;overflow-wrap:anywhere}
             th{background:#e2e8f0;font-weight:700;color:#0f172a}
-            th:nth-child(2),td:nth-child(2){width:22%;text-align:right}
-            .totals{width:340px;margin-top:10px;font-size:12px}
+            th:nth-child(2),td:nth-child(2){width:22%;text-align:start}
+            .totals{width:340px;margin-top:10px;margin-inline-start:auto;font-size:12px}
             .totals div{display:flex;justify-content:space-between;border-bottom:1px solid #d1d5db;padding:5px 7px}
             .totals div:last-child{background:#eff6ff;border:1px solid #93c5fd;font-weight:700;font-size:13px}
             .bank{margin-top:18px;padding-top:10px;border-top:1px solid #cbd5e1;font-size:11px;line-height:1.8}
@@ -252,12 +252,12 @@ export default function Quotations() {
                 <div class="meta">${t("الرقم")} ${quotation.id}<br/>${t("التاريخ")} ${quotation.date ? formatDate(quotation.date) : "-"}</div>
               </div>
               <div class="meta" style="text-align:center">
-                <div style="font-size:28px;font-weight:700">${COMPANY_INFO.nameAr}</div>
+                <div style="font-size:28px;font-weight:700">${t(COMPANY_INFO.nameAr)}</div>
                 ${t("السجل التجاري")}: ${COMPANY_INFO.commercialNo}<br/>
                 ${t("الرقم الضريبي")}: ${COMPANY_INFO.vatNo}<br/>
-                ${COMPANY_INFO.city}
+                ${t(COMPANY_INFO.city)}
               </div>
-              <div style="text-align:left">
+              <div style="text-align:${direction === "rtl" ? "left" : "right"}">
                 <img src="${COMPANY_LOGO_URL}" class="logo"/>
                 <div class="meta">${COMPANY_INFO.nameEn}</div>
               </div>
@@ -297,8 +297,8 @@ export default function Quotations() {
               <div>
                 <strong>${t("ملاحظة")}</strong><br/>
                 <strong>${t("البيانات البنكية")}</strong><br/>
-                *${t("اسم البنك")}: ${COMPANY_INFO.bankName}<br/>
-                *${t("اسم المستفيد")}: ${COMPANY_INFO.beneficiary}<br/>
+                *${t("اسم البنك")}: ${t(COMPANY_INFO.bankName)}<br/>
+                *${t("اسم المستفيد")}: ${t(COMPANY_INFO.beneficiary)}<br/>
                 *${t("رقم الحساب")}: ${COMPANY_INFO.accountNo}<br/>
                 *${t("رقم الايبان")}: ${COMPANY_INFO.iban}
               </div>
@@ -314,7 +314,12 @@ export default function Quotations() {
   };
 
   return (
-    <Layout subMenu={{ title: t("المبيعات"), items: salesFeatures }}>
+    <Layout
+      subMenu={{
+        title: t("المبيعات"),
+        items: salesFeatures.map((item) => ({ ...item, label: t(item.label) })),
+      }}
+    >
       <div className="mx-auto max-w-7xl">
         {view === "list" && (
           <QuotationsList
@@ -421,7 +426,7 @@ function QuotationsList({
                 <ActionBtn icon={Trash2} label={t("حذف")} color="red" onClick={() => onDelete(row.id)} />
               </div>
             </td>
-            <td className="px-5 py-3.5 text-right">
+            <td className="px-5 py-3.5" style={{ textAlign: "start" }}>
               <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold", row.statusColor)}>{t(row.status)}</span>
             </td>
             <td className="px-5 py-3.5 font-bold text-primary whitespace-nowrap">{formatNumber(parseCurrency(row.total), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}</td>
@@ -633,7 +638,7 @@ function QuotationEditor({
           </div>
 
           <div className="rounded-xl border border-slate-200 overflow-x-auto">
-            <table className="w-full text-sm text-right">
+            <table className="w-full text-sm" style={{ textAlign: "start" }}>
               <thead className="bg-slate-100">
                 <tr>
                   <th className="px-2 py-2 border">{t("الإجراءات")}</th>
@@ -655,7 +660,12 @@ function QuotationEditor({
                   return (
                     <tr key={item.id}>
                       <td className="border px-2 py-2">
-                        <button onClick={() => removeItem(item.id)} className="w-7 h-7 rounded bg-red-500 text-white flex items-center justify-center">
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="w-7 h-7 rounded bg-red-500 text-white flex items-center justify-center"
+                          title={t("حذف البند")}
+                          aria-label={t("حذف البند")}
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </td>
@@ -677,7 +687,7 @@ function QuotationEditor({
             <button onClick={addItem} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold flex items-center gap-1.5">
               <Plus className="h-4 w-4" /> {t("إضافة بند")}
             </button>
-            <div className="text-sm space-y-1 text-right">
+            <div className="text-sm space-y-1" style={{ textAlign: "start" }}>
               <p>{t("الإجمالي قبل الضريبة")}: <strong>{formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
               <p>{t("الضريبة")}: <strong>{formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
               <p className="text-base">{t("الإجمالي")}: <strong>{formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
@@ -743,13 +753,13 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
           </div>
 
           <div className="text-center text-sm leading-7">
-            <h3 className="text-2xl font-bold">{COMPANY_INFO.nameAr}</h3>
+            <h3 className="text-2xl font-bold">{t(COMPANY_INFO.nameAr)}</h3>
             <p>{t("السجل التجاري")}: {COMPANY_INFO.commercialNo}</p>
             <p>{t("الرقم الضريبي")}: {COMPANY_INFO.vatNo}</p>
-            <p>{COMPANY_INFO.city}</p>
+            <p>{t(COMPANY_INFO.city)}</p>
           </div>
 
-          <div className="text-left">
+          <div style={{ textAlign: "end" }}>
             <img src={COMPANY_LOGO_URL} alt={t("شعار الشركة")} className="w-28 h-20 object-contain" />
             <p className="text-xs mt-1">{COMPANY_INFO.nameEn}</p>
           </div>
@@ -798,7 +808,10 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
           </tbody>
         </table>
 
-        <div className="max-w-md mr-auto text-2xl leading-10 border-t border-slate-300 pt-2">
+        <div
+          className="max-w-md text-2xl leading-10 border-t border-slate-300 pt-2"
+          style={{ marginInlineStart: "auto" }}
+        >
           <div className="flex justify-between"><span>{formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>{t("الإجمالي قبل الضريبة")}</span></div>
           <div className="flex justify-between"><span>{formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>{t("القيمة المضافة %15")}</span></div>
           <div className="flex justify-between font-bold"><span>{formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span>{t("الإجمالي (﷼)")}</span></div>
@@ -810,8 +823,8 @@ function QuotePreview({ quotation }: { quotation: QuotationRow }) {
             <h4 className="font-bold">{t("ملاحظة")}</h4>
             <p>{quotation.notes || "-"}</p>
             <h4 className="font-bold mt-2">{t("البيانات البنكية")}</h4>
-            <p>*{t("اسم البنك")} : {COMPANY_INFO.bankName}</p>
-            <p>*{t("اسم المستفيد")} : {COMPANY_INFO.beneficiary}</p>
+            <p>*{t("اسم البنك")} : {t(COMPANY_INFO.bankName)}</p>
+            <p>*{t("اسم المستفيد")} : {t(COMPANY_INFO.beneficiary)}</p>
             <p>*{t("رقم الحساب")} : {COMPANY_INFO.accountNo}</p>
             <p>*{t("رقم الايبان")} : {COMPANY_INFO.iban}</p>
           </div>

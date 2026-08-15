@@ -2,6 +2,7 @@ import { X, Lock, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { AccountNode } from "./accountData";
 import { CASH_FLOW_TYPES } from "./accountData";
+import { useI18n } from "@/i18n";
 
 type Props = {
   account: AccountNode;
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export default function AccountEditPanel({ account, allAccounts, onClose, onSave }: Props) {
+  const { t, direction } = useI18n();
   const [form, setForm] = useState<AccountNode>({ ...account });
   const [usageOpen, setUsageOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(false);
@@ -34,20 +36,20 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-50 flex" dir={direction}>
       <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="w-full max-w-md bg-white shadow-xl border-r border-border overflow-y-auto">
+      <div className="w-full max-w-md bg-white shadow-xl border-s border-border overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-white px-5 py-3">
           <button
             onClick={handleSave}
             className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary/90"
           >
-            حفظ
+            {t("حفظ")}
           </button>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-foreground">تعديل الحساب</h2>
-            <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+            <h2 className="text-base font-semibold text-foreground">{t("تعديل الحساب")}</h2>
+            <button onClick={onClose} aria-label={t("إغلاق")} className="p-1 text-muted-foreground hover:text-foreground">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -57,14 +59,14 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
           {/* Account Type & Classification */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-red-500">مطلوب</span>
-              <label className="text-sm font-semibold text-foreground">نوع الحساب والتصنيف</label>
+              <span className="text-xs text-red-500">{t("مطلوب")}</span>
+              <label className="text-sm font-semibold text-foreground">{t("نوع الحساب والتصنيف")}</label>
             </div>
             <select
               value={form.parentCode ? allAccounts.find(a => a.code === form.parentCode && a.level === 0)?.code || form.code.charAt(0) : form.code}
               onChange={(e) => setForm({ ...form })}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
-              dir="rtl"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-start"
+              dir={direction}
             >
               {mainCategories.map((cat) => (
                 <option key={cat.code} value={cat.code}>
@@ -72,22 +74,22 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-muted-foreground text-right">الأب</p>
+            <p className="mt-1 text-xs text-muted-foreground text-start">{t("الأب")}</p>
           </div>
 
           {/* Parent Account */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-red-500">مطلوب</span>
-              <label className="text-sm font-semibold text-foreground">الحساب الرئيسي / الأب</label>
+              <span className="text-xs text-red-500">{t("مطلوب")}</span>
+              <label className="text-sm font-semibold text-foreground">{t("الحساب الرئيسي")} / {t("الأب")}</label>
             </div>
             <select
               value={form.parentCode}
               onChange={(e) => setForm({ ...form, parentCode: e.target.value })}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
-              dir="rtl"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-start"
+              dir={direction}
             >
-              <option value="">بدون حساب أب</option>
+              <option value="">{t("بدون حساب أب")}</option>
               {parentOptions.map((p) => (
                 <option key={p.code} value={p.code}>
                   {p.code} - {p.nameAr}
@@ -99,45 +101,45 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
           {/* Account Info */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-red-500">مطلوب</span>
-              <label className="text-sm font-semibold text-foreground">معلومات الحساب</label>
+              <span className="text-xs text-red-500">{t("مطلوب")}</span>
+              <label className="text-sm font-semibold text-foreground">{t("معلومات الحساب")}</label>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground text-right">الاسم</label>
+                <label className="mb-1 block text-xs text-muted-foreground text-start">{t("الاسم")}</label>
                 <input
                   value={form.nameAr}
                   onChange={(e) => setForm({ ...form, nameAr: e.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
-                  dir="rtl"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-start"
+                  dir={direction}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground text-right">en</label>
+                <label className="mb-1 block text-xs text-muted-foreground text-start">{t("الاسم بالإنجليزية")}</label>
                 <input
                   value={form.nameEn}
                   onChange={(e) => setForm({ ...form, nameEn: e.target.value })}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
                   dir="ltr"
-                  placeholder="English name"
+                  placeholder={t("أدخل الاسم بالإنجليزية")}
                 />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1 text-xs text-muted-foreground justify-end">
                   <Lock className="h-3 w-3" />
-                  رقم الحساب
+                  {t("رقم الحساب")}
                 </label>
                 <div className="flex items-center gap-2">
                   <input
                     value={form.code}
                     readOnly
-                    className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-right"
-                    dir="rtl"
+                    className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-start"
+                    dir={direction}
                   />
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-foreground justify-end cursor-pointer">
-                يظهر هذا الحساب في تقرير قائمة المركز المالي
+                {t("يظهر هذا الحساب في تقرير قائمة المركز المالي")}
                 <input type="checkbox" defaultChecked className="rounded border-border" />
               </label>
             </div>
@@ -145,21 +147,21 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
 
           {/* Cash Flow Type */}
           <div>
-            <label className="mb-2 block text-sm font-semibold text-foreground text-right">
-              نوع التدفق النقدي<span className="text-red-500">*</span>
+            <label className="mb-2 block text-sm font-semibold text-foreground text-start">
+              {t("نوع التدفق النقدي")}<span className="text-red-500">*</span>
             </label>
             <select
               value={form.cashFlowType}
               onChange={(e) => setForm({ ...form, cashFlowType: e.target.value })}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
-              dir="rtl"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-start"
+              dir={direction}
             >
-              {CASH_FLOW_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              {CASH_FLOW_TYPES.map((cashFlowType) => (
+                <option key={cashFlowType} value={cashFlowType}>{t(cashFlowType)}</option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-muted-foreground text-right">
-              حدد القسم الذي سيظهره هذا الحساب ضمن قائمة التدفقات النقدية
+            <p className="mt-1 text-xs text-muted-foreground text-start">
+              {t("حدد القسم الذي سيظهره هذا الحساب ضمن قائمة التدفقات النقدية")}
             </p>
           </div>
 
@@ -172,12 +174,12 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
               <div className="flex items-center gap-1">
                 {usageOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </div>
-              <span>كيف يمكن استخدام هذا الحساب؟ (اختياري)</span>
+              <span>{t("كيف يمكن استخدام هذا الحساب؟")} ({t("اختياري")})</span>
             </button>
             {usageOpen && (
               <div className="px-4 pb-4 space-y-3">
                 <label className="flex items-center gap-2 text-sm text-foreground justify-end cursor-pointer">
-                  السماح بتسجيل المعاملات على هذا الحساب
+                  {t("السماح بتسجيل المعاملات على هذا الحساب")}
                   <input
                     type="checkbox"
                     checked={allowTransactions}
@@ -185,12 +187,12 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
                     className="rounded border-border"
                   />
                 </label>
-                <p className="text-xs text-muted-foreground text-right">
-                  سيتم السماح في هذه الحالة بتحديد هذا الحساب عند إنشاء القيود المحاسبية أو إصدار الفواتير
+                <p className="text-xs text-muted-foreground text-start">
+                  {t("سيتم السماح في هذه الحالة بتحديد هذا الحساب عند إنشاء القيود المحاسبية أو إصدار الفواتير")}
                 </p>
 
                 <label className="flex items-center gap-2 text-sm text-foreground justify-end cursor-pointer">
-                  السماح باختيار هذا الحساب للمدفوعات
+                  {t("السماح باختيار هذا الحساب للمدفوعات")}
                   <input
                     type="checkbox"
                     checked={allowPayments}
@@ -198,12 +200,12 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
                     className="rounded border-border"
                   />
                 </label>
-                <p className="text-xs text-muted-foreground text-right">
-                  سيتم السماح في هذه الحالة بتحديد هذا الحساب عند تسجيل عمليات الدفع
+                <p className="text-xs text-muted-foreground text-start">
+                  {t("سيتم السماح في هذه الحالة بتحديد هذا الحساب عند تسجيل عمليات الدفع")}
                 </p>
 
                 <label className="flex items-center gap-2 text-sm text-foreground justify-end cursor-pointer">
-                  السماح باختيار هذا الحساب في مطالبات أو مصاريف الموظفين
+                  {t("السماح باختيار هذا الحساب في مطالبات أو مصاريف الموظفين")}
                   <input
                     type="checkbox"
                     checked={allowExpenseClaims}
@@ -211,8 +213,8 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
                     className="rounded border-border"
                   />
                 </label>
-                <p className="text-xs text-muted-foreground text-right">
-                  سيتم السماح في هذه الحالة بتحديد هذا الحساب عند تقديم مطالمات الموظفين
+                <p className="text-xs text-muted-foreground text-start">
+                  {t("سيتم السماح في هذه الحالة بتحديد هذا الحساب عند تقديم مطالبات الموظفين")}
                 </p>
               </div>
             )}
@@ -227,11 +229,11 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
               <div className="flex items-center gap-1">
                 {reportsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </div>
-              <span>سجلات وتقارير الحساب</span>
+              <span>{t("سجلات وتقارير الحساب")}</span>
             </button>
             {reportsOpen && (
-              <div className="px-4 pb-4 text-sm text-muted-foreground text-right">
-                لا توجد سجلات أو تقارير مرتبطة بهذا الحساب حالياً.
+              <div className="px-4 pb-4 text-sm text-muted-foreground text-start">
+                {t("لا توجد سجلات أو تقارير مرتبطة بهذا الحساب حالياً.")}
               </div>
             )}
           </div>

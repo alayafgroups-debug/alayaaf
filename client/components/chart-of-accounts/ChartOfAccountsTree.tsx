@@ -1,4 +1,4 @@
-import { Search, ChevronDown, ChevronLeft, Info } from "lucide-react";
+import { Search, ChevronDown, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import type { AccountNode } from "./accountData";
 import { defaultAccounts, CATEGORY_COLORS } from "./accountData";
@@ -6,8 +6,12 @@ import AccountActionsMenu from "./AccountActionsMenu";
 import AccountEditPanel from "./AccountEditPanel";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { useI18n } from "@/i18n";
 
 const COMPANY_NAME = "شركة العياف التجارية";
+
+const getAccountDisplayName = (account: AccountNode, locale: "ar" | "en") =>
+  locale === "en" ? account.nameEn || account.nameAr : account.nameAr;
 
 type SalesPostingRule = {
   receivableAccountCode: string;
@@ -40,6 +44,7 @@ const toDatabaseAccount = (account: AccountNode) => ({
 });
 
 export default function ChartOfAccountsTree() {
+  const { t, locale, direction } = useI18n();
   const [accounts, setAccounts] = useState<AccountNode[]>(defaultAccounts);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingAccount, setEditingAccount] = useState<AccountNode | null>(null);
@@ -61,7 +66,7 @@ export default function ChartOfAccountsTree() {
         .order("code");
 
       if (error) {
-        toast({ title: "تعذر تحميل الحسابات", description: error.message, variant: "destructive" });
+        toast({ title: t("تعذر تحميل الحسابات"), description: error.message, variant: "destructive" });
         return;
       }
 
@@ -112,10 +117,10 @@ export default function ChartOfAccountsTree() {
     });
 
     if (error) {
-      toast({ title: "تعذر حفظ قواعد الترحيل", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر حفظ قواعد الترحيل"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "تم حفظ قواعد الترحيل", description: "ستُستخدم الحسابات المحددة في الفواتير والإشعارات الجديدة" });
+    toast({ title: t("تم حفظ قواعد الترحيل"), description: t("ستُستخدم الحسابات المحددة في الفواتير والإشعارات الجديدة") });
   };
 
   const hasChildren = (code: string) =>
@@ -175,7 +180,7 @@ export default function ChartOfAccountsTree() {
       .upsert(toDatabaseAccount(updated), { onConflict: "code" });
 
     if (error) {
-      toast({ title: "تعذر حفظ الحساب", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر حفظ الحساب"), description: error.message, variant: "destructive" });
       return;
     }
 
@@ -183,7 +188,7 @@ export default function ChartOfAccountsTree() {
       prev.map((a) => (a.code === updated.code ? updated : a))
     );
     setEditingAccount(null);
-    toast({ title: "تم الحفظ", description: "تم تحديث بيانات الحساب وربطه بقاعدة البيانات" });
+    toast({ title: t("تم الحفظ"), description: t("تم تحديث بيانات الحساب وربطه بقاعدة البيانات") });
   };
 
   const handleDeleteAccount = async (code: string) => {
@@ -192,8 +197,8 @@ export default function ChartOfAccountsTree() {
 
     if (account.isSystem) {
       toast({
-        title: "لا يمكن الحذف",
-        description: "هذا الحساب مقيد ولا يمكن حذفه لأنه حساب نظامي.",
+        title: t("لا يمكن الحذف"),
+        description: t("هذا الحساب مقيد ولا يمكن حذفه لأنه حساب نظامي."),
         variant: "destructive",
       });
       return;
@@ -202,8 +207,8 @@ export default function ChartOfAccountsTree() {
     const childrenExist = accounts.some((a) => a.parentCode === code);
     if (childrenExist) {
       toast({
-        title: "لا يمكن الحذف",
-        description: "يجب حذف الحسابات الفرعية أولاً.",
+        title: t("لا يمكن الحذف"),
+        description: t("يجب حذف الحسابات الفرعية أولاً."),
         variant: "destructive",
       });
       return;
@@ -211,12 +216,12 @@ export default function ChartOfAccountsTree() {
 
     const { error } = await supabase.from("accounting_accounts").delete().eq("code", code);
     if (error) {
-      toast({ title: "تعذر حذف الحساب", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر حذف الحساب"), description: error.message, variant: "destructive" });
       return;
     }
 
     setAccounts((prev) => prev.filter((a) => a.code !== code));
-    toast({ title: "تم الحذف", description: "تم حذف الحساب من قاعدة البيانات" });
+    toast({ title: t("تم الحذف"), description: t("تم حذف الحساب من قاعدة البيانات") });
   };
 
   const handleAddSubAccount = (parentCode: string, isBank = false) => {
@@ -271,13 +276,13 @@ export default function ChartOfAccountsTree() {
 
     setEditingAccount(newAccount);
     toast({
-      title: "تمت الإضافة",
-      description: `تم إضافة ${isBank ? "حساب بنكي" : "حساب"} فرعي جديد`,
+      title: t("تمت الإضافة"),
+      description: `${t("تم إضافة")} ${isBank ? t("حساب بنكي") : t("حساب")} ${t("فرعي جديد")}`,
     });
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" dir={direction}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -291,7 +296,7 @@ export default function ChartOfAccountsTree() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              الحسابات
+              {t("الحسابات")}
             </button>
             <button
               onClick={() => setActiveTab("tree")}
@@ -301,52 +306,52 @@ export default function ChartOfAccountsTree() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              شجرة الحسابات
+              {t("شجرة الحسابات")}
             </button>
           </div>
         </div>
 
         {/* Search */}
         <div className="relative w-full max-w-xs">
-          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="البحث..."
-            className="w-full rounded-lg border border-border bg-background pr-9 pl-3 py-2 text-sm text-right"
-            dir="rtl"
+            placeholder={t("بحث...")}
+            className="w-full rounded-lg border border-border bg-background ps-9 pe-3 py-2 text-sm text-start"
+            dir={direction}
           />
         </div>
       </div>
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4" dir="rtl">
+      <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4" dir={direction}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-foreground">قواعد ترحيل فواتير المبيعات</h3>
-            <p className="text-xs text-muted-foreground">تحدد الحسابات الافتراضية للقيد: مدين ذمم العملاء، ودائن الإيراد وضريبة المخرجات.</p>
+            <h3 className="font-semibold text-foreground">{t("قواعد ترحيل فواتير المبيعات")}</h3>
+            <p className="text-xs text-muted-foreground">{t("تحدد الحسابات الافتراضية للقيد: مدين ذمم العملاء، ودائن الإيراد وضريبة المخرجات.")}</p>
           </div>
           <button
             onClick={saveSalesPostingRule}
             className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
           >
-            حفظ قواعد الترحيل
+            {t("حفظ قواعد الترحيل")}
           </button>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <PostingAccountSelect
-            label="حساب ذمم العملاء (مدين)"
+            label={t("حساب ذمم العملاء (مدين)")}
             value={salesPostingRule.receivableAccountCode}
             accounts={accounts.filter((account) => account.code.startsWith("1") && !accounts.some((child) => child.parentCode === account.code))}
             onChange={(value) => setSalesPostingRule((rule) => ({ ...rule, receivableAccountCode: value }))}
           />
           <PostingAccountSelect
-            label="حساب إيرادات المبيعات (دائن)"
+            label={t("حساب إيرادات المبيعات (دائن)")}
             value={salesPostingRule.revenueAccountCode}
             accounts={accounts.filter((account) => account.code.startsWith("4") && !accounts.some((child) => child.parentCode === account.code))}
             onChange={(value) => setSalesPostingRule((rule) => ({ ...rule, revenueAccountCode: value }))}
           />
           <PostingAccountSelect
-            label="حساب ضريبة المخرجات (دائن)"
+            label={t("حساب ضريبة المخرجات (دائن)")}
             value={salesPostingRule.outputVatAccountCode}
             accounts={accounts.filter((account) => account.code.startsWith("2") && !accounts.some((child) => child.parentCode === account.code))}
             onChange={(value) => setSalesPostingRule((rule) => ({ ...rule, outputVatAccountCode: value }))}
@@ -357,26 +362,26 @@ export default function ChartOfAccountsTree() {
       {/* Table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm" dir="rtl">
+          <table className="w-full min-w-[900px] text-sm" dir={direction}>
             <thead>
               <tr className="bg-slate-50 border-b border-border">
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground w-[120px]">
-                  رقم الحساب
+                <th className="px-3 py-2.5 text-start font-medium text-muted-foreground w-[120px]">
+                  {t("رقم الحساب")}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
-                  اسم الحساب
+                <th className="px-3 py-2.5 text-start font-medium text-muted-foreground">
+                  {t("اسم الحساب")}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground w-[140px]">
-                  نوع التدفق النقدي
+                <th className="px-3 py-2.5 text-start font-medium text-muted-foreground w-[140px]">
+                  {t("نوع التدفق النقدي")}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground w-[140px]">
-                  تفعيل عمليات الدفع
+                <th className="px-3 py-2.5 text-start font-medium text-muted-foreground w-[140px]">
+                  {t("تفعيل عمليات الدفع")}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground w-[160px]">
-                  إظهار في مطالبات المصر...
+                <th className="px-3 py-2.5 text-start font-medium text-muted-foreground w-[160px]">
+                  {t("إظهار في مطالبات المصروف")}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground w-[120px]">
-                  نوع الحساب
+                <th className="px-3 py-2.5 text-start font-medium text-muted-foreground w-[120px]">
+                  {t("نوع الحساب")}
                 </th>
                 <th className="w-[50px]" />
               </tr>
@@ -452,17 +457,20 @@ function PostingAccountSelect({
   accounts: AccountNode[];
   onChange: (value: string) => void;
 }) {
+  const { direction, locale } = useI18n();
+
   return (
-    <label className="space-y-1 text-xs font-medium text-foreground">
+    <label className="space-y-1 text-xs font-medium text-foreground" dir={direction}>
       <span>{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm"
+        dir={direction}
       >
         {accounts.map((account) => (
           <option key={account.code} value={account.code}>
-            {account.code} — {account.nameAr}
+            {account.code} — {getAccountDisplayName(account, locale)}
           </option>
         ))}
       </select>
@@ -496,6 +504,8 @@ function MainCategoryRow({
   hoveredSystem: string | null;
   setHoveredSystem: (v: string | null) => void;
 }) {
+  const { t, locale, direction } = useI18n();
+  const CollapseIcon = direction === "rtl" ? ChevronLeft : ChevronRight;
   const bgClass = catColor
     ? `${catColor.bg}/10`
     : "bg-slate-100";
@@ -507,7 +517,7 @@ function MainCategoryRow({
           {hasKids && (
             <button onClick={onToggle} className="text-muted-foreground hover:text-foreground">
               {isCollapsed ? (
-                <ChevronLeft className="h-4 w-4" />
+                <CollapseIcon className="h-4 w-4" />
               ) : (
                 <ChevronDown className="h-4 w-4" />
               )}
@@ -522,10 +532,10 @@ function MainCategoryRow({
             <span
               className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-bold ${catColor.bg} ${catColor.text}`}
             >
-              {account.nameAr}
+              {getAccountDisplayName(account, locale)}
             </span>
           )}
-          {!catColor && <span className="text-foreground">{account.nameAr}</span>}
+          {!catColor && <span className="text-foreground">{getAccountDisplayName(account, locale)}</span>}
 
           {account.isSystem && (
             <div className="relative">
@@ -533,12 +543,14 @@ function MainCategoryRow({
                 onMouseEnter={() => setHoveredSystem(account.code)}
                 onMouseLeave={() => setHoveredSystem(null)}
                 className="text-muted-foreground"
+                aria-label={t("معلومات الحساب")}
+                title={t("معلومات الحساب")}
               >
                 <Info className="h-3.5 w-3.5" />
               </button>
               {hoveredSystem === account.code && (
-                <div className="absolute z-50 top-full right-0 mt-1 w-64 rounded-lg border border-border bg-slate-800 text-white p-3 text-xs leading-relaxed shadow-lg">
-                  هذا الحساب مقيد ولا يمكن حذفه لأنه حساب نظامي تم إنشاؤه لمساعدتك على تنظيم حساباتك وربطها بالتقارير المناسبة.
+                <div className="absolute z-50 top-full start-0 mt-1 w-64 rounded-lg border border-border bg-slate-800 text-white p-3 text-xs leading-relaxed shadow-lg">
+                  {t("هذا الحساب مقيد ولا يمكن حذفه لأنه حساب نظامي تم إنشاؤه لمساعدتك على تنظيم حساباتك وربطها بالتقارير المناسبة.")}
                 </div>
               )}
             </div>
@@ -582,6 +594,8 @@ function AccountRow({
   hoveredSystem: string | null;
   setHoveredSystem: (v: string | null) => void;
 }) {
+  const { t, locale, direction } = useI18n();
+  const CollapseIcon = direction === "rtl" ? ChevronLeft : ChevronRight;
   const indent = account.level * 20;
 
   return (
@@ -593,17 +607,17 @@ function AccountRow({
 
       {/* اسم الحساب */}
       <td className="px-3 py-2.5">
-        <div className="flex items-center gap-2" style={{ paddingRight: `${indent}px` }}>
+        <div className="flex items-center gap-2" style={{ paddingInlineStart: `${indent}px` }}>
           {hasKids && (
             <button onClick={onToggle} className="text-muted-foreground hover:text-foreground shrink-0">
               {isCollapsed ? (
-                <ChevronLeft className="h-4 w-4" />
+                <CollapseIcon className="h-4 w-4" />
               ) : (
                 <ChevronDown className="h-4 w-4" />
               )}
             </button>
           )}
-          <span className="text-foreground">{account.nameAr}</span>
+          <span className="text-foreground">{getAccountDisplayName(account, locale)}</span>
 
           {account.currencyBadge && (
             <span className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700 border border-green-200">
@@ -617,12 +631,14 @@ function AccountRow({
                 onMouseEnter={() => setHoveredSystem(account.code)}
                 onMouseLeave={() => setHoveredSystem(null)}
                 className="text-muted-foreground"
+                aria-label={t("معلومات الحساب")}
+                title={t("معلومات الحساب")}
               >
                 <Info className="h-3.5 w-3.5" />
               </button>
               {hoveredSystem === account.code && (
-                <div className="absolute z-50 top-full right-0 mt-1 w-64 rounded-lg border border-border bg-slate-800 text-white p-3 text-xs leading-relaxed shadow-lg">
-                  هذا الحساب مقيد ولا يمكن حذفه لأنه حساب نظامي تم إنشاؤه لمساعدتك على تنظيم حساباتك وربطها بالتقارير المناسبة.
+                <div className="absolute z-50 top-full start-0 mt-1 w-64 rounded-lg border border-border bg-slate-800 text-white p-3 text-xs leading-relaxed shadow-lg">
+                  {t("هذا الحساب مقيد ولا يمكن حذفه لأنه حساب نظامي تم إنشاؤه لمساعدتك على تنظيم حساباتك وربطها بالتقارير المناسبة.")}
                 </div>
               )}
             </div>
@@ -632,22 +648,22 @@ function AccountRow({
 
       {/* نوع التدفق النقدي */}
       <td className="px-3 py-2.5 text-muted-foreground">
-        {account.cashFlowType || "—"}
+        {account.cashFlowType ? t(account.cashFlowType) : "—"}
       </td>
 
       {/* تفعيل عمليات الدفع */}
       <td className="px-3 py-2.5 text-muted-foreground">
-        {account.enablePayments ? "نعم" : "—"}
+        {account.enablePayments ? t("نعم") : "—"}
       </td>
 
       {/* إظهار في مطالبات المصروف */}
       <td className="px-3 py-2.5 text-muted-foreground">
-        {account.showExpenseClaims ? "نعم" : "—"}
+        {account.showExpenseClaims ? t("نعم") : "—"}
       </td>
 
       {/* نوع الحساب */}
       <td className="px-3 py-2.5 text-muted-foreground">
-        {account.accountType || "—"}
+        {account.accountType ? t(account.accountType) : "—"}
       </td>
 
       {/* Actions */}

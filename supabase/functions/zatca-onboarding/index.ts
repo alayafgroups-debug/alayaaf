@@ -776,21 +776,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    let setupQuery = admin
-      .from("zatca_onboarding_settings")
-      .select("id, created_by, status, compliance_issued_at, device_serial")
-      .eq("mode", mode)
-      .eq("organization_key", organizationKey)
-      .eq("branch_key", branchKey);
-    if (requestedDeviceSerial) {
-      setupQuery = setupQuery.eq("device_serial", requestedDeviceSerial);
-    }
-    const { data: matchingSetups, error: ownerError } = await setupQuery
-      .order("updated_at", { ascending: false })
-      .limit(1);
-    if (ownerError) throw ownerError;
-    let existingSetup = matchingSetups?.[0] ?? null;
-    if (!existingSetup && action === "status") {
+    let existingSetup: any = null;
+    if (action === "status") {
       const { data: latestOwnedSetups, error: latestOwnedError } = await admin
         .from("zatca_onboarding_settings")
         .select("id, created_by, status, compliance_issued_at, device_serial")
@@ -798,10 +785,29 @@ Deno.serve(async (req) => {
         .eq("organization_key", organizationKey)
         .eq("branch_key", branchKey)
         .eq("created_by", user.id)
+        .order("production_issued_at", {
+          ascending: false,
+          nullsFirst: false,
+        })
         .order("updated_at", { ascending: false })
         .limit(1);
       if (latestOwnedError) throw latestOwnedError;
       existingSetup = latestOwnedSetups?.[0] ?? null;
+    } else {
+      let setupQuery = admin
+        .from("zatca_onboarding_settings")
+        .select("id, created_by, status, compliance_issued_at, device_serial")
+        .eq("mode", mode)
+        .eq("organization_key", organizationKey)
+        .eq("branch_key", branchKey);
+      if (requestedDeviceSerial) {
+        setupQuery = setupQuery.eq("device_serial", requestedDeviceSerial);
+      }
+      const { data: matchingSetups, error: ownerError } = await setupQuery
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (ownerError) throw ownerError;
+      existingSetup = matchingSetups?.[0] ?? null;
     }
     if (existingSetup && existingSetup.created_by !== user.id) {
       return respond({ error: "هذه التهيئة مرتبطة بحساب إداري آخر" }, 403);

@@ -382,7 +382,7 @@ export default function ZATCASettings() {
       toast({
         title:
           selectedMode === "production"
-            ? "تم طلب اعتماد الإنتاج الحقيقي"
+            ? "تم إصدار شهادة التوافق للإنتاج"
             : "نجحت تهيئة المحاكاة",
         description: "تمت معالجة OTP مرة واحدة ولم يتم حفظه في الواجهة.",
       });
@@ -453,9 +453,14 @@ export default function ZATCASettings() {
     try {
       const data = await invoke({ action: "request_production_csid" });
       toast({
-        title: "تم إصدار اعتماد تشغيل المحاكاة",
+        title:
+          selectedMode === "production"
+            ? "تم إصدار Production CSID الحقيقي"
+            : "تم إصدار اعتماد تشغيل المحاكاة",
         description:
-          "هذا اعتماد تجريبي داخل Simulation وليس اعتماد إنتاج حقيقيًا.",
+          selectedMode === "production"
+            ? "تم حفظ اعتماد الإنتاج الحقيقي داخل Vault، وما زال إرسال الفواتير معطلاً حتى التفعيل الصريح."
+            : "هذا اعتماد تجريبي داخل Simulation وليس اعتماد إنتاج حقيقيًا.",
       });
       await loadStatus(true);
     } catch (error) {
@@ -1156,7 +1161,7 @@ export default function ZATCASettings() {
           </section>
         )}
 
-        {selectedMode === "simulation" && (
+        {setup && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1164,8 +1169,9 @@ export default function ZATCASettings() {
                   3. فحص التوافق — المستندات المطلوبة
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  ينشئ الخادم مستندات UBL موقعة ويرسل كل نتيجة فعليًا إلى منصة
-                  ZATCA Simulation.
+                  {selectedMode === "production"
+                    ? "ينشئ الخادم مستندات التوافق الستة ويرسلها إلى منصة ZATCA Core باستخدام شهادة التوافق، دون إرسال أي فاتورة أعمال حقيقية."
+                    : "ينشئ الخادم مستندات UBL موقعة ويرسل كل نتيجة فعليًا إلى منصة ZATCA Simulation."}
                 </p>
               </div>
               <button
@@ -1238,55 +1244,62 @@ export default function ZATCASettings() {
           </section>
         )}
 
-        {selectedMode === "simulation" &&
-          setup?.status === "compliance_passed" && (
-            <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="font-bold text-indigo-950">
-                    4. إصدار Production CSID للمحاكاة — اعتماد تجريبي فقط
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-indigo-800">
-                    هذا Production CSID داخل Simulation فقط، وليس Production
-                    CSID للإنتاج الحقيقي. يُستخدم لاختبارات Clearance وReporting
-                    التجريبية.
-                  </p>
-                  {setup.production_csid_masked && (
-                    <span className="mt-3 inline-block rounded-lg bg-white px-3 py-2 text-xs font-bold text-indigo-900">
-                      اعتماد تشغيل المحاكاة التجريبي موجود
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {setup.production_status === "failed" && (
-                    <button
-                      onClick={resetOnboarding}
-                      disabled={Boolean(action)}
-                      className="rounded-xl border border-rose-300 bg-white px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
-                    >
-                      {action === "reset" ? "جاري البدء..." : "بدء تهيئة جديدة"}
-                    </button>
-                  )}
-                  <button
-                    onClick={requestProductionCsid}
-                    disabled={
-                      Boolean(action) || Boolean(setup.production_csid_masked)
-                    }
-                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {action === "production" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ShieldCheck className="h-4 w-4" />
-                    )}
-                    {setup.production_csid_masked
-                      ? "تم إصدار اعتماد المحاكاة"
-                      : "إصدار Production CSID للمحاكاة فقط"}
-                  </button>
-                </div>
+        {setup?.status === "compliance_passed" && (
+          <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="font-bold text-indigo-950">
+                  {selectedMode === "production"
+                    ? "4. إصدار Production CSID الحقيقي"
+                    : "4. إصدار Production CSID للمحاكاة — اعتماد تجريبي فقط"}
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-indigo-800">
+                  {selectedMode === "production"
+                    ? "هذا طلب اعتماد إنتاج حقيقي بعد اجتياز اختبارات التوافق. إصداره وحده لا يفعّل إرسال الفواتير؛ يلزم التفعيل الصريح لاحقًا."
+                    : "هذا Production CSID داخل Simulation فقط، وليس Production CSID للإنتاج الحقيقي. يُستخدم لاختبارات Clearance وReporting التجريبية."}
+                </p>
+                {setup.production_csid_masked && (
+                  <span className="mt-3 inline-block rounded-lg bg-white px-3 py-2 text-xs font-bold text-indigo-900">
+                    {selectedMode === "production"
+                      ? "Production CSID الحقيقي موجود"
+                      : "اعتماد تشغيل المحاكاة التجريبي موجود"}
+                  </span>
+                )}
               </div>
-            </section>
-          )}
+              <div className="flex flex-wrap items-center gap-2">
+                {setup.production_status === "failed" && (
+                  <button
+                    onClick={resetOnboarding}
+                    disabled={Boolean(action)}
+                    className="rounded-xl border border-rose-300 bg-white px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
+                  >
+                    {action === "reset" ? "جاري البدء..." : "بدء تهيئة جديدة"}
+                  </button>
+                )}
+                <button
+                  onClick={requestProductionCsid}
+                  disabled={
+                    Boolean(action) || Boolean(setup.production_csid_masked)
+                  }
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {action === "production" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-4 w-4" />
+                  )}
+                  {setup.production_csid_masked
+                    ? selectedMode === "production"
+                      ? "تم إصدار Production CSID الحقيقي"
+                      : "تم إصدار اعتماد المحاكاة"
+                    : selectedMode === "production"
+                      ? "إصدار Production CSID الحقيقي"
+                      : "إصدار Production CSID للمحاكاة فقط"}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {audit.length > 0 && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5">

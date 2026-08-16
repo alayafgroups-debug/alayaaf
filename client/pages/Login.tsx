@@ -185,33 +185,6 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Demo Info */}
-          <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-lg shadow-black/10">
-            <p className="mb-3 text-sm font-bold text-slate-900">
-              حساب المدير التجريبي
-            </p>
-            <div className="space-y-2 text-sm text-slate-700">
-              <p className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold">البريد الإلكتروني:</span>
-                <span
-                  className="rounded-md bg-blue-50 px-2 py-1 font-mono font-bold text-blue-800"
-                  dir="ltr"
-                >
-                  saeed@alayaf.com
-                </span>
-              </p>
-              <p className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold">كلمة المرور:</span>
-                <span
-                  className="rounded-md bg-blue-50 px-2 py-1 font-mono font-bold text-blue-800"
-                  dir="ltr"
-                >
-                  Saeed@2026
-                </span>
-              </p>
-            </div>
-          </div>
-
           {/* Switch to employee portal */}
           <p className="text-center text-sm text-white/40">
             هل أنت موظف؟{" "}

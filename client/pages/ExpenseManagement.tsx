@@ -196,7 +196,7 @@ export default function ExpenseManagement() {
     const printNumber = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const printDate = (value: string) => value ? formatDate(value, { dateStyle: "medium" }) : "-";
     const total = items.reduce((s, i) => s + (Number.parseFloat(i.amount || "0") || 0), 0);
-    const rowsHtml = items.map((item, idx) => `<tr><td>${idx + 1}</td><td style="text-align:${direction === "rtl" ? "right" : "left"}">${escHtml(item.description || "-")}</td><td>${escHtml(item.accountCode || "-")}</td><td style="font-weight:700">${printNumber(Number.parseFloat(item.amount || "0") || 0)} SAR</td></tr>`).join("");
+    const rowsHtml = items.map((item, idx) => `<tr><td>${formatNumber(idx + 1)}</td><td style="text-align:${direction === "rtl" ? "right" : "left"}">${escHtml(item.description || "-")}</td><td>${escHtml(item.accountCode || "-")}</td><td style="font-weight:700">${printNumber(Number.parseFloat(item.amount || "0") || 0)} ${printText("ريال")}</td></tr>`).join("");
     printWindow.document.write(`<!doctype html><html dir="${direction}" lang="${locale}"><head><meta charset="utf-8"><title>${printText("سند صرف")} ${escHtml(row.voucherNumber)}</title><style>@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#111827;font-family:Arial,Tahoma,sans-serif}.voucher{width:100%;min-height:273mm;border:1px solid #d1d5db;padding:14mm 15mm 10mm;position:relative;background:#fff}.header{display:grid;grid-template-columns:150px 1fr 190px;align-items:start;gap:20px}.logo{width:135px;height:90px;object-fit:contain}.company{text-align:right}.company h2{margin:0;font-size:22px}.company p{margin:4px 0;color:#475569;font-size:11px;line-height:1.6}.voucher-title{text-align:center}.voucher-title h1{font-size:29px;margin:0}.en{font-size:14px;font-weight:700;letter-spacing:1.8px;border-bottom:2px solid #dc2626;padding:4px 12px;display:inline-block}.number{margin-top:10px;color:#dc2626;font-size:24px;font-weight:800;letter-spacing:2px}.date-row{display:flex;justify-content:space-between;margin:14px 0 6px;font-size:12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;margin-bottom:10px}.label{color:#64748b;font-size:11px}.line-val{font-weight:700;border-bottom:1px solid #94a3b8;padding-bottom:3px}.line{display:grid;grid-template-columns:165px 1fr 165px;gap:8px;align-items:end;margin:10px 0;font-size:13px}.label-ar{font-weight:700}.label-en{text-align:left;font-weight:700;direction:ltr}.vbox{min-height:25px;border-bottom:1px solid #64748b;padding:3px 8px;text-align:center;font-weight:700}table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:8px}th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:center}th{background:#f1f5f9;font-weight:700}.total-row{background:#fef2f2;font-weight:700;color:#dc2626}.amt-box{float:left;margin-top:8px;border:2px solid #dc2626;border-radius:6px;padding:9px 18px;color:#dc2626;font-size:18px;font-weight:800}.sigs{display:grid;grid-template-columns:repeat(4,1fr);gap:40px;margin-top:30px;text-align:center}.sig strong{display:block;font-size:13px}.sig small{display:block;color:#64748b}.sig .sl{border-bottom:1px solid #94a3b8;height:38px}.footer{position:absolute;bottom:0;left:0;right:0;height:10px;background:linear-gradient(90deg,#dc2626,#0f766e)}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.voucher{border:0}}</style></head><body><section class="voucher"><div class="header"><img class="logo" src="${COMPANY_LOGO_URL}" alt="logo"><div class="voucher-title"><h1>${printText("سند صرف")}</h1><div class="en">PAYMENT VOUCHER</div><div class="number">${escHtml(row.voucherNumber)}</div></div><div class="company"><h2>${printText("شركة لاكجري العياف")}</h2><p>Luxury Al Ayaf Company<br>${printText("المملكة العربية السعودية")}<br>VAT No. 314559705300003</p></div></div><div class="date-row"><span><b>${printText("التاريخ")} / Date:</b> ${escHtml(printDate(row.voucherDate))}</span><span><b>${printText("هـ")} / H &nbsp; ${printText("ريال")} / S.R. SAR</b></span></div><div class="meta"><div><div class="label">${printText("صرف إلى")} / Pay to (${printText("قسم")}):</div><div class="line-val">${escHtml(row.department || "-")}</div></div><div><div class="label">${printText("اعتمد من")} / Approved by:</div><div class="line-val">${escHtml(row.approvedBy || "-")}</div></div></div><div class="line"><span class="label-ar">${printText("البيان")} / Description:</span><div class="vbox">${escHtml(row.description || "-")}</div><span class="label-en">Being / Details</span></div><table><thead><tr><th>#</th><th style="text-align:${direction === "rtl" ? "right" : "left"}">${printText("البند")} / Item</th><th>${printText("الحساب")} / Account</th><th>${printText("المبلغ")} / Amount</th></tr></thead><tbody>${rowsHtml || "<tr><td colspan='4'>-</td></tr>"}<tr class='total-row'><td colspan='3'>${printText("الإجمالي")} / Total</td><td>${printNumber(total)} SAR</td></tr></tbody></table><div class="amt-box">${printNumber(total)} SAR</div><div class="sigs"><div class="sig"><strong>${printText("المحاسب")}</strong><small>Accountant</small><div class="sl"></div></div><div class="sig"><strong>${printText("مدير مالي")}</strong><small>Finance Manager</small><div class="sl"></div></div><div class="sig"><strong>${printText("معتمد")}</strong><small>Approved</small><div class="sl"></div></div><div class="sig"><strong>${printText("المستلم")}</strong><small>Received by</small><div class="sl"></div></div></div><div class="footer"></div></section></body></html>`);
     printWindow.document.close();
     let printed = false;
@@ -564,6 +564,7 @@ export default function ExpenseManagement() {
                 <h3 className="text-lg font-semibold text-foreground">{t("تفاصيل سند الصرف")}</h3>
                 <button
                   onClick={() => setVoucherView(null)}
+                  aria-label={t("إغلاق")}
                   className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
@@ -653,6 +654,7 @@ export default function ExpenseManagement() {
                 <h3 className="text-lg font-semibold text-foreground">{t("تفاصيل سند القبض")}</h3>
                 <button
                   onClick={() => setPettyCashView(null)}
+                  aria-label={t("إغلاق")}
                   className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
@@ -801,7 +803,7 @@ function VoucherForm({
             }
             className="text-xs text-primary hover:underline"
           >
-            {t("+ إضافة بند")}
+            + {t("إضافة بند")}
           </button>
         </div>
 
@@ -1294,7 +1296,7 @@ function ExpenseReportsList({
             {t("إجمالي سندات الصرف")}
           </div>
           <p className="text-2xl font-bold text-foreground">{formatMoney(vouchersTotal)} {t("ريال")}</p>
-          <p className="text-xs text-muted-foreground mt-1">{voucherRows.length} {t("سند")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{formatNumber(voucherRows.length)} {t("سند")}</p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border bg-card p-4">
@@ -1302,7 +1304,7 @@ function ExpenseReportsList({
             {t("إجمالي سندات القبض")}
           </div>
           <p className="text-2xl font-bold text-foreground">{formatMoney(pettyCashTotal)} {t("ريال")}</p>
-          <p className="text-xs text-muted-foreground mt-1">{pettyCashRows.length} {t("سند")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{formatNumber(pettyCashRows.length)} {t("سند")}</p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border bg-card p-4">

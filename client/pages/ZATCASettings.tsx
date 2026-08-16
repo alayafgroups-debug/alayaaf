@@ -90,6 +90,8 @@ type IdentityForm = {
   invoiceType: "1000" | "0100" | "1100";
 };
 
+const ACTIVE_PRODUCTION_DEVICE_KEY = "zatca-active-production-device-serial";
+
 const initialIdentity: IdentityForm = {
   companyNameAr: "شركة إدارة العياف للمقاولات",
   companyNameEn: "Company Idarat Al Ayaf For Contracting",
@@ -180,7 +182,18 @@ function getAuditDetailMessage(item: any) {
 }
 
 export default function ZATCASettings() {
-  const [identity, setIdentity] = useState<IdentityForm>(initialIdentity);
+  const [identity, setIdentity] = useState<IdentityForm>(() => {
+    const activeProductionSerial = localStorage.getItem(
+      ACTIVE_PRODUCTION_DEVICE_KEY,
+    );
+    return activeProductionSerial
+      ? {
+          ...initialIdentity,
+          deviceSerial: activeProductionSerial,
+          commonName: activeProductionSerial,
+        }
+      : initialIdentity;
+  });
   const [selectedMode, setSelectedMode] = useState<ZatcaMode>("simulation");
   const [setup, setSetup] = useState<SetupMetadata | null>(null);
   const [audit, setAudit] = useState<any[]>([]);
@@ -268,6 +281,12 @@ export default function ZATCASettings() {
         });
       }
       if (data.setup) {
+        if (mode === "production" && data.setup.device_serial) {
+          localStorage.setItem(
+            ACTIVE_PRODUCTION_DEVICE_KEY,
+            data.setup.device_serial,
+          );
+        }
         setIdentity({
           companyNameAr:
             data.setup.company_name_ar ?? initialIdentity.companyNameAr,
@@ -546,6 +565,9 @@ export default function ZATCASettings() {
       setSetup(null);
       setAudit([]);
       setOtp("");
+      if (selectedMode === "production") {
+        localStorage.removeItem(ACTIVE_PRODUCTION_DEVICE_KEY);
+      }
       toast({
         title: "تم بدء تهيئة جديدة",
         description: `تمت إعادة حالة تهيئة ${environmentLabel} دون عرض أي اعتماد أو سر.`,

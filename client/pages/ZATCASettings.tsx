@@ -477,8 +477,10 @@ export default function ZATCASettings() {
   };
 
   const resetOnboarding = async () => {
+    const environmentLabel =
+      selectedMode === "production" ? "الإنتاج الحقيقي" : "المحاكاة";
     const confirmed = window.confirm(
-      "سيتم حذف اعتماد المحاكاة الحالي ونتائج الاختبارات لبدء تهيئة جديدة. هل تريد المتابعة؟",
+      `سيتم حذف اعتماد ${environmentLabel} الحالي ونتائج الاختبارات لبدء تهيئة جديدة. هل تريد المتابعة؟`,
     );
     if (!confirmed) return;
     setAction("reset");
@@ -489,7 +491,7 @@ export default function ZATCASettings() {
       setOtp("");
       toast({
         title: "تم بدء تهيئة جديدة",
-        description: "تمت إعادة حالة تهيئة المحاكاة دون عرض أي اعتماد أو سر.",
+        description: `تمت إعادة حالة تهيئة ${environmentLabel} دون عرض أي اعتماد أو سر.`,
       });
     } catch (error) {
       toast({

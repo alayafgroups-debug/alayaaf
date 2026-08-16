@@ -167,6 +167,7 @@ function sanitizeAuditDetails(value: unknown): unknown {
 }
 
 function generateCsr(input: {
+  mode: ZatcaMode;
   commonName: string;
   branchName: string;
   companyNameAr: string;
@@ -185,6 +186,10 @@ function generateCsr(input: {
   const serialNumber = `1-${input.deviceManufacturer}|2-${input.deviceModel}|3-${input.deviceSerial}`;
   const registeredAddress = compactCsrLocation(input.branchLocation);
   const businessCategory = asciiCsrValue(input.industry, "Contracting", 64);
+  const certificateTemplateName =
+    input.mode === "production"
+      ? "ZATCA-Code-Signing"
+      : "PREZATCA-Code-Signing";
   const csrPem = KJUR.asn1.csr.CSRUtil.newCSRPEM({
     subject: { str: subject },
     sbjpubkey: keypair.pubKeyObj,
@@ -193,7 +198,7 @@ function generateCsr(input: {
     extreq: [
       {
         extname: "1.3.6.1.4.1.311.20.2",
-        extn: { prnstr: { str: "PREZATCA-Code-Signing" } },
+        extn: { prnstr: { str: certificateTemplateName } },
       },
       {
         extname: "subjectAltName",
@@ -825,7 +830,7 @@ Deno.serve(async (req) => {
         );
       }
       const identity = validateIdentity(body, mode);
-      const csr = generateCsr(identity);
+      const csr = generateCsr({ ...identity, mode });
       const payload = {
         mode,
         organization_key: identity.organizationKey,
@@ -964,6 +969,7 @@ Deno.serve(async (req) => {
       }
 
       const csr = generateCsr({
+        mode,
         companyNameAr: clean(setup.company_name_ar),
         vatNumber: clean(setup.vat_number),
         branchName: clean(setup.branch_name),

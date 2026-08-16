@@ -46,7 +46,7 @@ type SetupMetadata = {
   production_csid_masked?: string;
   production_issued_at?: string;
   production_status?: "not_requested" | "issued" | "failed";
-  production_active?: boolean;
+  production_enabled?: boolean;
   compliance_results?: ComplianceResult[];
   last_error?: string;
   updated_at?: string;
@@ -1106,14 +1106,14 @@ export default function ZATCASettings() {
                   value={activationPhrase}
                   onChange={(event) => setActivationPhrase(event.target.value)}
                   disabled={
-                    !productionCsidExists || Boolean(setup?.production_active)
+                    !productionCsidExists || Boolean(setup?.production_enabled)
                   }
                   dir="ltr"
                   autoComplete="off"
                   className="h-12 min-w-72 flex-1 rounded-xl border border-rose-300 bg-white px-4 font-mono text-sm outline-none disabled:bg-slate-100"
                   placeholder="اكتب عبارة التفعيل"
                 />
-                {setup?.production_active ? (
+                {setup?.production_enabled ? (
                   <button
                     onClick={deactivateProduction}
                     disabled={Boolean(action)}

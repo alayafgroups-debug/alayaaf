@@ -46,11 +46,14 @@ create table if not exists public.zatca_device_sequences (
   last_pih text not null default 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==',
   reservation_token uuid,
   reservation_expires_at timestamptz,
+  blocked_at timestamptz,
+  blocked_reason text,
   updated_at timestamptz not null default now()
 );
 
 alter table public.zatca_invoice_submission_logs
-  add column if not exists onboarding_id uuid references public.zatca_onboarding_settings(id),
+  add column if not exists onboarding_id uuid;
+alter table public.zatca_invoice_submission_logs
   add column if not exists idempotency_key text,
   add column if not exists icv bigint,
   add column if not exists previous_pih text,
@@ -60,6 +63,20 @@ alter table public.zatca_invoice_submission_logs
   add column if not exists retry_after timestamptz,
   add column if not exists last_error text,
   add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  alter table public.zatca_invoice_submission_logs
+    drop constraint if exists zatca_invoice_submission_logs_onboarding_id_fkey;
+  alter table public.zatca_invoice_submission_logs
+    add constraint zatca_invoice_submission_logs_onboarding_id_fkey
+    foreign key (onboarding_id) references public.zatca_onboarding_settings(id) on delete set null;
+  alter table public.zatca_invoice_submission_logs
+    drop constraint if exists zatca_invoice_submission_logs_status_check;
+  alter table public.zatca_invoice_submission_logs
+    add constraint zatca_invoice_submission_logs_status_check
+    check (status in ('submitted', 'cleared', 'reported', 'rejected', 'failed', 'ambiguous'));
+end $$;
 
 create unique index if not exists zatca_submission_idempotency_uidx
   on public.zatca_invoice_submission_logs (idempotency_key)
@@ -90,6 +107,10 @@ begin
   from public.zatca_device_sequences
   where onboarding_id = p_onboarding_id
   for update;
+
+  if v_row.blocked_at is not null then
+    raise exception 'ZATCA_SEQUENCE_BLOCKED: %', coalesce(v_row.blocked_reason, 'manual reconciliation required');
+  end if;
 
   if v_row.reservation_token is not null
      and v_row.reservation_expires_at > now() then
@@ -129,6 +150,28 @@ begin
 end;
 $$;
 
+create or replace function public.block_zatca_sequence(
+  p_onboarding_id uuid,
+  p_reservation_token uuid,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.zatca_device_sequences
+  set blocked_at = now(),
+      blocked_reason = p_reason,
+      reservation_expires_at = null,
+      updated_at = now()
+  where onboarding_id = p_onboarding_id
+    and reservation_token = p_reservation_token;
+  if not found then raise exception 'INVALID_ZATCA_SEQUENCE_RESERVATION'; end if;
+end;
+$$;
+
 create or replace function public.release_zatca_sequence(
   p_onboarding_id uuid,
   p_reservation_token uuid
@@ -149,9 +192,11 @@ $$;
 revoke all on function public.reserve_zatca_sequence(uuid) from public, anon, authenticated;
 revoke all on function public.finalize_zatca_sequence(uuid, uuid, text) from public, anon, authenticated;
 revoke all on function public.release_zatca_sequence(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.block_zatca_sequence(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.reserve_zatca_sequence(uuid) to service_role;
 grant execute on function public.finalize_zatca_sequence(uuid, uuid, text) to service_role;
 grant execute on function public.release_zatca_sequence(uuid, uuid) to service_role;
+grant execute on function public.block_zatca_sequence(uuid, uuid, text) to service_role;
 
 comment on column public.zatca_onboarding_settings.production_enabled is
   'Manual production submission gate. Must remain false until real credentials exist and an administrator confirms activation.';

@@ -539,6 +539,9 @@ Deno.serve(async (req) => {
       .from("zatca_onboarding_settings")
       .select("*")
       .eq("mode", mode);
+    if (mode === "production") {
+      setupQuery = setupQuery.eq("production_enabled", true);
+    }
     if (deviceSerial) setupQuery = setupQuery.eq("device_serial", deviceSerial);
     const { data: setups, error: setupError } = await setupQuery.limit(2);
     if (setupError) throw setupError;

@@ -242,10 +242,19 @@ const initialInvoices: Invoice[] = [];
 
 async function submitInvoiceToZatca(
   invoiceId: string,
+  productionConfirmation: string,
   t: (value: string) => string,
 ) {
+  const deviceSerial = localStorage.getItem(
+    "zatca-active-production-device-serial",
+  );
   const { data, error } = await supabase.functions.invoke("zatca-invoice", {
-    body: { invoiceId },
+    body: {
+      invoiceId,
+      mode: "production",
+      deviceSerial,
+      productionConfirmation,
+    },
   });
   if (error || data?.error) {
     const context = (error as { context?: Response } | null)?.context;
@@ -2095,6 +2104,18 @@ function InvoiceForm({
       return;
     }
 
+    const productionConfirmation = window.prompt(
+      "هذه فاتورة إنتاج حقيقية وملزمة قانونيًا لدى ZATCA. اكتب SUBMIT_REAL_ZATCA_INVOICE للمتابعة:",
+    );
+    if (productionConfirmation?.trim() !== "SUBMIT_REAL_ZATCA_INVOICE") {
+      toast({
+        title: t("تم إلغاء الإرسال الحقيقي"),
+        description: t("لم يتم حفظ أو إرسال الفاتورة إلى ZATCA."),
+        variant: "destructive",
+      });
+      return;
+    }
+
     saveInFlight.current = true;
     setSaveIntent(intent);
     const printWindow = intent === "print" ? window.open("", "_blank") : null;
@@ -2180,7 +2201,11 @@ function InvoiceForm({
           });
         }
         const zatca = accountingPosted
-          ? await submitInvoiceToZatca(savedInvoiceId, t)
+          ? await submitInvoiceToZatca(
+              savedInvoiceId,
+              productionConfirmation.trim(),
+              t,
+            )
           : { status: "pending", qrCodeData: "" };
         const savedInvoice: Invoice = {
           id: data.id ?? attemptId,

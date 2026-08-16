@@ -135,7 +135,7 @@ export default function CostCenters() {
   };
 
   const handleDelete = async (center: CostCenter) => {
-    if (!window.confirm(`${t("هل تريد حذف مركز التكلفة")} ${center.name_ar}؟`)) return;
+    if (!window.confirm(`${t("هل تريد حذف مركز التكلفة")} ${center.name_ar}?`)) return;
     const { error } = await supabase.from("cost_centers").delete().eq("id", center.id);
     if (error) {
       toast({ title: t("تعذّر الحذف"), description: error.message, variant: "destructive" });

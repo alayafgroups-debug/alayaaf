@@ -39,6 +39,13 @@ const creditNoteTranslations: Record<string, string> = {
   "مبلغ الإشعار غير صحيح": "Invalid note amount",
   "أضف بنداً بقيمة أكبر من صفر": "Add an item with a value greater than zero",
   "الحساب المحاسبي مطلوب": "Accounting account is required",
+  "سبب الإشعار مطلوب": "Note reason is required",
+  "اكتب السبب الحقيقي للإشعار الدائن أو المدين":
+    "Enter the actual reason for the credit or debit note",
+  "تعذر حفظ سبب الإشعار": "Unable to save the note reason",
+  "سبب الإشعار الدائن/المدين*": "Credit/debit note reason*",
+  "مثال: إلغاء جزئي، خطأ في السعر، أو تعديل كمية":
+    "Example: partial cancellation, pricing error, or quantity adjustment",
   "اختر حساب الإيراد لكل بند من شجرة الحسابات":
     "Select a revenue account from the chart of accounts for each item",
   "تعذر ترحيل الإشعار": "Unable to post the note",
@@ -137,6 +144,7 @@ type SavedCreditNote = {
   noteType: "sales_credit" | "sales_debit";
   originalInvoiceId: string;
   customer: string;
+  reason: string;
   currency: string;
   date: string;
   orderRef: string;
@@ -167,6 +175,7 @@ type CreditNoteForm = {
   noteType: "sales_credit" | "sales_debit";
   originalInvoiceId: string;
   customer: string;
+  reason: string;
   currency: string;
   date: string;
   orderRef: string;
@@ -200,6 +209,7 @@ const createEmptyForm = (sequence: number): CreditNoteForm => ({
   noteType: "sales_credit",
   originalInvoiceId: "",
   customer: "",
+  reason: "",
   currency: "SAR",
   date: new Date().toISOString().split("T")[0],
   orderRef: "",
@@ -243,7 +253,7 @@ export default function SalesCreditNote() {
           supabase
             .from("invoice_adjustment_notes")
             .select(
-              "id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, zatca_status, qr_code_data, accounting_status, accounting_journal_entry_id",
+              "id, note_number, note_type, original_invoice_id, counterparty, reason, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, zatca_status, qr_code_data, accounting_status, accounting_journal_entry_id",
             )
             .in("note_type", ["sales_credit", "sales_debit"])
             .order("created_at", { ascending: false }),
@@ -271,6 +281,7 @@ export default function SalesCreditNote() {
           noteType: row.note_type as "sales_credit" | "sales_debit",
           originalInvoiceId: String(row.original_invoice_id),
           customer: String(row.counterparty),
+          reason: String(row.reason ?? ""),
           currency: String(row.currency),
           date: String(row.issue_date),
           orderRef: "",
@@ -418,6 +429,14 @@ export default function SalesCreditNote() {
       });
       return;
     }
+    if (!form.reason.trim()) {
+      toast({
+        title: t("سبب الإشعار مطلوب"),
+        description: t("اكتب السبب الحقيقي للإشعار الدائن أو المدين"),
+        variant: "destructive",
+      });
+      return;
+    }
     if (form.items.some((item) => !item.account)) {
       toast({
         title: t("الحساب المحاسبي مطلوب"),
@@ -460,6 +479,19 @@ export default function SalesCreditNote() {
       toast({
         title: t("تعذر ترحيل الإشعار"),
         description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error: reasonError } = await supabase
+      .from("invoice_adjustment_notes")
+      .update({ reason: form.reason.trim() })
+      .eq("id", String(data));
+    if (reasonError) {
+      toast({
+        title: t("تعذر حفظ سبب الإشعار"),
+        description: reasonError.message,
         variant: "destructive",
       });
       return;
@@ -513,6 +545,7 @@ export default function SalesCreditNote() {
       noteType: form.noteType,
       originalInvoiceId: form.originalInvoiceId,
       customer: form.customer,
+      reason: form.reason.trim(),
       currency: form.currency,
       date: form.date,
       orderRef: form.orderRef,
@@ -803,9 +836,11 @@ export default function SalesCreditNote() {
           <>
             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
-                  {COMPANY_PROFILE.programNameAr}
-                </div>
+                <img
+                  src={COMPANY_PROFILE.logoUrl}
+                  alt={COMPANY_PROFILE.companyNameAr}
+                  className="h-20 w-40 object-contain"
+                />
                 <h2 className="text-xl font-bold text-foreground">
                   {COMPANY_PROFILE.companyNameAr}
                 </h2>
@@ -882,6 +917,20 @@ export default function SalesCreditNote() {
                     </select>
                   </Field>
                 </div>
+
+                <Field label={t("سبب الإشعار الدائن/المدين*")}>
+                  <textarea
+                    value={form.reason}
+                    onChange={(e) =>
+                      setForm({ ...form, reason: e.target.value })
+                    }
+                    rows={3}
+                    placeholder={t(
+                      "مثال: إلغاء جزئي، خطأ في السعر، أو تعديل كمية",
+                    )}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </Field>
 
                 <Field label={t("العميل المرتبط بالفاتورة")}>
                   <input

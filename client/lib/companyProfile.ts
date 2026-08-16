@@ -1,5 +1,7 @@
 export const COMPANY_PROFILE = {
   programNameAr: "نظام إدارة العياف",
+  logoUrl:
+    "https://cdn.builder.io/api/v1/image/assets%2Fce04605038104603b965d31c7c18e8db%2Ff22198e2793344a8afcb99b315ddbc49?format=webp&width=800&height=1200",
   companyNameAr: "شركة إدارة العياف للمقاولات",
   companyNameEn: "Company Idarat Al Ayaf For Contracting",
   vatNumber: "314067317200003",

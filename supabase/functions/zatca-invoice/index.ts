@@ -266,6 +266,7 @@ function buildSignedInvoice(input: {
     description: string;
     quantity: number;
     unitPrice: number;
+    discount: number;
     taxPercent: number;
   }>;
   icv: number;
@@ -328,15 +329,20 @@ function buildSignedInvoice(input: {
   );
   const buyer = new BuyerData()
     .setRegistrationName(escapeXmlText(invoice.customer) || "عميل")
-    .setPartyIdentification(simplified ? "1234567890" : "1010000000")
-    .setPartyIdentificationId(simplified ? "NAT" : "CRN")
     .setStreetName(escapeXmlText(buyerAddress.streetName))
     .setBuildingNumber(buyerAddress.buildingNumber)
     .setCitySubdivisionName(escapeXmlText(buyerAddress.citySubdivisionName))
     .setCityName(escapeXmlText(buyerAddress.cityName))
     .setPostalZone(buyerAddress.postalZone)
     .setCountryCode("SA");
-  if (!simplified) buyer.setVatNumber(String(invoice.buyer_vat));
+  if (!simplified) {
+    buyer
+      .setPartyIdentification(
+        String(invoice.buyer_commercial_registration),
+      )
+      .setPartyIdentificationId("CRN")
+      .setVatNumber(String(invoice.buyer_vat));
+  }
 
   document.setSeller(seller).setBuyer(buyer);
   lines.forEach((line, index) => {
@@ -347,6 +353,7 @@ function buildSignedInvoice(input: {
         .setDescription(escapeXmlText(line.description) || "بند")
         .setQuantity(line.quantity)
         .setUnitPrice(line.unitPrice)
+        .setAllowanceAmount(line.discount)
         .setTaxPercent(line.taxPercent)
         .setUnitCode("EA")
         .calculateTotals(),
@@ -360,9 +367,10 @@ function buildSignedInvoice(input: {
     document.addPaymentMeans({
       code: "10",
       instruction_note:
-        documentType === "creditNote"
+        clean(invoice.reason) ||
+        (documentType === "creditNote"
           ? "تخفيض قيمة الفاتورة الأصلية"
-          : "زيادة قيمة الفاتورة الأصلية",
+          : "زيادة قيمة الفاتورة الأصلية"),
     });
   }
   document.calculateTotals();
@@ -382,7 +390,7 @@ function buildSignedInvoice(input: {
 
   const totals = lines.reduce(
     (acc, line) => {
-      const net = line.quantity * line.unitPrice;
+      const net = line.quantity * line.unitPrice - line.discount;
       const tax = (net * line.taxPercent) / 100;
       return { net: acc.net + net, tax: acc.tax + tax };
     },
@@ -583,6 +591,10 @@ Deno.serve(async (req) => {
           customer_address: clean(originalInvoice?.customer_address),
           invoice_type: clean(originalInvoice?.invoice_type) || "simplified",
           buyer_vat: clean(originalInvoice?.buyer_vat),
+          buyer_commercial_registration: clean(
+            originalInvoice?.buyer_commercial_registration,
+          ),
+          reason: clean(record.reason),
         }
       : record;
     const simplified = invoice.invoice_type !== "standard";
@@ -720,6 +732,44 @@ Deno.serve(async (req) => {
           422,
         );
       }
+      if (!clean(invoice.customer_address)) {
+        return await rejectBeforeSubmission(
+          "العنوان الوطني الحقيقي للعميل مطلوب قبل الإرسال الإنتاجي",
+          422,
+        );
+      }
+      try {
+        parseRegisteredAddress(clean(invoice.customer_address));
+      } catch {
+        return await rejectBeforeSubmission(
+          "عنوان العميل يجب أن يتضمن رقم مبنى من 4 أرقام ورمزًا بريديًا من 5 أرقام ومدينة",
+          422,
+        );
+      }
+      if (!simplified) {
+        if (!/^3\d{14}$/.test(clean(invoice.buyer_vat))) {
+          return await rejectBeforeSubmission(
+            "الرقم الضريبي الحقيقي للعميل مطلوب لفاتورة B2B",
+            422,
+          );
+        }
+        if (
+          !/^\d{10,15}$/.test(
+            clean(invoice.buyer_commercial_registration),
+          )
+        ) {
+          return await rejectBeforeSubmission(
+            "السجل التجاري الحقيقي للعميل مطلوب لفاتورة B2B",
+            422,
+          );
+        }
+      }
+      if (noteId && !clean(record.reason)) {
+        return await rejectBeforeSubmission(
+          "سبب الإشعار الدائن أو المدين مطلوب قبل الإرسال الإنتاجي",
+          422,
+        );
+      }
       if (noteId && !clean(originalInvoice?.uuid)) {
         return await rejectBeforeSubmission(
           "لا يمكن إرسال إشعار إنتاجي دون UUID فعلي للفاتورة الأصلية",
@@ -753,12 +803,56 @@ Deno.serve(async (req) => {
       description: clean(item.description),
       quantity: Number(item.quantity) || 1,
       unitPrice: Number(item.unitPrice) || 0,
+      discount: Math.max(Number(item.discount) || 0, 0),
       taxPercent: Number(item.taxPercent ?? 15) || 15,
     }));
     if (!lines.length) {
       return await rejectBeforeSubmission(
         "لا توجد بنود صالحة داخل المستند",
         400,
+      );
+    }
+    if (
+      lines.some(
+        (line) =>
+          line.quantity <= 0 ||
+          line.unitPrice < 0 ||
+          line.discount > line.quantity * line.unitPrice,
+      )
+    ) {
+      return await rejectBeforeSubmission(
+        "توجد كمية أو قيمة خصم غير صالحة في بنود المستند",
+        400,
+      );
+    }
+    const calculated = lines.reduce(
+      (totals, line) => {
+        const net = line.quantity * line.unitPrice - line.discount;
+        const tax = (net * line.taxPercent) / 100;
+        return {
+          subtotal: totals.subtotal + net,
+          tax: totals.tax + tax,
+          total: totals.total + net + tax,
+        };
+      },
+      { subtotal: 0, tax: 0, total: 0 },
+    );
+    const storedSubtotal = Number(record.subtotal);
+    const storedTax = Number(noteId ? record.tax : record.total_tax);
+    const storedTotal = Number(
+      String(record.total ?? "0").replace(/[^0-9.-]/g, ""),
+    );
+    if (
+      !Number.isFinite(storedSubtotal) ||
+      !Number.isFinite(storedTax) ||
+      !Number.isFinite(storedTotal) ||
+      Math.abs(storedSubtotal - calculated.subtotal) > 0.01 ||
+      Math.abs(storedTax - calculated.tax) > 0.01 ||
+      Math.abs(storedTotal - calculated.total) > 0.01
+    ) {
+      return await rejectBeforeSubmission(
+        "إجماليات المستند لا تطابق مجموع البنود والضريبة",
+        422,
       );
     }
 

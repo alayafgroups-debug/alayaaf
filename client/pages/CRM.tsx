@@ -9,6 +9,7 @@ import { useI18n } from "@/i18n";
 
 type PartyRow = {
   id: string;
+  number: string;
   name: string;
   type: string;
   email: string;
@@ -19,6 +20,7 @@ type PartyRow = {
   country: string;
   taxRegistrationMode: "not_registered" | "registered_sa";
   taxNumber: string;
+  commercialRegistration: string;
   city: string;
   street: string;
   buildingNumber: string;
@@ -43,6 +45,7 @@ type PartyForm = {
   country: string;
   taxRegistrationMode: "not_registered" | "registered_sa";
   taxNumber: string;
+  commercialRegistration: string;
   city: string;
   street: string;
   buildingNumber: string;
@@ -64,6 +67,9 @@ const vendors: PartyRow[] = [];
 
 const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
   id: String(row.id ?? ""),
+  number: String(
+    row.customer_number ?? row.vendor_number ?? row.id ?? "",
+  ),
   name: String(row.name ?? ""),
   type: String(row.type ?? ""),
   email: String(row.email ?? ""),
@@ -77,6 +83,7 @@ const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
       ? "registered_sa"
       : "not_registered",
   taxNumber: String(row.tax_number ?? ""),
+  commercialRegistration: String(row.commercial_registration ?? ""),
   city: String(row.city ?? ""),
   street: String(row.street ?? ""),
   buildingNumber: String(row.building_number ?? ""),
@@ -117,6 +124,15 @@ const crmTranslations: Record<string, string> = {
   "تنبيهات": "alerts",
   "تنبيه": "Alert",
   "أدخل الاسم": "Enter a name",
+  "رقم ضريبي غير صالح": "Invalid VAT number",
+  "الرقم الضريبي السعودي يجب أن يبدأ بـ3 ويتكون من 15 رقمًا":
+    "The Saudi VAT number must start with 3 and contain 15 digits",
+  "سجل تجاري غير صالح": "Invalid commercial registration",
+  "السجل التجاري يجب أن يتكون من 10 إلى 15 رقمًا":
+    "The commercial registration must contain 10 to 15 digits",
+  "العنوان الوطني غير صالح": "Invalid national address",
+  "رقم المبنى 4 أرقام والرمز البريدي 5 أرقام":
+    "The building number must be 4 digits and the postal code 5 digits",
   "تم التحديث": "Updated",
   "تم تحديث بيانات المورد": "Vendor data updated",
   "تم تحديث بيانات العميل": "Customer data updated",
@@ -134,6 +150,9 @@ const crmTranslations: Record<string, string> = {
   "تم الحذف": "Deleted",
   "تم حذف المورد": "Vendor deleted",
   "تم حذف العميل": "Customer deleted",
+  "تم تعطيل العميل": "Customer deactivated",
+  "لا يمكن حذف عميل مرتبط بفواتير، لذلك تم تحويله إلى غير نشط":
+    "A customer linked to invoices cannot be deleted, so it was marked inactive",
   "فشل الحذف": "Delete failed",
   "تعذر حذف البيانات": "Unable to delete data",
   "تعديل بيانات المورد": "Edit vendor data",
@@ -152,6 +171,7 @@ const crmTranslations: Record<string, string> = {
   "جهة اتصال مسجلة في ضريبة القيمة المضافة في السعودية": "Contact registered for VAT in Saudi Arabia",
   "التسجيل في ضريبة القيمة المضافة *": "VAT registration *",
   "رقم التسجيل الضريبي": "Tax registration number",
+  "رقم السجل التجاري للعميل": "Customer commercial registration",
   "العنوان اختياري": "Address (optional)",
   "المدينة": "City",
   "الشارع": "Street",
@@ -236,6 +256,7 @@ const emptyForm = (isVendor: boolean): PartyForm => ({
   country: "",
   taxRegistrationMode: "not_registered",
   taxNumber: "",
+  commercialRegistration: "",
   city: "",
   street: "",
   buildingNumber: "",
@@ -391,7 +412,39 @@ export default function CRM() {
       toast({ title: t("تنبيه"), description: t("أدخل الاسم"), variant: "destructive" });
       return;
     }
-
+    if (
+      form.taxRegistrationMode === "registered_sa" &&
+      !/^3\d{14}$/.test(form.taxNumber.trim())
+    ) {
+      toast({
+        title: t("رقم ضريبي غير صالح"),
+        description: t("الرقم الضريبي السعودي يجب أن يبدأ بـ3 ويتكون من 15 رقمًا"),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      form.commercialRegistration.trim() &&
+      !/^\d{10,15}$/.test(form.commercialRegistration.trim())
+    ) {
+      toast({
+        title: t("سجل تجاري غير صالح"),
+        description: t("السجل التجاري يجب أن يتكون من 10 إلى 15 رقمًا"),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      (form.buildingNumber && !/^\d{4}$/.test(form.buildingNumber)) ||
+      (form.postalCode && !/^\d{5}$/.test(form.postalCode))
+    ) {
+      toast({
+        title: t("العنوان الوطني غير صالح"),
+        description: t("رقم المبنى 4 أرقام والرمز البريدي 5 أرقام"),
+        variant: "destructive",
+      });
+      return;
+    }
 
     const tableName = isVendors ? "vendors" : "customers";
     setSaving(true);
@@ -409,6 +462,7 @@ export default function CRM() {
         country: form.country,
         tax_registration_mode: form.taxRegistrationMode,
         tax_number: form.taxNumber.trim(),
+        commercial_registration: form.commercialRegistration.trim(),
         city: form.city.trim(),
         street: form.street.trim(),
         building_number: form.buildingNumber.trim(),
@@ -473,6 +527,7 @@ export default function CRM() {
         country: form.country,
         tax_registration_mode: form.taxRegistrationMode,
         tax_number: form.taxNumber.trim(),
+        commercial_registration: form.commercialRegistration.trim(),
         city: form.city.trim(),
         street: form.street.trim(),
         building_number: form.buildingNumber.trim(),
@@ -489,7 +544,9 @@ export default function CRM() {
       try {
         const res = await supabase
           .from(tableName)
-          .insert([payload]);
+          .insert([payload])
+          .select("*")
+          .single();
         result = { ...res, failed: false };
         if (res.error) result.error = res.error;
       } catch (e) {
@@ -497,7 +554,9 @@ export default function CRM() {
       }
 
       if (!result.error) {
-        const newRow = mapPartyRow(payload as unknown as Record<string, unknown>);
+        const newRow = mapPartyRow(
+          (result.data ?? payload) as unknown as Record<string, unknown>,
+        );
         if (isVendors) {
           setVendorRows((prev) => [newRow, ...prev]);
         } else {
@@ -543,6 +602,7 @@ export default function CRM() {
       country: row.country,
       taxRegistrationMode: row.taxRegistrationMode,
       taxNumber: row.taxNumber,
+      commercialRegistration: row.commercialRegistration,
       city: row.city,
       street: row.street,
       buildingNumber: row.buildingNumber,
@@ -564,6 +624,49 @@ export default function CRM() {
 
     const tableName = isVendors ? "vendors" : "customers";
     setDeleting(true);
+
+    if (!isVendors) {
+      const { count, error: invoiceLookupError } = await supabase
+        .from("sales_invoices")
+        .select("id", { count: "exact", head: true })
+        .eq("customer_id", id);
+      if (invoiceLookupError) {
+        toast({
+          title: t("فشل الحذف"),
+          description: invoiceLookupError.message,
+          variant: "destructive",
+        });
+        setDeleting(false);
+        return;
+      }
+      if ((count ?? 0) > 0) {
+        const { error: deactivateError } = await supabase
+          .from("customers")
+          .update({ status: "غير نشط" })
+          .eq("id", id);
+        if (!deactivateError) {
+          setCustomerRows((prev) =>
+            prev.map((row) =>
+              row.id === id ? { ...row, status: "غير نشط" } : row,
+            ),
+          );
+          toast({
+            title: t("تم تعطيل العميل"),
+            description: t(
+              "لا يمكن حذف عميل مرتبط بفواتير، لذلك تم تحويله إلى غير نشط",
+            ),
+          });
+        } else {
+          toast({
+            title: t("فشل الحذف"),
+            description: deactivateError.message,
+            variant: "destructive",
+          });
+        }
+        setDeleting(false);
+        return;
+      }
+    }
 
     let result: any = { error: null, failed: false };
     try {
@@ -701,6 +804,25 @@ export default function CRM() {
                   placeholder={t("اختياري")}
                 />
                 <label className="text-sm font-medium text-slate-700 text-end">{t("رقم التسجيل الضريبي")}</label>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                <input
+                  value={form.commercialRegistration ?? ""}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      commercialRegistration: e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 15),
+                    }))
+                  }
+                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  placeholder={t("اختياري")}
+                />
+                <label className="text-sm font-medium text-slate-700 text-end">
+                  {t("رقم السجل التجاري للعميل")}
+                </label>
               </div>
 
               <details open className="space-y-3">
@@ -976,7 +1098,7 @@ export default function CRM() {
                       className="border-b border-border hover:bg-muted/40"
                     >
                       <td className="px-4 py-3 font-medium text-primary">
-                        {customer.id}
+                        {customer.number}
                       </td>
                       <td className="px-4 py-3 text-foreground">
                         {customer.name}
@@ -1047,7 +1169,7 @@ export default function CRM() {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-muted-foreground">{t("الرقم")}</p>
-                  <p className="text-sm font-medium text-foreground">{viewModal.id}</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.number}</p>
                 </div>
 
                 <div>

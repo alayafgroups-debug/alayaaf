@@ -1457,7 +1457,7 @@ Deno.serve(async (req) => {
       const existingResults: any[] = Array.isArray(setup.compliance_results)
         ? setup.compliance_results
         : [];
-      const forceRetest = body.forceRetest === true;
+      const forceRetest = body.reuseResults !== true;
       const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
       const testCase = complianceCases[caseIndex];
       const { data: passedAuditRows } = await admin

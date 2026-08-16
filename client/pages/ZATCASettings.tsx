@@ -45,6 +45,7 @@ type SetupMetadata = {
   production_request_id?: string;
   production_csid_masked?: string;
   production_issued_at?: string;
+  certificate_expires_at?: string;
   production_status?: "not_requested" | "issued" | "failed";
   production_enabled?: boolean;
   compliance_results?: ComplianceResult[];
@@ -1308,21 +1309,34 @@ export default function ZATCASettings() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="font-bold text-indigo-950">
-                  {selectedMode === "production"
-                    ? "4. إصدار Production CSID الحقيقي"
-                    : "4. إصدار Production CSID للمحاكاة — اعتماد تجريبي فقط"}
+                  {setup.production_csid_masked
+                    ? selectedMode === "production"
+                      ? "4. تم إصدار Production CSID الحقيقي"
+                      : "4. تم إصدار اعتماد المحاكاة"
+                    : selectedMode === "production"
+                      ? "4. إصدار Production CSID الحقيقي"
+                      : "4. إصدار Production CSID للمحاكاة — اعتماد تجريبي فقط"}
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-indigo-800">
-                  {selectedMode === "production"
-                    ? "هذا طلب اعتماد إنتاج حقيقي بعد اجتياز اختبارات التوافق. إصداره وحده لا يفعّل إرسال الفواتير؛ يلزم التفعيل الصريح لاحقًا."
-                    : "هذا Production CSID داخل Simulation فقط، وليس Production CSID للإنتاج الحقيقي. يُستخدم لاختبارات Clearance وReporting التجريبية."}
+                  {setup.production_csid_masked
+                    ? "تم حفظ بيانات الاعتماد بأمان داخل Vault. لا تُرسل أي فاتورة حقيقية قبل التفعيل الصريح."
+                    : selectedMode === "production"
+                      ? "هذا طلب اعتماد إنتاج حقيقي بعد اجتياز اختبارات التوافق. إصداره وحده لا يفعّل إرسال الفواتير؛ يلزم التفعيل الصريح لاحقًا."
+                      : "هذا Production CSID داخل Simulation فقط، وليس Production CSID للإنتاج الحقيقي. يُستخدم لاختبارات Clearance وReporting التجريبية."}
                 </p>
                 {setup.production_csid_masked && (
-                  <span className="mt-3 inline-block rounded-lg bg-white px-3 py-2 text-xs font-bold text-indigo-900">
-                    {selectedMode === "production"
-                      ? "Production CSID الحقيقي موجود"
-                      : "اعتماد تشغيل المحاكاة التجريبي موجود"}
-                  </span>
+                  <div className="mt-3 grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-900 sm:grid-cols-2">
+                    <span dir="ltr">
+                      CSID: {setup.production_csid_masked}
+                    </span>
+                    <span>
+                      انتهاء الشهادة: {setup.certificate_expires_at
+                        ? new Date(setup.certificate_expires_at).toLocaleString(
+                            "ar-SA",
+                          )
+                        : "يحتاج مراجعة"}
+                    </span>
+                  </div>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">

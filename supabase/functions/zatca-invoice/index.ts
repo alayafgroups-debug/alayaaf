@@ -333,6 +333,16 @@ function getAcceptedInvoiceArtifacts(
   }
 }
 
+// The XML builder always emits <cac:PartyIdentification> with the default TIN
+// scheme, so simplified B2C invoices carry an empty BT-46 that ZATCA flags as
+// BR-KSA-F-07. Drop identification blocks that have no value.
+function removeEmptyPartyIdentification(xml: string) {
+  return xml.replace(
+    /[ \t]*<cac:PartyIdentification>\s*<cbc:ID schemeID="[^"]*">\s*<\/cbc:ID>\s*<\/cac:PartyIdentification>\r?\n?/g,
+    "",
+  );
+}
+
 function buildSignedInvoice(input: {
   setup: any;
   invoice: any;
@@ -449,7 +459,9 @@ function buildSignedInvoice(input: {
   }
   document.calculateTotals();
 
-  const unsignedXml = new ZatcaInvoice().generateXml(document, uuid);
+  const unsignedXml = removeEmptyPartyIdentification(
+    new ZatcaInvoice().generateXml(document, uuid),
+  );
   const certificate = createCompatibleCertificate(
     toCertificatePem(credentials.csid),
     String(setup.private_key_pem),

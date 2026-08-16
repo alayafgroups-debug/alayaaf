@@ -484,7 +484,10 @@ export default function ZATCASettings() {
       return;
     setAction("activate");
     try {
-      const data = await invoke({ action: "activate_production" });
+      const data = await invoke({
+        action: "activate_production",
+        confirmation: activationPhrase,
+      });
       setActivationPhrase("");
       toast({
         title: "تم تفعيل الإنتاج الحقيقي",

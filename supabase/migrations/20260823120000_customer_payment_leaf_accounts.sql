@@ -105,8 +105,15 @@ begin
     or exists (
       select 1
       from public.employees employee
+      left join public.user_roles role
+        on role.name_ar = employee.employee_role
+       and role.status = 'فعال'
       where lower(employee.email) = lower(coalesce(auth.jwt()->>'email', ''))
-        and employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+        and (
+          employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+          or coalesce(role.permissions->>'sales.receipts', '') in ('true', 'manage')
+          or coalesce(role.permissions->>'module.sales', '') in ('true', 'manage')
+        )
     )
   ) then
     raise exception 'FORBIDDEN_CUSTOMER_PAYMENT';

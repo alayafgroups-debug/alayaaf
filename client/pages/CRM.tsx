@@ -16,6 +16,19 @@ type PartyRow = {
   openingBalance: string;
   creditLimit: string;
   status: string;
+  country: string;
+  taxRegistrationMode: "not_registered" | "registered_sa";
+  taxNumber: string;
+  city: string;
+  street: string;
+  buildingNumber: string;
+  district: string;
+  postalCode: string;
+  invoiceRef: string;
+  currency: string;
+  paymentTerms: string;
+  businessType: string;
+  licenseNumber: string;
 };
 
 type PartyForm = {
@@ -58,6 +71,22 @@ const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
   openingBalance: String(row.opening_balance ?? row.openingBalance ?? "0.00"),
   creditLimit: String(row.credit_limit ?? row.creditLimit ?? "0.00"),
   status: String(row.status ?? "نشط"),
+  country: String(row.country ?? ""),
+  taxRegistrationMode:
+    row.tax_registration_mode === "registered_sa"
+      ? "registered_sa"
+      : "not_registered",
+  taxNumber: String(row.tax_number ?? ""),
+  city: String(row.city ?? ""),
+  street: String(row.street ?? ""),
+  buildingNumber: String(row.building_number ?? ""),
+  district: String(row.district ?? ""),
+  postalCode: String(row.postal_code ?? ""),
+  invoiceRef: String(row.invoice_ref ?? ""),
+  currency: String(row.currency ?? "SAR"),
+  paymentTerms: String(row.payment_terms ?? ""),
+  businessType: String(row.business_type ?? ""),
+  licenseNumber: String(row.license_number ?? ""),
 });
 
 const crmTranslations: Record<string, string> = {
@@ -234,6 +263,12 @@ export default function CRM() {
   const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState<PartyForm>(emptyForm(false));
   const [viewModal, setViewModal] = useState<ViewModalData>(null);
+  const [reportSummary, setReportSummary] = useState({
+    totalReceivables: 0,
+    recentPayments: 0,
+    overdueReceivables: 0,
+    alerts: 0,
+  });
 
   useEffect(() => {
     const loadTable = async (
@@ -266,7 +301,52 @@ export default function CRM() {
     if (!isReports) {
       setForm(emptyForm(isVendors));
       setIsFormOpen(false);
+      return;
     }
+
+    const loadReportSummary = async () => {
+      const { data, error } = await supabase
+        .from("sales_invoices")
+        .select("total, paid, remaining, due_date");
+      if (error) {
+        setReportSummary({
+          totalReceivables: 0,
+          recentPayments: 0,
+          overdueReceivables: 0,
+          alerts: 0,
+        });
+        return;
+      }
+
+      const amount = (value: unknown) =>
+        Number(String(value ?? "0").replace(/[^0-9.-]/g, "")) || 0;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const invoices = data ?? [];
+      const overdue = invoices.filter((invoice) => {
+        const remaining = amount(invoice.remaining);
+        const dueAt = Date.parse(String(invoice.due_date ?? ""));
+        return remaining > 0 && Number.isFinite(dueAt) && dueAt < today.getTime();
+      });
+
+      setReportSummary({
+        totalReceivables: invoices.reduce(
+          (sum, invoice) => sum + amount(invoice.remaining),
+          0,
+        ),
+        recentPayments: invoices.reduce(
+          (sum, invoice) => sum + amount(invoice.paid),
+          0,
+        ),
+        overdueReceivables: overdue.reduce(
+          (sum, invoice) => sum + amount(invoice.remaining),
+          0,
+        ),
+        alerts: overdue.length,
+      });
+    };
+
+    void loadReportSummary();
   }, [isVendors, isReports]);
 
   const title = t(isReports ? "التقارير" : isVendors ? "الموردين" : "العملاء");
@@ -326,6 +406,19 @@ export default function CRM() {
         opening_balance: form.openingBalance || "0",
         credit_limit: form.creditLimit || "0",
         status: form.status,
+        country: form.country,
+        tax_registration_mode: form.taxRegistrationMode,
+        tax_number: form.taxNumber.trim(),
+        city: form.city.trim(),
+        street: form.street.trim(),
+        building_number: form.buildingNumber.trim(),
+        district: form.district.trim(),
+        postal_code: form.postalCode.trim(),
+        invoice_ref: form.invoiceRef.trim(),
+        currency: form.currency,
+        payment_terms: form.paymentTerms,
+        business_type: form.businessType.trim(),
+        license_number: form.licenseNumber.trim(),
       };
 
       let result: any = { error: null, failed: false };
@@ -377,6 +470,19 @@ export default function CRM() {
         opening_balance: form.openingBalance || "0",
         credit_limit: form.creditLimit || "0",
         status: form.status,
+        country: form.country,
+        tax_registration_mode: form.taxRegistrationMode,
+        tax_number: form.taxNumber.trim(),
+        city: form.city.trim(),
+        street: form.street.trim(),
+        building_number: form.buildingNumber.trim(),
+        district: form.district.trim(),
+        postal_code: form.postalCode.trim(),
+        invoice_ref: form.invoiceRef.trim(),
+        currency: form.currency,
+        payment_terms: form.paymentTerms,
+        business_type: form.businessType.trim(),
+        license_number: form.licenseNumber.trim(),
       };
 
       let result: any = { error: null, failed: false };
@@ -434,6 +540,19 @@ export default function CRM() {
       openingBalance: row.openingBalance,
       creditLimit: row.creditLimit,
       status: row.status,
+      country: row.country,
+      taxRegistrationMode: row.taxRegistrationMode,
+      taxNumber: row.taxNumber,
+      city: row.city,
+      street: row.street,
+      buildingNumber: row.buildingNumber,
+      district: row.district,
+      postalCode: row.postalCode,
+      invoiceRef: row.invoiceRef,
+      currency: row.currency,
+      paymentTerms: row.paymentTerms,
+      businessType: row.businessType,
+      licenseNumber: row.licenseNumber,
     });
     setIsFormOpen(true);
   };
@@ -777,19 +896,19 @@ export default function CRM() {
               <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">{t("إجمالي المديونية")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount("120000")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.totalReceivables))}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">{t("المدفوعات الأخيرة")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount("48000")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.recentPayments))}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">{t("المستحقات المتأخرة")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount("18500")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.overdueReceivables))}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">{t("تنبيهات المتابعة")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">5 {t("تنبيهات")}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{formatNumber(reportSummary.alerts)} {t("تنبيهات")}</p>
                 </div>
               </div>
             </div>

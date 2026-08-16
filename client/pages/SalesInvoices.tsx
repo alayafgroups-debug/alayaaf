@@ -235,6 +235,13 @@ type RevenueAccount = {
   nameAr: string;
 };
 
+type CustomerOption = {
+  id: string;
+  name: string;
+  vatNumber: string;
+  address: string;
+};
+
 const parseCurrency = (value: string) =>
   Number(value.replace(/[^0-9.]/g, "")) || 0;
 
@@ -1960,6 +1967,7 @@ function InvoiceForm({
     },
   ]);
   const [revenueAccounts, setRevenueAccounts] = useState<RevenueAccount[]>([]);
+  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -1975,7 +1983,6 @@ function InvoiceForm({
   const [buyerVat, setBuyerVat] = useState("");
   const [saveIntent, setSaveIntent] = useState<"save" | "print" | null>(null);
   const saveInFlight = useRef(false);
-  const customerOptions = ["فندي بن سالم", "فندي كوزوبد", "شركة لاكجري العياف"];
 
   useEffect(() => {
     const loadDefaults = async () => {
@@ -1985,6 +1992,37 @@ function InvoiceForm({
 
       setInvoiceDate(today.toISOString().split("T")[0]);
       setDueDate(due.toISOString().split("T")[0]);
+
+      const { data: customerRows, error: customerError } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("status", "نشط")
+        .order("name");
+      if (!customerError) {
+        setCustomerOptions(
+          (customerRows ?? [])
+            .map((row: Record<string, unknown>) => ({
+              id: String(row.id ?? ""),
+              name: String(row.name ?? "").trim(),
+              vatNumber: String(
+                row.tax_number ?? row.vat_number ?? "",
+              ).trim(),
+              address: String(
+                row.address ??
+                  [
+                    row.building_number,
+                    row.street,
+                    row.district,
+                    row.city,
+                    row.postal_code,
+                  ]
+                    .filter(Boolean)
+                    .join("، "),
+              ).trim(),
+            }))
+            .filter((row) => row.id && row.name),
+        );
+      }
 
       const { data: accountRows } = await supabase
         .from("accounting_accounts")
@@ -2351,14 +2389,24 @@ function InvoiceForm({
                     {t("العميل")}
                   </label>
                   <select
-                    value={customer}
-                    onChange={(event) => setCustomer(event.target.value)}
+                    value={
+                      customerOptions.find((option) => option.name === customer)
+                        ?.id ?? ""
+                    }
+                    onChange={(event) => {
+                      const selected = customerOptions.find(
+                        (option) => option.id === event.target.value,
+                      );
+                      setCustomer(selected?.name ?? "");
+                      setBuyerVat(selected?.vatNumber ?? "");
+                      setCustomerAddress(selected?.address ?? "");
+                    }}
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   >
                     <option value="">{t("اختر العميل")}</option>
                     {customerOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {t(option)}
+                      <option key={option.id} value={option.id}>
+                        {option.name}
                       </option>
                     ))}
                   </select>

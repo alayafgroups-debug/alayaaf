@@ -33,6 +33,18 @@ set company_name = excluded.company_name,
     is_system = excluded.is_system,
     updated_at = now();
 
+do $$
+begin
+  if to_regclass('public.cost_centers') is not null then
+    execute $migration$
+      update public.cost_centers
+      set company_name = 'شركة إدارة العياف للمقاولات'
+      where company_name = 'شركة العياف التجارية'
+    $migration$;
+  end if;
+end;
+$$;
+
 alter table public.customer_payments
   add column if not exists deposit_account_code text;
 
@@ -67,10 +79,39 @@ declare
   v_payment_number text;
   v_payment_method text := nullif(btrim(p_payment_method), '');
   v_deposit_account_code text;
+  v_receivable_account_code text;
 begin
   if auth.uid() is null then
     raise exception 'UNAUTHORIZED';
   end if;
+
+  if not (
+    exists (
+      select 1
+      from public.employee_emails credential
+      join public.employees employee
+        on employee.id = credential.employee_id
+      left join public.user_roles role
+        on role.name_ar = employee.employee_role
+       and role.status = 'فعال'
+      where credential.auth_user_id = auth.uid()
+        and credential.status = 'active'
+        and (
+          employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+          or coalesce(role.permissions->>'sales.receipts', '') in ('true', 'manage')
+          or coalesce(role.permissions->>'module.sales', '') in ('true', 'manage')
+        )
+    )
+    or exists (
+      select 1
+      from public.employees employee
+      where lower(employee.email) = lower(coalesce(auth.jwt()->>'email', ''))
+        and employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+    )
+  ) then
+    raise exception 'FORBIDDEN_CUSTOMER_PAYMENT';
+  end if;
+
   if p_amount is null or p_amount <= 0 then
     raise exception 'PAYMENT_AMOUNT_MUST_BE_POSITIVE';
   end if;
@@ -87,10 +128,6 @@ begin
     else '1113'
   end;
 
-  -- Confirm that both sides are leaf accounts before creating any journal row.
-  perform public.account_name_for_posting(v_deposit_account_code);
-  perform public.account_name_for_posting('112');
-
   select * into v_invoice
   from public.sales_invoices
   where id = p_invoice_id
@@ -98,6 +135,35 @@ begin
   if not found then
     raise exception 'SALES_INVOICE_NOT_FOUND';
   end if;
+  if v_invoice.accounting_status <> 'posted'
+     or v_invoice.accounting_journal_entry_id is null then
+    raise exception 'SALES_INVOICE_MUST_BE_POSTED_BEFORE_PAYMENT';
+  end if;
+  if not exists (
+    select 1
+    from public.accounting_journal_entries entry
+    where entry.id = v_invoice.accounting_journal_entry_id
+      and entry.status = 'posted'
+      and entry.reference_type = 'sales_invoice'
+      and entry.source_document_table = 'sales_invoices'
+      and entry.source_document_id = p_invoice_id
+  ) then
+    raise exception 'SALES_INVOICE_POSTING_ENTRY_NOT_FOUND';
+  end if;
+
+  select line.account_code into v_receivable_account_code
+  from public.accounting_journal_lines line
+  where line.journal_entry_id = v_invoice.accounting_journal_entry_id
+    and line.debit > 0
+  order by line.debit desc, line.created_at
+  limit 1;
+  if v_receivable_account_code is null then
+    raise exception 'SALES_INVOICE_RECEIVABLE_ACCOUNT_NOT_FOUND';
+  end if;
+
+  -- Confirm that both sides are leaf accounts before creating any journal row.
+  perform public.account_name_for_posting(v_deposit_account_code);
+  perform public.account_name_for_posting(v_receivable_account_code);
 
   v_total := coalesce(
     v_invoice.adjusted_total,
@@ -138,7 +204,8 @@ begin
       p_amount, 0, v_invoice.customer
     ),
     (
-      v_entry_id, '112', public.account_name_for_posting('112'),
+      v_entry_id, v_receivable_account_code,
+      public.account_name_for_posting(v_receivable_account_code),
       0, p_amount, v_invoice.customer
     );
 

@@ -5,12 +5,14 @@ type ZatcaQrCodeProps = {
   value?: string | null;
   size?: number;
   className?: string;
+  status?: string | null;
 };
 
 export default function ZatcaQrCode({
   value,
   size = 112,
   className = "",
+  status,
 }: ZatcaQrCodeProps) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
@@ -45,7 +47,13 @@ export default function ZatcaQrCode({
         className={`grid place-items-center border border-slate-200 bg-slate-50 text-center text-[10px] text-slate-500 ${className}`}
         style={{ width: size, height: size }}
       >
-        {value ? "جارٍ إنشاء QR" : "QR بعد اعتماد الفاتورة"}
+        {value
+          ? "جارٍ إنشاء QR"
+          : status === "ambiguous"
+            ? "يتطلب مراجعة — لا تعد الإرسال"
+            : status === "rejected"
+              ? "لم يتم إنشاء QR"
+              : "QR بعد اعتماد الفاتورة"}
       </div>
     );
   }

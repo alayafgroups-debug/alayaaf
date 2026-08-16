@@ -954,6 +954,15 @@ Deno.serve(async (req) => {
         logError = error;
       }
 
+      const { error: invoiceStatusError } = await admin
+        .from(table)
+        .update({
+          zatca_status: "ambiguous",
+          zatca_response: values.response ?? {},
+          zatca_submitted_at: new Date().toISOString(),
+        })
+        .eq("id", recordId);
+
       const { error: blockError } = await admin.rpc("block_zatca_sequence", {
         p_onboarding_id: setup.id,
         p_reservation_token: reservationToken,
@@ -961,6 +970,7 @@ Deno.serve(async (req) => {
       });
       if (blockError) throw blockError;
       if (logError) throw logError;
+      if (invoiceStatusError) throw invoiceStatusError;
     };
     try {
       const uuid = clean(record.uuid) || crypto.randomUUID();

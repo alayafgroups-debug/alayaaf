@@ -45,6 +45,7 @@ const zatcaStatusLabels: Record<string, string> = {
   cleared: "مصادق من ZATCA",
   reported: "مُبلّغ لـ ZATCA",
   rejected: "مرفوض من ZATCA",
+  ambiguous: "يتطلب مراجعة — لا تعد الإرسال",
 };
 
 const accountingStatusLabels: Record<string, string> = {
@@ -907,7 +908,9 @@ function InvoicesList({
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : invoice.zatcaStatus === "rejected"
                       ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-slate-50 text-slate-600 border-slate-200",
+                      : invoice.zatcaStatus === "ambiguous"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-slate-50 text-slate-600 border-slate-200",
                 )}
               >
                 {t(
@@ -1127,7 +1130,19 @@ function InvoiceDetails({
                       "",
                   )}
                 </span>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                <span
+                  className={cn(
+                    "rounded-full px-3 py-1",
+                    invoice.zatcaStatus === "cleared" ||
+                      invoice.zatcaStatus === "reported"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : invoice.zatcaStatus === "rejected"
+                        ? "bg-rose-50 text-rose-700"
+                        : invoice.zatcaStatus === "ambiguous"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-slate-100 text-slate-700",
+                  )}
+                >
                   ZATCA:{" "}
                   {t(
                     zatcaStatusLabels[invoice.zatcaStatus ?? "pending"] ??
@@ -1279,6 +1294,7 @@ function InvoiceDetails({
                 <div className="flex items-center gap-4">
                   <ZatcaQrCode
                     value={invoice.qrCodeData}
+                    status={invoice.zatcaStatus}
                     size={112}
                     className="rounded"
                   />

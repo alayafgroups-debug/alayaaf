@@ -3,8 +3,9 @@ import { Building2, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
-const COMPANY_NAME = "شركة العياف التجارية";
+const COMPANY_NAME = COMPANY_PROFILE.companyNameAr;
 
 type AccountOption = {
   code: string;

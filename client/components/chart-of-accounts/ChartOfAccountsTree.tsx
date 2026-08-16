@@ -7,8 +7,9 @@ import AccountEditPanel from "./AccountEditPanel";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
-const COMPANY_NAME = "شركة العياف التجارية";
+const COMPANY_NAME = COMPANY_PROFILE.companyNameAr;
 
 const getAccountDisplayName = (account: AccountNode, locale: "ar" | "en") =>
   locale === "en" ? account.nameEn || account.nameAr : account.nameAr;

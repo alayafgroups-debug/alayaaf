@@ -13,18 +13,23 @@ import {
   ZatcaInvoice,
 } from "npm:@khaledhajsalem/zatca-node@1.0.4";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+type ZatcaMode = "simulation" | "production";
+
+const getCorsHeaders = () => ({
+  "Access-Control-Allow-Origin": clean(Deno.env.get("APP_ORIGIN")) || "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
-};
-const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+});
 const SIMULATION_URL = "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation";
+const PRODUCTION_URL = "https://gw-fatoora.zatca.gov.sa/e-invoicing/core";
 const ZATCA_INITIAL_PIH =
   "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==";
 
 const respond = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
+  });
 
 const clean = (value: unknown) => String(value ?? "").trim();
 const cleanToken = (value: unknown) => String(value ?? "").replace(/\s+/g, "");
@@ -45,14 +50,100 @@ const canManageSettings = (
   permissions["module.settings"] === true ||
   permissions["module.settings"] === "manage";
 
-const publicFields = `id, mode, company_name_ar, company_name_en, vat_number, commercial_registration,
-  branch_name, branch_location, industry, device_manufacturer, device_model, device_serial,
-  common_name, invoice_type, status, compliance_request_id, compliance_csid_masked,
-  compliance_issued_at, compliance_results, production_request_id,
-  production_csid_masked, production_issued_at, production_status, last_error,
-  created_at, updated_at`;
+const publicFields = `id, mode, organization_key, branch_key, company_name_ar, company_name_en,
+  vat_number, vat_effective_date, commercial_registration, branch_name, branch_location,
+  building_number, street_name, district, city, postal_code, additional_number, short_address,
+  industry, device_manufacturer, device_model, device_serial, common_name, invoice_type, status,
+  compliance_request_id, compliance_csid_masked, compliance_issued_at, compliance_results,
+  production_request_id, production_csid_masked, production_issued_at, production_status,
+  production_enabled, production_confirmed_at, certificate_expires_at, certificate_revoked_at,
+  last_error, created_at, updated_at`;
 
-function generateCsr(input: Record<string, string>) {
+function parseMode(value: unknown): ZatcaMode {
+  const mode = clean(value) || "simulation";
+  if (mode !== "simulation" && mode !== "production") {
+    throw new Error("وضع ZATCA غير صالح");
+  }
+  return mode;
+}
+
+function validateKey(value: unknown, fallback: string, label: string) {
+  const key = clean(value) || fallback;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(key)) {
+    throw new Error(`${label} غير صالح`);
+  }
+  return key;
+}
+
+function validateDeviceSerial(value: unknown, required = true) {
+  const serial = clean(value);
+  if (!serial && !required) return "";
+  if (!/^[A-Za-z0-9._\-\/]+$/.test(serial)) {
+    throw new Error("الرقم التسلسلي للجهاز يحتوي على رموز غير صالحة");
+  }
+  return serial;
+}
+
+function validateStructuredAddress(body: any, required: boolean) {
+  const address = {
+    buildingNumber: clean(body.buildingNumber),
+    streetName: clean(body.streetName),
+    district: clean(body.district),
+    city: clean(body.city),
+    postalCode: clean(body.postalCode),
+    additionalNumber: clean(body.additionalNumber),
+    shortAddress: clean(body.shortAddress),
+  };
+  const supplied = Object.values(address).some(Boolean);
+  if (!supplied && !required) return null;
+  if (!/^\d{4}$/.test(address.buildingNumber))
+    throw new Error("رقم المبنى يجب أن يتكون من 4 أرقام");
+  if (!/^\d{5}$/.test(address.postalCode))
+    throw new Error("الرمز البريدي يجب أن يتكون من 5 أرقام");
+  if (!/^\d{4}$/.test(address.additionalNumber))
+    throw new Error("الرقم الإضافي يجب أن يتكون من 4 أرقام");
+  if (
+    !address.streetName ||
+    !address.district ||
+    !address.city ||
+    !address.shortAddress
+  ) {
+    throw new Error("أكمل جميع حقول العنوان الوطني المنظمة");
+  }
+  return address;
+}
+
+function constructBranchLocation(
+  address: NonNullable<ReturnType<typeof validateStructuredAddress>>,
+) {
+  return `${address.buildingNumber} ${address.streetName}، ${address.district}، ${address.city}، ${address.postalCode}، ${address.additionalNumber}، ${address.shortAddress}`;
+}
+
+function sanitizeAuditDetails(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeAuditDetails);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(
+        ([key]) =>
+          !/secret|private.?key|binarysecuritytoken|(^|_)csid$/i.test(key),
+      )
+      .map(([key, nested]) => [key, sanitizeAuditDetails(nested)]),
+  );
+}
+
+function generateCsr(input: {
+  commonName: string;
+  branchName: string;
+  companyNameAr: string;
+  deviceManufacturer: string;
+  deviceModel: string;
+  deviceSerial: string;
+  branchLocation: string;
+  industry: string;
+  vatNumber: string;
+  invoiceType: string;
+}) {
   const keypair = KEYUTIL.generateKeypair("EC", "secp256k1");
   const privateKeyPem = KEYUTIL.getPEM(keypair.prvKeyObj, "PKCS8PRV");
   const publicKeyPem = KEYUTIL.getPEM(keypair.pubKeyObj);
@@ -96,18 +187,32 @@ function generateCsr(input: Record<string, string>) {
   };
 }
 
-function validateIdentity(body: any) {
+function validateIdentity(body: any, mode: ZatcaMode) {
+  const structuredAddress = validateStructuredAddress(
+    body,
+    mode === "production",
+  );
   const identity = {
+    organizationKey: validateKey(
+      body.organizationKey,
+      "alayaaf",
+      "مفتاح المنشأة",
+    ),
+    branchKey: validateKey(body.branchKey, "main", "مفتاح الفرع"),
     companyNameAr: clean(body.companyNameAr),
     companyNameEn: clean(body.companyNameEn),
     vatNumber: clean(body.vatNumber),
+    vatEffectiveDate: clean(body.vatEffectiveDate),
     commercialRegistration: clean(body.commercialRegistration),
     branchName: clean(body.branchName),
-    branchLocation: clean(body.branchLocation),
+    branchLocation: structuredAddress
+      ? constructBranchLocation(structuredAddress)
+      : clean(body.branchLocation),
+    structuredAddress,
     industry: clean(body.industry),
     deviceManufacturer: clean(body.deviceManufacturer),
     deviceModel: clean(body.deviceModel),
-    deviceSerial: clean(body.deviceSerial),
+    deviceSerial: validateDeviceSerial(body.deviceSerial),
     commonName: clean(body.commonName),
     invoiceType: clean(body.invoiceType || "1100"),
   };
@@ -117,6 +222,14 @@ function validateIdentity(body: any) {
     throw new Error("رقم السجل التجاري يجب أن يتكون من 10 إلى 15 رقماً");
   if (!["1000", "0100", "1100"].includes(identity.invoiceType))
     throw new Error("نوع الفواتير غير صالح");
+  if (
+    identity.vatEffectiveDate &&
+    !/^\d{4}-\d{2}-\d{2}$/.test(identity.vatEffectiveDate)
+  ) {
+    throw new Error(
+      "تاريخ سريان ضريبة القيمة المضافة يجب أن يكون بصيغة YYYY-MM-DD",
+    );
+  }
   const required = [
     "companyNameAr",
     "branchName",
@@ -130,8 +243,6 @@ function validateIdentity(body: any) {
   const missing = required.filter((key) => identity[key].length < 2);
   if (missing.length)
     throw new Error("أكمل جميع بيانات المنشأة والجهاز المطلوبة");
-  if (!/^[A-Za-z0-9._\-\/]+$/.test(identity.deviceSerial))
-    throw new Error("الرقم التسلسلي للجهاز يحتوي على رموز غير صالحة");
   parseRegisteredAddress(identity.branchLocation);
   return identity;
 }
@@ -217,9 +328,10 @@ function parseRegisteredAddress(location: string) {
     .split(/[،,]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  const cityName = parts.find((part) =>
-    /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
-  );
+  const cityName =
+    parts.find((part) =>
+      /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
+    ) ?? (parts.length >= 3 && !/^\d+$/.test(parts[2]) ? parts[2] : "");
   if (!cityName) {
     throw new Error("عنوان الفرع يجب أن يتضمن اسم المدينة المسجلة");
   }
@@ -347,7 +459,7 @@ function buildComplianceDocument(
   const now = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
   const issueDate = now.slice(0, 10);
   const issueTime = now.slice(11, 19);
-  const invoiceNumber = `SIM-${String(caseIndex + 1).padStart(2, "0")}-${Date.now()}`;
+  const invoiceNumber = `${setup.mode === "production" ? "PROD" : "SIM"}-${String(caseIndex + 1).padStart(2, "0")}-${Date.now()}`;
   const invoice = new InvoiceData()
     .setInvoiceNumber(invoiceNumber)
     .setIssueDate(issueDate)
@@ -464,7 +576,7 @@ function getValidationSummary(responseData: any) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders() });
   if (req.method !== "POST")
     return respond({ error: "Method not allowed" }, 405);
 
@@ -506,27 +618,59 @@ Deno.serve(async (req) => {
   if (!canManageSettings(callerEmployee.employee_role, permissions))
     return respond({ error: "غير مصرح بإدارة إعدادات ZATCA" }, 403);
 
-  const { data: existingSetup, error: ownerError } = await admin
-    .from("zatca_onboarding_settings")
-    .select("id, created_by, status, compliance_issued_at")
-    .eq("mode", "simulation")
-    .maybeSingle();
-  if (ownerError) throw ownerError;
-  if (existingSetup && existingSetup.created_by !== user.id) {
-    return respond({ error: "هذه التهيئة مرتبطة بحساب إداري آخر" }, 403);
-  }
-
   let body: any = {};
   try {
     body = await req.json();
     const action = clean(body.action);
+    const mode = parseMode(body.mode);
+    const baseUrl = mode === "production" ? PRODUCTION_URL : SIMULATION_URL;
+    const organizationKey = validateKey(
+      body.organizationKey,
+      "alayaaf",
+      "مفتاح المنشأة",
+    );
+    const branchKey = validateKey(body.branchKey, "main", "مفتاح الفرع");
+    const requestedDeviceSerial = validateDeviceSerial(
+      body.deviceSerial,
+      false,
+    );
+    if (
+      mode === "production" &&
+      action !== "prepare" &&
+      !requestedDeviceSerial
+    ) {
+      return respond(
+        { error: "يجب تحديد الرقم التسلسلي لجهاز بيئة الإنتاج" },
+        400,
+      );
+    }
+
+    let setupQuery = admin
+      .from("zatca_onboarding_settings")
+      .select("id, created_by, status, compliance_issued_at, device_serial")
+      .eq("mode", mode)
+      .eq("organization_key", organizationKey)
+      .eq("branch_key", branchKey);
+    if (requestedDeviceSerial) {
+      setupQuery = setupQuery.eq("device_serial", requestedDeviceSerial);
+    }
+    const { data: matchingSetups, error: ownerError } = await setupQuery
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    if (ownerError) throw ownerError;
+    const existingSetup = matchingSetups?.[0] ?? null;
+    if (existingSetup && existingSetup.created_by !== user.id) {
+      return respond({ error: "هذه التهيئة مرتبطة بحساب إداري آخر" }, 403);
+    }
 
     if (action === "status") {
-      const { data, error } = await admin
-        .from("zatca_onboarding_settings")
-        .select(publicFields)
-        .eq("mode", "simulation")
-        .maybeSingle();
+      const { data, error } = existingSetup
+        ? await admin
+            .from("zatca_onboarding_settings")
+            .select(publicFields)
+            .eq("id", existingSetup.id)
+            .maybeSingle()
+        : { data: null, error: null };
       if (error) throw error;
       const { data: audit } = data
         ? await admin
@@ -536,12 +680,18 @@ Deno.serve(async (req) => {
             .order("created_at", { ascending: false })
             .limit(20)
         : { data: [] };
-      return respond({ setup: data, audit: audit ?? [] });
+      return respond({
+        setup: data,
+        audit: (audit ?? []).map((entry: any) => ({
+          ...entry,
+          details: sanitizeAuditDetails(entry.details),
+        })),
+      });
     }
 
-    if (action === "reset_onboarding") {
+    if (action === "reset_onboarding" || action === "reset") {
       if (!existingSetup) {
-        return respond({ message: "لا توجد تهيئة تجريبية لإعادة تشغيلها" });
+        return respond({ message: "لا توجد تهيئة لإعادة تشغيلها" });
       }
       const { error } = await admin
         .from("zatca_onboarding_settings")
@@ -551,7 +701,7 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return respond({
         message:
-          "تم حذف اعتماد المحاكاة السابق. جهّز الجهاز من جديد باستخدام OTP جديد.",
+          "تم حذف اعتماد ZATCA السابق. جهّز الجهاز من جديد باستخدام OTP جديد.",
       });
     }
 
@@ -573,17 +723,27 @@ Deno.serve(async (req) => {
           409,
         );
       }
-      const identity = validateIdentity(body);
+      const identity = validateIdentity(body, mode);
       const csr = generateCsr(identity);
       const payload = {
-        mode: "simulation",
+        mode,
+        organization_key: identity.organizationKey,
+        branch_key: identity.branchKey,
         created_by: user.id,
         company_name_ar: identity.companyNameAr,
         company_name_en: identity.companyNameEn || null,
         vat_number: identity.vatNumber,
+        vat_effective_date: identity.vatEffectiveDate || null,
         commercial_registration: identity.commercialRegistration,
         branch_name: identity.branchName,
         branch_location: identity.branchLocation,
+        building_number: identity.structuredAddress?.buildingNumber ?? null,
+        street_name: identity.structuredAddress?.streetName ?? null,
+        district: identity.structuredAddress?.district ?? null,
+        city: identity.structuredAddress?.city ?? null,
+        postal_code: identity.structuredAddress?.postalCode ?? null,
+        additional_number: identity.structuredAddress?.additionalNumber ?? null,
+        short_address: identity.structuredAddress?.shortAddress ?? null,
         industry: identity.industry,
         device_manufacturer: identity.deviceManufacturer,
         device_model: identity.deviceModel,
@@ -600,6 +760,15 @@ Deno.serve(async (req) => {
         compliance_csid_masked: null,
         compliance_issued_at: null,
         compliance_results: [],
+        production_request_id: null,
+        production_csid: null,
+        production_secret: null,
+        production_csid_masked: null,
+        production_issued_at: null,
+        production_status: "not_requested",
+        production_enabled: false,
+        production_confirmed_by: null,
+        production_confirmed_at: null,
         last_error: null,
         updated_at: new Date().toISOString(),
       };
@@ -617,7 +786,7 @@ Deno.serve(async (req) => {
         actor_id: user.id,
         action: "csr_generated",
         result: "success",
-        details: { mode: "simulation" },
+        details: { mode, deviceSerial: identity.deviceSerial },
       });
       return respond({
         setup: { id: data.id, status: "csr_generated" },
@@ -625,16 +794,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (action === "update_branch_location") {
+    if (action === "update_branch_location" || action === "update_address") {
       if (!existingSetup?.compliance_issued_at) {
         return respond({ error: "يجب تجهيز الجهاز أولاً" }, 400);
       }
-      const branchLocation = clean(body.branchLocation);
+      const structuredAddress = validateStructuredAddress(
+        body,
+        mode === "production",
+      );
+      const branchLocation = structuredAddress
+        ? constructBranchLocation(structuredAddress)
+        : clean(body.branchLocation);
       parseRegisteredAddress(branchLocation);
       const { error } = await admin
         .from("zatca_onboarding_settings")
         .update({
           branch_location: branchLocation,
+          ...(structuredAddress
+            ? {
+                building_number: structuredAddress.buildingNumber,
+                street_name: structuredAddress.streetName,
+                district: structuredAddress.district,
+                city: structuredAddress.city,
+                postal_code: structuredAddress.postalCode,
+                additional_number: structuredAddress.additionalNumber,
+                short_address: structuredAddress.shortAddress,
+              }
+            : {}),
           last_error: null,
           updated_at: new Date().toISOString(),
         })
@@ -646,7 +832,7 @@ Deno.serve(async (req) => {
         actor_id: user.id,
         action: "branch_location_updated",
         result: "success",
-        details: { mode: "simulation" },
+        details: { mode, deviceSerial: existingSetup.device_serial },
       });
       return respond({ message: "تم حفظ عنوان الفواتير المسجل" });
     }
@@ -655,11 +841,13 @@ Deno.serve(async (req) => {
       const otp = clean(body.otp);
       if (!/^\d{6}$/.test(otp))
         return respond({ error: "رمز OTP يجب أن يتكون من 6 أرقام" }, 400);
-      const { data: setup, error: setupError } = await admin
-        .from("zatca_onboarding_settings")
-        .select("*")
-        .eq("mode", "simulation")
-        .maybeSingle();
+      const { data: setup, error: setupError } = existingSetup
+        ? await admin
+            .from("zatca_onboarding_settings")
+            .select("*")
+            .eq("id", existingSetup.id)
+            .maybeSingle()
+        : { data: null, error: null };
       if (setupError) throw setupError;
       if (!setup?.csr_pem)
         return respond(
@@ -699,7 +887,7 @@ Deno.serve(async (req) => {
       if (csrUpdateError) throw csrUpdateError;
 
       const csrBase64 = csr.csrBase64;
-      const zatcaResponse = await fetch(`${SIMULATION_URL}/compliance`, {
+      const zatcaResponse = await fetch(`${baseUrl}/compliance`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -787,50 +975,68 @@ Deno.serve(async (req) => {
           complianceRequestId: requestId,
           complianceCsidMasked: masked,
         },
-        message: "تم الحصول على Compliance CSID من منصة المحاكاة",
+        message:
+          mode === "production"
+            ? "تم الحصول على Compliance CSID من منصة الإنتاج"
+            : "تم الحصول على Compliance CSID من منصة المحاكاة",
       });
     }
 
     if (action === "request_production_csid") {
-      const { data: setup, error: setupError } = await admin
-        .from("zatca_onboarding_settings")
-        .select(
-          "id, mode, status, compliance_request_id, compliance_csid, compliance_secret, production_csid",
-        )
-        .eq("mode", "simulation")
-        .maybeSingle();
+      const { data: setup, error: setupError } = existingSetup
+        ? await admin
+            .from("zatca_onboarding_settings")
+            .select(
+              "id, mode, invoice_type, status, compliance_request_id, compliance_csid, compliance_secret, compliance_results, production_csid",
+            )
+            .eq("id", existingSetup.id)
+            .maybeSingle()
+        : { data: null, error: null };
       if (setupError) throw setupError;
       if (!setup?.compliance_csid || !setup?.compliance_secret) {
         return respond({ error: "يجب الحصول على Compliance CSID أولاً" }, 400);
       }
-      if (setup.status !== "compliance_passed") {
-        return respond({ error: "أكمل اختبارات التوافق الستة أولاً" }, 409);
+      const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
+      const complianceResults = Array.isArray(setup.compliance_results)
+        ? setup.compliance_results
+        : [];
+      const allRequiredPassed = requiredIndexes.every((caseIndex) =>
+        complianceResults.some(
+          (item: any) =>
+            Number(item.caseIndex) === caseIndex && item.status === "passed",
+        ),
+      );
+      if (setup.status !== "compliance_passed" || !allRequiredPassed) {
+        return respond(
+          { error: "أكمل جميع اختبارات التوافق المطلوبة أولاً" },
+          409,
+        );
       }
       if (setup.production_csid) {
         return respond({
           status: "production_ready",
-          message: "تم إصدار Production CSID التجريبي مسبقاً",
+          message:
+            mode === "production"
+              ? "تم إصدار Production CSID الحقيقي مسبقاً"
+              : "تم إصدار Production CSID التجريبي مسبقاً",
         });
       }
       const complianceCsid = clean(setup.compliance_csid);
       const complianceSecret = clean(setup.compliance_secret);
-      const productionResponse = await fetch(
-        `${SIMULATION_URL}/production/csids`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            "Accept-Version": "V2",
-            "Accept-Language": "en",
-            Authorization: `Basic ${Buffer.from(`${complianceCsid}:${complianceSecret}`, "utf8").toString("base64")}`,
-          },
-          body: JSON.stringify({
-            compliance_request_id: clean(setup.compliance_request_id),
-          }),
-          signal: AbortSignal.timeout(35_000),
+      const productionResponse = await fetch(`${baseUrl}/production/csids`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "Accept-Version": "V2",
+          "Accept-Language": "en",
+          Authorization: `Basic ${Buffer.from(`${complianceCsid}:${complianceSecret}`, "utf8").toString("base64")}`,
         },
-      );
+        body: JSON.stringify({
+          compliance_request_id: clean(setup.compliance_request_id),
+        }),
+        signal: AbortSignal.timeout(35_000),
+      });
       const responseText = await productionResponse.text();
       let responseData: any = {};
       try {
@@ -858,7 +1064,6 @@ Deno.serve(async (req) => {
             responseData.message ??
             responseData.error ??
             responseData.dispositionMessage ??
-            responseText ??
             `ZATCA HTTP ${productionResponse.status}`,
         );
         await admin
@@ -876,12 +1081,11 @@ Deno.serve(async (req) => {
           result: "failed",
           http_status: productionResponse.status,
           details: {
-            endpoint: `${SIMULATION_URL}/production/csids`,
+            endpoint: `${baseUrl}/production/csids`,
             requestId: clean(setup.compliance_request_id) || null,
             message,
             code: firstProductionError?.code ?? responseData.code ?? null,
-            response: responseData,
-            responseText: responseText || null,
+            response: sanitizeAuditDetails(responseData),
           },
         });
         return respond(
@@ -889,10 +1093,9 @@ Deno.serve(async (req) => {
             error: message,
             details: {
               status: productionResponse.status,
-              endpoint: `${SIMULATION_URL}/production/csids`,
+              endpoint: `${baseUrl}/production/csids`,
               requestId: clean(setup.compliance_request_id) || null,
-              response: responseData,
-              responseText: responseText || null,
+              response: sanitizeAuditDetails(responseData),
             },
           },
           productionResponse.status >= 400 ? productionResponse.status : 502,
@@ -926,7 +1129,115 @@ Deno.serve(async (req) => {
         status: "production_ready",
         productionRequestId,
         productionCsidMasked: masked,
-        message: "تم إصدار Production CSID التجريبي من منصة المحاكاة",
+        message:
+          mode === "production"
+            ? "تم إصدار Production CSID الحقيقي من منصة الإنتاج"
+            : "تم إصدار Production CSID التجريبي من منصة المحاكاة",
+      });
+    }
+
+    if (
+      action === "activate_production" ||
+      action === "deactivate_production"
+    ) {
+      if (mode !== "production") {
+        return respond({ error: "هذا الإجراء متاح لوضع الإنتاج فقط" }, 400);
+      }
+      if (!existingSetup) {
+        return respond({ error: "لا توجد تهيئة إنتاج للجهاز المحدد" }, 404);
+      }
+      const { data: setup, error: setupError } = await admin
+        .from("zatca_onboarding_settings")
+        .select(
+          "id, invoice_type, status, compliance_results, production_csid, production_secret, production_enabled",
+        )
+        .eq("id", existingSetup.id)
+        .maybeSingle();
+      if (setupError) throw setupError;
+      if (!setup) return respond({ error: "لا توجد تهيئة إنتاج" }, 404);
+
+      if (action === "activate_production") {
+        const confirmation = clean(
+          body.confirmation ?? body.confirmationPhrase,
+        );
+        if (confirmation !== "ENABLE_REAL_ZATCA_PRODUCTION") {
+          return respond({ error: "عبارة تأكيد تفعيل الإنتاج غير صحيحة" }, 400);
+        }
+        const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
+        const results = Array.isArray(setup.compliance_results)
+          ? setup.compliance_results
+          : [];
+        const allRequiredPassed = requiredIndexes.every((caseIndex) =>
+          results.some(
+            (item: any) =>
+              Number(item.caseIndex) === caseIndex && item.status === "passed",
+          ),
+        );
+        if (
+          !setup.production_csid ||
+          !setup.production_secret ||
+          setup.status !== "compliance_passed" ||
+          !allRequiredPassed
+        ) {
+          return respond(
+            {
+              error:
+                "يتطلب التفعيل اعتماد Production CSID واجتياز جميع اختبارات التوافق المطلوبة",
+            },
+            409,
+          );
+        }
+        const confirmedAt = new Date().toISOString();
+        const { error: updateError } = await admin
+          .from("zatca_onboarding_settings")
+          .update({
+            production_enabled: true,
+            production_confirmed_by: user.id,
+            production_confirmed_at: confirmedAt,
+            last_error: null,
+            updated_at: confirmedAt,
+          })
+          .eq("id", setup.id)
+          .eq("mode", "production");
+        if (updateError) throw updateError;
+        await admin.from("zatca_onboarding_audit").insert({
+          onboarding_id: setup.id,
+          actor_id: user.id,
+          action: "production_activated",
+          result: "success",
+          details: { mode, deviceSerial: existingSetup.device_serial },
+        });
+        return respond({
+          status: "production_active",
+          productionEnabled: true,
+          productionConfirmedAt: confirmedAt,
+          message: "تم تفعيل الإرسال الحقيقي إلى ZATCA",
+        });
+      }
+
+      const updatedAt = new Date().toISOString();
+      const { error: updateError } = await admin
+        .from("zatca_onboarding_settings")
+        .update({
+          production_enabled: false,
+          production_confirmed_by: null,
+          production_confirmed_at: null,
+          updated_at: updatedAt,
+        })
+        .eq("id", setup.id)
+        .eq("mode", "production");
+      if (updateError) throw updateError;
+      await admin.from("zatca_onboarding_audit").insert({
+        onboarding_id: setup.id,
+        actor_id: user.id,
+        action: "production_deactivated",
+        result: "success",
+        details: { mode, deviceSerial: existingSetup.device_serial },
+      });
+      return respond({
+        status: "production_inactive",
+        productionEnabled: false,
+        message: "تم تعطيل الإرسال الحقيقي إلى ZATCA",
       });
     }
 
@@ -939,11 +1250,13 @@ Deno.serve(async (req) => {
       ) {
         return respond({ error: "رقم اختبار التوافق غير صالح" }, 400);
       }
-      const { data: setup, error: setupError } = await admin
-        .from("zatca_onboarding_settings")
-        .select("*")
-        .eq("mode", "simulation")
-        .maybeSingle();
+      const { data: setup, error: setupError } = existingSetup
+        ? await admin
+            .from("zatca_onboarding_settings")
+            .select("*")
+            .eq("id", existingSetup.id)
+            .maybeSingle()
+        : { data: null, error: null };
       if (setupError) throw setupError;
       if (
         !setup?.compliance_csid ||
@@ -1060,27 +1373,22 @@ Deno.serve(async (req) => {
           caseIndex,
           previousHash,
         );
-        const zatcaResponse = await fetch(
-          `${SIMULATION_URL}/compliance/invoices`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              "Accept-Version": "V2",
-              "Accept-Language": "ar",
-              Authorization: `Basic ${Buffer.from(`${setup.compliance_csid}:${setup.compliance_secret}`).toString("base64")}`,
-            },
-            body: JSON.stringify({
-              invoiceHash: document.invoiceHash,
-              uuid: document.uuid,
-              invoice: Buffer.from(document.signedXml, "utf8").toString(
-                "base64",
-              ),
-            }),
-            signal: AbortSignal.timeout(35_000),
+        const zatcaResponse = await fetch(`${baseUrl}/compliance/invoices`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "Accept-Version": "V2",
+            "Accept-Language": "ar",
+            Authorization: `Basic ${Buffer.from(`${setup.compliance_csid}:${setup.compliance_secret}`).toString("base64")}`,
           },
-        );
+          body: JSON.stringify({
+            invoiceHash: document.invoiceHash,
+            uuid: document.uuid,
+            invoice: Buffer.from(document.signedXml, "utf8").toString("base64"),
+          }),
+          signal: AbortSignal.timeout(35_000),
+        });
         httpStatus = zatcaResponse.status;
         const responseData = await zatcaResponse.json().catch(() => ({}));
         const validation = getValidationSummary(responseData);

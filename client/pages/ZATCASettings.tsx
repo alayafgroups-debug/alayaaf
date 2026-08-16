@@ -189,8 +189,38 @@ export default function ZATCASettings() {
       },
     );
     if (error || data?.error) {
+      let payload = data;
+      const context = (error as { context?: Response } | null)?.context;
+      if (!payload && context) {
+        payload = await context
+          .clone()
+          .json()
+          .catch(() => null);
+      }
+
+      const response = payload?.details?.response;
+      const responseErrors = Array.isArray(response?.errors)
+        ? response.errors
+            .map((item: unknown) =>
+              typeof item === "string"
+                ? item
+                : String((item as { message?: unknown })?.message ?? ""),
+            )
+            .filter(Boolean)
+        : [];
+      const messages = [
+        payload?.error,
+        response?.dispositionMessage,
+        response?.message,
+        ...responseErrors,
+      ]
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean);
+      const safeMessage = [...new Set(messages)].join(" — ");
+
       throw new Error(
-        "لم تكتمل العملية. راجع السجل الآمن في الخادم دون عرض الاستجابة الحساسة هنا.",
+        safeMessage ||
+          "لم تكتمل العملية. راجع السجل الآمن في الخادم دون عرض بيانات الاعتماد.",
       );
     }
     return data;

@@ -1173,8 +1173,12 @@ Deno.serve(async (req) => {
         const firstProductionError = Array.isArray(productionErrors)
           ? productionErrors[0]
           : productionErrors;
+        const firstProductionErrorMessage =
+          typeof firstProductionError === "string"
+            ? firstProductionError
+            : firstProductionError?.message;
         const message = clean(
-          firstProductionError?.message ??
+          firstProductionErrorMessage ??
             responseData.message ??
             responseData.error ??
             responseData.dispositionMessage ??
@@ -1198,7 +1202,12 @@ Deno.serve(async (req) => {
             endpoint: `${baseUrl}/production/csids`,
             requestId: clean(setup.compliance_request_id) || null,
             message,
-            code: firstProductionError?.code ?? responseData.code ?? null,
+            code:
+              (typeof firstProductionError === "object"
+                ? firstProductionError?.code
+                : null) ??
+              responseData.code ??
+              null,
             response: sanitizeAuditDetails(responseData),
           },
         });

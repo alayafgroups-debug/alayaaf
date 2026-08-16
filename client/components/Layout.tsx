@@ -1358,6 +1358,24 @@ export default function Layout({ children }: LayoutProps) {
     setSidebarOpen(true);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const cleanupMarker = "preproduction-test-cache-cleared-v1";
+    if (localStorage.getItem(cleanupMarker)) return;
+
+    const invoiceCachePrefixes = [
+      "sales-invoice-items-",
+      "sales-invoice-address-",
+      "sales-invoice-notes-",
+    ];
+    for (const key of Object.keys(localStorage)) {
+      if (invoiceCachePrefixes.some((prefix) => key.startsWith(prefix))) {
+        localStorage.removeItem(key);
+      }
+    }
+    localStorage.removeItem("sales-delivery-notes");
+    localStorage.setItem(cleanupMarker, new Date().toISOString());
+  }, []);
+
   const currentPermissionKeys = isHRSection
     ? permissionForHRPath(location.pathname)
     : permissionForMainSubPath(location.pathname);

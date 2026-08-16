@@ -113,27 +113,41 @@ const escapeXmlText = (value: unknown) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-function parseRegisteredAddress(location: string) {
+function parseRegisteredAddress(location: string, strict = false) {
   const normalized = location.replace(/\s+/g, " ").trim();
-  const buildingNumber = normalized.match(/\b\d{4}\b/)?.[0] ?? "0000";
-  const postalZone = normalized.match(/\b\d{5}\b/)?.[0] ?? "00000";
+  const buildingMatch = normalized.match(/\b\d{4}\b/)?.[0];
+  const postalMatch = normalized.match(/\b\d{5}\b/)?.[0];
   const parts = normalized
     .split(/[،,]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  const cityName =
-    parts.find((part) =>
-      /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
-    ) ?? "الرياض";
-  const citySubdivisionName = parts[1] ?? "الفرع الرئيسي";
-  const streetName = (parts[0] ?? normalized)
+  const recognizedCity = parts.find((part) =>
+    /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
+  );
+  const buildingNumber = buildingMatch ?? "0000";
+  const postalZone = postalMatch ?? "00000";
+  const firstPartWithoutBuilding = (parts[0] ?? normalized)
     .replace(new RegExp(`^${buildingNumber}\\s*`), "")
     .trim();
+  const streetName = firstPartWithoutBuilding || parts[1] || "";
+  const citySubdivisionName = parts[2] || parts[1] || "";
+
+  if (
+    strict &&
+    (!buildingMatch ||
+      !postalMatch ||
+      !recognizedCity ||
+      !streetName ||
+      !citySubdivisionName)
+  ) {
+    throw new Error("INVALID_REGISTERED_ADDRESS");
+  }
+
   return {
     buildingNumber,
     postalZone,
-    cityName,
-    citySubdivisionName,
+    cityName: recognizedCity ?? "الرياض",
+    citySubdivisionName: citySubdivisionName || "الفرع الرئيسي",
     streetName: streetName || "العنوان الوطني",
   };
 }
@@ -813,7 +827,7 @@ Deno.serve(async (req) => {
         );
       }
       try {
-        parseRegisteredAddress(clean(invoice.customer_address));
+        parseRegisteredAddress(clean(invoice.customer_address), true);
       } catch {
         return await rejectBeforeSubmission(
           "عنوان العميل يجب أن يتضمن رقم مبنى من 4 أرقام ورمزًا بريديًا من 5 أرقام ومدينة",

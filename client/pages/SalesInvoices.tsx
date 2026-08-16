@@ -120,6 +120,10 @@ const invoiceTranslations: Record<string, string> = {
   "فاتورة ضريبية مبسطة": "Simplified Tax Invoice",
   "رقم السجل التجاري للعميل": "Customer commercial registration",
   "السجل التجاري للعميل مطلوب": "Customer commercial registration is required",
+  "العنوان الوطني للعميل غير مكتمل":
+    "Customer national address is incomplete",
+  "أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي في بيانات العميل قبل إنشاء الفاتورة":
+    "Complete the building number, street, district, city, and postal code in the customer record before creating the invoice",
   "الفاتورة المعيارية B2B تتطلب سجلًا تجاريًا حقيقيًا من 10 إلى 15 رقمًا":
     "A standard B2B invoice requires a real 10 to 15 digit customer commercial registration",
   المحاسبة: "Accounting",
@@ -2069,28 +2073,29 @@ function InvoiceForm({
       if (!customerError) {
         setCustomerOptions(
           (customerRows ?? [])
-            .map((row: Record<string, unknown>) => ({
-              id: String(row.id ?? ""),
-              name: String(row.name ?? "").trim(),
-              vatNumber: String(
-                row.tax_number ?? row.vat_number ?? "",
-              ).trim(),
-              commercialRegistration: String(
-                row.commercial_registration ?? "",
-              ).trim(),
-              address: String(
-                row.address ??
-                  [
-                    row.building_number,
-                    row.street,
-                    row.district,
-                    row.city,
-                    row.postal_code,
-                  ]
-                    .filter(Boolean)
-                    .join("، "),
-              ).trim(),
-            }))
+            .map((row: Record<string, unknown>) => {
+              const structuredAddress = [
+                row.building_number,
+                row.street,
+                row.district,
+                row.city,
+                row.postal_code,
+              ]
+                .map((value) => String(value ?? "").trim())
+                .filter(Boolean)
+                .join("، ");
+              return {
+                id: String(row.id ?? ""),
+                name: String(row.name ?? "").trim(),
+                vatNumber: String(
+                  row.tax_number ?? row.vat_number ?? "",
+                ).trim(),
+                commercialRegistration: String(
+                  row.commercial_registration ?? "",
+                ).trim(),
+                address: structuredAddress || String(row.address ?? "").trim(),
+              };
+            })
             .filter((row) => row.id && row.name),
         );
       }
@@ -2220,6 +2225,20 @@ function InvoiceForm({
         title: t("السجل التجاري للعميل مطلوب"),
         description: t(
           "الفاتورة المعيارية B2B تتطلب سجلًا تجاريًا حقيقيًا من 10 إلى 15 رقمًا",
+        ),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      !/\b\d{4}\b/.test(customerAddress) ||
+      !/\b\d{5}\b/.test(customerAddress) ||
+      !/مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(customerAddress)
+    ) {
+      toast({
+        title: t("العنوان الوطني للعميل غير مكتمل"),
+        description: t(
+          "أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي في بيانات العميل قبل إنشاء الفاتورة",
         ),
         variant: "destructive",
       });
@@ -2495,6 +2514,16 @@ function InvoiceForm({
                         selected?.commercialRegistration ?? "",
                       );
                       setCustomerAddress(selected?.address ?? "");
+                      if (selected) {
+                        setInvoiceType(
+                          /^3\d{14}$/.test(selected.vatNumber) &&
+                            /^\d{10,15}$/.test(
+                              selected.commercialRegistration,
+                            )
+                            ? "standard"
+                            : "simplified",
+                        );
+                      }
                     }}
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   >

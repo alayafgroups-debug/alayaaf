@@ -13,20 +13,83 @@ import {
   ZatcaInvoice,
 } from "npm:@khaledhajsalem/zatca-node@1.0.4";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+type ZatcaMode = "simulation" | "production";
+
+const getCorsHeaders = () => {
+  const appOrigin = clean(Deno.env.get("APP_ORIGIN"));
+  return {
+    ...(appOrigin ? { "Access-Control-Allow-Origin": appOrigin } : {}),
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
+  };
 };
-const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 const SIMULATION_URL = "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation";
+const PRODUCTION_URL = "https://gw-fatoora.zatca.gov.sa/e-invoicing/core";
 const ZATCA_INITIAL_PIH =
   "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==";
+const PRODUCTION_CONFIRMATION = "SUBMIT_REAL_ZATCA_INVOICE";
 
 const respond = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
+  });
 
 const clean = (value: unknown) => String(value ?? "").trim();
+
+function containsSyntheticMarker(value: unknown): boolean {
+  if (typeof value === "string") {
+    return /(?:^|[^A-Z])(?:TEST(?:ING)?|SIM(?:ULATION|ULATED|ULATOR)?)(?:[^A-Z]|$)|تجريب/i.test(
+      value,
+    );
+  }
+  if (Array.isArray(value)) return value.some(containsSyntheticMarker);
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some(
+      containsSyntheticMarker,
+    );
+  }
+  return false;
+}
+
+function getValidationResult(responseData: any) {
+  const validation = responseData?.validationResults;
+  const errors = Array.isArray(validation?.errorMessages)
+    ? validation.errorMessages
+    : [];
+  const status = clean(validation?.status).toUpperCase();
+  const documentStatus = clean(
+    responseData?.reportingStatus ?? responseData?.clearanceStatus,
+  ).toUpperCase();
+  const validDocumentStatus =
+    !documentStatus || ["REPORTED", "CLEARED"].includes(documentStatus);
+  return {
+    accepted:
+      errors.length === 0 &&
+      ["PASS", "WARNING"].includes(status) &&
+      validDocumentStatus,
+    message: clean(
+      errors[0]?.message ??
+        responseData?.message ??
+        responseData?.error ??
+        responseData?.dispositionMessage,
+    ),
+  };
+}
+
+function getRetryAfter(response?: Response) {
+  const header = response?.headers.get("Retry-After");
+  if (header) {
+    const seconds = Number(header);
+    const parsed = Number.isFinite(seconds)
+      ? Date.now() + Math.max(0, seconds) * 1000
+      : Date.parse(header);
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+  }
+  return new Date(Date.now() + 5 * 60 * 1000).toISOString();
+}
 const escapeXmlText = (value: unknown) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -152,10 +215,7 @@ function correctXadesDigests(xml: string, certificate: Certificate) {
 }
 
 function tlv(tag: number, value: Buffer) {
-  return Buffer.concat([
-    Buffer.from([tag, value.length]),
-    value,
-  ]);
+  return Buffer.concat([Buffer.from([tag, value.length]), value]);
 }
 
 function buildQrPayload(input: {
@@ -198,6 +258,8 @@ function buildSignedInvoice(input: {
   uuid: string;
   documentType: "invoice" | "creditNote" | "debitNote";
   originalInvoiceId?: string;
+  originalInvoiceUuid?: string;
+  credentials: { csid: string; secret: string };
 }) {
   const {
     setup,
@@ -208,6 +270,8 @@ function buildSignedInvoice(input: {
     uuid,
     documentType,
     originalInvoiceId,
+    originalInvoiceUuid,
+    credentials,
   } = input;
   const address = parseRegisteredAddress(String(setup.branch_location));
   const now = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
@@ -217,7 +281,9 @@ function buildSignedInvoice(input: {
     .setInvoiceNumber(String(invoice.id))
     .setIssueDate(clean(invoice.date) || now.slice(0, 10))
     .setIssueTime(now.slice(11, 19))
-    .setDueDate(clean(invoice.due_date) || clean(invoice.date) || now.slice(0, 10))
+    .setDueDate(
+      clean(invoice.due_date) || clean(invoice.date) || now.slice(0, 10),
+    )
     .setCurrencyCode("SAR")
     .setDocumentCurrencyCode("SAR")
     .setTaxCurrencyCode("SAR")
@@ -274,7 +340,7 @@ function buildSignedInvoice(input: {
   if (documentType !== "invoice") {
     document.addBillingReference({
       id: String(originalInvoiceId ?? invoice.id),
-      uuid: crypto.randomUUID(),
+      uuid: String(originalInvoiceUuid ?? crypto.randomUUID()),
     });
     document.addPaymentMeans({
       code: "10",
@@ -288,9 +354,9 @@ function buildSignedInvoice(input: {
 
   const unsignedXml = new ZatcaInvoice().generateXml(document, uuid);
   const certificate = createCompatibleCertificate(
-    toCertificatePem(String(setup.production_csid ?? setup.compliance_csid)),
+    toCertificatePem(credentials.csid),
     String(setup.private_key_pem),
-    String(setup.production_secret ?? setup.compliance_secret),
+    credentials.secret,
   );
   const signer = InvoiceSigner.signInvoice(unsignedXml, certificate);
   const signedXml = correctXadesDigests(signer.getXML(), certificate);
@@ -325,8 +391,13 @@ function buildSignedInvoice(input: {
 }
 
 Deno.serve(async (req) => {
+  const appOrigin = clean(Deno.env.get("APP_ORIGIN"));
+  const requestOrigin = clean(req.headers.get("Origin"));
+  if (appOrigin && requestOrigin && requestOrigin !== appOrigin) {
+    return respond({ error: "Origin not allowed" }, 403);
+  }
   if (req.method === "OPTIONS")
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders() });
   if (req.method !== "POST")
     return respond({ error: "Method not allowed" }, 405);
 
@@ -349,22 +420,20 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+    const mode: ZatcaMode = body.mode ?? "simulation";
+    if (!(["simulation", "production"] as string[]).includes(mode)) {
+      return respond({ error: "mode must be simulation or production" }, 400);
+    }
+
     const invoiceId = clean(body.invoiceId);
     const noteId = clean(body.noteId);
-    if (!invoiceId && !noteId)
-      return respond({ error: "رقم الفاتورة أو الإشعار مطلوب" }, 400);
+    const deviceSerial = clean(body.deviceSerial);
+    if ((!invoiceId && !noteId) || (invoiceId && noteId)) {
+      return respond({ error: "حدد فاتورة أو إشعاراً واحداً فقط" }, 400);
+    }
     const table = noteId ? "invoice_adjustment_notes" : "sales_invoices";
     const recordId = noteId || invoiceId;
-
-    const { data: setup, error: setupError } = await admin
-      .from("zatca_onboarding_settings")
-      .select("*")
-      .eq("mode", "simulation")
-      .maybeSingle();
-    if (setupError) throw setupError;
-    if (!setup?.private_key_pem || !setup?.compliance_csid) {
-      return respond({ error: "أكمل تهيئة ZATCA قبل إرسال الفواتير" }, 409);
-    }
+    const idempotencyKey = `${mode}:${table}:${recordId}`;
 
     const { data: record, error: recordError } = await admin
       .from(table)
@@ -373,21 +442,57 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (recordError) throw recordError;
     if (!record) return respond({ error: "المستند غير موجود" }, 404);
-    if (record.zatca_status === "cleared" || record.zatca_status === "reported") {
+
+    const { data: existingLog, error: existingLogError } = await admin
+      .from("zatca_invoice_submission_logs")
+      .select("*")
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    if (existingLogError) throw existingLogError;
+    if (
+      existingLog &&
+      ["cleared", "reported"].includes(clean(existingLog.status))
+    ) {
       return respond({
-        status: record.zatca_status,
+        status: existingLog.status,
+        uuid: existingLog.request_uuid,
+        icv: existingLog.icv,
         qrCodeData: record.qr_code_data,
+        response: existingLog.response,
+        idempotent: true,
         message: "تم إرسال هذا المستند إلى ZATCA مسبقاً",
       });
     }
+    if (clean(existingLog?.status) === "submitted") {
+      return respond({ error: "يوجد إرسال جارٍ بالفعل لهذا المستند" }, 409);
+    }
+
+    let setupQuery = admin
+      .from("zatca_onboarding_settings")
+      .select("*")
+      .eq("mode", mode);
+    if (deviceSerial) setupQuery = setupQuery.eq("device_serial", deviceSerial);
+    const { data: setups, error: setupError } = await setupQuery.limit(2);
+    if (setupError) throw setupError;
+    if (!setups?.length) {
+      return respond({ error: `لا توجد تهيئة ZATCA لوضع ${mode}` }, 409);
+    }
+    if (setups.length > 1) {
+      return respond(
+        { error: "deviceSerial مطلوب لتحديد جهاز ZATCA الصحيح" },
+        409,
+      );
+    }
+    const setup = setups[0];
 
     let originalInvoice: any = null;
     if (noteId) {
-      const { data: linked } = await admin
+      const { data: linked, error: linkedError } = await admin
         .from("sales_invoices")
         .select("*")
         .eq("id", clean(record.original_invoice_id))
         .maybeSingle();
+      if (linkedError) throw linkedError;
       originalInvoice = linked;
     }
 
@@ -396,7 +501,6 @@ Deno.serve(async (req) => {
       : record.note_type === "sales_credit"
         ? "creditNote"
         : "debitNote";
-
     const invoice = noteId
       ? {
           id: clean(record.note_number) || recordId,
@@ -408,6 +512,168 @@ Deno.serve(async (req) => {
           buyer_vat: clean(originalInvoice?.buyer_vat),
         }
       : record;
+    const simplified = invoice.invoice_type !== "standard";
+    const baseUrl = mode === "production" ? PRODUCTION_URL : SIMULATION_URL;
+    const endpoint = simplified
+      ? `${baseUrl}/invoices/reporting/single`
+      : `${baseUrl}/invoices/clearance/single`;
+    const attemptCount = Number(existingLog?.attempt_count ?? 0) + 1;
+    const baseLog = {
+      invoice_id: recordId,
+      invoice_table: table,
+      document_type: documentType,
+      invoice_type: simplified ? "simplified" : "standard",
+      mode,
+      onboarding_id: setup.id,
+      idempotency_key: idempotencyKey,
+      endpoint,
+      attempt_count: attemptCount,
+      created_by: user.id,
+      updated_at: new Date().toISOString(),
+    };
+    let durableLogId = clean(existingLog?.id);
+    const saveLog = async (values: Record<string, unknown>) => {
+      if (durableLogId) {
+        const { error } = await admin
+          .from("zatca_invoice_submission_logs")
+          .update({ ...baseLog, ...values })
+          .eq("id", durableLogId);
+        if (error) throw error;
+        return;
+      }
+      const { data, error } = await admin
+        .from("zatca_invoice_submission_logs")
+        .insert({ ...baseLog, ...values })
+        .select("id")
+        .single();
+      if (error) throw error;
+      durableLogId = clean(data?.id);
+    };
+    await saveLog({
+      status: "submitted",
+      request_payload: {
+        mode,
+        invoiceTable: table,
+        recordId,
+        deviceSerial: setup.device_serial,
+        endpoint,
+      },
+      response: {},
+      response_text: "",
+      retry_after: null,
+      last_error: null,
+    });
+    const rejectBeforeSubmission = async (message: string, status = 409) => {
+      await saveLog({
+        status: "rejected",
+        request_payload: {
+          mode,
+          invoiceTable: table,
+          recordId,
+          deviceSerial: setup.device_serial,
+          reason: message,
+        },
+        response: {},
+        response_text: "",
+        retry_after: null,
+        last_error: message,
+      });
+      return respond({ error: message }, status);
+    };
+
+    if (mode === "production") {
+      if (body.productionConfirmation !== PRODUCTION_CONFIRMATION) {
+        return await rejectBeforeSubmission(
+          `productionConfirmation must equal ${PRODUCTION_CONFIRMATION}`,
+          403,
+        );
+      }
+      if (setup.production_enabled !== true) {
+        return await rejectBeforeSubmission("الإرسال الإنتاجي غير مفعّل", 403);
+      }
+      if (
+        !clean(setup.private_key_pem) ||
+        !clean(setup.production_csid) ||
+        !clean(setup.production_secret)
+      ) {
+        return await rejectBeforeSubmission(
+          "بيانات اعتماد ZATCA الإنتاجية غير مكتملة",
+        );
+      }
+      const expiresAt = Date.parse(clean(setup.certificate_expires_at));
+      if (setup.certificate_revoked_at) {
+        return await rejectBeforeSubmission("شهادة ZATCA ملغاة", 403);
+      }
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        return await rejectBeforeSubmission(
+          "شهادة ZATCA منتهية أو لا يوجد تاريخ انتهاء صالح",
+          403,
+        );
+      }
+      const productionRecordText = {
+        recordId,
+        invoiceNumber: record.invoice_number,
+        noteNumber: record.note_number,
+        customer: record.customer,
+        counterparty: record.counterparty,
+        originalInvoiceId: record.original_invoice_id,
+        items: Array.isArray(record.items)
+          ? record.items.map((item: any) => ({
+              description: item.description,
+              name: item.name,
+              id: item.id,
+              sku: item.sku,
+            }))
+          : [],
+        originalInvoice: originalInvoice
+          ? {
+              id: originalInvoice.id,
+              invoiceNumber: originalInvoice.invoice_number,
+              customer: originalInvoice.customer,
+              items: Array.isArray(originalInvoice.items)
+                ? originalInvoice.items.map((item: any) => ({
+                    description: item.description,
+                    name: item.name,
+                    id: item.id,
+                    sku: item.sku,
+                  }))
+                : [],
+            }
+          : null,
+      };
+      if (containsSyntheticMarker(productionRecordText)) {
+        return await rejectBeforeSubmission(
+          "تم رفض مستند إنتاجي يحتوي على بيانات اختبارية أو تجريبية",
+          422,
+        );
+      }
+      if (noteId && !clean(originalInvoice?.uuid)) {
+        return await rejectBeforeSubmission(
+          "لا يمكن إرسال إشعار إنتاجي دون UUID فعلي للفاتورة الأصلية",
+          422,
+        );
+      }
+    }
+
+    const credentials =
+      mode === "production"
+        ? {
+            csid: clean(setup.production_csid),
+            secret: clean(setup.production_secret),
+          }
+        : {
+            csid: clean(setup.compliance_csid),
+            secret: clean(setup.compliance_secret),
+          };
+    if (
+      !clean(setup.private_key_pem) ||
+      !credentials.csid ||
+      !credentials.secret
+    ) {
+      return await rejectBeforeSubmission(
+        "أكمل تهيئة بيانات اعتماد ZATCA قبل إرسال الفواتير",
+      );
+    }
 
     const rawItems = Array.isArray(record.items) ? record.items : [];
     const lines = rawItems.map((item: any) => ({
@@ -417,133 +683,261 @@ Deno.serve(async (req) => {
       taxPercent: Number(item.taxPercent ?? 15) || 15,
     }));
     if (!lines.length) {
-      return respond({ error: "لا توجد بنود صالحة داخل المستند" }, 400);
-    }
-
-    const { data: lastLog } = await admin
-      .from("zatca_invoice_submission_logs")
-      .select("invoice_hash, created_at")
-      .in("status", ["cleared", "reported"])
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const previousHash = clean(lastLog?.[0]?.invoice_hash) || ZATCA_INITIAL_PIH;
-
-    const { count } = await admin
-      .from("zatca_invoice_submission_logs")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["cleared", "reported"]);
-    const icv = (count ?? 0) + 1;
-    const uuid = clean(record.uuid) || crypto.randomUUID();
-
-    const signed = buildSignedInvoice({
-      setup,
-      invoice,
-      lines,
-      icv,
-      previousHash,
-      uuid,
-      documentType,
-      originalInvoiceId: clean(record.original_invoice_id),
-    });
-
-    const endpoint = signed.simplified
-      ? `${SIMULATION_URL}/invoices/reporting/single`
-      : `${SIMULATION_URL}/invoices/clearance/single`;
-    const csid = clean(setup.production_csid ?? setup.compliance_csid);
-    const secret = clean(setup.production_secret ?? setup.compliance_secret);
-
-    const zatcaResponse = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "Accept-Version": "V2",
-        "Accept-Language": "en",
-        "Clearance-Status": signed.simplified ? "0" : "1",
-        Authorization: `Basic ${Buffer.from(`${csid}:${secret}`, "utf8").toString("base64")}`,
-      },
-      body: JSON.stringify({
-        invoiceHash: signed.invoiceHash,
-        uuid,
-        invoice: Buffer.from(signed.signedXml, "utf8").toString("base64"),
-      }),
-      signal: AbortSignal.timeout(35_000),
-    });
-    const responseText = await zatcaResponse.text();
-    let responseData: any = {};
-    try {
-      responseData = responseText ? JSON.parse(responseText) : {};
-    } catch {
-      responseData = {};
-    }
-
-    const accepted = zatcaResponse.status === 200 || zatcaResponse.status === 202;
-    const submittedAt = new Date().toISOString();
-    const status = accepted
-      ? signed.simplified
-        ? "reported"
-        : "cleared"
-      : "rejected";
-
-    await admin.from("zatca_invoice_submission_logs").insert({
-      invoice_id: recordId,
-      invoice_table: table,
-      document_type: documentType,
-      invoice_type: signed.simplified ? "simplified" : "standard",
-      mode: "simulation",
-      endpoint,
-      http_status: zatcaResponse.status,
-      request_uuid: uuid,
-      invoice_hash: signed.invoiceHash,
-      response: responseData,
-      status,
-      created_by: user.id,
-    });
-
-    if (!accepted) {
-      const errorMessage = clean(
-        responseData?.validationResults?.errorMessages?.[0]?.message ??
-          responseData?.message ??
-          responseText ??
-          `ZATCA HTTP ${zatcaResponse.status}`,
+      return await rejectBeforeSubmission(
+        "لا توجد بنود صالحة داخل المستند",
+        400,
       );
-      await admin
+    }
+
+    const { data: reservationRows, error: reservationError } = await admin.rpc(
+      "reserve_zatca_sequence",
+      { p_onboarding_id: setup.id },
+    );
+    if (reservationError) {
+      const message = clean(reservationError.message) || "تعذر حجز تسلسل ZATCA";
+      await saveLog({
+        status: "failed",
+        request_payload: { mode, invoiceTable: table, recordId, endpoint },
+        response: {},
+        response_text: "",
+        retry_after: getRetryAfter(),
+        last_error: message,
+      });
+      return respond({ error: message }, 409);
+    }
+    const reservation = Array.isArray(reservationRows)
+      ? reservationRows[0]
+      : reservationRows;
+    const reservationToken = clean(reservation?.reservation_token);
+    const icv = Number(reservation?.icv);
+    const previousHash = clean(reservation?.previous_pih) || ZATCA_INITIAL_PIH;
+    if (!reservationToken || !Number.isSafeInteger(icv) || icv < 1) {
+      if (reservationToken) {
+        await admin.rpc("release_zatca_sequence", {
+          p_onboarding_id: setup.id,
+          p_reservation_token: reservationToken,
+        });
+      }
+      await saveLog({
+        status: "failed",
+        retry_after: getRetryAfter(),
+        last_error: "استجابة حجز تسلسل ZATCA غير صالحة",
+      });
+      throw new Error("استجابة حجز تسلسل ZATCA غير صالحة");
+    }
+
+    let sequenceFinalized = false;
+    try {
+      const uuid = clean(record.uuid) || crypto.randomUUID();
+      const signed = buildSignedInvoice({
+        setup,
+        invoice,
+        lines,
+        icv,
+        previousHash,
+        uuid,
+        documentType,
+        originalInvoiceId: clean(record.original_invoice_id),
+        originalInvoiceUuid: clean(originalInvoice?.uuid) || undefined,
+        credentials,
+      });
+      const requestPayload = {
+        mode,
+        invoiceTable: table,
+        recordId,
+        documentType,
+        invoiceType: simplified ? "simplified" : "standard",
+        deviceSerial: setup.device_serial,
+        endpoint,
+        uuid,
+        icv,
+        previousPih: previousHash,
+        invoiceHash: signed.invoiceHash,
+        invoiceBytes: Buffer.byteLength(signed.signedXml, "utf8"),
+      };
+      await saveLog({
+        status: "submitted",
+        http_status: null,
+        request_uuid: uuid,
+        invoice_hash: signed.invoiceHash,
+        icv,
+        previous_pih: previousHash,
+        request_payload: requestPayload,
+        response: {},
+        response_text: "",
+        retry_after: null,
+        last_error: null,
+      });
+
+      let zatcaResponse: Response;
+      try {
+        zatcaResponse = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "Accept-Version": "V2",
+            "Accept-Language": "en",
+            "Clearance-Status": signed.simplified ? "0" : "1",
+            Authorization: `Basic ${Buffer.from(`${credentials.csid}:${credentials.secret}`, "utf8").toString("base64")}`,
+          },
+          body: JSON.stringify({
+            invoiceHash: signed.invoiceHash,
+            uuid,
+            invoice: Buffer.from(signed.signedXml, "utf8").toString("base64"),
+          }),
+          signal: AbortSignal.timeout(35_000),
+        });
+      } catch (error: any) {
+        const message = clean(error?.message) || "ZATCA network error";
+        await saveLog({
+          status: "failed",
+          http_status: null,
+          request_uuid: uuid,
+          invoice_hash: signed.invoiceHash,
+          icv,
+          previous_pih: previousHash,
+          request_payload: requestPayload,
+          response: {},
+          response_text: "",
+          retry_after: getRetryAfter(),
+          last_error: message,
+        });
+        return respond({ error: message, retryable: true }, 503);
+      }
+
+      const responseText = await zatcaResponse.text();
+      let responseData: any = {};
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        responseData = {};
+      }
+      const httpAccepted = [200, 202].includes(zatcaResponse.status);
+      const validation = getValidationResult(responseData);
+      const accepted = httpAccepted && validation.accepted;
+      const retryable = zatcaResponse.status >= 500;
+      const submittedAt = new Date().toISOString();
+
+      if (!accepted) {
+        const errorMessage =
+          validation.message ||
+          responseText ||
+          `ZATCA HTTP ${zatcaResponse.status}`;
+        const failureStatus = retryable ? "failed" : "rejected";
+        await saveLog({
+          status: failureStatus,
+          http_status: zatcaResponse.status,
+          request_uuid: uuid,
+          invoice_hash: signed.invoiceHash,
+          icv,
+          previous_pih: previousHash,
+          request_payload: requestPayload,
+          response: responseData,
+          response_text: responseText,
+          retry_after: retryable ? getRetryAfter(zatcaResponse) : null,
+          last_error: errorMessage,
+        });
+        await admin
+          .from(table)
+          .update({
+            zatca_status: failureStatus,
+            zatca_response: responseData,
+            zatca_submitted_at: submittedAt,
+          })
+          .eq("id", recordId);
+        return respond(
+          { error: errorMessage, details: responseData, retryable },
+          retryable ? 503 : 422,
+        );
+      }
+
+      const status = signed.simplified ? "reported" : "cleared";
+      const { error: finalizeError } = await admin.rpc(
+        "finalize_zatca_sequence",
+        {
+          p_onboarding_id: setup.id,
+          p_reservation_token: reservationToken,
+          p_invoice_hash: signed.invoiceHash,
+        },
+      );
+      if (finalizeError) throw finalizeError;
+      sequenceFinalized = true;
+
+      await saveLog({
+        status,
+        http_status: zatcaResponse.status,
+        request_uuid: uuid,
+        invoice_hash: signed.invoiceHash,
+        icv,
+        previous_pih: previousHash,
+        request_payload: requestPayload,
+        response: responseData,
+        response_text: responseText,
+        retry_after: null,
+        last_error: null,
+      });
+      const { error: recordUpdateError } = await admin
         .from(table)
         .update({
-          zatca_status: "rejected",
+          uuid,
+          icv: String(icv),
+          pih: previousHash,
+          qr_code_data: signed.qrCodeData,
+          cryptographic_stamp: signed.signatureValue,
+          invoice_xml: signed.signedXml,
+          zatca_status: status,
           zatca_response: responseData,
           zatca_submitted_at: submittedAt,
+          zatca_approved_at: signed.simplified ? null : submittedAt,
+          zatca_reported_at: signed.simplified ? submittedAt : null,
         })
         .eq("id", recordId);
-      return respond({ error: errorMessage, details: responseData }, 422);
-    }
+      if (recordUpdateError) throw recordUpdateError;
 
-    await admin
-      .from(table)
-      .update({
+      return respond({
+        status,
         uuid,
-        icv: String(icv),
-        pih: previousHash,
-        qr_code_data: signed.qrCodeData,
-        cryptographic_stamp: signed.signatureValue,
-        invoice_xml: signed.signedXml,
-        zatca_status: status,
-        zatca_response: responseData,
-        zatca_submitted_at: submittedAt,
-        zatca_approved_at: signed.simplified ? null : submittedAt,
-        zatca_reported_at: signed.simplified ? submittedAt : null,
-      })
-      .eq("id", recordId);
-
-    return respond({
-      status,
-      uuid,
-      icv,
-      qrCodeData: signed.qrCodeData,
-      message: signed.simplified
-        ? "تم إبلاغ ZATCA بالمستند المبسط"
-        : "تمت مصادقة ZATCA على المستند المعياري",
-    });
+        icv,
+        qrCodeData: signed.qrCodeData,
+        message: signed.simplified
+          ? "تم إبلاغ ZATCA بالمستند المبسط"
+          : "تمت مصادقة ZATCA على المستند المعياري",
+      });
+    } catch (error: any) {
+      const message = clean(error?.message) || "Unexpected submission error";
+      if (!sequenceFinalized) {
+        await saveLog({
+          status: "failed",
+          request_payload: {
+            mode,
+            invoiceTable: table,
+            recordId,
+            documentType,
+            invoiceType: simplified ? "simplified" : "standard",
+            deviceSerial: setup.device_serial,
+            endpoint,
+          },
+          retry_after: getRetryAfter(),
+          last_error: message,
+        }).catch((logError) =>
+          console.error("zatca-invoice log failure", logError),
+        );
+      }
+      throw error;
+    } finally {
+      if (!sequenceFinalized) {
+        const { error: releaseError } = await admin.rpc(
+          "release_zatca_sequence",
+          {
+            p_onboarding_id: setup.id,
+            p_reservation_token: reservationToken,
+          },
+        );
+        if (releaseError)
+          console.error("zatca-invoice sequence release", releaseError);
+      }
+    }
   } catch (error: any) {
     console.error("zatca-invoice", error);
     return respond({ error: error?.message ?? "Unexpected error" }, 500);

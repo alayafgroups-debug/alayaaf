@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Search, ChevronLeft, ChevronRight, Calendar, UserCheck, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 export default function LeavesReport() {
   const [reportType, setReportType] = useState("تقرير تفصيلي");
@@ -197,7 +198,9 @@ export default function LeavesReport() {
                   <td className="px-4 py-3 text-center"><input type="checkbox" className="rounded border-gray-300" /></td>
                   <td className="px-4 py-3 font-medium text-gray-800">محمود البحراوي</td>
                   <td className="px-4 py-3 text-gray-600">مصمم وتشطيبات طباعة وتجليد</td>
-                  <td className="px-4 py-3 text-gray-600">شركة العياف التجارية للدعاية والإعلان</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {COMPANY_PROFILE.companyNameAr}
+                  </td>
                   <td className="px-4 py-3 text-gray-600">إدارة الموارد البشرية</td>
                   <td className="px-4 py-3 text-gray-600">الفرع الرئيسي</td>
                 </tr>

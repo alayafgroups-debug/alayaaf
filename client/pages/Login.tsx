@@ -6,6 +6,7 @@ import { Eye, EyeOff, Lock, Mail, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import type { UserSession } from "@/lib/authSession";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -113,10 +114,10 @@ export default function Login() {
             </div>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight leading-tight">
-            نظام إدارة العياف
+            {COMPANY_PROFILE.programNameAr}
           </h1>
           <p className="mt-2 text-blue-200/70 text-sm">
-            شركة إدارة العياف للمقاولات · تسجيل دخول الإدارة
+            {COMPANY_PROFILE.companyNameAr} · تسجيل دخول الإدارة
           </p>
         </div>
 
@@ -199,7 +200,7 @@ export default function Login() {
 
         {/* Footer */}
         <p className="text-center mt-6 text-xs text-white/20">
-          © 2026 نظام إدارة العياف · جميع الحقوق محفوظة
+          © 2026 {COMPANY_PROFILE.programNameAr} · جميع الحقوق محفوظة
         </p>
       </div>
     </div>

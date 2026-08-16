@@ -108,7 +108,6 @@ const invoiceTranslations: Record<string, string> = {
   "حدث خطأ غير متوقع": "An unexpected error occurred",
   "العودة للقائمة": "Back to list",
   "تفاصيل الفاتورة الضريبية": "Tax invoice details",
-  "شركة لاكجري العياف": "Luxury Al Ayaf Company",
   "8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة":
     "8529 Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca",
   "24351 المملكة العربية السعودية": "24351, Kingdom of Saudi Arabia",

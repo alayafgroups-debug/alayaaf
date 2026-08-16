@@ -12,6 +12,7 @@ import {
   Shield,
   BarChart3,
 } from "lucide-react";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 export default function Home() {
   const features = [
@@ -75,7 +76,7 @@ export default function Home() {
               نظ
             </div>
             <span className="text-lg font-semibold text-foreground">
-              شركة إدارة العياف للمقاولات
+              {COMPANY_PROFILE.companyNameAr}
             </span>
           </div>
           <div className="flex items-center gap-4">
@@ -243,7 +244,7 @@ export default function Home() {
                 نظ
               </div>
               <span className="font-semibold text-foreground">
-                شركة إدارة العياف للمقاولات
+                {COMPANY_PROFILE.companyNameAr}
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -251,7 +252,7 @@ export default function Home() {
             </p>
           </div>
           <div className="border-t border-border pt-8 text-center text-sm text-muted-foreground">
-            <p>© 2024 شركة إدارة العياف للمقاولات. جميع الحقوق محفوظة.</p>
+            <p>© 2024 {COMPANY_PROFILE.companyNameAr}. جميع الحقوق محفوظة.</p>
           </div>
         </div>
       </footer>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import {
   AlertCircle,
   Building2,
@@ -93,10 +94,10 @@ type IdentityForm = {
 const ACTIVE_PRODUCTION_DEVICE_KEY = "zatca-active-production-device-serial";
 
 const initialIdentity: IdentityForm = {
-  companyNameAr: "شركة إدارة العياف للمقاولات",
-  companyNameEn: "Company Idarat Al Ayaf For Contracting",
-  vatNumber: "314067317200003",
-  commercialRegistration: "7049437580",
+  companyNameAr: COMPANY_PROFILE.companyNameAr,
+  companyNameEn: COMPANY_PROFILE.companyNameEn,
+  vatNumber: COMPANY_PROFILE.vatNumber,
+  commercialRegistration: COMPANY_PROFILE.commercialRegistration,
   branchName: "الفرع الرئيسي",
   branchLocation: "8697، نخبة العلماء، حي الأندلس، جدة 23326، 2882",
   buildingNumber: "8697",

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 export default function Settings() {
   const { locale, setLocale } = useI18n();
@@ -58,7 +59,7 @@ export default function Settings() {
                 </label>
                 <input
                   className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="شركة إدارة العياف للمقاولات"
+                  defaultValue={COMPANY_PROFILE.companyNameAr}
                 />
               </div>
               <div>

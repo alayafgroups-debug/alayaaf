@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import {
   PageHeader,
   FilterBar,
@@ -57,23 +58,6 @@ const statusColors: Record<string, string> = {
   "مغلق": "bg-green-600 text-white",
   "مفتوح": "bg-cyan-500 text-white",
 };
-
-type CompanyProfile = {
-  name?: string;
-  country?: string;
-  commercialRegistration?: string;
-};
-
-function getCompanyProfile(): CompanyProfile {
-  try {
-    const raw = localStorage.getItem("company_profile");
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as CompanyProfile;
-    return parsed ?? {};
-  } catch {
-    return {};
-  }
-}
 
 function mapRow(row: Record<string, unknown>): PurchaseOrderRow {
   const status = (row.status as string) ?? "مفتوح";
@@ -577,7 +561,6 @@ function OrderEdit({
     }
   };
 
-  const companyProfile = getCompanyProfile();
 
   return (
     <div dir={direction} className="mx-auto max-w-5xl">
@@ -605,11 +588,11 @@ function OrderEdit({
             <div className="rounded-lg border border-slate-200 p-4 flex justify-between items-start bg-white">
               <div className="text-right space-y-1 text-slate-700">
                 <div className="text-xs opacity-75">{t("رقم السجل التجاري")}</div>
-                <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
+                <div className="text-sm font-medium">{COMPANY_PROFILE.commercialRegistration}</div>
               </div>
               <div className="text-right space-y-2 text-slate-900">
-                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || t("اسم الشركة")}</div>
-                <div className="text-xs opacity-75">{companyProfile.country || t("الدولة")}</div>
+                <div className="font-semibold text-2xl leading-tight">{t(COMPANY_PROFILE.companyNameAr)}</div>
+                <div className="text-xs opacity-75">{t("المملكة العربية السعودية")}</div>
               </div>
             </div>
 
@@ -870,7 +853,6 @@ function OrderForm({
     });
   };
 
-  const companyProfile = getCompanyProfile();
 
   return (
     <div dir={direction} className="mx-auto max-w-5xl">
@@ -898,11 +880,11 @@ function OrderForm({
             <div className="rounded-lg border border-slate-200 p-4 flex justify-between items-start bg-white">
               <div className="text-right space-y-1 text-slate-700">
                 <div className="text-xs opacity-75">{t("رقم السجل التجاري")}</div>
-                <div className="text-sm font-medium">{companyProfile.commercialRegistration || "—"}</div>
+                <div className="text-sm font-medium">{COMPANY_PROFILE.commercialRegistration}</div>
               </div>
               <div className="text-right space-y-2 text-slate-900">
-                <div className="font-semibold text-2xl leading-tight">{companyProfile.name || t("اسم الشركة")}</div>
-                <div className="text-xs opacity-75">{companyProfile.country || t("الدولة")}</div>
+                <div className="font-semibold text-2xl leading-tight">{t(COMPANY_PROFILE.companyNameAr)}</div>
+                <div className="text-xs opacity-75">{t("المملكة العربية السعودية")}</div>
               </div>
             </div>
 

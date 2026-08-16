@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, Building2, MapPin, Phone, Globe } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 type Props = { onBack: () => void };
 
@@ -28,7 +29,9 @@ export default function AboutPage({ onBack }: Props) {
         {/* Company hero */}
         <div className="bg-gradient-to-r from-[#004e89] to-[#0066b3] rounded-xl p-6 text-white">
           <Building2 className="h-10 w-10 mb-3 text-white/80" />
-          <h3 className="text-xl font-bold mb-1">{t("شركة الأياف")}</h3>
+          <h3 className="text-xl font-bold mb-1">
+            {t(COMPANY_PROFILE.companyNameAr)}
+          </h3>
           <p className="text-blue-100 text-sm">{t("نظام إدارة الموارد البشرية المتكامل")}</p>
         </div>
 

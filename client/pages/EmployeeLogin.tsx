@@ -6,6 +6,7 @@ import { Eye, EyeOff, Lock, User, Users2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import type { UserSession } from "@/lib/authSession";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 export default function EmployeeLogin() {
   const navigate = useNavigate();
@@ -108,7 +109,7 @@ export default function EmployeeLogin() {
             بوابة الموظفين
           </h1>
           <p className="mt-2 text-emerald-200/70 text-sm">
-            نظام الموارد البشرية · لاكجري العياف
+            نظام الموارد البشرية · {COMPANY_PROFILE.programNameAr}
           </p>
         </div>
 
@@ -184,7 +185,7 @@ export default function EmployeeLogin() {
               to="/login"
               className="text-emerald-400 hover:text-emerald-300 font-medium"
             >
-              نظام إدارة العياف
+              {COMPANY_PROFILE.programNameAr}
             </Link>
           </p>
         </div>

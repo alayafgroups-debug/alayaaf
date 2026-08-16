@@ -19,6 +19,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 type UserRow = {
   id: string;
@@ -53,7 +54,7 @@ const emptyForm: UserForm = {
   name: "",
   email: "",
   role: "User",
-  company: "شركة إدارة العياف للمقاولات",
+  company: COMPANY_PROFILE.companyNameAr,
   phone: "",
   status: "نشط",
 };
@@ -63,7 +64,7 @@ const mapUserRow = (row: Record<string, unknown>): UserRow => ({
   name: String(row.full_name ?? row.name ?? ""),
   email: String(row.email ?? ""),
   role: String(row.role ?? "User"),
-  company: String(row.company ?? "شركة إدارة العياف للمقاولات"),
+  company: String(row.company ?? COMPANY_PROFILE.companyNameAr),
   phone: String(row.phone ?? ""),
   status: String(row.status ?? "نشط"),
 });
@@ -218,7 +219,7 @@ export default function UsersPermissions() {
       full_name: form.name.trim(),
       email: form.email.trim(),
       role: form.role,
-      company: form.company.trim() || "شركة إدارة العياف للمقاولات",
+      company: form.company.trim() || COMPANY_PROFILE.companyNameAr,
       phone: form.phone.trim(),
       status: form.status,
       updated_at: new Date().toISOString(),

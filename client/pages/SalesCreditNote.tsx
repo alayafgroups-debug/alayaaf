@@ -86,7 +86,6 @@ const creditNoteTranslations: Record<string, string> = {
   "QR بعد الاعتماد": "QR after approval",
   "يظهر رمز الاستجابة السريعة بعد قبول ZATCA للإشعار.":
     "The QR code appears after ZATCA accepts the note.",
-  "شركة لاكجري العياف": "Luxury Al Ayaf Company",
   "الشيخ محمد بن جبير": "Sheikh Mohammed Bin Jubair",
   "مكة المكرمة": "Makkah",
   "المملكة العربية السعودية": "Saudi Arabia",

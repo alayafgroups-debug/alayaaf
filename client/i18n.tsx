@@ -18,7 +18,6 @@ type I18nContextValue = {
 };
 
 const translations: Record<string, string> = {
-  "لاكجري العياف": "Luxury Al Ayaf",
   "نظام إدارة العياف": "Idarat Al Ayaf Management System",
   "شركة إدارة العياف للمقاولات": "Company Idarat Al Ayaf For Contracting",
   "القائمة الرئيسية": "Main menu",
@@ -35,7 +34,6 @@ const translations: Record<string, string> = {
   "العودة للقائمة الرئيسية": "Back to main menu",
   "تسجيل الخروج": "Log out",
   "بحث...": "Search...",
-  "شركة لاكجري العياف": "Luxury Al Ayaf Company",
   "نظام الموارد البشرية": "Human resources system",
   "نظام إدارة الأعمال المتكامل": "Integrated business management system",
   الملاحظة: "Note",
@@ -570,7 +568,6 @@ const translations: Record<string, string> = {
   "يرجى كتابة الرسالة": "Enter a message",
   "تم إرسال رسالتك إلى الإدارة": "Your message was sent to management",
   "من نحن": "About us",
-  "شركة الأياف": "Al Ayaf Company",
   "نظام إدارة الموارد البشرية المتكامل":
     "Integrated human resources management system",
   "مقرات الشركة والفروع": "Company offices and branches",
@@ -1152,7 +1149,6 @@ Object.assign(translations, {
   "تعذر تحميل مراكز التكلفة": "Unable to load cost centers",
   "تم إنشاء مركز التكلفة": "Cost center created",
   "لا توجد مراكز تكلفة.": "No cost centers.",
-  "شركة العياف التجارية": "Al Ayaf Trading Company",
   "تعديل الحساب": "Edit account",
   "حذف حساب": "Delete account",
   "إضافة حساب فرعي": "Add sub-account",

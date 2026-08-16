@@ -387,7 +387,13 @@ export default function ChartOfAccountsTree() {
               </tr>
             </thead>
             <tbody>
-              {visibleAccounts.map((account) => {
+              {visibleAccounts.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                    {t("لا توجد نتائج")}
+                  </td>
+                </tr>
+              ) : visibleAccounts.map((account) => {
                 const catColor = getCategoryColor(account);
                 const isMainRow = account.isMainCategory;
                 const hasKids = hasChildren(account.code);
@@ -515,7 +521,12 @@ function MainCategoryRow({
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2">
           {hasKids && (
-            <button onClick={onToggle} className="text-muted-foreground hover:text-foreground">
+            <button
+              onClick={onToggle}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label={isCollapsed ? t("توسيع الحساب") : t("طي الحساب")}
+              title={isCollapsed ? t("توسيع الحساب") : t("طي الحساب")}
+            >
               {isCollapsed ? (
                 <CollapseIcon className="h-4 w-4" />
               ) : (
@@ -609,7 +620,12 @@ function AccountRow({
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2" style={{ paddingInlineStart: `${indent}px` }}>
           {hasKids && (
-            <button onClick={onToggle} className="text-muted-foreground hover:text-foreground shrink-0">
+            <button
+              onClick={onToggle}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              aria-label={isCollapsed ? t("توسيع الحساب") : t("طي الحساب")}
+              title={isCollapsed ? t("توسيع الحساب") : t("طي الحساب")}
+            >
               {isCollapsed ? (
                 <CollapseIcon className="h-4 w-4" />
               ) : (

@@ -12,7 +12,7 @@ type Props = {
 };
 
 export default function AccountEditPanel({ account, allAccounts, onClose, onSave }: Props) {
-  const { t, direction } = useI18n();
+  const { t, direction, locale } = useI18n();
   const [form, setForm] = useState<AccountNode>({ ...account });
   const [usageOpen, setUsageOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(false);
@@ -26,6 +26,8 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
   );
 
   const mainCategories = allAccounts.filter((a) => a.level === 0);
+  const accountDisplayName = (item: AccountNode) =>
+    locale === "ar" ? item.nameAr : item.nameEn;
 
   const handleSave = () => {
     onSave({
@@ -70,7 +72,7 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
             >
               {mainCategories.map((cat) => (
                 <option key={cat.code} value={cat.code}>
-                  {cat.code} - {cat.nameAr}
+                  {cat.code} - {accountDisplayName(cat)}
                 </option>
               ))}
             </select>
@@ -92,7 +94,7 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
               <option value="">{t("بدون حساب أب")}</option>
               {parentOptions.map((p) => (
                 <option key={p.code} value={p.code}>
-                  {p.code} - {p.nameAr}
+                  {p.code} - {accountDisplayName(p)}
                 </option>
               ))}
             </select>
@@ -120,7 +122,7 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
                   value={form.nameEn}
                   onChange={(e) => setForm({ ...form, nameEn: e.target.value })}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  dir="ltr"
+                  dir={direction}
                   placeholder={t("أدخل الاسم بالإنجليزية")}
                 />
               </div>

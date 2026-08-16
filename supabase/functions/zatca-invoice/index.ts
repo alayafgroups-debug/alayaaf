@@ -557,6 +557,17 @@ Deno.serve(async (req) => {
         message: "تم إرسال هذا المستند إلى ZATCA مسبقاً",
       });
     }
+    if (clean(existingLog?.status) === "ambiguous") {
+      return respond(
+        {
+          error:
+            "نتيجة الإرسال السابق غير محسومة؛ لا تعد إرسال المستند قبل المراجعة اليدوية",
+          status: "ambiguous",
+          retryable: false,
+        },
+        409,
+      );
+    }
     if (clean(existingLog?.status) === "submitted") {
       const submittedTimestamps = [
         Date.parse(clean(existingLog.updated_at)),
@@ -605,6 +616,27 @@ Deno.serve(async (req) => {
       );
     }
     const setup = setups[0];
+    const { data: unresolvedSubmission, error: unresolvedSubmissionError } =
+      await admin
+        .from("zatca_invoice_submission_logs")
+        .select("id")
+        .eq("onboarding_id", setup.id)
+        .eq("status", "ambiguous")
+        .limit(1)
+        .maybeSingle();
+    if (unresolvedSubmissionError) throw unresolvedSubmissionError;
+    if (unresolvedSubmission) {
+      return respond(
+        {
+          error:
+            "يوجد مستند سابق غير محسوم على هذا الجهاز؛ لا ترسل مستندًا جديدًا قبل المراجعة اليدوية",
+          status: "ambiguous",
+          retryable: false,
+        },
+        409,
+      );
+    }
+
     const vaultCredentials = await getZatcaCredentials(admin, setup.id);
     Object.assign(setup, vaultCredentials);
 
@@ -941,7 +973,6 @@ Deno.serve(async (req) => {
       values: Record<string, unknown>,
       reason: string,
     ) => {
-      sequenceBlocked = true;
       let logError: unknown = null;
       try {
         await saveLog({
@@ -975,6 +1006,7 @@ Deno.serve(async (req) => {
         p_reason: reason,
       });
       if (blockError) throw blockError;
+      sequenceBlocked = true;
       if (logError) throw logError;
       if (invoiceStatusError) throw invoiceStatusError;
     };

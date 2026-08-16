@@ -969,10 +969,12 @@ Deno.serve(async (req) => {
 
     let sequenceFinalized = false;
     let sequenceBlocked = false;
+    let submissionAmbiguous = false;
     const markAmbiguousAndBlock = async (
       values: Record<string, unknown>,
       reason: string,
     ) => {
+      submissionAmbiguous = true;
       let logError: unknown = null;
       try {
         await saveLog({
@@ -1005,10 +1007,17 @@ Deno.serve(async (req) => {
         p_reservation_token: reservationToken,
         p_reason: reason,
       });
-      if (blockError) throw blockError;
+      if (blockError) {
+        const error = new Error(
+          clean(blockError.message) || "تعذر حظر تسلسل ZATCA للمراجعة",
+        ) as Error & { zatcaStatus?: string };
+        error.zatcaStatus = "ambiguous";
+        throw error;
+      }
       sequenceBlocked = true;
-      if (logError) throw logError;
-      if (invoiceStatusError) throw invoiceStatusError;
+      if (logError) console.error("zatca-invoice ambiguous log", logError);
+      if (invoiceStatusError)
+        console.error("zatca-invoice ambiguous document status", invoiceStatusError);
     };
     try {
       const uuid = clean(record.uuid) || crypto.randomUUID();
@@ -1237,7 +1246,7 @@ Deno.serve(async (req) => {
       });
     } catch (error: any) {
       const message = clean(error?.message) || "Unexpected submission error";
-      if (!sequenceFinalized && !sequenceBlocked) {
+      if (!sequenceFinalized && !sequenceBlocked && !submissionAmbiguous) {
         await saveLog({
           status: "failed",
           request_payload: {
@@ -1271,6 +1280,13 @@ Deno.serve(async (req) => {
     }
   } catch (error: any) {
     console.error("zatca-invoice", error);
-    return respond({ error: error?.message ?? "Unexpected error" }, 500);
+    const status = error?.zatcaStatus === "ambiguous" ? "ambiguous" : undefined;
+    return respond(
+      {
+        error: error?.message ?? "Unexpected error",
+        ...(status ? { status, retryable: false } : {}),
+      },
+      status ? 503 : 500,
+    );
   }
 });

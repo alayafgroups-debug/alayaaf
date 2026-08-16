@@ -152,6 +152,32 @@ const auditActionLabels: Record<string, string> = {
   production_deactivated: "تعطيل الإنتاج الحقيقي",
 };
 
+function getAuditDetailMessage(item: any) {
+  if (item?.result !== "failed") return "";
+  const details = item?.details ?? {};
+  const response = details?.response ?? {};
+  const errors = Array.isArray(response?.errors)
+    ? response.errors.map((error: unknown) =>
+        typeof error === "string"
+          ? error
+          : String((error as { message?: unknown })?.message ?? ""),
+      )
+    : [];
+  return [
+    details?.code,
+    details?.message,
+    response?.code,
+    response?.message,
+    response?.errorMessage,
+    response?.dispositionMessage,
+    ...errors,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join(" — ");
+}
+
 export default function ZATCASettings() {
   const [identity, setIdentity] = useState<IdentityForm>(initialIdentity);
   const [selectedMode, setSelectedMode] = useState<ZatcaMode>("simulation");
@@ -1338,28 +1364,42 @@ export default function ZATCASettings() {
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <h2 className="mb-3 font-bold text-slate-900">سجل التهيئة</h2>
             <div className="space-y-2">
-              {audit.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs"
-                >
-                  <span className="font-semibold text-slate-700">
-                    {auditActionLabels[item.action] ?? item.action}
-                  </span>
-                  <span
-                    className={
-                      item.result === "success"
-                        ? "text-emerald-700"
-                        : "text-rose-700"
-                    }
+              {audit.map((item) => {
+                const detailMessage = getAuditDetailMessage(item);
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-lg bg-slate-50 px-3 py-2 text-xs"
                   >
-                    {item.result === "success" ? "نجح" : "فشل"}
-                  </span>
-                  <time className="text-slate-400">
-                    {new Date(item.created_at).toLocaleString("ar-SA")}
-                  </time>
-                </div>
-              ))}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-700">
+                        {auditActionLabels[item.action] ?? item.action}
+                      </span>
+                      <span
+                        className={
+                          item.result === "success"
+                            ? "text-emerald-700"
+                            : "text-rose-700"
+                        }
+                      >
+                        {item.result === "success" ? "نجح" : "فشل"}
+                        {item.http_status ? ` — HTTP ${item.http_status}` : ""}
+                      </span>
+                      <time className="text-slate-400">
+                        {new Date(item.created_at).toLocaleString("ar-SA")}
+                      </time>
+                    </div>
+                    {detailMessage && (
+                      <p
+                        className="mt-2 break-words rounded-md bg-rose-50 px-2 py-1.5 text-rose-800"
+                        dir="auto"
+                      >
+                        {detailMessage}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}

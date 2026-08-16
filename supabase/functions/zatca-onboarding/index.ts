@@ -1038,21 +1038,17 @@ Deno.serve(async (req) => {
 
       const masked = `${csid.slice(0, 8)}••••${csid.slice(-6)}`;
       const issuedAt = new Date().toISOString();
-      await storeZatcaSecret(admin, setup.id, "compliance_csid", csid);
-      await storeZatcaSecret(admin, setup.id, "compliance_secret", secret);
-      const { error: updateError } = await admin
-        .from("zatca_onboarding_settings")
-        .update({
-          status: "compliance_ready",
-          compliance_request_id: requestId,
-          compliance_csid: null,
-          compliance_secret: null,
-          compliance_csid_masked: masked,
-          compliance_issued_at: issuedAt,
-          last_error: null,
-          updated_at: issuedAt,
-        })
-        .eq("id", setup.id);
+      const { error: updateError } = await admin.rpc(
+        "store_zatca_compliance_credentials",
+        {
+          p_onboarding_id: setup.id,
+          p_request_id: requestId,
+          p_csid: csid,
+          p_secret: secret,
+          p_csid_masked: masked,
+          p_issued_at: issuedAt,
+        },
+      );
       if (updateError) throw updateError;
       await admin.from("zatca_onboarding_audit").insert({
         onboarding_id: setup.id,
@@ -1092,7 +1088,10 @@ Deno.serve(async (req) => {
       }
       const credentials = await getZatcaCredentials(admin, setup.id);
       if (!credentials.compliance_csid || !credentials.compliance_secret) {
-        return respond({ error: "بيانات اعتماد التوافق غير موجودة في Vault" }, 409);
+        return respond(
+          { error: "بيانات اعتماد التوافق غير موجودة في Vault" },
+          409,
+        );
       }
       const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
       const complianceResults = Array.isArray(setup.compliance_results)
@@ -1242,24 +1241,18 @@ Deno.serve(async (req) => {
         });
         return respond({ error: message }, 502);
       }
-      await storeZatcaSecret(admin, setup.id, "production_csid", productionCsid);
-      await storeZatcaSecret(admin, setup.id, "production_secret", productionSecret);
-      const { error: updateError } = await admin
-        .from("zatca_onboarding_settings")
-        .update({
-          production_request_id: productionRequestId,
-          production_csid: null,
-          production_secret: null,
-          production_csid_masked: masked,
-          production_issued_at: issuedAt,
-          production_status: "issued",
-          production_enabled: false,
-          certificate_expires_at: certificateExpiresAt,
-          certificate_revoked_at: null,
-          last_error: null,
-          updated_at: issuedAt,
-        })
-        .eq("id", setup.id);
+      const { error: updateError } = await admin.rpc(
+        "store_zatca_production_credentials",
+        {
+          p_onboarding_id: setup.id,
+          p_request_id: productionRequestId,
+          p_csid: productionCsid,
+          p_secret: productionSecret,
+          p_csid_masked: masked,
+          p_issued_at: issuedAt,
+          p_certificate_expires_at: certificateExpiresAt,
+        },
+      );
       if (updateError) throw updateError;
       await admin.from("zatca_onboarding_audit").insert({
         onboarding_id: setup.id,

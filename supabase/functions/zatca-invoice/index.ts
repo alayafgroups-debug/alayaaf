@@ -431,7 +431,36 @@ Deno.serve(async (req) => {
     data: { user },
     error: authError,
   } = await caller.auth.getUser(authHeader.slice(7));
-  if (authError || !user) return respond({ error: "Unauthorized" }, 401);
+  if (authError || !user?.email) return respond({ error: "Unauthorized" }, 401);
+
+  const { data: callerEmployee } = await admin
+    .from("employees")
+    .select("employee_role")
+    .ilike("email", user.email)
+    .maybeSingle();
+  if (!callerEmployee?.employee_role) {
+    return respond({ error: "غير مصرح بإرسال مستندات ZATCA" }, 403);
+  }
+  const { data: callerRole } = await admin
+    .from("user_roles")
+    .select("permissions")
+    .eq("name_ar", callerEmployee.employee_role)
+    .eq("status", "فعال")
+    .maybeSingle();
+  const permissions =
+    callerRole?.permissions && typeof callerRole.permissions === "object"
+      ? (callerRole.permissions as Record<string, unknown>)
+      : {};
+  const fullAccessRoles = new Set(["مدير النظام", "مدير عام", "المدير العام"]);
+  const canSubmitZatca =
+    fullAccessRoles.has(callerEmployee.employee_role) ||
+    permissions["module.sales"] === true ||
+    permissions["module.sales"] === "manage" ||
+    permissions["sales.invoices"] === true ||
+    permissions["sales.invoices"] === "manage";
+  if (!canSubmitZatca) {
+    return respond({ error: "غير مصرح بإرسال مستندات ZATCA" }, 403);
+  }
 
   try {
     const body = await req.json();
@@ -947,46 +976,47 @@ Deno.serve(async (req) => {
 
       const status = signed.simplified ? "reported" : "cleared";
       const { error: finalizeError } = await admin.rpc(
-        "finalize_zatca_sequence",
+        "finalize_zatca_accepted_submission",
         {
           p_onboarding_id: setup.id,
           p_reservation_token: reservationToken,
           p_invoice_hash: signed.invoiceHash,
+          p_log_id: durableLogId,
+          p_status: status,
+          p_http_status: zatcaResponse.status,
+          p_request_uuid: uuid,
+          p_icv: icv,
+          p_previous_pih: previousHash,
+          p_request_payload: requestPayload,
+          p_response: responseData,
+          p_response_text: responseText,
+          p_invoice_table: table,
+          p_record_id: recordId,
+          p_qr_code_data: signed.qrCodeData,
+          p_cryptographic_stamp: signed.signatureValue,
+          p_invoice_xml: signed.signedXml,
+          p_submitted_at: submittedAt,
         },
       );
-      if (finalizeError) throw finalizeError;
+      if (finalizeError) {
+        const persistenceError =
+          "قبلت ZATCA المستند لكن تعذر تثبيت النتيجة محليًا؛ تم إيقاف تسلسل الجهاز للمراجعة اليدوية";
+        await markAmbiguousAndBlock(
+          {
+            http_status: zatcaResponse.status,
+            request_uuid: uuid,
+            invoice_hash: signed.invoiceHash,
+            icv,
+            previous_pih: previousHash,
+            request_payload: requestPayload,
+            response: responseData,
+            response_text: responseText,
+          },
+          `${persistenceError}: ${clean(finalizeError.message)}`,
+        );
+        return respond({ error: persistenceError }, 503);
+      }
       sequenceFinalized = true;
-
-      await saveLog({
-        status,
-        http_status: zatcaResponse.status,
-        request_uuid: uuid,
-        invoice_hash: signed.invoiceHash,
-        icv,
-        previous_pih: previousHash,
-        request_payload: requestPayload,
-        response: responseData,
-        response_text: responseText,
-        retry_after: null,
-        last_error: null,
-      });
-      const { error: recordUpdateError } = await admin
-        .from(table)
-        .update({
-          uuid,
-          icv: String(icv),
-          pih: previousHash,
-          qr_code_data: signed.qrCodeData,
-          cryptographic_stamp: signed.signatureValue,
-          invoice_xml: signed.signedXml,
-          zatca_status: status,
-          zatca_response: responseData,
-          zatca_submitted_at: submittedAt,
-          zatca_approved_at: signed.simplified ? null : submittedAt,
-          zatca_reported_at: signed.simplified ? submittedAt : null,
-        })
-        .eq("id", recordId);
-      if (recordUpdateError) throw recordUpdateError;
 
       return respond({
         status,

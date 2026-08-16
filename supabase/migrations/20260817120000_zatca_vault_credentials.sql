@@ -147,11 +147,11 @@ security definer
 stable
 set search_path = public, vault
 as $$
-  select private_key.secret,
-         compliance_csid_value.secret,
-         compliance_secret_value.secret,
-         production_csid_value.secret,
-         production_secret_value.secret
+  select private_key.decrypted_secret,
+         compliance_csid_value.decrypted_secret,
+         compliance_secret_value.decrypted_secret,
+         production_csid_value.decrypted_secret,
+         production_secret_value.decrypted_secret
   from public.zatca_onboarding_settings settings
   left join vault.decrypted_secrets private_key
     on private_key.id = settings.private_key_secret_id
@@ -198,6 +198,151 @@ create trigger cleanup_zatca_vault_secrets_trigger
 before delete on public.zatca_onboarding_settings
 for each row execute function public.cleanup_zatca_vault_secrets();
 
+create or replace function public.store_zatca_compliance_credentials(
+  p_onboarding_id uuid,
+  p_request_id text,
+  p_csid text,
+  p_secret text,
+  p_csid_masked text,
+  p_issued_at timestamptz
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+begin
+  perform public.store_zatca_secret(p_onboarding_id, 'compliance_csid', p_csid);
+  perform public.store_zatca_secret(p_onboarding_id, 'compliance_secret', p_secret);
+
+  update public.zatca_onboarding_settings
+  set status = 'compliance_ready',
+      compliance_request_id = p_request_id,
+      compliance_csid = null,
+      compliance_secret = null,
+      compliance_csid_masked = p_csid_masked,
+      compliance_issued_at = p_issued_at,
+      last_error = null,
+      updated_at = p_issued_at
+  where id = p_onboarding_id;
+  if not found then raise exception 'ZATCA_ONBOARDING_NOT_FOUND'; end if;
+end;
+$$;
+
+create or replace function public.store_zatca_production_credentials(
+  p_onboarding_id uuid,
+  p_request_id text,
+  p_csid text,
+  p_secret text,
+  p_csid_masked text,
+  p_issued_at timestamptz,
+  p_certificate_expires_at timestamptz
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+begin
+  perform public.store_zatca_secret(p_onboarding_id, 'production_csid', p_csid);
+  perform public.store_zatca_secret(p_onboarding_id, 'production_secret', p_secret);
+
+  update public.zatca_onboarding_settings
+  set production_request_id = p_request_id,
+      production_csid = null,
+      production_secret = null,
+      production_csid_masked = p_csid_masked,
+      production_issued_at = p_issued_at,
+      production_status = 'issued',
+      production_enabled = false,
+      certificate_expires_at = p_certificate_expires_at,
+      certificate_revoked_at = null,
+      last_error = null,
+      updated_at = p_issued_at
+  where id = p_onboarding_id;
+  if not found then raise exception 'ZATCA_ONBOARDING_NOT_FOUND'; end if;
+end;
+$$;
+
+create or replace function public.finalize_zatca_accepted_submission(
+  p_onboarding_id uuid,
+  p_reservation_token uuid,
+  p_invoice_hash text,
+  p_log_id uuid,
+  p_status text,
+  p_http_status integer,
+  p_request_uuid text,
+  p_icv bigint,
+  p_previous_pih text,
+  p_request_payload jsonb,
+  p_response jsonb,
+  p_response_text text,
+  p_invoice_table text,
+  p_record_id uuid,
+  p_qr_code_data text,
+  p_cryptographic_stamp text,
+  p_invoice_xml text,
+  p_submitted_at timestamptz
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_status not in ('cleared', 'reported') then
+    raise exception 'INVALID_ZATCA_ACCEPTED_STATUS';
+  end if;
+  if p_invoice_table not in ('sales_invoices', 'invoice_adjustment_notes') then
+    raise exception 'INVALID_ZATCA_INVOICE_TABLE';
+  end if;
+
+  update public.zatca_device_sequences
+  set next_icv = next_icv + 1,
+      last_pih = p_invoice_hash,
+      reservation_token = null,
+      reservation_expires_at = null,
+      updated_at = now()
+  where onboarding_id = p_onboarding_id
+    and reservation_token = p_reservation_token;
+  if not found then raise exception 'INVALID_ZATCA_SEQUENCE_RESERVATION'; end if;
+
+  update public.zatca_invoice_submission_logs
+  set status = p_status,
+      http_status = p_http_status,
+      request_uuid = p_request_uuid,
+      invoice_hash = p_invoice_hash,
+      icv = p_icv,
+      previous_pih = p_previous_pih,
+      request_payload = p_request_payload,
+      response = p_response,
+      response_text = p_response_text,
+      retry_after = null,
+      last_error = null,
+      updated_at = now()
+  where id = p_log_id;
+  if not found then raise exception 'ZATCA_SUBMISSION_LOG_NOT_FOUND'; end if;
+
+  execute format(
+    'update public.%I set uuid = $1, icv = $2, pih = $3, qr_code_data = $4, cryptographic_stamp = $5, invoice_xml = $6, zatca_status = $7, zatca_response = $8, zatca_submitted_at = $9, zatca_approved_at = $10, zatca_reported_at = $11 where id = $12',
+    p_invoice_table
+  ) using
+    p_request_uuid,
+    p_icv::text,
+    p_previous_pih,
+    p_qr_code_data,
+    p_cryptographic_stamp,
+    p_invoice_xml,
+    p_status,
+    p_response,
+    p_submitted_at,
+    case when p_status = 'cleared' then p_submitted_at else null end,
+    case when p_status = 'reported' then p_submitted_at else null end,
+    p_record_id;
+  if not found then raise exception 'ZATCA_INVOICE_RECORD_NOT_FOUND'; end if;
+end;
+$$;
+
 do $$
 declare
   v_row record;
@@ -236,9 +381,15 @@ revoke all on function public.store_zatca_secret(uuid, text, text) from public, 
 revoke all on function public.delete_zatca_secret(uuid, text) from public, anon, authenticated;
 revoke all on function public.get_zatca_credentials(uuid) from public, anon, authenticated;
 revoke all on function public.cleanup_zatca_vault_secrets() from public, anon, authenticated;
+revoke all on function public.store_zatca_compliance_credentials(uuid, text, text, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.store_zatca_production_credentials(uuid, text, text, text, text, timestamptz, timestamptz) from public, anon, authenticated;
+revoke all on function public.finalize_zatca_accepted_submission(uuid, uuid, text, uuid, text, integer, text, bigint, text, jsonb, jsonb, text, text, uuid, text, text, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.store_zatca_secret(uuid, text, text) to service_role;
 grant execute on function public.delete_zatca_secret(uuid, text) to service_role;
 grant execute on function public.get_zatca_credentials(uuid) to service_role;
+grant execute on function public.store_zatca_compliance_credentials(uuid, text, text, text, text, timestamptz) to service_role;
+grant execute on function public.store_zatca_production_credentials(uuid, text, text, text, text, timestamptz, timestamptz) to service_role;
+grant execute on function public.finalize_zatca_accepted_submission(uuid, uuid, text, uuid, text, integer, text, bigint, text, jsonb, jsonb, text, text, uuid, text, text, text, timestamptz) to service_role;
 
 revoke all on vault.secrets from public, anon, authenticated;
 revoke all on vault.decrypted_secrets from public, anon, authenticated;

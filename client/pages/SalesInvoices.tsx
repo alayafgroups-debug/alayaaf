@@ -286,6 +286,10 @@ async function submitInvoiceToZatca(
           .json()
           .catch(() => null)
       : null;
+    const failureStatus =
+      payload?.status === "ambiguous" || data?.status === "ambiguous"
+        ? ("ambiguous" as const)
+        : ("rejected" as const);
     toast({
       title: t("تعذر إرسال الفاتورة إلى ZATCA"),
       description: String(
@@ -296,7 +300,7 @@ async function submitInvoiceToZatca(
       ),
       variant: "destructive",
     });
-    return { status: "rejected" as const, qrCodeData: "" };
+    return { status: failureStatus, qrCodeData: "" };
   }
   toast({ title: "ZATCA", description: String(data.message) });
   return {

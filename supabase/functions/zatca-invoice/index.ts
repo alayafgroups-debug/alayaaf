@@ -954,14 +954,20 @@ Deno.serve(async (req) => {
         logError = error;
       }
 
-      const { error: invoiceStatusError } = await admin
-        .from(table)
-        .update({
-          zatca_status: "ambiguous",
-          zatca_response: values.response ?? {},
-          zatca_submitted_at: new Date().toISOString(),
-        })
-        .eq("id", recordId);
+      let invoiceStatusError: unknown = null;
+      try {
+        const { error } = await admin
+          .from(table)
+          .update({
+            zatca_status: "ambiguous",
+            zatca_response: values.response ?? {},
+            zatca_submitted_at: new Date().toISOString(),
+          })
+          .eq("id", recordId);
+        invoiceStatusError = error;
+      } catch (error) {
+        invoiceStatusError = error;
+      }
 
       const { error: blockError } = await admin.rpc("block_zatca_sequence", {
         p_onboarding_id: setup.id,
@@ -1051,7 +1057,10 @@ Deno.serve(async (req) => {
           },
           message,
         );
-        return respond({ error: message, retryable: false }, 503);
+        return respond(
+          { error: message, status: "ambiguous", retryable: false },
+          503,
+        );
       }
 
       let responseText: string;
@@ -1072,7 +1081,10 @@ Deno.serve(async (req) => {
           },
           message,
         );
-        return respond({ error: message, retryable: false }, 503);
+        return respond(
+          { error: message, status: "ambiguous", retryable: false },
+          503,
+        );
       }
       let responseData: any = {};
       try {
@@ -1121,7 +1133,12 @@ Deno.serve(async (req) => {
           })
           .eq("id", recordId);
         return respond(
-          { error: errorMessage, details: responseData, retryable: false },
+          {
+            error: errorMessage,
+            status: failureStatus,
+            details: responseData,
+            retryable: false,
+          },
           retryable ? 503 : 422,
         );
       }
@@ -1170,7 +1187,10 @@ Deno.serve(async (req) => {
           },
           `${persistenceError}: ${clean(finalizeError.message)}`,
         );
-        return respond({ error: persistenceError }, 503);
+        return respond(
+          { error: persistenceError, status: "ambiguous", retryable: false },
+          503,
+        );
       }
       sequenceFinalized = true;
 

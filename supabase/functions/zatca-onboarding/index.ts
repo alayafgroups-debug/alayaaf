@@ -789,7 +789,20 @@ Deno.serve(async (req) => {
       .order("updated_at", { ascending: false })
       .limit(1);
     if (ownerError) throw ownerError;
-    const existingSetup = matchingSetups?.[0] ?? null;
+    let existingSetup = matchingSetups?.[0] ?? null;
+    if (!existingSetup && action === "status") {
+      const { data: latestOwnedSetups, error: latestOwnedError } = await admin
+        .from("zatca_onboarding_settings")
+        .select("id, created_by, status, compliance_issued_at, device_serial")
+        .eq("mode", mode)
+        .eq("organization_key", organizationKey)
+        .eq("branch_key", branchKey)
+        .eq("created_by", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (latestOwnedError) throw latestOwnedError;
+      existingSetup = latestOwnedSetups?.[0] ?? null;
+    }
     if (existingSetup && existingSetup.created_by !== user.id) {
       return respond({ error: "هذه التهيئة مرتبطة بحساب إداري آخر" }, 403);
     }

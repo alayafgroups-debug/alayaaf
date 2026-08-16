@@ -174,14 +174,14 @@ begin
     end if;
 
     -- Old simplified logs predate artifact persistence and ZATCA reporting does
-    -- not return the submitted XML. Never claim full local recovery or unblock
-    -- when the exact signed legal document cannot be restored.
-    if v_log.invoice_type = 'simplified'
-       and (v_invoice_xml is null
-         or v_qr_code_data is null
-         or v_cryptographic_stamp is null) then
+    -- not return the submitted XML. Standard recovery normally uses clearedInvoice.
+    -- Never claim full local recovery or unblock either type when the exact signed
+    -- legal document and its QR/signature cannot be restored.
+    if v_invoice_xml is null
+       or v_qr_code_data is null
+       or v_cryptographic_stamp is null then
       update public.zatca_invoice_submission_logs
-      set last_error = 'ZATCA_SIMPLIFIED_ARTIFACTS_UNRECOVERABLE: لا تعد إرسال المستند؛ يلزم تطابق يدوي مع ZATCA',
+      set last_error = 'ZATCA_ACCEPTED_ARTIFACTS_UNRECOVERABLE: لا تعد إرسال المستند؛ يلزم تطابق يدوي مع ZATCA',
           retry_after = null,
           updated_at = now()
       where id = v_log.id;

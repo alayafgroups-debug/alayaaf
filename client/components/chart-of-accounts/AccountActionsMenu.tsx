@@ -53,6 +53,7 @@ export default function AccountActionsMenu({
           {/* Edit */}
           <button
             onClick={() => { onEdit(); setOpen(false); }}
+            aria-label={t("تعديل الحساب")}
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted/40 transition"
           >
             <Pencil className="h-4 w-4 text-muted-foreground" />
@@ -62,6 +63,7 @@ export default function AccountActionsMenu({
           {/* Delete */}
           <button
             onClick={() => { if (canDelete) { onDelete(); } setOpen(false); }}
+            aria-label={t("حذف حساب")}
             className={`flex w-full items-center gap-2 px-4 py-2.5 text-sm transition ${
               canDelete
                 ? "text-foreground hover:bg-muted/40"
@@ -83,6 +85,7 @@ export default function AccountActionsMenu({
           {/* Add Sub Account */}
           <button
             onClick={() => { onAddSubAccount(); setOpen(false); }}
+            aria-label={t("إضافة حساب فرعي")}
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted/40 transition"
           >
             <Plus className="h-4 w-4 text-muted-foreground" />
@@ -92,6 +95,7 @@ export default function AccountActionsMenu({
           {/* Add Sub Account as Bank */}
           <button
             onClick={() => { onAddBankSubAccount(); setOpen(false); }}
+            aria-label={t("إضافة حساب فرعي كحساب بنك")}
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted/40 transition"
           >
             <Building2 className="h-4 w-4 text-muted-foreground" />

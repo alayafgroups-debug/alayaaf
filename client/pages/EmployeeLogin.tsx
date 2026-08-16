@@ -31,10 +31,11 @@ export default function EmployeeLogin() {
         return;
       }
 
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: (resolvedEmail as string).toLowerCase(),
-        password,
-      });
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email: (resolvedEmail as string).toLowerCase(),
+          password,
+        });
       if (authError) {
         toast.error("بيانات الدخول غير صحيحة");
         return;
@@ -43,7 +44,7 @@ export default function EmployeeLogin() {
       const { data: empData, error: profileError } = await supabase
         .from("employees")
         .select("id, emp_id, account_title, name, employee_role, permissions")
-        .ilike("email", (resolvedEmail as string))
+        .ilike("email", resolvedEmail as string)
         .maybeSingle();
 
       if (profileError || !empData) {
@@ -58,7 +59,9 @@ export default function EmployeeLogin() {
         empId: empData.emp_id || empId,
         name: empData.name,
         role: empData.employee_role ?? "موظف",
-        permissions: (Array.isArray(empData.permissions) ? {} : empData.permissions ?? {}) as Record<string, boolean>,
+        permissions: (Array.isArray(empData.permissions)
+          ? {}
+          : (empData.permissions ?? {})) as Record<string, boolean>,
         portal: "employee",
       };
       localStorage.setItem("user_session", JSON.stringify(session));
@@ -77,7 +80,8 @@ export default function EmployeeLogin() {
       className="min-h-screen flex items-center justify-center p-4"
       dir="rtl"
       style={{
-        background: "linear-gradient(135deg, #052e16 0%, #14532d 40%, #064e3b 70%, #012617 100%)",
+        background:
+          "linear-gradient(135deg, #052e16 0%, #14532d 40%, #064e3b 70%, #012617 100%)",
       }}
     >
       {/* Background glow */}
@@ -92,7 +96,9 @@ export default function EmployeeLogin() {
           <div className="flex justify-center mb-5">
             <div
               className="relative flex h-20 w-20 items-center justify-center rounded-2xl shadow-2xl shadow-emerald-500/30"
-              style={{ background: "linear-gradient(135deg, #059669, #0d9488)" }}
+              style={{
+                background: "linear-gradient(135deg, #059669, #0d9488)",
+              }}
             >
               <Users2 className="h-10 w-10 text-white" />
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/20 to-transparent" />
@@ -101,7 +107,9 @@ export default function EmployeeLogin() {
           <h1 className="text-3xl font-extrabold text-white tracking-tight leading-tight">
             بوابة الموظفين
           </h1>
-          <p className="mt-2 text-emerald-200/70 text-sm">نظام الموارد البشرية · لاكجري العياف</p>
+          <p className="mt-2 text-emerald-200/70 text-sm">
+            نظام الموارد البشرية · لاكجري العياف
+          </p>
         </div>
 
         {/* Card */}
@@ -109,7 +117,9 @@ export default function EmployeeLogin() {
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Employee ID */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-white/70">الرقم الوظيفي</label>
+              <label className="block text-sm font-medium text-white/70">
+                الرقم الوظيفي
+              </label>
               <div className="relative">
                 <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <Input
@@ -126,7 +136,9 @@ export default function EmployeeLogin() {
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-white/70">كلمة المرور</label>
+              <label className="block text-sm font-medium text-white/70">
+                كلمة المرور
+              </label>
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <input
@@ -143,7 +155,11 @@ export default function EmployeeLogin() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -153,7 +169,9 @@ export default function EmployeeLogin() {
               type="submit"
               disabled={loading}
               className="w-full h-12 text-[15px] font-bold rounded-xl transition shadow-lg shadow-emerald-500/25"
-              style={{ background: "linear-gradient(135deg, #059669, #0d9488)" }}
+              style={{
+                background: "linear-gradient(135deg, #059669, #0d9488)",
+              }}
             >
               {loading ? "جاري الدخول..." : "دخول"}
             </Button>
@@ -162,8 +180,11 @@ export default function EmployeeLogin() {
           {/* Switch to admin portal */}
           <p className="text-center text-sm text-white/40">
             هل أنت مدير؟{" "}
-            <Link to="/login" className="text-emerald-400 hover:text-emerald-300 font-medium">
-              نظام إدارة الأعمال المتكامل
+            <Link
+              to="/login"
+              className="text-emerald-400 hover:text-emerald-300 font-medium"
+            >
+              نظام إدارة العياف
             </Link>
           </p>
         </div>

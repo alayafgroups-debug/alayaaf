@@ -22,10 +22,11 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.toLowerCase(),
-        password,
-      });
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email: email.toLowerCase(),
+          password,
+        });
       if (authError) {
         toast.error("بيانات الدخول غير صحيحة");
         return;
@@ -53,7 +54,11 @@ export default function Login() {
           .eq("name_ar", empData.employee_role)
           .eq("status", "فعال")
           .maybeSingle();
-        if (roleData?.permissions && typeof roleData.permissions === "object" && !Array.isArray(roleData.permissions)) {
+        if (
+          roleData?.permissions &&
+          typeof roleData.permissions === "object" &&
+          !Array.isArray(roleData.permissions)
+        ) {
           resolvedPermissions = roleData.permissions as Record<string, boolean>;
         }
       }
@@ -83,7 +88,8 @@ export default function Login() {
       className="min-h-screen flex items-center justify-center p-4"
       dir="rtl"
       style={{
-        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f2740 70%, #020d1a 100%)",
+        background:
+          "linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f2740 70%, #020d1a 100%)",
       }}
     >
       {/* Background glow */}
@@ -96,17 +102,22 @@ export default function Login() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-5">
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl shadow-2xl shadow-blue-500/30"
-              style={{ background: "linear-gradient(135deg, #2563eb, #4f46e5)" }}
+            <div
+              className="relative flex h-20 w-20 items-center justify-center rounded-2xl shadow-2xl shadow-blue-500/30"
+              style={{
+                background: "linear-gradient(135deg, #2563eb, #4f46e5)",
+              }}
             >
               <Building2 className="h-10 w-10 text-white" />
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/20 to-transparent" />
             </div>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight leading-tight">
-            نظام إدارة الأعمال المتكامل
+            نظام إدارة العياف
           </h1>
-          <p className="mt-2 text-blue-200/70 text-sm">شركة لاكجري العياف · تسجيل دخول الإدارة</p>
+          <p className="mt-2 text-blue-200/70 text-sm">
+            شركة إدارة العياف للمقاولات · تسجيل دخول الإدارة
+          </p>
         </div>
 
         {/* Card */}
@@ -114,7 +125,9 @@ export default function Login() {
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-white/70">البريد الإلكتروني</label>
+              <label className="block text-sm font-medium text-white/70">
+                البريد الإلكتروني
+              </label>
               <div className="relative">
                 <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <Input
@@ -131,7 +144,9 @@ export default function Login() {
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-white/70">كلمة المرور</label>
+              <label className="block text-sm font-medium text-white/70">
+                كلمة المرور
+              </label>
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <input
@@ -148,7 +163,11 @@ export default function Login() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -158,7 +177,9 @@ export default function Login() {
               type="submit"
               disabled={loading}
               className="w-full h-12 text-[15px] font-bold rounded-xl transition shadow-lg shadow-blue-500/25"
-              style={{ background: "linear-gradient(135deg, #2563eb, #4f46e5)" }}
+              style={{
+                background: "linear-gradient(135deg, #2563eb, #4f46e5)",
+              }}
             >
               {loading ? "جاري الدخول..." : "دخول النظام"}
             </Button>
@@ -166,17 +187,30 @@ export default function Login() {
 
           {/* Demo Info */}
           <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4">
-            <p className="text-xs font-semibold text-white/50 mb-2">حساب المدير التجريبي:</p>
+            <p className="text-xs font-semibold text-white/50 mb-2">
+              حساب المدير التجريبي:
+            </p>
             <div className="space-y-1 text-xs text-white/40">
-              <p>البريد: <span className="font-mono text-white/70">saeed@alayaf.com</span></p>
-              <p>كلمة المرور: <span className="font-mono text-white/70">Saeed@2026</span></p>
+              <p>
+                البريد:{" "}
+                <span className="font-mono text-white/70">
+                  saeed@alayaf.com
+                </span>
+              </p>
+              <p>
+                كلمة المرور:{" "}
+                <span className="font-mono text-white/70">Saeed@2026</span>
+              </p>
             </div>
           </div>
 
           {/* Switch to employee portal */}
           <p className="text-center text-sm text-white/40">
             هل أنت موظف؟{" "}
-            <Link to="/employee/login" className="text-blue-400 hover:text-blue-300 font-medium">
+            <Link
+              to="/employee/login"
+              className="text-blue-400 hover:text-blue-300 font-medium"
+            >
               بوابة الموظفين
             </Link>
           </p>
@@ -184,7 +218,7 @@ export default function Login() {
 
         {/* Footer */}
         <p className="text-center mt-6 text-xs text-white/20">
-          © 2026 نظام إدارة الأعمال المتكامل · جميع الحقوق محفوظة
+          © 2026 نظام إدارة العياف · جميع الحقوق محفوظة
         </p>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { Plus, Save, Trash2, ArrowRight } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 type DeliveryNoteItem = {
   id: string;
@@ -52,7 +53,8 @@ const emptyItem = (): DeliveryNoteItem => ({
   unitPrice: 0,
 });
 
-const buildNoteNumber = (sequence: number) => `GDN-${String(sequence).padStart(6, "0")}`;
+const buildNoteNumber = (sequence: number) =>
+  `GDN-${String(sequence).padStart(6, "0")}`;
 
 const extractSequence = (noteNumber: string) => {
   const parsed = Number(noteNumber.replace("GDN-", ""));
@@ -76,7 +78,9 @@ export default function SalesDeliveryNote() {
   const [savedNotes, setSavedNotes] = useState<SavedDeliveryNote[]>([]);
   const [nextSequence, setNextSequence] = useState(START_NUMBER);
   const [mode, setMode] = useState<"list" | "create">("list");
-  const [form, setForm] = useState<DeliveryNoteForm>(() => createEmptyForm(START_NUMBER));
+  const [form, setForm] = useState<DeliveryNoteForm>(() =>
+    createEmptyForm(START_NUMBER),
+  );
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -90,7 +94,7 @@ export default function SalesDeliveryNote() {
 
       const maxSequence = parsed.reduce(
         (max, note) => Math.max(max, extractSequence(note.noteNumber)),
-        START_NUMBER - 1
+        START_NUMBER - 1,
       );
       const sequence = maxSequence + 1;
       setNextSequence(sequence);
@@ -103,27 +107,38 @@ export default function SalesDeliveryNote() {
   }, []);
 
   const subtotal = useMemo(
-    () => form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-    [form.items]
+    () =>
+      form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    [form.items],
   );
   const tax = useMemo(() => subtotal * 0.15, [subtotal]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
   const formatAmount = (value: number) =>
     `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}`;
 
-  const updateItem = (id: string, key: keyof DeliveryNoteItem, value: string | number) => {
+  const updateItem = (
+    id: string,
+    key: keyof DeliveryNoteItem,
+    value: string | number,
+  ) => {
     setForm((prev) => ({
       ...prev,
-      items: prev.items.map((item) => (item.id === id ? { ...item, [key]: value } : item)),
+      items: prev.items.map((item) =>
+        item.id === id ? { ...item, [key]: value } : item,
+      ),
     }));
   };
 
-  const addItem = () => setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
+  const addItem = () =>
+    setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
 
   const removeItem = (id: string) =>
     setForm((prev) => ({
       ...prev,
-      items: prev.items.length > 1 ? prev.items.filter((item) => item.id !== id) : prev.items,
+      items:
+        prev.items.length > 1
+          ? prev.items.filter((item) => item.id !== id)
+          : prev.items,
     }));
 
   const createNewNote = () => {
@@ -133,12 +148,16 @@ export default function SalesDeliveryNote() {
 
   const handleSave = () => {
     if (!form.customer.trim()) {
-      toast({ title: t("العميل مطلوب"), description: t("يرجى إدخال اسم العميل قبل الحفظ") });
+      toast({
+        title: t("العميل مطلوب"),
+        description: t("يرجى إدخال اسم العميل قبل الحفظ"),
+      });
       return;
     }
 
     const cleanedItems = form.items.filter(
-      (item) => item.description.trim() || item.account.trim() || item.unitPrice > 0
+      (item) =>
+        item.description.trim() || item.account.trim() || item.unitPrice > 0,
     );
 
     const payload: SavedDeliveryNote = {
@@ -168,7 +187,10 @@ export default function SalesDeliveryNote() {
 
     toast({
       title: t("تم حفظ إشعار تسليم"),
-      description: t("تم حفظ الإشعار {noteNumber} بنجاح").replace("{noteNumber}", payload.noteNumber),
+      description: t("تم حفظ الإشعار {noteNumber} بنجاح").replace(
+        "{noteNumber}",
+        payload.noteNumber,
+      ),
     });
   };
 
@@ -177,9 +199,13 @@ export default function SalesDeliveryNote() {
       <div dir={direction} className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{t("إشعار تسليم")}</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              {t("إشعار تسليم")}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list" ? t("عرض إشعارات التسليم") : t("إنشاء إشعار تسليم جديد")}
+              {mode === "list"
+                ? t("عرض إشعارات التسليم")
+                : t("إنشاء إشعار تسليم جديد")}
             </p>
           </div>
 
@@ -198,7 +224,9 @@ export default function SalesDeliveryNote() {
                   onClick={() => setMode("list")}
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
                 >
-                  <ArrowRight className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`} />
+                  <ArrowRight
+                    className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`}
+                  />
                   {t("الرجوع للإشعارات")}
                 </button>
                 <button
@@ -216,11 +244,16 @@ export default function SalesDeliveryNote() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              {t("عدد الإشعارات المحفوظة:")} <span className="font-semibold text-foreground">{formatNumber(savedNotes.length)}</span>
+              {t("عدد الإشعارات المحفوظة:")}{" "}
+              <span className="font-semibold text-foreground">
+                {formatNumber(savedNotes.length)}
+              </span>
             </p>
 
             {savedNotes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("لا يوجد إشعارات محفوظة حالياً.")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("لا يوجد إشعارات محفوظة حالياً.")}
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[700px] text-start text-sm">
@@ -236,11 +269,17 @@ export default function SalesDeliveryNote() {
                   <tbody>
                     {savedNotes.map((note) => (
                       <tr key={note.id} className="border-t border-border">
-                        <td className="px-3 py-2 font-semibold text-primary">{note.noteNumber}</td>
+                        <td className="px-3 py-2 font-semibold text-primary">
+                          {note.noteNumber}
+                        </td>
                         <td className="px-3 py-2">{note.customer}</td>
-                        <td className="px-3 py-2">{formatDate(note.date, { dateStyle: "medium" })}</td>
+                        <td className="px-3 py-2">
+                          {formatDate(note.date, { dateStyle: "medium" })}
+                        </td>
                         <td className="px-3 py-2">{note.currency}</td>
-                        <td className="px-3 py-2">{formatAmount(note.total)}</td>
+                        <td className="px-3 py-2">
+                          {formatAmount(note.total)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -253,14 +292,20 @@ export default function SalesDeliveryNote() {
             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
-                  {t("شركة لاكجري العياف")}
+                  {COMPANY_PROFILE.programNameAr}
                 </div>
-                <h2 className="text-xl font-bold text-foreground">{t("شركة لاكجري العياف")}</h2>
-                <p className="text-sm text-muted-foreground">{t("الشيخ محمد بن جبير")}</p>
-                <p className="text-sm text-muted-foreground">{t("مكة المكرمة")}</p>
-                <p className="text-sm text-muted-foreground">{t("المملكة العربية السعودية")}</p>
+                <h2 className="text-xl font-bold text-foreground">
+                  {COMPANY_PROFILE.companyNameAr}
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  {t("رقم التسجيل الضريبي:")} {formatNumber(314559705300003, { useGrouping: false })}
+                  {COMPANY_PROFILE.addressAr}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t("رقم التسجيل الضريبي:")} {COMPANY_PROFILE.vatNumber}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t("رقم السجل التجاري")}:{" "}
+                  {COMPANY_PROFILE.commercialRegistration}
                 </p>
               </div>
 
@@ -268,7 +313,9 @@ export default function SalesDeliveryNote() {
                 <Field label={t("العميل*")}>
                   <input
                     value={form.customer}
-                    onChange={(e) => setForm({ ...form, customer: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, customer: e.target.value })
+                    }
                     placeholder={t("مطلوب")}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
@@ -286,7 +333,9 @@ export default function SalesDeliveryNote() {
                   <Field label={t("العملة*")}>
                     <input
                       value={form.currency}
-                      onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, currency: e.target.value })
+                      }
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
@@ -294,7 +343,9 @@ export default function SalesDeliveryNote() {
                     <input
                       type="date"
                       value={form.date}
-                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, date: e.target.value })
+                      }
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
@@ -304,7 +355,9 @@ export default function SalesDeliveryNote() {
                   <Field label={t("رقم الطلب")}>
                     <input
                       value={form.orderRef}
-                      onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, orderRef: e.target.value })
+                      }
                       placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
@@ -312,7 +365,9 @@ export default function SalesDeliveryNote() {
                   <Field label={t("المرجع")}>
                     <input
                       value={form.reference}
-                      onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, reference: e.target.value })
+                      }
                       placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
@@ -322,7 +377,9 @@ export default function SalesDeliveryNote() {
                 <Field label={t("المشروع")}>
                   <input
                     value={form.project}
-                    onChange={(e) => setForm({ ...form, project: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, project: e.target.value })
+                    }
                     placeholder={t("تحديد")}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
@@ -331,7 +388,9 @@ export default function SalesDeliveryNote() {
             </div>
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold text-foreground">{t("السعر شامل من الضريبة")}</p>
+              <p className="text-sm font-semibold text-foreground">
+                {t("السعر شامل من الضريبة")}
+              </p>
 
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[900px] text-start text-sm">
@@ -352,7 +411,13 @@ export default function SalesDeliveryNote() {
                           <td className="px-3 py-2">
                             <input
                               value={item.description}
-                              onChange={(e) => updateItem(item.id, "description", e.target.value)}
+                              onChange={(e) =>
+                                updateItem(
+                                  item.id,
+                                  "description",
+                                  e.target.value,
+                                )
+                              }
                               placeholder={t("مفتاح أو خدمة")}
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
                             />
@@ -362,7 +427,13 @@ export default function SalesDeliveryNote() {
                               type="number"
                               min={1}
                               value={item.quantity}
-                              onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value) || 1)}
+                              onChange={(e) =>
+                                updateItem(
+                                  item.id,
+                                  "quantity",
+                                  Number(e.target.value) || 1,
+                                )
+                              }
                               className="h-10 w-24 rounded-md border border-border bg-background px-3"
                             />
                           </td>
@@ -371,11 +442,19 @@ export default function SalesDeliveryNote() {
                               type="number"
                               min={0}
                               value={item.unitPrice}
-                              onChange={(e) => updateItem(item.id, "unitPrice", Number(e.target.value) || 0)}
+                              onChange={(e) =>
+                                updateItem(
+                                  item.id,
+                                  "unitPrice",
+                                  Number(e.target.value) || 0,
+                                )
+                              }
                               className="h-10 w-32 rounded-md border border-border bg-background px-3"
                             />
                           </td>
-                          <td className="px-3 py-2 font-semibold">{formatAmount(lineTotal)}</td>
+                          <td className="px-3 py-2 font-semibold">
+                            {formatAmount(lineTotal)}
+                          </td>
                           <td className="px-3 py-2">
                             <button
                               onClick={() => removeItem(item.id)}
@@ -405,7 +484,9 @@ export default function SalesDeliveryNote() {
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-                {t("يتم توليد البيانات لعرض متطلبات ضريبة القيمة المضافة في إشعار التسليم.")}
+                {t(
+                  "يتم توليد البيانات لعرض متطلبات ضريبة القيمة المضافة في إشعار التسليم.",
+                )}
               </div>
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">

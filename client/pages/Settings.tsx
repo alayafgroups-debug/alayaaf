@@ -34,7 +34,10 @@ export default function Settings() {
           <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
             الإعدادات الضريبية
           </button>
-          <a href="/zatca/settings" className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors inline-flex">
+          <a
+            href="/zatca/settings"
+            className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors inline-flex"
+          >
             إعدادات ZATCA
           </a>
           <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
@@ -55,7 +58,7 @@ export default function Settings() {
                 </label>
                 <input
                   className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="شركة لاكجري العياف"
+                  defaultValue="شركة إدارة العياف للمقاولات"
                 />
               </div>
               <div>
@@ -64,7 +67,7 @@ export default function Settings() {
                 </label>
                 <input
                   className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="311111111111113"
+                  defaultValue="314067317200003"
                 />
               </div>
               <div>
@@ -73,7 +76,7 @@ export default function Settings() {
                 </label>
                 <input
                   className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="1010101010"
+                  defaultValue="7049437580"
                 />
               </div>
               <div>
@@ -100,7 +103,7 @@ export default function Settings() {
                 </label>
                 <input
                   className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="الرياض"
+                  defaultValue="جدة"
                 />
               </div>
               <div className="sm:col-span-2">
@@ -109,7 +112,7 @@ export default function Settings() {
                 </label>
                 <input
                   className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  defaultValue="شارع الملك فهد - الرياض"
+                  defaultValue="8697، نخبة العلماء، حي الأندلس، جدة، 23326، 2882"
                 />
               </div>
             </div>

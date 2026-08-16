@@ -6,6 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import ZatcaQrCode from "@/components/ZatcaQrCode";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 const zatcaStatusLabels: Record<string, string> = {
   pending: "بانتظار الإرسال",
@@ -31,24 +32,27 @@ const creditNoteTranslations: Record<string, string> = {
   "فشل الترحيل": "Posting failed",
   "قيد معكوس": "Reversed entry",
   "الفاتورة الأصلية مطلوبة": "Original invoice is required",
-  "كل إشعار يجب أن يكون مرتبطاً بفاتورة مبيعات": "Every note must be linked to a sales invoice",
+  "كل إشعار يجب أن يكون مرتبطاً بفاتورة مبيعات":
+    "Every note must be linked to a sales invoice",
   "العميل مطلوب": "Customer is required",
   "اختر الفاتورة الأصلية أولاً": "Select the original invoice first",
   "مبلغ الإشعار غير صحيح": "Invalid note amount",
   "أضف بنداً بقيمة أكبر من صفر": "Add an item with a value greater than zero",
   "الحساب المحاسبي مطلوب": "Accounting account is required",
-  "اختر حساب الإيراد لكل بند من شجرة الحسابات": "Select a revenue account from the chart of accounts for each item",
+  "اختر حساب الإيراد لكل بند من شجرة الحسابات":
+    "Select a revenue account from the chart of accounts for each item",
   "تعذر ترحيل الإشعار": "Unable to post the note",
   "تعذر إرسال الإشعار إلى ZATCA": "Unable to submit the note to ZATCA",
   "حدث خطأ غير متوقع": "An unexpected error occurred",
   "تم ترحيل الإشعار الدائن": "Credit note posted",
   "تم ترحيل الإشعار المدين": "Debit note posted",
   "تم ربط": "Linked",
-  "بالفاتورة": "to invoice",
+  بالفاتورة: "to invoice",
   "وتسجيل القيد المحاسبي": "and recorded the accounting entry",
-  "المبيعات": "Sales",
+  المبيعات: "Sales",
   "إشعارات تعديل المبيعات": "Sales adjustment notes",
-  "إشعارات دائنة ومدينة مرتبطة بالفواتير": "Credit and debit notes linked to invoices",
+  "إشعارات دائنة ومدينة مرتبطة بالفواتير":
+    "Credit and debit notes linked to invoices",
   "إنشاء إشعار مرتبط بفاتورة مبيعات": "Create a note linked to a sales invoice",
   "إنشاء إشعار جديد": "Create new note",
   "الرجوع للإشعارات": "Back to notes",
@@ -56,57 +60,61 @@ const creditNoteTranslations: Record<string, string> = {
   "عدد الإشعارات المرحلة": "Posted notes",
   "لا يوجد إشعارات محفوظة حالياً.": "No saved notes at this time.",
   "رقم الإشعار": "Note number",
-  "النوع": "Type",
+  النوع: "Type",
   "الفاتورة الأصلية": "Original invoice",
-  "العميل": "Customer",
-  "التاريخ": "Date",
-  "الإجمالي": "Total",
+  العميل: "Customer",
+  التاريخ: "Date",
+  الإجمالي: "Total",
   "الرصيد بعد الإشعار": "Balance after note",
   "القيد المحاسبي": "Accounting entry",
   "حالة ZATCA": "ZATCA status",
-  "دائن": "Credit",
-  "مدين": "Debit",
+  دائن: "Credit",
+  مدين: "Debit",
   "رجوع للقائمة": "Back to list",
   "إشعار دائن": "Credit note",
   "إشعار مدين": "Debit note",
   "المجموع الفرعي": "Subtotal",
-  "الضريبة": "Tax",
+  الضريبة: "Tax",
   "رقم القيد": "Entry number",
   "QR بعد الاعتماد": "QR after approval",
-  "يظهر رمز الاستجابة السريعة بعد قبول ZATCA للإشعار.": "The QR code appears after ZATCA accepts the note.",
+  "يظهر رمز الاستجابة السريعة بعد قبول ZATCA للإشعار.":
+    "The QR code appears after ZATCA accepts the note.",
   "شركة لاكجري العياف": "Luxury Al Ayaf Company",
   "الشيخ محمد بن جبير": "Sheikh Mohammed Bin Jubair",
   "مكة المكرمة": "Makkah",
   "المملكة العربية السعودية": "Saudi Arabia",
   "رقم التسجيل الضريبي": "Tax registration number",
   "نوع الإشعار*": "Note type*",
-  "إشعار دائن — يخفض رصيد الفاتورة": "Credit note — decreases the invoice balance",
-  "إشعار مدين — يزيد رصيد الفاتورة": "Debit note — increases the invoice balance",
+  "إشعار دائن — يخفض رصيد الفاتورة":
+    "Credit note — decreases the invoice balance",
+  "إشعار مدين — يزيد رصيد الفاتورة":
+    "Debit note — increases the invoice balance",
   "الفاتورة الأصلية*": "Original invoice*",
   "اختر الفاتورة": "Select an invoice",
-  "الرصيد": "Balance",
+  الرصيد: "Balance",
   "العميل المرتبط بالفاتورة": "Customer linked to the invoice",
   "يُحدد تلقائياً من الفاتورة": "Automatically populated from the invoice",
   "العملة*": "Currency*",
   "التاريخ*": "Date*",
   "أمر الشراء": "Purchase order",
-  "اختياري": "Optional",
+  اختياري: "Optional",
   "مرجع الفاتورة": "Invoice reference",
   "يُحدد من الفاتورة الأصلية": "Populated from the original invoice",
-  "المشروع": "Project",
-  "المستودع": "Warehouse",
+  المشروع: "Project",
+  المستودع: "Warehouse",
   "السعر شامل من الضريبة": "Price includes tax",
-  "الوصف": "Description",
+  الوصف: "Description",
   "حساب*": "Account*",
   "الكمية*": "Quantity*",
   "السعر*": "Price*",
-  "المجموع": "Total",
+  المجموع: "Total",
   "مفتاح أو خدمة": "Item or service",
   "إيرادات المبيعات والخدمات": "Sales and service revenue",
   "﷼": "SAR",
   "حذف البند": "Delete item",
   "أضف بند": "Add item",
-  "رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.": "The QR code displays the Zakat, Tax and Customs Authority requirements for electronic invoices.",
+  "رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.":
+    "The QR code displays the Zakat, Tax and Customs Authority requirements for electronic invoices.",
   "إجمالي ضريبة القيمة المضافة": "Total VAT",
 };
 
@@ -179,7 +187,8 @@ const emptyItem = (): CreditNoteItem => ({
   unitPrice: 0,
 });
 
-const buildNoteNumber = (sequence: number) => `CN-${String(sequence).padStart(6, "0")}`;
+const buildNoteNumber = (sequence: number) =>
+  `CN-${String(sequence).padStart(6, "0")}`;
 
 const extractSequence = (noteNumber: string) => {
   const parsed = Number(noteNumber.replace("CN-", ""));
@@ -201,42 +210,59 @@ const createEmptyForm = (sequence: number): CreditNoteForm => ({
 });
 
 export default function SalesCreditNote() {
-  const { t: translate, locale, direction, formatDate, formatNumber } = useI18n();
+  const {
+    t: translate,
+    locale,
+    direction,
+    formatDate,
+    formatNumber,
+  } = useI18n();
   const t = (value: string) =>
-    locale === "en" ? creditNoteTranslations[value] ?? translate(value) : translate(value);
+    locale === "en"
+      ? (creditNoteTranslations[value] ?? translate(value))
+      : translate(value);
   const [savedNotes, setSavedNotes] = useState<SavedCreditNote[]>([]);
   const [invoices, setInvoices] = useState<OriginalInvoice[]>([]);
-  const [revenueAccounts, setRevenueAccounts] = useState<AccountingAccount[]>([]);
+  const [revenueAccounts, setRevenueAccounts] = useState<AccountingAccount[]>(
+    [],
+  );
   const [defaultRevenueAccount, setDefaultRevenueAccount] = useState("411");
   const [nextSequence, setNextSequence] = useState(START_NUMBER);
   const [mode, setMode] = useState<"list" | "create" | "details">("list");
-  const [selectedNote, setSelectedNote] = useState<SavedCreditNote | null>(null);
-  const [form, setForm] = useState<CreditNoteForm>(() => createEmptyForm(START_NUMBER));
+  const [selectedNote, setSelectedNote] = useState<SavedCreditNote | null>(
+    null,
+  );
+  const [form, setForm] = useState<CreditNoteForm>(() =>
+    createEmptyForm(START_NUMBER),
+  );
 
   useEffect(() => {
     const load = async () => {
-      const [notesResult, invoicesResult, accountsResult, ruleResult] = await Promise.all([
-        supabase
-          .from("invoice_adjustment_notes")
-          .select("id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, zatca_status, qr_code_data, accounting_status, accounting_journal_entry_id")
-          .in("note_type", ["sales_credit", "sales_debit"])
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("sales_invoices")
-          .select("id, customer, total, adjusted_total, accounting_status")
-          .eq("accounting_status", "posted")
-          .order("date", { ascending: false }),
-        supabase
-          .from("accounting_accounts")
-          .select("code, name_ar, parent_code")
-          .like("code", "4%")
-          .order("code"),
-        supabase
-          .from("accounting_posting_rules")
-          .select("revenue_account_code")
-          .eq("rule_code", "sales_default")
-          .maybeSingle(),
-      ]);
+      const [notesResult, invoicesResult, accountsResult, ruleResult] =
+        await Promise.all([
+          supabase
+            .from("invoice_adjustment_notes")
+            .select(
+              "id, note_number, note_type, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, zatca_status, qr_code_data, accounting_status, accounting_journal_entry_id",
+            )
+            .in("note_type", ["sales_credit", "sales_debit"])
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("sales_invoices")
+            .select("id, customer, total, adjusted_total, accounting_status")
+            .eq("accounting_status", "posted")
+            .order("date", { ascending: false }),
+          supabase
+            .from("accounting_accounts")
+            .select("code, name_ar, parent_code")
+            .like("code", "4%")
+            .order("code"),
+          supabase
+            .from("accounting_posting_rules")
+            .select("revenue_account_code")
+            .eq("rule_code", "sales_default")
+            .maybeSingle(),
+        ]);
 
       if (!notesResult.error) {
         const parsed = (notesResult.data ?? []).map((row: any) => ({
@@ -260,38 +286,61 @@ export default function SalesCreditNote() {
           zatcaStatus: String(row.zatca_status ?? "pending"),
           qrCodeData: String(row.qr_code_data ?? ""),
           accountingStatus: String(row.accounting_status ?? "unposted"),
-          accountingJournalEntryId: String(row.accounting_journal_entry_id ?? ""),
+          accountingJournalEntryId: String(
+            row.accounting_journal_entry_id ?? "",
+          ),
         }));
         setSavedNotes(parsed);
-        const sequence = parsed.reduce((max, note) => Math.max(max, extractSequence(note.noteNumber)), START_NUMBER - 1) + 1;
+        const sequence =
+          parsed.reduce(
+            (max, note) => Math.max(max, extractSequence(note.noteNumber)),
+            START_NUMBER - 1,
+          ) + 1;
         setNextSequence(sequence);
         setForm(createEmptyForm(sequence));
       }
 
       if (!invoicesResult.error) {
-        setInvoices((invoicesResult.data ?? []).map((row: any) => ({
-          id: String(row.id),
-          customer: String(row.customer || ""),
-          total: Number(String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
-          adjustedTotal: Number(row.adjusted_total ?? String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
-        })));
+        setInvoices(
+          (invoicesResult.data ?? []).map((row: any) => ({
+            id: String(row.id),
+            customer: String(row.customer || ""),
+            total:
+              Number(String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
+            adjustedTotal:
+              Number(
+                row.adjusted_total ??
+                  String(row.total || "0").replace(/[^0-9.-]/g, ""),
+              ) || 0,
+          })),
+        );
       }
 
       if (!accountsResult.error) {
         const accountRows = accountsResult.data ?? [];
-        setRevenueAccounts(accountRows
-          .filter((account: any) => !accountRows.some((child: any) => child.parent_code === account.code))
-          .map((row: any) => ({
-            code: String(row.code),
-            nameAr: String(row.name_ar),
-          })));
+        setRevenueAccounts(
+          accountRows
+            .filter(
+              (account: any) =>
+                !accountRows.some(
+                  (child: any) => child.parent_code === account.code,
+                ),
+            )
+            .map((row: any) => ({
+              code: String(row.code),
+              nameAr: String(row.name_ar),
+            })),
+        );
       }
       if (!ruleResult.error && ruleResult.data?.revenue_account_code) {
         const configuredRevenue = String(ruleResult.data.revenue_account_code);
         setDefaultRevenueAccount(configuredRevenue);
         setForm((current) => ({
           ...current,
-          items: current.items.map((item) => ({ ...item, account: configuredRevenue })),
+          items: current.items.map((item) => ({
+            ...item,
+            account: configuredRevenue,
+          })),
         }));
       }
     };
@@ -299,57 +348,87 @@ export default function SalesCreditNote() {
   }, []);
 
   const subtotal = useMemo(
-    () => form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-    [form.items]
+    () =>
+      form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    [form.items],
   );
   const tax = useMemo(() => subtotal * 0.15, [subtotal]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
-  const updateItem = (id: string, key: keyof CreditNoteItem, value: string | number) => {
+  const updateItem = (
+    id: string,
+    key: keyof CreditNoteItem,
+    value: string | number,
+  ) => {
     setForm((prev) => ({
       ...prev,
-      items: prev.items.map((item) => (item.id === id ? { ...item, [key]: value } : item)),
+      items: prev.items.map((item) =>
+        item.id === id ? { ...item, [key]: value } : item,
+      ),
     }));
   };
 
-  const addItem = () => setForm((prev) => ({
-    ...prev,
-    items: [...prev.items, { ...emptyItem(), account: defaultRevenueAccount }],
-  }));
+  const addItem = () =>
+    setForm((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        { ...emptyItem(), account: defaultRevenueAccount },
+      ],
+    }));
 
   const removeItem = (id: string) =>
     setForm((prev) => ({
       ...prev,
-      items: prev.items.length > 1 ? prev.items.filter((item) => item.id !== id) : prev.items,
+      items:
+        prev.items.length > 1
+          ? prev.items.filter((item) => item.id !== id)
+          : prev.items,
     }));
 
   const createNewNote = () => {
     const nextForm = createEmptyForm(nextSequence);
-    nextForm.items = nextForm.items.map((item) => ({ ...item, account: defaultRevenueAccount }));
+    nextForm.items = nextForm.items.map((item) => ({
+      ...item,
+      account: defaultRevenueAccount,
+    }));
     setForm(nextForm);
     setMode("create");
   };
 
   const handleSave = async () => {
     if (!form.originalInvoiceId) {
-      toast({ title: t("الفاتورة الأصلية مطلوبة"), description: t("كل إشعار يجب أن يكون مرتبطاً بفاتورة مبيعات") });
+      toast({
+        title: t("الفاتورة الأصلية مطلوبة"),
+        description: t("كل إشعار يجب أن يكون مرتبطاً بفاتورة مبيعات"),
+      });
       return;
     }
     if (!form.customer.trim()) {
-      toast({ title: t("العميل مطلوب"), description: t("اختر الفاتورة الأصلية أولاً") });
+      toast({
+        title: t("العميل مطلوب"),
+        description: t("اختر الفاتورة الأصلية أولاً"),
+      });
       return;
     }
     if (total <= 0) {
-      toast({ title: t("مبلغ الإشعار غير صحيح"), description: t("أضف بنداً بقيمة أكبر من صفر") });
+      toast({
+        title: t("مبلغ الإشعار غير صحيح"),
+        description: t("أضف بنداً بقيمة أكبر من صفر"),
+      });
       return;
     }
     if (form.items.some((item) => !item.account)) {
-      toast({ title: t("الحساب المحاسبي مطلوب"), description: t("اختر حساب الإيراد لكل بند من شجرة الحسابات") });
+      toast({
+        title: t("الحساب المحاسبي مطلوب"),
+        description: t("اختر حساب الإيراد لكل بند من شجرة الحسابات"),
+      });
       return;
     }
 
     const cleanedItems = form.items.filter(
-      (item) => item.description.trim() || item.account.trim() || item.unitPrice > 0
+      (item) =>
+        item.description.trim() || item.account.trim() || item.unitPrice > 0,
     );
 
     const { data, error } = await supabase.rpc("post_invoice_adjustment_note", {
@@ -366,7 +445,11 @@ export default function SalesCreditNote() {
     });
 
     if (error) {
-      toast({ title: t("تعذر ترحيل الإشعار"), description: error.message, variant: "destructive" });
+      toast({
+        title: t("تعذر ترحيل الإشعار"),
+        description: error.message,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -401,32 +484,58 @@ export default function SalesCreditNote() {
       toast({ title: "ZATCA", description: String(zatca.data.message) });
     }
 
-    const invoice = invoices.find((item) => item.id === form.originalInvoiceId)!;
+    const invoice = invoices.find(
+      (item) => item.id === form.originalInvoiceId,
+    )!;
     const signedAmount = form.noteType === "sales_credit" ? -total : total;
     const payload: SavedCreditNote = {
-      id: String(data), noteNumber: form.noteNumber, noteType: form.noteType,
-      originalInvoiceId: form.originalInvoiceId, customer: form.customer,
-      currency: form.currency, date: form.date, orderRef: form.orderRef,
-      reference: form.originalInvoiceId, project: form.project, warehouse: form.warehouse,
-      subtotal, tax, total, balanceBefore: invoice.adjustedTotal,
+      id: String(data),
+      noteNumber: form.noteNumber,
+      noteType: form.noteType,
+      originalInvoiceId: form.originalInvoiceId,
+      customer: form.customer,
+      currency: form.currency,
+      date: form.date,
+      orderRef: form.orderRef,
+      reference: form.originalInvoiceId,
+      project: form.project,
+      warehouse: form.warehouse,
+      subtotal,
+      tax,
+      total,
+      balanceBefore: invoice.adjustedTotal,
       balanceAfter: invoice.adjustedTotal + signedAmount,
       items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
       zatcaStatus: String(zatca.data?.status ?? "rejected"),
       qrCodeData: String(zatca.data?.qrCodeData ?? ""),
       accountingStatus: String(postedNote?.accounting_status ?? "posted"),
-      accountingJournalEntryId: String(postedNote?.accounting_journal_entry_id ?? ""),
+      accountingJournalEntryId: String(
+        postedNote?.accounting_journal_entry_id ?? "",
+      ),
     };
     setSavedNotes((current) => [payload, ...current]);
-    setInvoices((current) => current.map((item) => item.id === form.originalInvoiceId ? { ...item, adjustedTotal: payload.balanceAfter } : item));
+    setInvoices((current) =>
+      current.map((item) =>
+        item.id === form.originalInvoiceId
+          ? { ...item, adjustedTotal: payload.balanceAfter }
+          : item,
+      ),
+    );
 
     const sequence = extractSequence(form.noteNumber) + 1;
     setNextSequence(sequence);
     const nextForm = createEmptyForm(sequence);
-    nextForm.items = nextForm.items.map((item) => ({ ...item, account: defaultRevenueAccount }));
+    nextForm.items = nextForm.items.map((item) => ({
+      ...item,
+      account: defaultRevenueAccount,
+    }));
     setForm(nextForm);
     setMode("list");
     toast({
-      title: form.noteType === "sales_credit" ? t("تم ترحيل الإشعار الدائن") : t("تم ترحيل الإشعار المدين"),
+      title:
+        form.noteType === "sales_credit"
+          ? t("تم ترحيل الإشعار الدائن")
+          : t("تم ترحيل الإشعار المدين"),
       description: `${t("تم ربط")} ${payload.noteNumber} ${t("بالفاتورة")} ${payload.originalInvoiceId} ${t("وتسجيل القيد المحاسبي")}`,
     });
   };
@@ -436,9 +545,13 @@ export default function SalesCreditNote() {
       <div dir={direction} className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{t("إشعارات تعديل المبيعات")}</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              {t("إشعارات تعديل المبيعات")}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list" ? t("إشعارات دائنة ومدينة مرتبطة بالفواتير") : t("إنشاء إشعار مرتبط بفاتورة مبيعات")}
+              {mode === "list"
+                ? t("إشعارات دائنة ومدينة مرتبطة بالفواتير")
+                : t("إنشاء إشعار مرتبط بفاتورة مبيعات")}
             </p>
           </div>
 
@@ -457,7 +570,9 @@ export default function SalesCreditNote() {
                   onClick={() => setMode("list")}
                   className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium"
                 >
-                  <ArrowRight className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`} />
+                  <ArrowRight
+                    className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`}
+                  />
                   {t("الرجوع للإشعارات")}
                 </button>
                 <button
@@ -475,14 +590,21 @@ export default function SalesCreditNote() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              {t("عدد الإشعارات المرحلة")}: <span className="font-semibold text-foreground">{formatNumber(savedNotes.length)}</span>
+              {t("عدد الإشعارات المرحلة")}:{" "}
+              <span className="font-semibold text-foreground">
+                {formatNumber(savedNotes.length)}
+              </span>
             </p>
 
             {savedNotes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("لا يوجد إشعارات محفوظة حالياً.")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("لا يوجد إشعارات محفوظة حالياً.")}
+              </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className={`w-full min-w-[700px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}>
+                <table
+                  className={`w-full min-w-[700px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}
+                >
                   <thead>
                     <tr className="bg-muted/40">
                       <th className="px-3 py-2">{t("رقم الإشعار")}</th>
@@ -510,19 +632,42 @@ export default function SalesCreditNote() {
                             {note.noteNumber}
                           </button>
                         </td>
-                        <td className="px-3 py-2">{note.noteType === "sales_credit" ? `${t("دائن")} −` : `${t("مدين")} +`}</td>
-                        <td className="px-3 py-2 font-medium">{note.originalInvoiceId}</td>
+                        <td className="px-3 py-2">
+                          {note.noteType === "sales_credit"
+                            ? `${t("دائن")} −`
+                            : `${t("مدين")} +`}
+                        </td>
+                        <td className="px-3 py-2 font-medium">
+                          {note.originalInvoiceId}
+                        </td>
                         <td className="px-3 py-2">{note.customer}</td>
                         <td className="px-3 py-2">{formatDate(note.date)}</td>
-                        <td className="px-3 py-2">{formatNumber(note.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {note.currency}</td>
-                        <td className="px-3 py-2 font-semibold">{formatNumber(note.balanceAfter, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {note.currency}</td>
                         <td className="px-3 py-2">
-                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                            note.accountingStatus === "posted"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-amber-100 text-amber-700"
-                          }`}>
-                            {t(accountingStatusLabels[note.accountingStatus] ?? note.accountingStatus)}
+                          {formatNumber(note.total, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          {note.currency}
+                        </td>
+                        <td className="px-3 py-2 font-semibold">
+                          {formatNumber(note.balanceAfter, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          {note.currency}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              note.accountingStatus === "posted"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {t(
+                              accountingStatusLabels[note.accountingStatus] ??
+                                note.accountingStatus,
+                            )}
                           </span>
                         </td>
                         <td className="px-3 py-2">
@@ -536,7 +681,10 @@ export default function SalesCreditNote() {
                                   : "bg-slate-100 text-slate-600"
                             }`}
                           >
-                            {t(zatcaStatusLabels[note.zatcaStatus] ?? note.zatcaStatus)}
+                            {t(
+                              zatcaStatusLabels[note.zatcaStatus] ??
+                                note.zatcaStatus,
+                            )}
                           </span>
                         </td>
                       </tr>
@@ -560,21 +708,63 @@ export default function SalesCreditNote() {
               </button>
             </div>
             <div className="grid gap-3 text-sm sm:grid-cols-2">
-              <p>{t("النوع")}: {selectedNote.noteType === "sales_credit" ? t("إشعار دائن") : t("إشعار مدين")}</p>
-              <p>{t("الفاتورة الأصلية")}: {selectedNote.originalInvoiceId}</p>
-              <p>{t("العميل")}: {selectedNote.customer}</p>
-              <p>{t("التاريخ")}: {formatDate(selectedNote.date)}</p>
-              <p>{t("المجموع الفرعي")}: {formatNumber(selectedNote.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedNote.currency}</p>
-              <p>{t("الضريبة")}: {formatNumber(selectedNote.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedNote.currency}</p>
-              <p>{t("الإجمالي")}: {formatNumber(selectedNote.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedNote.currency}</p>
               <p>
-                {t("حالة ZATCA")}: {t(zatcaStatusLabels[selectedNote.zatcaStatus] ?? selectedNote.zatcaStatus)}
+                {t("النوع")}:{" "}
+                {selectedNote.noteType === "sales_credit"
+                  ? t("إشعار دائن")
+                  : t("إشعار مدين")}
               </p>
               <p>
-                {t("القيد المحاسبي")}: {t(accountingStatusLabels[selectedNote.accountingStatus] ?? selectedNote.accountingStatus)}
+                {t("الفاتورة الأصلية")}: {selectedNote.originalInvoiceId}
+              </p>
+              <p>
+                {t("العميل")}: {selectedNote.customer}
+              </p>
+              <p>
+                {t("التاريخ")}: {formatDate(selectedNote.date)}
+              </p>
+              <p>
+                {t("المجموع الفرعي")}:{" "}
+                {formatNumber(selectedNote.subtotal, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                {selectedNote.currency}
+              </p>
+              <p>
+                {t("الضريبة")}:{" "}
+                {formatNumber(selectedNote.tax, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                {selectedNote.currency}
+              </p>
+              <p>
+                {t("الإجمالي")}:{" "}
+                {formatNumber(selectedNote.total, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                {selectedNote.currency}
+              </p>
+              <p>
+                {t("حالة ZATCA")}:{" "}
+                {t(
+                  zatcaStatusLabels[selectedNote.zatcaStatus] ??
+                    selectedNote.zatcaStatus,
+                )}
+              </p>
+              <p>
+                {t("القيد المحاسبي")}:{" "}
+                {t(
+                  accountingStatusLabels[selectedNote.accountingStatus] ??
+                    selectedNote.accountingStatus,
+                )}
               </p>
               {selectedNote.accountingJournalEntryId && (
-                <p>{t("رقم القيد")}: {selectedNote.accountingJournalEntryId}</p>
+                <p>
+                  {t("رقم القيد")}: {selectedNote.accountingJournalEntryId}
+                </p>
               )}
             </div>
             <div className="flex items-center gap-4 border-t border-border pt-4">
@@ -595,13 +785,21 @@ export default function SalesCreditNote() {
             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex h-14 w-36 items-center justify-center rounded-md bg-slate-700 text-xs font-semibold text-white">
-                  {t("شركة لاكجري العياف")}
+                  {COMPANY_PROFILE.programNameAr}
                 </div>
-                <h2 className="text-xl font-bold text-foreground">{t("شركة لاكجري العياف")}</h2>
-                <p className="text-sm text-muted-foreground">{t("الشيخ محمد بن جبير")}</p>
-                <p className="text-sm text-muted-foreground">{t("مكة المكرمة")}</p>
-                <p className="text-sm text-muted-foreground">{t("المملكة العربية السعودية")}</p>
-                <p className="text-sm text-muted-foreground">{t("رقم التسجيل الضريبي")}: {formatNumber(314559705300003, { useGrouping: false })}</p>
+                <h2 className="text-xl font-bold text-foreground">
+                  {COMPANY_PROFILE.companyNameAr}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {COMPANY_PROFILE.addressAr}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t("رقم التسجيل الضريبي")}: {COMPANY_PROFILE.vatNumber}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t("رقم السجل التجاري")}:{" "}
+                  {COMPANY_PROFILE.commercialRegistration}
+                </p>
               </div>
 
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
@@ -617,25 +815,50 @@ export default function SalesCreditNote() {
                   <Field label={t("نوع الإشعار*")}>
                     <select
                       value={form.noteType}
-                      onChange={(e) => setForm({ ...form, noteType: e.target.value as "sales_credit" | "sales_debit" })}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          noteType: e.target.value as
+                            | "sales_credit"
+                            | "sales_debit",
+                        })
+                      }
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     >
-                      <option value="sales_credit">{t("إشعار دائن — يخفض رصيد الفاتورة")}</option>
-                      <option value="sales_debit">{t("إشعار مدين — يزيد رصيد الفاتورة")}</option>
+                      <option value="sales_credit">
+                        {t("إشعار دائن — يخفض رصيد الفاتورة")}
+                      </option>
+                      <option value="sales_debit">
+                        {t("إشعار مدين — يزيد رصيد الفاتورة")}
+                      </option>
                     </select>
                   </Field>
                   <Field label={t("الفاتورة الأصلية*")}>
                     <select
                       value={form.originalInvoiceId}
                       onChange={(e) => {
-                        const invoice = invoices.find((item) => item.id === e.target.value);
-                        setForm({ ...form, originalInvoiceId: e.target.value, customer: invoice?.customer || "", reference: e.target.value });
+                        const invoice = invoices.find(
+                          (item) => item.id === e.target.value,
+                        );
+                        setForm({
+                          ...form,
+                          originalInvoiceId: e.target.value,
+                          customer: invoice?.customer || "",
+                          reference: e.target.value,
+                        });
                       }}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     >
                       <option value="">{t("اختر الفاتورة")}</option>
                       {invoices.map((invoice) => (
-                        <option key={invoice.id} value={invoice.id}>{invoice.id} — {invoice.customer} — {t("الرصيد")} {formatNumber(invoice.adjustedTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} SAR</option>
+                        <option key={invoice.id} value={invoice.id}>
+                          {invoice.id} — {invoice.customer} — {t("الرصيد")}{" "}
+                          {formatNumber(invoice.adjustedTotal, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          SAR
+                        </option>
                       ))}
                     </select>
                   </Field>
@@ -654,7 +877,9 @@ export default function SalesCreditNote() {
                   <Field label={t("العملة*")}>
                     <input
                       value={form.currency}
-                      onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, currency: e.target.value })
+                      }
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
@@ -662,7 +887,9 @@ export default function SalesCreditNote() {
                     <input
                       type="date"
                       value={form.date}
-                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, date: e.target.value })
+                      }
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
                   </Field>
@@ -672,7 +899,9 @@ export default function SalesCreditNote() {
                   <Field label={t("أمر الشراء")}>
                     <input
                       value={form.orderRef}
-                      onChange={(e) => setForm({ ...form, orderRef: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, orderRef: e.target.value })
+                      }
                       placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
@@ -691,7 +920,9 @@ export default function SalesCreditNote() {
                   <Field label={t("المشروع")}>
                     <input
                       value={form.project}
-                      onChange={(e) => setForm({ ...form, project: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, project: e.target.value })
+                      }
                       placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
@@ -699,7 +930,9 @@ export default function SalesCreditNote() {
                   <Field label={t("المستودع")}>
                     <input
                       value={form.warehouse}
-                      onChange={(e) => setForm({ ...form, warehouse: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, warehouse: e.target.value })
+                      }
                       placeholder={t("اختياري")}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     />
@@ -709,10 +942,14 @@ export default function SalesCreditNote() {
             </div>
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold text-foreground">{t("السعر شامل من الضريبة")}</p>
+              <p className="text-sm font-semibold text-foreground">
+                {t("السعر شامل من الضريبة")}
+              </p>
 
               <div className="overflow-x-auto">
-                <table className={`w-full min-w-[900px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}>
+                <table
+                  className={`w-full min-w-[900px] text-sm ${direction === "rtl" ? "text-right" : "text-left"}`}
+                >
                   <thead>
                     <tr className="bg-muted/40">
                       <th className="px-3 py-2">{t("الوصف")}</th>
@@ -731,7 +968,13 @@ export default function SalesCreditNote() {
                           <td className="px-3 py-2">
                             <input
                               value={item.description}
-                              onChange={(e) => updateItem(item.id, "description", e.target.value)}
+                              onChange={(e) =>
+                                updateItem(
+                                  item.id,
+                                  "description",
+                                  e.target.value,
+                                )
+                              }
                               placeholder={t("مفتاح أو خدمة")}
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
                             />
@@ -739,10 +982,20 @@ export default function SalesCreditNote() {
                           <td className="px-3 py-2">
                             <select
                               value={item.account}
-                              onChange={(e) => updateItem(item.id, "account", e.target.value)}
+                              onChange={(e) =>
+                                updateItem(item.id, "account", e.target.value)
+                              }
                               className="h-10 w-full rounded-md border border-border bg-background px-3"
                             >
-                              {(revenueAccounts.length ? revenueAccounts : [{ code: "411", nameAr: "إيرادات المبيعات والخدمات" }]).map((account) => (
+                              {(revenueAccounts.length
+                                ? revenueAccounts
+                                : [
+                                    {
+                                      code: "411",
+                                      nameAr: "إيرادات المبيعات والخدمات",
+                                    },
+                                  ]
+                              ).map((account) => (
                                 <option key={account.code} value={account.code}>
                                   {account.code} — {t(account.nameAr)}
                                 </option>
@@ -754,7 +1007,13 @@ export default function SalesCreditNote() {
                               type="number"
                               min={1}
                               value={item.quantity}
-                              onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value) || 1)}
+                              onChange={(e) =>
+                                updateItem(
+                                  item.id,
+                                  "quantity",
+                                  Number(e.target.value) || 1,
+                                )
+                              }
                               className="h-10 w-24 rounded-md border border-border bg-background px-3"
                             />
                           </td>
@@ -763,11 +1022,23 @@ export default function SalesCreditNote() {
                               type="number"
                               min={0}
                               value={item.unitPrice}
-                              onChange={(e) => updateItem(item.id, "unitPrice", Number(e.target.value) || 0)}
+                              onChange={(e) =>
+                                updateItem(
+                                  item.id,
+                                  "unitPrice",
+                                  Number(e.target.value) || 0,
+                                )
+                              }
                               className="h-10 w-32 rounded-md border border-border bg-background px-3"
                             />
                           </td>
-                          <td className="px-3 py-2 font-semibold">{formatNumber(lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</td>
+                          <td className="px-3 py-2 font-semibold">
+                            {formatNumber(lineTotal, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}{" "}
+                            {t("﷼")}
+                          </td>
                           <td className="px-3 py-2">
                             <button
                               onClick={() => removeItem(item.id)}
@@ -797,21 +1068,41 @@ export default function SalesCreditNote() {
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-                {t("رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.")}
+                {t(
+                  "رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.",
+                )}
               </div>
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
                 <div className="flex items-center justify-between">
                   <span>{t("المجموع الفرعي")}</span>
-                  <span>{formatNumber(subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</span>
+                  <span>
+                    {formatNumber(subtotal, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    {t("﷼")}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>{t("إجمالي ضريبة القيمة المضافة")}</span>
-                  <span>{formatNumber(tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</span>
+                  <span>
+                    {formatNumber(tax, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    {t("﷼")}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold">
                   <span>{t("المجموع")}</span>
-                  <span>{formatNumber(total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("﷼")}</span>
+                  <span>
+                    {formatNumber(total, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    {t("﷼")}
+                  </span>
                 </div>
               </div>
             </div>

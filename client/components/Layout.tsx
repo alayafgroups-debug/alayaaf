@@ -41,10 +41,18 @@ import {
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { readUserSession, checkPerm, canManagePerm, permissionForMainPath, permissionForMainSubPath, permissionForHRPath } from "@/lib/authSession";
+import {
+  readUserSession,
+  checkPerm,
+  canManagePerm,
+  permissionForMainPath,
+  permissionForMainSubPath,
+  permissionForHRPath,
+} from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import ReadOnlyBoundary from "@/components/permissions/ReadOnlyBoundary";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import QuickActionsBar from "@/components/QuickActionsBar";
 
 interface LayoutProps {
@@ -53,7 +61,10 @@ interface LayoutProps {
 }
 
 /* ── Main navigation sub-menus (excluding HR) ── */
-const navSubMenus: Record<string, { label: string; href: string; isHeader?: boolean }[]> = {
+const navSubMenus: Record<
+  string,
+  { label: string; href: string; isHeader?: boolean }[]
+> = {
   "/sales": [
     { label: "عروض الأسعار", href: "/sales/quotations" },
     { label: "أوامر البيع", href: "/sales/orders" },
@@ -84,9 +95,7 @@ const navSubMenus: Record<string, { label: string; href: string; isHeader?: bool
     { label: "الأدوار والصلاحيات", href: "/users/roles" },
     { label: "سجل النشاط", href: "/users/audit" },
   ],
-  "/ai": [
-    { label: "المساعد الذكي", href: "/ai/assistant" },
-  ],
+  "/ai": [{ label: "المساعد الذكي", href: "/ai/assistant" }],
 };
 
 /* ── HR nav item types ── */
@@ -103,168 +112,481 @@ type HRNavItem = {
 const hrNavItems: HRNavItem[] = [
   { icon: LayoutDashboard, label: "لوحة التحكم", href: "/hr/dashboard" },
   {
-    icon: Users2, label: "الموظفون", href: "/hr/employees", hasChildren: true,
+    icon: Users2,
+    label: "الموظفون",
+    href: "/hr/employees",
+    hasChildren: true,
     children: [
       { icon: Users2, label: "الموظفون", href: "/hr/employees" },
-      { icon: Handshake, label: "الموظفون المتعاونون", href: "/hr/employees/cooperative" },
-      { icon: UserX, label: "الموظفون غير الفعالين", href: "/hr/employees/inactive" },
+      {
+        icon: Handshake,
+        label: "الموظفون المتعاونون",
+        href: "/hr/employees/cooperative",
+      },
+      {
+        icon: UserX,
+        label: "الموظفون غير الفعالين",
+        href: "/hr/employees/inactive",
+      },
       { icon: ScrollText, label: "سجلات المستخدمين", href: "/hr/user-logs" },
     ],
   },
   {
-    icon: Send, label: "الطلبات", href: "/hr/requests", hasChildren: true,
+    icon: Send,
+    label: "الطلبات",
+    href: "/hr/requests",
+    hasChildren: true,
     children: [
       { icon: Send, label: "إرسال الطلبات", href: "/hr/requests/send" },
       { icon: Inbox, label: "الطلبات الواردة", href: "/hr/requests/incoming" },
       { icon: MailCheck, label: "الطلبات المرسلة", href: "/hr/requests/sent" },
-      { icon: Settings, label: "إعداد حقول الطلبات", href: "/hr/requests/form-settings" },
+      {
+        icon: Settings,
+        label: "إعداد حقول الطلبات",
+        href: "/hr/requests/form-settings",
+      },
     ],
   },
   {
-    icon: Clock, label: "حساب الدوام", href: "/hr/attendance", hasChildren: true,
+    icon: Clock,
+    label: "حساب الدوام",
+    href: "/hr/attendance",
+    hasChildren: true,
     children: [
       { icon: Clock, label: "حساب الدوام", href: "/hr/attendance/calculate" },
-      { icon: FileText, label: "تقرير الحضور والانصراف", href: "/hr/attendance/report" },
-      { icon: Users, label: "التحضير الفردي والجماعي", href: "/hr/attendance/individual-group" },
-      { icon: FileBarChart, label: "تقرير الحضور الشهري", href: "/hr/attendance/monthly" },
-      { icon: Settings, label: "إعداد فترات الدوام", href: "/hr/attendance/schedules" },
+      {
+        icon: FileText,
+        label: "تقرير الحضور والانصراف",
+        href: "/hr/attendance/report",
+      },
+      {
+        icon: Users,
+        label: "التحضير الفردي والجماعي",
+        href: "/hr/attendance/individual-group",
+      },
+      {
+        icon: FileBarChart,
+        label: "تقرير الحضور الشهري",
+        href: "/hr/attendance/monthly",
+      },
+      {
+        icon: Settings,
+        label: "إعداد فترات الدوام",
+        href: "/hr/attendance/schedules",
+      },
     ],
   },
   {
-    icon: Wallet, label: "حساب الراتب", href: "/hr/payroll", hasChildren: true,
+    icon: Wallet,
+    label: "حساب الراتب",
+    href: "/hr/payroll",
+    hasChildren: true,
     children: [
       { icon: Wallet, label: "كشف الرواتب", href: "/hr/payroll/statement" },
       { icon: ScrollText, label: "ارشيف الرواتب", href: "/hr/payroll/archive" },
-      { icon: FileText, label: "البيانات المالية للموظفين", href: "/hr/payroll/financial-data" },
-      { icon: Receipt, label: "ترحيل حساب الراتب إلى النظام المحاسبي", href: "/hr/payroll/transfer" },
-      { icon: Settings, label: "إعدادات حساب الراتب", href: "/hr/payroll/settings" },
+      {
+        icon: FileText,
+        label: "البيانات المالية للموظفين",
+        href: "/hr/payroll/financial-data",
+      },
+      {
+        icon: Receipt,
+        label: "ترحيل حساب الراتب إلى النظام المحاسبي",
+        href: "/hr/payroll/transfer",
+      },
+      {
+        icon: Settings,
+        label: "إعدادات حساب الراتب",
+        href: "/hr/payroll/settings",
+      },
     ],
   },
   { icon: FileBarChart, label: "تقارير الموارد البشرية", href: "/hr/reports" },
   {
-    icon: ShieldCheck, label: "المساءلات والإنذارات", href: "/hr/penalties", hasChildren: true,
+    icon: ShieldCheck,
+    label: "المساءلات والإنذارات",
+    href: "/hr/penalties",
+    hasChildren: true,
     children: [
-      { icon: ShieldCheck, label: "المساءلات", href: "/hr/penalties/investigations" },
-      { icon: ScrollText, label: "أرشيف الجزاءات", href: "/hr/penalties/archive" },
+      {
+        icon: ShieldCheck,
+        label: "المساءلات",
+        href: "/hr/penalties/investigations",
+      },
+      {
+        icon: ScrollText,
+        label: "أرشيف الجزاءات",
+        href: "/hr/penalties/archive",
+      },
       { icon: FileText, label: "الإنذارات", href: "/hr/penalties/warnings" },
       { icon: Settings, label: "أنواع المخالفات", href: "/hr/penalties/types" },
       { icon: Users, label: "مجموعات المخالفات", href: "/hr/penalties/groups" },
-      { icon: Receipt, label: "القرارات النهائية", href: "/hr/penalties/decisions" },
+      {
+        icon: Receipt,
+        label: "القرارات النهائية",
+        href: "/hr/penalties/decisions",
+      },
       { icon: Cog, label: "إعدادات", href: "/hr/penalties/settings" },
     ],
   },
   {
-    icon: Clock, label: "الإجازات", href: "/hr/leaves", hasChildren: true,
+    icon: Clock,
+    label: "الإجازات",
+    href: "/hr/leaves",
+    hasChildren: true,
     children: [
       { icon: Users, label: "إجازات الموظفين", href: "/hr/leaves/employees" },
       { icon: FileText, label: "تصنيف الإجازات", href: "/hr/leaves/types" },
-      { icon: ShieldCheck, label: "ارصدة الإجازة السنوية", href: "/hr/leaves/annual-balance" },
-      { icon: ScrollText, label: "أرصدة الاجازات الأخرى", href: "/hr/leaves/other-balance" },
+      {
+        icon: ShieldCheck,
+        label: "ارصدة الإجازة السنوية",
+        href: "/hr/leaves/annual-balance",
+      },
+      {
+        icon: ScrollText,
+        label: "أرصدة الاجازات الأخرى",
+        href: "/hr/leaves/other-balance",
+      },
       { icon: FileBarChart, label: "مخطط الإجازات", href: "/hr/leaves/chart" },
-      { icon: Clock, label: "العُطل والاجازات الرسمية", href: "/hr/leaves/holidays" },
+      {
+        icon: Clock,
+        label: "العُطل والاجازات الرسمية",
+        href: "/hr/leaves/holidays",
+      },
     ],
   },
   {
-    icon: UserX, label: "إنهاء الخدمة", href: "/hr/termination", hasChildren: true,
+    icon: UserX,
+    label: "إنهاء الخدمة",
+    href: "/hr/termination",
+    hasChildren: true,
     children: [
-      { icon: Receipt, label: "تقرير المستحقات", href: "/hr/termination/dues-report" },
-      { icon: UserX, label: "إنهاء خدمة الموظفين", href: "/hr/termination/employees" },
-      { icon: FileText, label: "مخالصة الذمة للموظفين", href: "/hr/termination/clearance" },
-      { icon: ScrollText, label: "إخلاء الطرف", href: "/hr/termination/evacuation" },
-      { icon: FileBarChart, label: "أسباب إنهاء الخدمة", href: "/hr/termination/reasons" },
+      {
+        icon: Receipt,
+        label: "تقرير المستحقات",
+        href: "/hr/termination/dues-report",
+      },
+      {
+        icon: UserX,
+        label: "إنهاء خدمة الموظفين",
+        href: "/hr/termination/employees",
+      },
+      {
+        icon: FileText,
+        label: "مخالصة الذمة للموظفين",
+        href: "/hr/termination/clearance",
+      },
+      {
+        icon: ScrollText,
+        label: "إخلاء الطرف",
+        href: "/hr/termination/evacuation",
+      },
+      {
+        icon: FileBarChart,
+        label: "أسباب إنهاء الخدمة",
+        href: "/hr/termination/reasons",
+      },
       { icon: Settings, label: "إعدادات", href: "/hr/termination/settings" },
-      { icon: Users2, label: "إعداد نموذج مقابلة إنهاء الخدمة", href: "/hr/termination/interview-setup" },
+      {
+        icon: Users2,
+        label: "إعداد نموذج مقابلة إنهاء الخدمة",
+        href: "/hr/termination/interview-setup",
+      },
     ],
   },
   {
-    icon: ShieldCheck, label: "التأمينات", href: "/hr/insurance", hasChildren: true,
+    icon: ShieldCheck,
+    label: "التأمينات",
+    href: "/hr/insurance",
+    hasChildren: true,
     children: [
-      { icon: ShieldCheck, label: "التأمينات الاجتماعية", href: "/hr/insurance/social" },
-      { icon: Clock, label: "التأمينات للساعات الإضافية", href: "/hr/insurance/overtime" },
-      { icon: FileText, label: "قائمة التأمينات الاجتماعية", href: "/hr/insurance/list" },
+      {
+        icon: ShieldCheck,
+        label: "التأمينات الاجتماعية",
+        href: "/hr/insurance/social",
+      },
+      {
+        icon: Clock,
+        label: "التأمينات للساعات الإضافية",
+        href: "/hr/insurance/overtime",
+      },
+      {
+        icon: FileText,
+        label: "قائمة التأمينات الاجتماعية",
+        href: "/hr/insurance/list",
+      },
       { icon: Receipt, label: "التأمين الطبي", href: "/hr/insurance/medical" },
     ],
   },
   {
-    icon: Handshake, label: "الموافقات", href: "/hr/approvals", hasChildren: true,
+    icon: Handshake,
+    label: "الموافقات",
+    href: "/hr/approvals",
+    hasChildren: true,
     children: [
-      { icon: FileText, label: "قائمة سلسلة الموافقات", href: "/hr/approvals/list" },
+      {
+        icon: FileText,
+        label: "قائمة سلسلة الموافقات",
+        href: "/hr/approvals/list",
+      },
       { icon: Plus, label: "إضافة سلسلة موافقات", href: "/hr/approvals/add" },
-      { icon: ShieldCheck, label: "سياسات الموافقات والتوقيع الالكتروني", href: "/hr/approvals/policies" },
+      {
+        icon: ShieldCheck,
+        label: "سياسات الموافقات والتوقيع الالكتروني",
+        href: "/hr/approvals/policies",
+      },
     ],
   },
   {
-    icon: Coins, label: "تهيئة المعلومات المالية", href: "/hr/financial-setup", hasChildren: true,
+    icon: Coins,
+    label: "تهيئة المعلومات المالية",
+    href: "/hr/financial-setup",
+    hasChildren: true,
     children: [
-      { icon: Coins, label: "أنواع البدلات", href: "/hr/financial-setup/allowances" },
-      { icon: Clock, label: "أنواع الساعات الإضافية", href: "/hr/financial-setup/overtime" },
-      { icon: Receipt, label: "أنواع الاقتطاعات المالية", href: "/hr/financial-setup/deductions" },
-      { icon: Award, label: "أنواع الامتيازات المالية", href: "/hr/financial-setup/privileges" },
-      { icon: BadgeDollarSign, label: "أنواع السلف", href: "/hr/financial-setup/loans" },
-      { icon: Users, label: "فئات الموظفين", href: "/hr/financial-setup/employee-categories" },
-      { icon: Settings, label: "إعدادات الحسابات للنظام المحاسبي", href: "/hr/financial-setup/account-settings" },
+      {
+        icon: Coins,
+        label: "أنواع البدلات",
+        href: "/hr/financial-setup/allowances",
+      },
+      {
+        icon: Clock,
+        label: "أنواع الساعات الإضافية",
+        href: "/hr/financial-setup/overtime",
+      },
+      {
+        icon: Receipt,
+        label: "أنواع الاقتطاعات المالية",
+        href: "/hr/financial-setup/deductions",
+      },
+      {
+        icon: Award,
+        label: "أنواع الامتيازات المالية",
+        href: "/hr/financial-setup/privileges",
+      },
+      {
+        icon: BadgeDollarSign,
+        label: "أنواع السلف",
+        href: "/hr/financial-setup/loans",
+      },
+      {
+        icon: Users,
+        label: "فئات الموظفين",
+        href: "/hr/financial-setup/employee-categories",
+      },
+      {
+        icon: Settings,
+        label: "إعدادات الحسابات للنظام المحاسبي",
+        href: "/hr/financial-setup/account-settings",
+      },
     ],
   },
   {
-    icon: Scale, label: "التعاقب الوظيفي", href: "/hr/succession", hasChildren: true,
+    icon: Scale,
+    label: "التعاقب الوظيفي",
+    href: "/hr/succession",
+    hasChildren: true,
     children: [
       { icon: Users, label: "المناصب", href: "/hr/succession/positions" },
-      { icon: Users2, label: "الموظفين المرشحين", href: "/hr/succession/candidates" },
-      { icon: FileText, label: "الخطط التطويرية للتعاقب الوظيفي", href: "/hr/succession/development-plans" },
-      { icon: FileBarChart, label: "تقرير متابعة الخطط التطويرية للتعاقب", href: "/hr/succession/tracking-report" },
+      {
+        icon: Users2,
+        label: "الموظفين المرشحين",
+        href: "/hr/succession/candidates",
+      },
+      {
+        icon: FileText,
+        label: "الخطط التطويرية للتعاقب الوظيفي",
+        href: "/hr/succession/development-plans",
+      },
+      {
+        icon: FileBarChart,
+        label: "تقرير متابعة الخطط التطويرية للتعاقب",
+        href: "/hr/succession/tracking-report",
+      },
     ],
   },
   { icon: Award, label: "شهادات الخبرة", href: "/hr/certificates" },
   { icon: Cog, label: "إعدادات الموارد البشرية", href: "/hr/settings" },
   {
-    icon: Network, label: "إعدادات الهيكل التنظيمي للشركة", href: "/hr/organization", hasChildren: true,
+    icon: Network,
+    label: "إعدادات الهيكل التنظيمي للشركة",
+    href: "/hr/organization",
+    hasChildren: true,
     children: [
-      { icon: Network, label: "شجرة الهيكل التنظيمي", href: "/hr/organization/tree" },
+      {
+        icon: Network,
+        label: "شجرة الهيكل التنظيمي",
+        href: "/hr/organization/tree",
+      },
       { icon: Users2, label: "الفروع", href: "/hr/organization/branches" },
-      { icon: LayoutDashboard, label: "الإدارات", href: "/hr/organization/departments" },
-      { icon: LayoutDashboard, label: "الأقسام", href: "/hr/organization/sections" },
-      { icon: LayoutDashboard, label: "الوحدات", href: "/hr/organization/units" },
-      { icon: LayoutDashboard, label: "الشعب", href: "/hr/organization/subunits" },
-      { icon: LayoutDashboard, label: "الوظائف", href: "/hr/organization/jobs" },
-      { icon: MapPin, label: "مواقع العمل", href: "/hr/organization/work-locations" },
-      { icon: Clock, label: "جداول العمل", href: "/hr/organization/work-schedules" },
+      {
+        icon: LayoutDashboard,
+        label: "الإدارات",
+        href: "/hr/organization/departments",
+      },
+      {
+        icon: LayoutDashboard,
+        label: "الأقسام",
+        href: "/hr/organization/sections",
+      },
+      {
+        icon: LayoutDashboard,
+        label: "الوحدات",
+        href: "/hr/organization/units",
+      },
+      {
+        icon: LayoutDashboard,
+        label: "الشعب",
+        href: "/hr/organization/subunits",
+      },
+      {
+        icon: LayoutDashboard,
+        label: "الوظائف",
+        href: "/hr/organization/jobs",
+      },
+      {
+        icon: MapPin,
+        label: "مواقع العمل",
+        href: "/hr/organization/work-locations",
+      },
+      {
+        icon: Clock,
+        label: "جداول العمل",
+        href: "/hr/organization/work-schedules",
+      },
     ],
   },
   {
-    icon: ShieldCheck, label: "صلاحيات الموظفين", href: "/hr/permissions", hasChildren: true,
+    icon: ShieldCheck,
+    label: "صلاحيات الموظفين",
+    href: "/hr/permissions",
+    hasChildren: true,
     children: [
-      { icon: ShieldCheck, label: "قائمة أدوار المستخدمين", href: "/hr/permissions/roles" },
+      {
+        icon: ShieldCheck,
+        label: "قائمة أدوار المستخدمين",
+        href: "/hr/permissions/roles",
+      },
       { icon: Plus, label: "إضافة دور جديد", href: "/hr/permissions/add-role" },
     ],
   },
   {
-    icon: Wrench, label: "أدوات الخصومات والإيميلات", href: "/hr/deductions-emails", hasChildren: false,
+    icon: Wrench,
+    label: "أدوات الخصومات والإيميلات",
+    href: "/hr/deductions-emails",
+    hasChildren: false,
   },
 ];
 
 function getActiveHRParent(pathname: string) {
-  return hrNavItems.find(
-    (item) => item.hasChildren && item.children?.some((child) => child.href === pathname),
-  )?.href ?? null;
+  return (
+    hrNavItems.find(
+      (item) =>
+        item.hasChildren &&
+        item.children?.some((child) => child.href === pathname),
+    )?.href ?? null
+  );
 }
 
 /* ── Per-item accent colors for active state ── */
-const itemColors: Record<string, { icon: string; active: string; glow: string; dot: string; text: string; subBg: string; border: string }> = {
-  "/":          { icon: "from-sky-400 to-blue-600",      active: "bg-sky-500/15 border-sky-500/25",      glow: "shadow-sky-500/20",      dot: "bg-sky-400",      text: "text-sky-300",      subBg: "bg-sky-500/[0.06]",      border: "border-sky-400/20" },
-  "/sales":     { icon: "from-blue-400 to-indigo-600",   active: "bg-blue-500/15 border-blue-500/25",    glow: "shadow-blue-500/20",     dot: "bg-blue-400",     text: "text-blue-300",     subBg: "bg-blue-500/[0.06]",     border: "border-blue-400/20" },
-  "/purchases": { icon: "from-violet-400 to-purple-600", active: "bg-violet-500/15 border-violet-500/25",glow: "shadow-violet-500/20",   dot: "bg-violet-400",   text: "text-violet-300",   subBg: "bg-violet-500/[0.06]",   border: "border-violet-400/20" },
-  "/hr":        { icon: "from-emerald-400 to-teal-600",  active: "bg-emerald-500/15 border-emerald-500/25",glow: "shadow-emerald-500/20",dot: "bg-emerald-400",  text: "text-emerald-300",  subBg: "bg-emerald-500/[0.06]",  border: "border-emerald-400/20" },
-  "/crm":       { icon: "from-amber-400 to-orange-600",  active: "bg-amber-500/15 border-amber-500/25",  glow: "shadow-amber-500/20",   dot: "bg-amber-400",    text: "text-amber-300",    subBg: "bg-amber-500/[0.06]",    border: "border-amber-400/20" },
-  "/expenses":  { icon: "from-green-400 to-emerald-600", active: "bg-green-500/15 border-green-500/25",  glow: "shadow-green-500/20",   dot: "bg-green-400",    text: "text-green-300",    subBg: "bg-green-500/[0.06]",    border: "border-green-400/20" },
-  "/users":     { icon: "from-cyan-400 to-teal-600",     active: "bg-cyan-500/15 border-cyan-500/25",    glow: "shadow-cyan-500/20",    dot: "bg-cyan-400",     text: "text-cyan-300",     subBg: "bg-cyan-500/[0.06]",     border: "border-cyan-400/20" },
-  "/ai":        { icon: "from-fuchsia-400 to-purple-600",active: "bg-fuchsia-500/15 border-fuchsia-500/25",glow: "shadow-fuchsia-500/20",dot: "bg-fuchsia-400", text: "text-fuchsia-300",  subBg: "bg-fuchsia-500/[0.06]",  border: "border-fuchsia-400/20" },
-  "/settings":  { icon: "from-slate-400 to-gray-600",    active: "bg-slate-500/15 border-slate-500/25",  glow: "shadow-slate-500/20",   dot: "bg-slate-400",    text: "text-slate-300",    subBg: "bg-slate-500/[0.06]",    border: "border-slate-400/20" },
+const itemColors: Record<
+  string,
+  {
+    icon: string;
+    active: string;
+    glow: string;
+    dot: string;
+    text: string;
+    subBg: string;
+    border: string;
+  }
+> = {
+  "/": {
+    icon: "from-sky-400 to-blue-600",
+    active: "bg-sky-500/15 border-sky-500/25",
+    glow: "shadow-sky-500/20",
+    dot: "bg-sky-400",
+    text: "text-sky-300",
+    subBg: "bg-sky-500/[0.06]",
+    border: "border-sky-400/20",
+  },
+  "/sales": {
+    icon: "from-blue-400 to-indigo-600",
+    active: "bg-blue-500/15 border-blue-500/25",
+    glow: "shadow-blue-500/20",
+    dot: "bg-blue-400",
+    text: "text-blue-300",
+    subBg: "bg-blue-500/[0.06]",
+    border: "border-blue-400/20",
+  },
+  "/purchases": {
+    icon: "from-violet-400 to-purple-600",
+    active: "bg-violet-500/15 border-violet-500/25",
+    glow: "shadow-violet-500/20",
+    dot: "bg-violet-400",
+    text: "text-violet-300",
+    subBg: "bg-violet-500/[0.06]",
+    border: "border-violet-400/20",
+  },
+  "/hr": {
+    icon: "from-emerald-400 to-teal-600",
+    active: "bg-emerald-500/15 border-emerald-500/25",
+    glow: "shadow-emerald-500/20",
+    dot: "bg-emerald-400",
+    text: "text-emerald-300",
+    subBg: "bg-emerald-500/[0.06]",
+    border: "border-emerald-400/20",
+  },
+  "/crm": {
+    icon: "from-amber-400 to-orange-600",
+    active: "bg-amber-500/15 border-amber-500/25",
+    glow: "shadow-amber-500/20",
+    dot: "bg-amber-400",
+    text: "text-amber-300",
+    subBg: "bg-amber-500/[0.06]",
+    border: "border-amber-400/20",
+  },
+  "/expenses": {
+    icon: "from-green-400 to-emerald-600",
+    active: "bg-green-500/15 border-green-500/25",
+    glow: "shadow-green-500/20",
+    dot: "bg-green-400",
+    text: "text-green-300",
+    subBg: "bg-green-500/[0.06]",
+    border: "border-green-400/20",
+  },
+  "/users": {
+    icon: "from-cyan-400 to-teal-600",
+    active: "bg-cyan-500/15 border-cyan-500/25",
+    glow: "shadow-cyan-500/20",
+    dot: "bg-cyan-400",
+    text: "text-cyan-300",
+    subBg: "bg-cyan-500/[0.06]",
+    border: "border-cyan-400/20",
+  },
+  "/ai": {
+    icon: "from-fuchsia-400 to-purple-600",
+    active: "bg-fuchsia-500/15 border-fuchsia-500/25",
+    glow: "shadow-fuchsia-500/20",
+    dot: "bg-fuchsia-400",
+    text: "text-fuchsia-300",
+    subBg: "bg-fuchsia-500/[0.06]",
+    border: "border-fuchsia-400/20",
+  },
+  "/settings": {
+    icon: "from-slate-400 to-gray-600",
+    active: "bg-slate-500/15 border-slate-500/25",
+    glow: "shadow-slate-500/20",
+    dot: "bg-slate-400",
+    text: "text-slate-300",
+    subBg: "bg-slate-500/[0.06]",
+    border: "border-slate-400/20",
+  },
 };
 
 // Store sidebar scroll positions globally so they survive re-renders
 const sidebarScrollPositions: Record<string, number> = {
   hr: 0,
-  main: 0
+  main: 0,
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -274,7 +596,7 @@ function HRSidebar({
   sidebarOpen,
   setSidebarOpen,
   expandedMenus,
-  setExpandedMenus
+  setExpandedMenus,
 }: {
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
@@ -292,13 +614,20 @@ function HRSidebar({
       .filter((item) => {
         if (item.isHeader) return true;
         if (item.hasChildren && item.children) {
-          return item.children.some((c) => checkPerm(livePerms, ...permissionForHRPath(c.href)));
+          return item.children.some((c) =>
+            checkPerm(livePerms, ...permissionForHRPath(c.href)),
+          );
         }
         return checkPerm(livePerms, ...permissionForHRPath(item.href));
       })
       .map((item) =>
         item.hasChildren && item.children
-          ? { ...item, children: item.children.filter((c) => checkPerm(livePerms, ...permissionForHRPath(c.href))) }
+          ? {
+              ...item,
+              children: item.children.filter((c) =>
+                checkPerm(livePerms, ...permissionForHRPath(c.href)),
+              ),
+            }
           : item,
       );
   }, [livePerms]);
@@ -331,15 +660,18 @@ function HRSidebar({
     let activeParentHref: string | null = null;
     for (const item of hrNavItems) {
       if (item.hasChildren && item.children) {
-        if (item.children.some(c => location.pathname === c.href)) {
+        if (item.children.some((c) => location.pathname === c.href)) {
           activeParentHref = item.href;
           break;
         }
       }
     }
-    if (activeParentHref && lastAutoExpandedPath.current !== location.pathname) {
+    if (
+      activeParentHref &&
+      lastAutoExpandedPath.current !== location.pathname
+    ) {
       lastAutoExpandedPath.current = location.pathname;
-      setExpandedMenus(prev => {
+      setExpandedMenus((prev) => {
         if (prev.has(activeParentHref!)) return prev;
         const next = new Set(prev);
         next.add(activeParentHref!);
@@ -352,10 +684,11 @@ function HRSidebar({
     <aside
       className={cn(
         "relative flex flex-col flex-shrink-0 h-full transition-all duration-300 overflow-hidden",
-        sidebarOpen ? "w-[270px]" : "w-[72px]"
+        sidebarOpen ? "w-[270px]" : "w-[72px]",
       )}
       style={{
-        background: "linear-gradient(180deg, #052e16 0%, #14332a 40%, #0c2a1e 100%)",
+        background:
+          "linear-gradient(180deg, #052e16 0%, #14332a 40%, #0c2a1e 100%)",
       }}
     >
       {/* Decorative ambient lights */}
@@ -386,7 +719,11 @@ function HRSidebar({
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="rounded-xl p-2 text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-all duration-200"
           >
-            {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            {sidebarOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Menu className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>
@@ -400,7 +737,7 @@ function HRSidebar({
           onClick={() => navigate("/")}
           className={cn(
             "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
-            "text-emerald-300/70 hover:text-white hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400/30"
+            "text-emerald-300/70 hover:text-white hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400/30",
           )}
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 flex-shrink-0">
@@ -439,7 +776,9 @@ function HRSidebar({
           const Icon = item.icon;
           const isToolsIcon = item.href === "/hr/deductions-emails";
           const isExpanded = expandedMenus.has(item.href);
-          const hasChildActive = item.hasChildren && item.children?.some(c => location.pathname === c.href);
+          const hasChildActive =
+            item.hasChildren &&
+            item.children?.some((c) => location.pathname === c.href);
           const isItemActive = item.hasChildren
             ? hasChildActive
             : location.pathname === item.href;
@@ -451,14 +790,14 @@ function HRSidebar({
                   "group w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200 border border-transparent",
                   isItemActive
                     ? "text-white bg-emerald-500/15 border-emerald-500/25"
-                    : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
+                    : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]",
                 )}
               >
                 {/* Icon + Label: clicking expands or navigates */}
                 <button
                   onClick={() => {
                     if (item.hasChildren) {
-                      setExpandedMenus(prev => {
+                      setExpandedMenus((prev) => {
                         if (prev.has(item.href)) return prev;
                         const next = new Set(prev);
                         next.add(item.href);
@@ -470,7 +809,7 @@ function HRSidebar({
                   }}
                   className={cn(
                     "flex items-center gap-3 min-w-0",
-                    isToolsIcon ? "flex-none" : "flex-1"
+                    isToolsIcon ? "flex-none" : "flex-1",
                   )}
                   title={t(item.label)}
                 >
@@ -479,13 +818,18 @@ function HRSidebar({
                       "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300 flex-shrink-0",
                       isItemActive
                         ? "bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
-                        : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70"
+                        : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70",
                     )}
                   >
                     <Icon className="h-4 w-4" />
                   </div>
                   {sidebarOpen && !isToolsIcon && (
-                    <span className={cn("flex-1 text-start truncate", isItemActive && "font-semibold")}>
+                    <span
+                      className={cn(
+                        "flex-1 text-start truncate",
+                        isItemActive && "font-semibold",
+                      )}
+                    >
                       {t(item.label)}
                     </span>
                   )}
@@ -496,9 +840,11 @@ function HRSidebar({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setExpandedMenus(prev => {
+                      setExpandedMenus((prev) => {
                         const next = new Set(prev);
-                        isExpanded ? next.delete(item.href) : next.add(item.href);
+                        isExpanded
+                          ? next.delete(item.href)
+                          : next.add(item.href);
                         return next;
                       });
                     }}
@@ -507,7 +853,7 @@ function HRSidebar({
                     <ChevronDown
                       className={cn(
                         "h-3.5 w-3.5 transition-transform duration-300 text-white/25",
-                        isExpanded && "rotate-180 text-white/50"
+                        isExpanded && "rotate-180 text-white/50",
                       )}
                     />
                   </button>
@@ -517,39 +863,42 @@ function HRSidebar({
               </div>
 
               {/* Children sub-menu */}
-              {item.hasChildren && isExpanded && sidebarOpen && item.children && (
-                <div className="mt-1.5 me-4 ms-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border bg-emerald-500/[0.06] border-emerald-400/15">
-                  {item.children.map((child) => {
-                    const ChildIcon = child.icon;
-                    const isChildActive = location.pathname === child.href;
-                    return (
-                      <button
-                        key={child.href}
-                        onClick={() => navigateKeepingScroll(child.href)}
-                        className={cn(
-                          "w-full text-start flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
-                          isChildActive
-                            ? "text-white bg-emerald-500/15 border border-emerald-500/25"
-                            : "text-emerald-300 opacity-60 hover:opacity-100 hover:bg-white/[0.05] border border-transparent"
-                        )}
-                      >
-                        <span
+              {item.hasChildren &&
+                isExpanded &&
+                sidebarOpen &&
+                item.children && (
+                  <div className="mt-1.5 me-4 ms-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border bg-emerald-500/[0.06] border-emerald-400/15">
+                    {item.children.map((child) => {
+                      const ChildIcon = child.icon;
+                      const isChildActive = location.pathname === child.href;
+                      return (
+                        <button
+                          key={child.href}
+                          onClick={() => navigateKeepingScroll(child.href)}
                           className={cn(
-                            "h-1.5 w-1.5 rounded-full flex-shrink-0 transition-all duration-200",
+                            "w-full text-start flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
                             isChildActive
-                              ? "h-2 w-2 bg-emerald-400 shadow-sm shadow-emerald-500/20"
-                              : "bg-emerald-400 opacity-40"
+                              ? "text-white bg-emerald-500/15 border border-emerald-500/25"
+                              : "text-emerald-300 opacity-60 hover:opacity-100 hover:bg-white/[0.05] border border-transparent",
                           )}
-                        />
-                        <span>{t(child.label)}</span>
-                        {isChildActive && (
-                          <span className="ms-auto h-1 w-5 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 opacity-60" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                        >
+                          <span
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full flex-shrink-0 transition-all duration-200",
+                              isChildActive
+                                ? "h-2 w-2 bg-emerald-400 shadow-sm shadow-emerald-500/20"
+                                : "bg-emerald-400 opacity-40",
+                            )}
+                          />
+                          <span>{t(child.label)}</span>
+                          {isChildActive && (
+                            <span className="ms-auto h-1 w-5 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 opacity-60" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
             </div>
           );
         })}
@@ -564,7 +913,7 @@ function HRSidebar({
           className={cn(
             "flex items-center gap-3 rounded-2xl px-3 py-3 transition-all duration-300",
             "bg-gradient-to-l from-emerald-500/[0.06] to-emerald-500/[0.02] border border-emerald-500/[0.10]",
-            !sidebarOpen && "justify-center px-0"
+            !sidebarOpen && "justify-center px-0",
           )}
         >
           <div className="relative flex-shrink-0">
@@ -576,8 +925,12 @@ function HRSidebar({
           {sidebarOpen && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || t("مدير النظام")}</p>
-                <p className="text-[10px] text-emerald-300/30 truncate">{userSession?.role || ""}</p>
+                <p className="text-[12px] font-bold text-white/90 truncate">
+                  {userSession?.name || t("مدير النظام")}
+                </p>
+                <p className="text-[10px] text-emerald-300/30 truncate">
+                  {userSession?.role || ""}
+                </p>
               </div>
               <button
                 onClick={async () => {
@@ -606,7 +959,7 @@ function MainSidebar({
   sidebarOpen,
   setSidebarOpen,
   expandedMenu,
-  setExpandedMenu
+  setExpandedMenu,
 }: {
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
@@ -635,7 +988,7 @@ function MainSidebar({
   };
 
   const activeSubmenuParent = Object.entries(navSubMenus).find(([, subItems]) =>
-    subItems.some((subItem) => subItem.href === location.pathname)
+    subItems.some((subItem) => subItem.href === location.pathname),
   )?.[0];
 
   const isActive = (path: string) =>
@@ -647,10 +1000,25 @@ function MainSidebar({
   const allNavItems = [
     { icon: BarChart3, label: "لوحة التحكم", href: "/" },
     { icon: FileText, label: "المبيعات", href: "/sales", hasSubmenu: true },
-    { icon: ShoppingCart, label: "المشتريات", href: "/purchases", hasSubmenu: true },
+    {
+      icon: ShoppingCart,
+      label: "المشتريات",
+      href: "/purchases",
+      hasSubmenu: true,
+    },
     { icon: Users, label: "الموارد البشرية", href: "/hr" },
-    { icon: CreditCard, label: "العملاء والموردين", href: "/crm", hasSubmenu: true },
-    { icon: Receipt, label: "المحاسبة والمالية", href: "/expenses", hasSubmenu: true },
+    {
+      icon: CreditCard,
+      label: "العملاء والموردين",
+      href: "/crm",
+      hasSubmenu: true,
+    },
+    {
+      icon: Receipt,
+      label: "المحاسبة والمالية",
+      href: "/expenses",
+      hasSubmenu: true,
+    },
     { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];
@@ -678,7 +1046,10 @@ function MainSidebar({
       });
     }
 
-    if (activeParentHref && lastAutoExpandedPath.current !== location.pathname) {
+    if (
+      activeParentHref &&
+      lastAutoExpandedPath.current !== location.pathname
+    ) {
       lastAutoExpandedPath.current = location.pathname;
       setExpandedMenu(activeParentHref);
     }
@@ -688,10 +1059,11 @@ function MainSidebar({
     <aside
       className={cn(
         "relative flex flex-col flex-shrink-0 h-full transition-all duration-300 overflow-hidden",
-        sidebarOpen ? "w-[270px]" : "w-[72px]"
+        sidebarOpen ? "w-[270px]" : "w-[72px]",
       )}
       style={{
-        background: "linear-gradient(180deg, #0f172a 0%, #1a1f3a 40%, #15203a 100%)",
+        background:
+          "linear-gradient(180deg, #0f172a 0%, #1a1f3a 40%, #15203a 100%)",
       }}
     >
       {/* Decorative ambient lights */}
@@ -700,8 +1072,15 @@ function MainSidebar({
       <div className="pointer-events-none absolute bottom-20 -left-16 h-36 w-36 rounded-full bg-cyan-500/[0.05] blur-[60px]" />
 
       {/* ── Logo area ── */}
-      <div className={cn("relative z-10 pt-5 pb-4", sidebarOpen ? "px-4" : "px-2")}>
-        <div className={cn("flex items-center", sidebarOpen ? "justify-between" : "flex-col gap-2")}>
+      <div
+        className={cn("relative z-10 pt-5 pb-4", sidebarOpen ? "px-4" : "px-2")}
+      >
+        <div
+          className={cn(
+            "flex items-center",
+            sidebarOpen ? "justify-between" : "flex-col gap-2",
+          )}
+        >
           <Link to="/" className="flex items-center gap-3 group">
             <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-600 text-white font-extrabold text-sm shadow-xl shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-all duration-300 group-hover:scale-105">
               <Crown className="h-5 w-5" />
@@ -710,10 +1089,10 @@ function MainSidebar({
             {sidebarOpen && (
               <div className="flex flex-col">
                 <span className="text-[14px] font-extrabold text-white tracking-tight leading-tight">
-                  {t("لاكجري العياف")}
+                  {t(COMPANY_PROFILE.programNameAr)}
                 </span>
                 <span className="text-[10px] font-medium text-blue-300/60 tracking-wide">
-                  {t("لاكجري العياف")}
+                  {t(COMPANY_PROFILE.companyNameAr)}
                 </span>
               </div>
             )}
@@ -724,11 +1103,15 @@ function MainSidebar({
               "rounded-xl p-2 transition-all duration-200",
               sidebarOpen
                 ? "text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
-                : "bg-white/10 text-white hover:bg-white/20"
+                : "bg-white/10 text-white hover:bg-white/20",
             )}
             title={t(sidebarOpen ? "تصغير القائمة" : "توسيع القائمة")}
           >
-            {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-5 w-5" />}
+            {sidebarOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </button>
         </div>
       </div>
@@ -751,7 +1134,11 @@ function MainSidebar({
           const Icon = item.icon;
           const isItemActive = isActive(item.href);
           const isExpanded = expandedMenu === item.href && item.hasSubmenu;
-          const subItems = navSubMenus[item.href]?.filter((subItem) => subItem.isHeader || checkPerm(livePerms, ...permissionForMainSubPath(subItem.href)));
+          const subItems = navSubMenus[item.href]?.filter(
+            (subItem) =>
+              subItem.isHeader ||
+              checkPerm(livePerms, ...permissionForMainSubPath(subItem.href)),
+          );
           const colors = itemColors[item.href] || itemColors["/"];
 
           // HR item navigates to /hr/dashboard directly
@@ -763,25 +1150,31 @@ function MainSidebar({
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 flex-shrink-0",
                   isItemActive
-                    ? cn("bg-gradient-to-br text-white shadow-lg", colors.icon, colors.glow)
-                    : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70"
+                    ? cn(
+                        "bg-gradient-to-br text-white shadow-lg",
+                        colors.icon,
+                        colors.glow,
+                      )
+                    : "bg-white/[0.04] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/70",
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" />
               </div>
               {sidebarOpen && (
                 <>
-                  <span className={cn(
-                    "flex-1 text-start transition-colors duration-200",
-                    isItemActive ? "text-white font-semibold" : ""
-                  )}>
+                  <span
+                    className={cn(
+                      "flex-1 text-start transition-colors duration-200",
+                      isItemActive ? "text-white font-semibold" : "",
+                    )}
+                  >
                     {t(item.label)}
                   </span>
                   {item.hasSubmenu && (
                     <ChevronDown
                       className={cn(
                         "h-3.5 w-3.5 transition-transform duration-300 text-white/25",
-                        isExpanded && "rotate-180 text-white/50"
+                        isExpanded && "rotate-180 text-white/50",
                       )}
                     />
                   )}
@@ -794,7 +1187,7 @@ function MainSidebar({
             "group w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200 border border-transparent",
             isItemActive
               ? cn("text-white", colors.active)
-              : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
+              : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]",
           );
 
           return (
@@ -811,7 +1204,9 @@ function MainSidebar({
               ) : item.hasSubmenu ? (
                 <button
                   onClick={() =>
-                    setExpandedMenu(expandedMenu === item.href ? null : item.href)
+                    setExpandedMenu(
+                      expandedMenu === item.href ? null : item.href,
+                    )
                   }
                   className={baseClass}
                   title={t(item.label)}
@@ -819,22 +1214,34 @@ function MainSidebar({
                   {btnContent}
                 </button>
               ) : (
-                <Link to={item.href} className={baseClass} title={t(item.label)}>
+                <Link
+                  to={item.href}
+                  className={baseClass}
+                  title={t(item.label)}
+                >
                   {btnContent}
                 </Link>
               )}
 
               {/* Submenu */}
               {isExpanded && sidebarOpen && subItems && (
-                <div className={cn(
-                  "mt-1.5 me-4 ms-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border",
-                  colors.subBg, colors.border
-                )}>
+                <div
+                  className={cn(
+                    "mt-1.5 me-4 ms-2 rounded-xl p-1.5 space-y-0.5 animate-fade-in border",
+                    colors.subBg,
+                    colors.border,
+                  )}
+                >
                   {subItems.map((subItem, index) => {
                     if (subItem.isHeader) {
                       return (
                         <div key={index} className="px-3 pt-3 pb-1">
-                          <span className={cn("text-[10px] font-bold uppercase tracking-widest opacity-40", colors.text)}>
+                          <span
+                            className={cn(
+                              "text-[10px] font-bold uppercase tracking-widest opacity-40",
+                              colors.text,
+                            )}
+                          >
                             {t(subItem.label)}
                           </span>
                         </div>
@@ -849,7 +1256,11 @@ function MainSidebar({
                           "w-full text-start flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium rounded-lg transition-all duration-200",
                           isSubActive
                             ? cn("text-white", colors.active)
-                            : cn("hover:bg-white/[0.05]", colors.text, "opacity-60 hover:opacity-100")
+                            : cn(
+                                "hover:bg-white/[0.05]",
+                                colors.text,
+                                "opacity-60 hover:opacity-100",
+                              ),
                         )}
                       >
                         <span
@@ -857,12 +1268,17 @@ function MainSidebar({
                             "h-1.5 w-1.5 rounded-full flex-shrink-0 transition-all duration-200",
                             isSubActive
                               ? cn("h-2 w-2 shadow-sm", colors.dot, colors.glow)
-                              : cn(colors.dot, "opacity-40")
+                              : cn(colors.dot, "opacity-40"),
                           )}
                         />
                         <span>{t(subItem.label)}</span>
                         {isSubActive && (
-                          <span className={cn("ms-auto h-1 w-5 rounded-full bg-gradient-to-r opacity-60", colors.icon)} />
+                          <span
+                            className={cn(
+                              "ms-auto h-1 w-5 rounded-full bg-gradient-to-r opacity-60",
+                              colors.icon,
+                            )}
+                          />
                         )}
                       </button>
                     );
@@ -883,7 +1299,7 @@ function MainSidebar({
           className={cn(
             "flex items-center gap-3 rounded-2xl px-3 py-3 transition-all duration-300",
             "bg-gradient-to-l from-white/[0.04] to-white/[0.02] border border-white/[0.06]",
-            !sidebarOpen && "justify-center px-0"
+            !sidebarOpen && "justify-center px-0",
           )}
         >
           <div className="relative flex-shrink-0">
@@ -895,8 +1311,12 @@ function MainSidebar({
           {sidebarOpen && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-white/90 truncate">{userSession?.name || t("مدير النظام")}</p>
-                <p className="text-[10px] text-white/30 truncate">{userSession?.role || ""}</p>
+                <p className="text-[12px] font-bold text-white/90 truncate">
+                  {userSession?.name || t("مدير النظام")}
+                </p>
+                <p className="text-[10px] text-white/30 truncate">
+                  {userSession?.role || ""}
+                </p>
               </div>
               <button
                 onClick={async () => {
@@ -938,11 +1358,18 @@ export default function Layout({ children }: LayoutProps) {
     setSidebarOpen(true);
   }, [location.pathname]);
 
-  const currentPermissionKeys = isHRSection ? permissionForHRPath(location.pathname) : permissionForMainSubPath(location.pathname);
-  const readOnly = checkPerm(livePerms, ...currentPermissionKeys) && !canManagePerm(livePerms, ...currentPermissionKeys);
+  const currentPermissionKeys = isHRSection
+    ? permissionForHRPath(location.pathname)
+    : permissionForMainSubPath(location.pathname);
+  const readOnly =
+    checkPerm(livePerms, ...currentPermissionKeys) &&
+    !canManagePerm(livePerms, ...currentPermissionKeys);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background" dir={direction}>
+    <div
+      className="flex h-screen overflow-hidden bg-background"
+      dir={direction}
+    >
       {/* ── Sidebar — switches between main and HR ── */}
       {isHRSection ? (
         <HRSidebar
@@ -966,11 +1393,13 @@ export default function Layout({ children }: LayoutProps) {
         <header className="sticky top-0 z-40 h-[68px] flex items-center justify-between px-8 bg-white/80 backdrop-blur-xl border-b border-border/40 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <div className="flex items-center gap-4">
             <h1 className="text-[16px] font-extrabold text-foreground">
-              {t("شركة لاكجري العياف")}
+              {t(COMPANY_PROFILE.programNameAr)}
             </h1>
             <span className="hidden sm:inline-block h-5 w-px bg-border/60" />
             <span className="hidden sm:inline-block text-[11px] text-muted-foreground font-bold">
-              {isHRSection ? t("نظام الموارد البشرية") : t("نظام إدارة الأعمال المتكامل")}
+              {isHRSection
+                ? t("نظام الموارد البشرية")
+                : t(COMPANY_PROFILE.programNameAr)}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -998,7 +1427,9 @@ export default function Layout({ children }: LayoutProps) {
         <QuickActionsBar />
 
         {/* Page Content */}
-        <div className="flex-1 overflow-auto p-4"><ReadOnlyBoundary readOnly={readOnly}>{children}</ReadOnlyBoundary></div>
+        <div className="flex-1 overflow-auto p-4">
+          <ReadOnlyBoundary readOnly={readOnly}>{children}</ReadOnlyBoundary>
+        </div>
       </main>
     </div>
   );

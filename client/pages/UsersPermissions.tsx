@@ -39,14 +39,21 @@ type UserForm = {
   status: string;
 };
 
-const ROLE_OPTIONS = ["Administrator", "Accounting", "HR", "Sales", "Support", "User"];
+const ROLE_OPTIONS = [
+  "Administrator",
+  "Accounting",
+  "HR",
+  "Sales",
+  "Support",
+  "User",
+];
 const STATUS_OPTIONS = ["نشط", "غير نشط"];
 
 const emptyForm: UserForm = {
   name: "",
   email: "",
   role: "User",
-  company: "شركة لاكجري العياف",
+  company: "شركة إدارة العياف للمقاولات",
   phone: "",
   status: "نشط",
 };
@@ -56,7 +63,7 @@ const mapUserRow = (row: Record<string, unknown>): UserRow => ({
   name: String(row.full_name ?? row.name ?? ""),
   email: String(row.email ?? ""),
   role: String(row.role ?? "User"),
-  company: String(row.company ?? "شركة لاكجري العياف"),
+  company: String(row.company ?? "شركة إدارة العياف للمقاولات"),
   phone: String(row.phone ?? ""),
   status: String(row.status ?? "نشط"),
 });
@@ -97,7 +104,9 @@ export default function UsersPermissions() {
     }
 
     if (!result.error && result.data) {
-      setUsers(result.data.map((row) => mapUserRow(row as Record<string, unknown>)));
+      setUsers(
+        result.data.map((row) => mapUserRow(row as Record<string, unknown>)),
+      );
     } else {
       setUsers([]);
       if (result.failed) {
@@ -114,7 +123,8 @@ export default function UsersPermissions() {
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
-      if (fSearch && !`${user.name} ${user.email}`.includes(fSearch)) return false;
+      if (fSearch && !`${user.name} ${user.email}`.includes(fSearch))
+        return false;
       if (fRole && user.role !== fRole) return false;
       if (fStatus && user.status !== fStatus) return false;
       return true;
@@ -148,7 +158,7 @@ export default function UsersPermissions() {
         color: "bg-blue-600",
       },
     ],
-    [users]
+    [users],
   );
 
   const title = isRoles
@@ -188,11 +198,19 @@ export default function UsersPermissions() {
 
   async function saveUser() {
     if (!form.name.trim()) {
-      toast({ title: "تنبيه", description: "أدخل اسم المستخدم", variant: "destructive" });
+      toast({
+        title: "تنبيه",
+        description: "أدخل اسم المستخدم",
+        variant: "destructive",
+      });
       return;
     }
     if (!form.email.trim()) {
-      toast({ title: "تنبيه", description: "أدخل البريد الإلكتروني", variant: "destructive" });
+      toast({
+        title: "تنبيه",
+        description: "أدخل البريد الإلكتروني",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -200,7 +218,7 @@ export default function UsersPermissions() {
       full_name: form.name.trim(),
       email: form.email.trim(),
       role: form.role,
-      company: form.company.trim() || "شركة لاكجري العياف",
+      company: form.company.trim() || "شركة إدارة العياف للمقاولات",
       phone: form.phone.trim(),
       status: form.status,
       updated_at: new Date().toISOString(),
@@ -224,22 +242,32 @@ export default function UsersPermissions() {
         setUsers((prev) =>
           prev.map((u) =>
             u.id === selected.id
-              ? { ...u, name: payload.full_name, email: payload.email, role: payload.role, company: payload.company, phone: payload.phone, status: payload.status }
-              : u
-          )
+              ? {
+                  ...u,
+                  name: payload.full_name,
+                  email: payload.email,
+                  role: payload.role,
+                  company: payload.company,
+                  phone: payload.phone,
+                  status: payload.status,
+                }
+              : u,
+          ),
         );
         toast({ title: "تم الحفظ", description: "تم تحديث المستخدم" });
         setMode("list");
       } else {
-        toast({ title: "فشل التحديث", description: "تعذر حفظ التعديلات", variant: "destructive" });
+        toast({
+          title: "فشل التحديث",
+          description: "تعذر حفظ التعديلات",
+          variant: "destructive",
+        });
       }
     } else {
       const insertPayload = { id: crypto.randomUUID(), ...payload };
       let result: any = { error: null, failed: false };
       try {
-        const res = await supabase
-          .from("app_users")
-          .insert([insertPayload]);
+        const res = await supabase.from("app_users").insert([insertPayload]);
         result = { ...res, failed: false };
         if (res.error) result.error = res.error;
       } catch (e) {
@@ -260,7 +288,11 @@ export default function UsersPermissions() {
         toast({ title: "تم الحفظ", description: "تمت إضافة المستخدم" });
         setMode("list");
       } else {
-        toast({ title: "فشل الحفظ", description: "تعذر إضافة المستخدم", variant: "destructive" });
+        toast({
+          title: "فشل الحفظ",
+          description: "تعذر إضافة المستخدم",
+          variant: "destructive",
+        });
       }
     }
 
@@ -272,10 +304,7 @@ export default function UsersPermissions() {
 
     let result: any = { error: null, failed: false };
     try {
-      const res = await supabase
-        .from("app_users")
-        .delete()
-        .eq("id", user.id);
+      const res = await supabase.from("app_users").delete().eq("id", user.id);
       result = { ...res, failed: false };
       if (res.error) result.error = res.error;
     } catch (e) {
@@ -286,7 +315,11 @@ export default function UsersPermissions() {
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
       toast({ title: "تم الحذف" });
     } else {
-      toast({ title: "فشل الحذف", description: "تعذر حذف المستخدم", variant: "destructive" });
+      toast({
+        title: "فشل الحذف",
+        description: "تعذر حذف المستخدم",
+        variant: "destructive",
+      });
     }
   }
 
@@ -305,10 +338,19 @@ export default function UsersPermissions() {
     }
 
     if (!result.error) {
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)));
-      toast({ title: "تم التحديث", description: `تم تغيير الحالة إلى ${nextStatus}` });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)),
+      );
+      toast({
+        title: "تم التحديث",
+        description: `تم تغيير الحالة إلى ${nextStatus}`,
+      });
     } else {
-      toast({ title: "فشل التحديث", description: "تعذر تحديث الحالة", variant: "destructive" });
+      toast({
+        title: "فشل التحديث",
+        description: "تعذر تحديث الحالة",
+        variant: "destructive",
+      });
     }
   }
 
@@ -348,10 +390,16 @@ export default function UsersPermissions() {
                 <div key={card.title} className="erp-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground">{card.title}</p>
-                      <p className="mt-2 text-2xl font-semibold text-foreground">{card.value}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {card.title}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
+                        {card.value}
+                      </p>
                     </div>
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg text-white ${card.color}`}>
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-lg text-white ${card.color}`}
+                    >
                       <Icon className="h-5 w-5" />
                     </div>
                   </div>
@@ -363,48 +411,105 @@ export default function UsersPermissions() {
 
         {isAudit ? (
           <div className="erp-card">
-            <h3 className="text-lg font-semibold text-foreground">سجل التدقيق</h3>
-            <p className="mt-2 text-sm text-muted-foreground">يتم تسجيل جميع العمليات الحساسة هنا مع معلومات المستخدم والوقت.</p>
+            <h3 className="text-lg font-semibold text-foreground">
+              سجل التدقيق
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              يتم تسجيل جميع العمليات الحساسة هنا مع معلومات المستخدم والوقت.
+            </p>
           </div>
         ) : isRoles ? (
           <div className="erp-card">
-            <h3 className="text-lg font-semibold text-foreground">إدارة الأدوار</h3>
-            <p className="mt-2 text-sm text-muted-foreground">قم بتحديث الصلاحيات الممنوحة لكل دور حسب احتياج العمل.</p>
+            <h3 className="text-lg font-semibold text-foreground">
+              إدارة الأدوار
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              قم بتحديث الصلاحيات الممنوحة لكل دور حسب احتياج العمل.
+            </p>
           </div>
         ) : mode === "create" || mode === "edit" ? (
           <div className="erp-card space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">{mode === "create" ? "إضافة مستخدم" : "تعديل المستخدم"}</h3>
+            <h3 className="text-lg font-semibold text-foreground">
+              {mode === "create" ? "إضافة مستخدم" : "تعديل المستخدم"}
+            </h3>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               <Field label="اسم المستخدم">
-                <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-lg border border-border px-3 py-2 text-sm" />
+                <input
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
               </Field>
               <Field label="البريد الإلكتروني">
-                <input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="w-full rounded-lg border border-border px-3 py-2 text-sm" />
+                <input
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, email: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
               </Field>
               <Field label="الدور">
-                <select value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))} className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-background">
-                  {ROLE_OPTIONS.map((role) => <option key={role}>{role}</option>)}
+                <select
+                  value={form.role}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, role: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-background"
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role}>{role}</option>
+                  ))}
                 </select>
               </Field>
               <Field label="الشركة">
-                <input value={form.company} onChange={(e) => setForm((p) => ({ ...p, company: e.target.value }))} className="w-full rounded-lg border border-border px-3 py-2 text-sm" />
+                <input
+                  value={form.company}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, company: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
               </Field>
               <Field label="الهاتف">
-                <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className="w-full rounded-lg border border-border px-3 py-2 text-sm" />
+                <input
+                  value={form.phone}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, phone: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
               </Field>
               <Field label="الحالة">
-                <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))} className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-background">
-                  {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
+                <select
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, status: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-background"
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status}>{status}</option>
+                  ))}
                 </select>
               </Field>
             </div>
 
             <div className="flex items-center gap-2">
-              <button onClick={saveUser} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
+              <button
+                onClick={saveUser}
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
                 <Save className="h-4 w-4" />
                 {saving ? "جاري الحفظ..." : "حفظ"}
               </button>
-              <button onClick={() => setMode("list")} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium">
+              <button
+                onClick={() => setMode("list")}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium"
+              >
                 <X className="h-4 w-4" />
                 إلغاء
               </button>
@@ -412,14 +517,31 @@ export default function UsersPermissions() {
           </div>
         ) : mode === "view" && selected ? (
           <div className="erp-card space-y-3">
-            <h3 className="text-lg font-semibold text-foreground">تفاصيل المستخدم</h3>
-            <p><strong>الاسم:</strong> {selected.name}</p>
-            <p><strong>البريد:</strong> {selected.email}</p>
-            <p><strong>الدور:</strong> {selected.role}</p>
-            <p><strong>الشركة:</strong> {selected.company}</p>
-            <p><strong>الهاتف:</strong> {selected.phone || "-"}</p>
-            <p><strong>الحالة:</strong> {selected.status}</p>
-            <button onClick={() => setMode("list")} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium">
+            <h3 className="text-lg font-semibold text-foreground">
+              تفاصيل المستخدم
+            </h3>
+            <p>
+              <strong>الاسم:</strong> {selected.name}
+            </p>
+            <p>
+              <strong>البريد:</strong> {selected.email}
+            </p>
+            <p>
+              <strong>الدور:</strong> {selected.role}
+            </p>
+            <p>
+              <strong>الشركة:</strong> {selected.company}
+            </p>
+            <p>
+              <strong>الهاتف:</strong> {selected.phone || "-"}
+            </p>
+            <p>
+              <strong>الحالة:</strong> {selected.status}
+            </p>
+            <button
+              onClick={() => setMode("list")}
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium"
+            >
               <X className="h-4 w-4" />
               إغلاق
             </button>
@@ -429,22 +551,49 @@ export default function UsersPermissions() {
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <div className="relative w-full max-w-xs">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input value={fSearch} onChange={(e) => setFSearch(e.target.value)} placeholder="ابحث باسم المستخدم أو البريد" className="w-full rounded-lg border border-border bg-background px-9 py-2 text-sm" />
+                <input
+                  value={fSearch}
+                  onChange={(e) => setFSearch(e.target.value)}
+                  placeholder="ابحث باسم المستخدم أو البريد"
+                  className="w-full rounded-lg border border-border bg-background px-9 py-2 text-sm"
+                />
               </div>
               <div className="flex flex-wrap gap-2">
-                <select value={fRole} onChange={(e) => setFRole(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                <select
+                  value={fRole}
+                  onChange={(e) => setFRole(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                >
                   <option value="">الدور</option>
-                  {ROLE_OPTIONS.map((role) => <option key={role}>{role}</option>)}
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role}>{role}</option>
+                  ))}
                 </select>
-                <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                <select
+                  value={fStatus}
+                  onChange={(e) => setFStatus(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                >
                   <option value="">الحالة</option>
-                  {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status}>{status}</option>
+                  ))}
                 </select>
-                <button onClick={() => { setFSearch(""); setFRole(""); setFStatus(""); }} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground">
+                <button
+                  onClick={() => {
+                    setFSearch("");
+                    setFRole("");
+                    setFStatus("");
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+                >
                   <Filter className="h-4 w-4" />
                   إعادة ضبط
                 </button>
-                <button onClick={() => void loadUsers()} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground">
+                <button
+                  onClick={() => void loadUsers()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+                >
                   <RefreshCw className="h-4 w-4" />
                   تحديث
                 </button>
@@ -456,32 +605,76 @@ export default function UsersPermissions() {
                 <table className="w-full text-sm text-right">
                   <thead>
                     <tr className="bg-gradient-to-l from-cyan-800 to-cyan-900 text-white">
-                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">#</th>
-                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">المستخدم</th>
-                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">البريد الإلكتروني</th>
-                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الدور</th>
-                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الشركة</th>
-                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الحالة</th>
-                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">الإجراءات</th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                        #
+                      </th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                        المستخدم
+                      </th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                        البريد الإلكتروني
+                      </th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                        الدور
+                      </th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                        الشركة
+                      </th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                        الحالة
+                      </th>
+                      <th className="px-5 py-3.5 text-[12px] font-bold text-right uppercase tracking-wider">
+                        الإجراءات
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/30">
                     {loading ? (
-                      <tr><td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">جاري التحميل...</td></tr>
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-5 py-12 text-center text-muted-foreground"
+                        >
+                          جاري التحميل...
+                        </td>
+                      </tr>
                     ) : filteredUsers.length === 0 ? (
-                      <tr><td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">لا يوجد مستخدمون</td></tr>
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-5 py-12 text-center text-muted-foreground"
+                        >
+                          لا يوجد مستخدمون
+                        </td>
+                      </tr>
                     ) : (
                       filteredUsers.map((user, index) => (
-                        <tr key={user.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                          <td className="px-5 py-3.5 text-muted-foreground">{index + 1}</td>
-                          <td className="px-5 py-3.5 font-medium text-foreground">{user.name}</td>
-                          <td className="px-5 py-3.5 text-muted-foreground">{user.email}</td>
+                        <tr
+                          key={user.id}
+                          className="border-b border-border/30 hover:bg-muted/20 transition-colors"
+                        >
+                          <td className="px-5 py-3.5 text-muted-foreground">
+                            {index + 1}
+                          </td>
+                          <td className="px-5 py-3.5 font-medium text-foreground">
+                            {user.name}
+                          </td>
+                          <td className="px-5 py-3.5 text-muted-foreground">
+                            {user.email}
+                          </td>
                           <td className="px-5 py-3.5">
-                            <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold", "bg-cyan-100 text-cyan-700")}>
+                            <span
+                              className={cn(
+                                "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold",
+                                "bg-cyan-100 text-cyan-700",
+                              )}
+                            >
                               {user.role}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 text-muted-foreground">{user.company}</td>
+                          <td className="px-5 py-3.5 text-muted-foreground">
+                            {user.company}
+                          </td>
                           <td className="px-5 py-3.5">
                             <button
                               onClick={() => void toggleUserStatus(user)}
@@ -489,7 +682,7 @@ export default function UsersPermissions() {
                                 "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold transition-colors",
                                 user.status === "نشط"
                                   ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                  : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                  : "bg-amber-100 text-amber-700 hover:bg-amber-200",
                               )}
                             >
                               {user.status}

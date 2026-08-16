@@ -75,7 +75,7 @@ export default function Home() {
               نظ
             </div>
             <span className="text-lg font-semibold text-foreground">
-              شركة لاكجري العياف
+              شركة إدارة العياف للمقاولات
             </span>
           </div>
           <div className="flex items-center gap-4">
@@ -242,14 +242,16 @@ export default function Home() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
                 نظ
               </div>
-              <span className="font-semibold text-foreground">شركة لاكجري العياف</span>
+              <span className="font-semibold text-foreground">
+                شركة إدارة العياف للمقاولات
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">
               نظام فواتير متكامل متوافق مع معايير ZATCA
             </p>
           </div>
           <div className="border-t border-border pt-8 text-center text-sm text-muted-foreground">
-            <p>© 2024 شركة لاكجري العياف. جميع الحقوق محفوظة.</p>
+            <p>© 2024 شركة إدارة العياف للمقاولات. جميع الحقوق محفوظة.</p>
           </div>
         </div>
       </footer>

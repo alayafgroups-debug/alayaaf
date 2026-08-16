@@ -120,7 +120,7 @@ begin
   end if;
 
   if v_secret_id is not null then
-    perform vault.delete_secret(v_secret_id);
+    delete from vault.secrets where id = v_secret_id;
   end if;
 
   update public.zatca_onboarding_settings
@@ -174,19 +174,19 @@ set search_path = public, vault
 as $$
 begin
   if old.private_key_secret_id is not null then
-    perform vault.delete_secret(old.private_key_secret_id);
+    delete from vault.secrets where id = old.private_key_secret_id;
   end if;
   if old.compliance_csid_secret_id is not null then
-    perform vault.delete_secret(old.compliance_csid_secret_id);
+    delete from vault.secrets where id = old.compliance_csid_secret_id;
   end if;
   if old.compliance_secret_secret_id is not null then
-    perform vault.delete_secret(old.compliance_secret_secret_id);
+    delete from vault.secrets where id = old.compliance_secret_secret_id;
   end if;
   if old.production_csid_secret_id is not null then
-    perform vault.delete_secret(old.production_csid_secret_id);
+    delete from vault.secrets where id = old.production_csid_secret_id;
   end if;
   if old.production_secret_secret_id is not null then
-    perform vault.delete_secret(old.production_secret_secret_id);
+    delete from vault.secrets where id = old.production_secret_secret_id;
   end if;
   return old;
 end;

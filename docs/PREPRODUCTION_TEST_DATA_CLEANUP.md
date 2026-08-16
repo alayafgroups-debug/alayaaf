@@ -25,22 +25,8 @@ begin
   end if;
 end $$;
 
-create temporary table preproduction_journal_ids (
-  id uuid primary key
-) on commit drop;
-
-insert into preproduction_journal_ids (id)
-select id
-from public.accounting_journal_entries
-where source_document_table in (
-  'sales_invoices',
-  'purchase_invoices',
-  'invoice_adjustment_notes',
-  'sales_quotations',
-  'sales_orders',
-  'purchase_orders'
-)
-on conflict do nothing;
+-- Accounting entries are selected directly without a temporary table because
+-- hosted SQL editors may use pooled database sessions.
 
 do $$
 begin
@@ -73,10 +59,28 @@ begin
 end $$;
 
 delete from public.accounting_journal_lines
-where journal_entry_id in (select id from preproduction_journal_ids);
+where journal_entry_id in (
+  select id
+  from public.accounting_journal_entries
+  where source_document_table in (
+    'sales_invoices',
+    'purchase_invoices',
+    'invoice_adjustment_notes',
+    'sales_quotations',
+    'sales_orders',
+    'purchase_orders'
+  )
+);
 
 delete from public.accounting_journal_entries
-where id in (select id from preproduction_journal_ids);
+where source_document_table in (
+  'sales_invoices',
+  'purchase_invoices',
+  'invoice_adjustment_notes',
+  'sales_quotations',
+  'sales_orders',
+  'purchase_orders'
+);
 
 delete from public.zatca_invoice_submission_logs
 where mode = 'simulation';

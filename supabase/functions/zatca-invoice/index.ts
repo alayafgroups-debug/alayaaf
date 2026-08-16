@@ -1016,8 +1016,21 @@ Deno.serve(async (req) => {
       }
       sequenceBlocked = true;
       if (logError) console.error("zatca-invoice ambiguous log", logError);
-      if (invoiceStatusError)
-        console.error("zatca-invoice ambiguous document status", invoiceStatusError);
+      if (invoiceStatusError) {
+        const { error: retryStatusError } = await admin
+          .from(table)
+          .update({
+            zatca_status: "ambiguous",
+            zatca_response: values.response ?? {},
+            zatca_submitted_at: new Date().toISOString(),
+          })
+          .eq("id", recordId);
+        if (retryStatusError)
+          console.error(
+            "zatca-invoice ambiguous document status",
+            retryStatusError,
+          );
+      }
     };
     try {
       const uuid = clean(record.uuid) || crypto.randomUUID();

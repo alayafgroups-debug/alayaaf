@@ -91,7 +91,7 @@ type IdentityForm = {
 
 const initialIdentity: IdentityForm = {
   companyNameAr: "شركة إدارة العياف للمقاولات",
-  companyNameEn: "Al Ayaf Management Contracting Company",
+  companyNameEn: "Company Idarat Al Ayaf For Contracting",
   vatNumber: "314067317200003",
   commercialRegistration: "7049437580",
   branchName: "الفرع الرئيسي",
@@ -245,6 +245,9 @@ export default function ZATCASettings() {
           commonName: data.setup.common_name ?? initialIdentity.commonName,
           invoiceType: data.setup.invoice_type ?? "1100",
         });
+      } else {
+        setIdentity(initialIdentity);
+        setLegalEnglishConfirmed(false);
       }
     } catch (error) {
       if (!quiet) {
@@ -766,6 +769,10 @@ export default function ZATCASettings() {
               راجع البيانات القانونية والعنوان الوطني بدقة. حفظ البيانات وتحضير
               CSR لا يطلب OTP ولا يفعّل الربط ولا يرسل فواتير.
             </p>
+            <p className="mt-2 text-xs font-semibold text-blue-700">
+              نطاق الربط المعتمد: الفرع الرئيسي فقط — وحدة إصدار واحدة — الرقم
+              التسلسلي ALAYAAF-EGS-001.
+            </p>
           </div>
           <div className="grid gap-4 p-5 md:grid-cols-2">
             <Field
@@ -938,6 +945,10 @@ export default function ZATCASettings() {
               <span className="text-xs font-bold text-slate-700">
                 أنواع الفواتير التي تصدرها الوحدة
               </span>
+              <span className="block text-xs leading-5 text-slate-500">
+                تم اختيار 1100 لأنه النوع المتعارف لوحدة واحدة تصدر فواتير
+                معيارية B2B ومبسطة B2C.
+              </span>
               <select
                 value={identity.invoiceType}
                 onChange={(event) =>
@@ -948,7 +959,9 @@ export default function ZATCASettings() {
                 }
                 className={inputClass}
               >
-                <option value="1100">معيارية ومبسطة — 1100</option>
+                <option value="1100">
+                  معيارية B2B ومبسطة B2C — 1100 (الاختيار المعتمد)
+                </option>
                 <option value="1000">معيارية فقط — 1000</option>
                 <option value="0100">مبسطة فقط — 0100</option>
               </select>

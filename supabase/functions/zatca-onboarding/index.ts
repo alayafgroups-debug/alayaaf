@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import { KEYUTIL, KJUR, X509 } from "npm:jsrsasign@11.1.3";
 import {
   BuyerData,
@@ -410,9 +410,34 @@ function parseX509TimeToIso(value: unknown) {
 }
 
 function getCertificateExpiryIso(binarySecurityToken: string) {
-  const certificate = new X509();
-  certificate.readCertPEM(toCertificatePem(binarySecurityToken));
-  return parseX509TimeToIso(certificate.getNotAfter());
+  const compactToken = cleanToken(binarySecurityToken);
+  const decoded = Buffer.from(compactToken, "base64");
+  const decodedText = decoded.toString("utf8").trim();
+  const candidates: Array<string | Buffer> = [decoded];
+
+  if (decodedText.includes("-----BEGIN CERTIFICATE-----")) {
+    candidates.unshift(decodedText);
+  } else if (
+    decodedText.length > 100 &&
+    /^[A-Za-z0-9+/=\s]+$/.test(decodedText)
+  ) {
+    candidates.push(Buffer.from(decodedText.replace(/\s+/g, ""), "base64"));
+  }
+  candidates.push(toCertificatePem(binarySecurityToken));
+
+  for (const candidate of candidates) {
+    try {
+      const certificate = new X509Certificate(candidate);
+      const timestamp = Date.parse(certificate.validTo);
+      if (Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
+    } catch {
+      // Try the next supported ZATCA certificate representation.
+    }
+  }
+
+  const fallbackCertificate = new X509();
+  fallbackCertificate.readCertPEM(toCertificatePem(binarySecurityToken));
+  return parseX509TimeToIso(fallbackCertificate.getNotAfter());
 }
 
 function parseRegisteredAddress(location: string) {
@@ -1094,7 +1119,7 @@ Deno.serve(async (req) => {
         ? await admin
             .from("zatca_onboarding_settings")
             .select(
-              "id, mode, invoice_type, status, compliance_request_id, compliance_results, compliance_csid_masked, production_csid_masked",
+              "id, mode, invoice_type, status, compliance_request_id, compliance_results, compliance_csid_masked, production_csid_masked, certificate_expires_at",
             )
             .eq("id", existingSetup.id)
             .maybeSingle()
@@ -1127,6 +1152,15 @@ Deno.serve(async (req) => {
         );
       }
       if (setup.production_csid_masked) {
+        if (!setup.certificate_expires_at) {
+          return respond(
+            {
+              error:
+                "تم حفظ Production CSID سابقاً، لكن تاريخ انتهاء الشهادة يحتاج مراجعة. لن يعاد طلب الشهادة حتى لا تُفقد بيانات الاعتماد.",
+            },
+            409,
+          );
+        }
         return respond({
           status: "production_ready",
           message:
@@ -1232,41 +1266,6 @@ Deno.serve(async (req) => {
       } catch {
         certificateExpiresAt = null;
       }
-      if (!certificateExpiresAt) {
-        const message =
-          "تعذر قراءة تاريخ انتهاء شهادة Production CSID. أعد طلب الشهادة أو تواصل مع الدعم قبل تفعيل الإنتاج.";
-        await admin
-          .from("zatca_onboarding_settings")
-          .update({
-            production_request_id: null,
-            production_csid: null,
-            production_secret: null,
-            production_csid_masked: null,
-            production_issued_at: null,
-            production_status: "failed",
-            production_enabled: false,
-            production_confirmed_by: null,
-            production_confirmed_at: null,
-            certificate_expires_at: null,
-            last_error: message,
-            updated_at: issuedAt,
-          })
-          .eq("id", setup.id);
-        await admin.from("zatca_onboarding_audit").insert({
-          onboarding_id: setup.id,
-          actor_id: user.id,
-          action: "production_csid_requested",
-          result: "failed",
-          http_status: productionResponse.status,
-          details: sanitizeAuditDetails({
-            requestId: productionRequestId,
-            csidMasked: masked,
-            reason: "certificate_expiry_parse_failed",
-            message,
-          }),
-        });
-        return respond({ error: message }, 502);
-      }
       const { error: updateError } = await admin.rpc(
         "store_zatca_production_credentials",
         {
@@ -1280,6 +1279,34 @@ Deno.serve(async (req) => {
         },
       );
       if (updateError) throw updateError;
+      if (!certificateExpiresAt) {
+        const message =
+          "تم حفظ Production CSID داخل Vault، لكن تعذر قراءة تاريخ انتهاء الشهادة. بقي الإنتاج معطلاً للمراجعة ولن تعاد مطالبة ZATCA بالشهادة.";
+        await admin
+          .from("zatca_onboarding_settings")
+          .update({
+            production_enabled: false,
+            production_confirmed_by: null,
+            production_confirmed_at: null,
+            last_error: message,
+            updated_at: issuedAt,
+          })
+          .eq("id", setup.id);
+        await admin.from("zatca_onboarding_audit").insert({
+          onboarding_id: setup.id,
+          actor_id: user.id,
+          action: "production_csid_requested",
+          result: "failed",
+          http_status: productionResponse.status,
+          details: {
+            requestId: productionRequestId,
+            csidMasked: masked,
+            reason: "certificate_expiry_parse_failed_credentials_preserved",
+            message,
+          },
+        });
+        return respond({ error: message }, 502);
+      }
       await admin.from("zatca_onboarding_audit").insert({
         onboarding_id: setup.id,
         actor_id: user.id,
@@ -1296,6 +1323,7 @@ Deno.serve(async (req) => {
         status: "production_ready",
         productionRequestId,
         productionCsidMasked: masked,
+        certificateExpiresAt,
         message:
           mode === "production"
             ? "تم إصدار Production CSID الحقيقي من منصة الإنتاج"

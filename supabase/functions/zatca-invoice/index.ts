@@ -39,6 +39,21 @@ const respond = (body: unknown, status = 200) =>
 
 const clean = (value: unknown) => String(value ?? "").trim();
 
+async function getZatcaCredentials(admin: any, onboardingId: string) {
+  const { data, error } = await admin.rpc("get_zatca_credentials", {
+    p_onboarding_id: onboardingId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    private_key_pem: clean(row?.private_key_pem),
+    compliance_csid: clean(row?.compliance_csid),
+    compliance_secret: clean(row?.compliance_secret),
+    production_csid: clean(row?.production_csid),
+    production_secret: clean(row?.production_secret),
+  };
+}
+
 function containsSyntheticMarker(value: unknown): boolean {
   if (typeof value === "string") {
     return /(?:^|[^A-Z])(?:TEST(?:ING)?|SIM(?:ULATION|ULATED|ULATOR)?)(?:[^A-Z]|$)|تجريب/i.test(
@@ -508,6 +523,8 @@ Deno.serve(async (req) => {
       );
     }
     const setup = setups[0];
+    const vaultCredentials = await getZatcaCredentials(admin, setup.id);
+    Object.assign(setup, vaultCredentials);
 
     let originalInvoice: any = null;
     if (noteId) {

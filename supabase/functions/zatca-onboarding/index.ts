@@ -33,6 +33,35 @@ const respond = (body: unknown, status = 200) =>
 
 const clean = (value: unknown) => String(value ?? "").trim();
 const cleanToken = (value: unknown) => String(value ?? "").replace(/\s+/g, "");
+
+async function storeZatcaSecret(
+  admin: any,
+  onboardingId: string,
+  kind: string,
+  secret: string,
+) {
+  const { error } = await admin.rpc("store_zatca_secret", {
+    p_onboarding_id: onboardingId,
+    p_kind: kind,
+    p_secret: secret,
+  });
+  if (error) throw error;
+}
+
+async function getZatcaCredentials(admin: any, onboardingId: string) {
+  const { data, error } = await admin.rpc("get_zatca_credentials", {
+    p_onboarding_id: onboardingId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    private_key_pem: clean(row?.private_key_pem),
+    compliance_csid: clean(row?.compliance_csid),
+    compliance_secret: clean(row?.compliance_secret),
+    production_csid: clean(row?.production_csid),
+    production_secret: clean(row?.production_secret),
+  };
+}
 const escapeDn = (value: string) => value.replace(/[,+"\\<>;/]/g, " ").trim();
 const escapeXmlText = (value: unknown) =>
   String(value ?? "")
@@ -813,7 +842,7 @@ Deno.serve(async (req) => {
         invoice_type: identity.invoiceType,
         csr_pem: csr.csrPem,
         public_key_pem: csr.publicKeyPem,
-        private_key_pem: csr.privateKeyPem,
+        private_key_pem: null,
         status: "csr_generated",
         compliance_request_id: null,
         compliance_csid: null,
@@ -842,6 +871,7 @@ Deno.serve(async (req) => {
         : admin.from("zatca_onboarding_settings").insert(payload);
       const { data, error } = await saveQuery.select("id").single();
       if (error) throw error;
+      await storeZatcaSecret(admin, data.id, "private_key", csr.privateKeyPem);
       await admin.from("zatca_onboarding_audit").insert({
         onboarding_id: data.id,
         actor_id: user.id,
@@ -915,7 +945,7 @@ Deno.serve(async (req) => {
           { error: "يجب تجهيز بيانات المنشأة وتوليد CSR أولاً" },
           400,
         );
-      if (setup.compliance_csid) {
+      if (setup.compliance_csid_masked || setup.compliance_issued_at) {
         return respond(
           { error: "تم إصدار شهادة التوافق لهذا الجهاز مسبقاً" },
           409,
@@ -939,13 +969,14 @@ Deno.serve(async (req) => {
         .update({
           csr_pem: csr.csrPem,
           public_key_pem: csr.publicKeyPem,
-          private_key_pem: csr.privateKeyPem,
+          private_key_pem: null,
           status: "csr_generated",
           last_error: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", setup.id);
       if (csrUpdateError) throw csrUpdateError;
+      await storeZatcaSecret(admin, setup.id, "private_key", csr.privateKeyPem);
 
       const csrBase64 = csr.csrBase64;
       const zatcaResponse = await fetch(`${baseUrl}/compliance`, {
@@ -1007,13 +1038,15 @@ Deno.serve(async (req) => {
 
       const masked = `${csid.slice(0, 8)}••••${csid.slice(-6)}`;
       const issuedAt = new Date().toISOString();
+      await storeZatcaSecret(admin, setup.id, "compliance_csid", csid);
+      await storeZatcaSecret(admin, setup.id, "compliance_secret", secret);
       const { error: updateError } = await admin
         .from("zatca_onboarding_settings")
         .update({
           status: "compliance_ready",
           compliance_request_id: requestId,
-          compliance_csid: csid,
-          compliance_secret: secret,
+          compliance_csid: null,
+          compliance_secret: null,
           compliance_csid_masked: masked,
           compliance_issued_at: issuedAt,
           last_error: null,
@@ -1048,14 +1081,18 @@ Deno.serve(async (req) => {
         ? await admin
             .from("zatca_onboarding_settings")
             .select(
-              "id, mode, invoice_type, status, compliance_request_id, compliance_csid, compliance_secret, compliance_results, production_csid",
+              "id, mode, invoice_type, status, compliance_request_id, compliance_results, compliance_csid_masked, production_csid_masked",
             )
             .eq("id", existingSetup.id)
             .maybeSingle()
         : { data: null, error: null };
       if (setupError) throw setupError;
-      if (!setup?.compliance_csid || !setup?.compliance_secret) {
+      if (!setup?.compliance_csid_masked) {
         return respond({ error: "يجب الحصول على Compliance CSID أولاً" }, 400);
+      }
+      const credentials = await getZatcaCredentials(admin, setup.id);
+      if (!credentials.compliance_csid || !credentials.compliance_secret) {
+        return respond({ error: "بيانات اعتماد التوافق غير موجودة في Vault" }, 409);
       }
       const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
       const complianceResults = Array.isArray(setup.compliance_results)
@@ -1073,7 +1110,7 @@ Deno.serve(async (req) => {
           409,
         );
       }
-      if (setup.production_csid) {
+      if (setup.production_csid_masked) {
         return respond({
           status: "production_ready",
           message:
@@ -1082,8 +1119,8 @@ Deno.serve(async (req) => {
               : "تم إصدار Production CSID التجريبي مسبقاً",
         });
       }
-      const complianceCsid = clean(setup.compliance_csid);
-      const complianceSecret = clean(setup.compliance_secret);
+      const complianceCsid = credentials.compliance_csid;
+      const complianceSecret = credentials.compliance_secret;
       const productionResponse = await fetch(`${baseUrl}/production/csids`, {
         method: "POST",
         headers: {
@@ -1205,12 +1242,14 @@ Deno.serve(async (req) => {
         });
         return respond({ error: message }, 502);
       }
+      await storeZatcaSecret(admin, setup.id, "production_csid", productionCsid);
+      await storeZatcaSecret(admin, setup.id, "production_secret", productionSecret);
       const { error: updateError } = await admin
         .from("zatca_onboarding_settings")
         .update({
           production_request_id: productionRequestId,
-          production_csid: productionCsid,
-          production_secret: productionSecret,
+          production_csid: null,
+          production_secret: null,
           production_csid_masked: masked,
           production_issued_at: issuedAt,
           production_status: "issued",
@@ -1258,7 +1297,7 @@ Deno.serve(async (req) => {
       const { data: setup, error: setupError } = await admin
         .from("zatca_onboarding_settings")
         .select(
-          "id, invoice_type, status, compliance_results, production_csid, production_secret, production_enabled, certificate_expires_at, certificate_revoked_at",
+          "id, invoice_type, status, compliance_results, production_csid_masked, production_enabled, certificate_expires_at, certificate_revoked_at",
         )
         .eq("id", existingSetup.id)
         .maybeSingle();
@@ -1302,6 +1341,7 @@ Deno.serve(async (req) => {
             409,
           );
         }
+        const credentials = await getZatcaCredentials(admin, setup.id);
         const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
         const results = Array.isArray(setup.compliance_results)
           ? setup.compliance_results
@@ -1313,8 +1353,9 @@ Deno.serve(async (req) => {
           ),
         );
         if (
-          !setup.production_csid ||
-          !setup.production_secret ||
+          !setup.production_csid_masked ||
+          !credentials.production_csid ||
+          !credentials.production_secret ||
           setup.status !== "compliance_passed" ||
           !allRequiredPassed
         ) {
@@ -1397,13 +1438,17 @@ Deno.serve(async (req) => {
             .maybeSingle()
         : { data: null, error: null };
       if (setupError) throw setupError;
+      const credentials = setup
+        ? await getZatcaCredentials(admin, setup.id)
+        : null;
       if (
-        !setup?.compliance_csid ||
-        !setup?.compliance_secret ||
-        !setup?.private_key_pem
+        !credentials?.compliance_csid ||
+        !credentials.compliance_secret ||
+        !credentials.private_key_pem
       ) {
         return respond({ error: "يجب الحصول على Compliance CSID أولاً" }, 400);
       }
+      Object.assign(setup, credentials);
 
       const existingResults: any[] = Array.isArray(setup.compliance_results)
         ? setup.compliance_results

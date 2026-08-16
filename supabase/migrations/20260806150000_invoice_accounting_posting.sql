@@ -23,12 +23,12 @@ insert into public.accounting_accounts (
   code, company_name, name_ar, name_en, parent_code, cash_flow_type,
   account_type, level, is_system
 ) values
-  ('112', 'شركة إدارة العياف للمقاولات', 'الذمم', 'Receivables', '11', 'التشغيليات', 'التشغيليات', 2, true),
-  ('2111', 'شركة إدارة العياف للمقاولات', 'ضريبة القيمة المضافة على المشتريات', 'Input VAT', '21', 'التشغيليات', 'التشغيليات', 2, true),
-  ('2112', 'شركة إدارة العياف للمقاولات', 'ذمم الموردين المستحقة', 'Accounts Payable', '21', 'التشغيليات', 'التشغيليات', 2, true),
-  ('219', 'شركة إدارة العياف للمقاولات', 'ضريبة المبيعات المستحقة', 'Accrued Sales Tax', '21', 'التشغيليات', 'التشغيليات', 2, true),
-  ('411', 'شركة إدارة العياف للمقاولات', 'إيرادات المبيعات والخدمات', 'Sales and Services Revenue', '41', 'التشغيليات', 'التشغيليات', 2, true),
-  ('511', 'شركة إدارة العياف للمقاولات', 'المشتريات والمصروفات', 'Purchases and Expenses', '51', 'التشغيليات', 'التشغيليات', 2, true)
+  ('112', 'شركة العياف التجارية', 'الذمم', 'Receivables', '11', 'التشغيليات', 'التشغيليات', 2, true),
+  ('2111', 'شركة العياف التجارية', 'ضريبة القيمة المضافة على المشتريات', 'Input VAT', '21', 'التشغيليات', 'التشغيليات', 2, true),
+  ('2112', 'شركة العياف التجارية', 'ذمم الموردين المستحقة', 'Accounts Payable', '21', 'التشغيليات', 'التشغيليات', 2, true),
+  ('219', 'شركة العياف التجارية', 'ضريبة المبيعات المستحقة', 'Accrued Sales Tax', '21', 'التشغيليات', 'التشغيليات', 2, true),
+  ('411', 'شركة العياف التجارية', 'إيرادات المبيعات والخدمات', 'Sales and Services Revenue', '41', 'التشغيليات', 'التشغيليات', 2, true),
+  ('511', 'شركة العياف التجارية', 'المشتريات والمصروفات', 'Purchases and Expenses', '51', 'التشغيليات', 'التشغيليات', 2, true)
 on conflict (code) do nothing;
 
 create table if not exists public.invoice_adjustment_notes (
@@ -99,7 +99,7 @@ create index if not exists accounting_journal_lines_account_idx
 
 create table if not exists public.accounting_posting_rules (
   rule_code text primary key,
-  company_name text not null default 'شركة إدارة العياف للمقاولات',
+  company_name text not null default 'شركة العياف التجارية',
   receivable_account_code text not null,
   revenue_account_code text not null,
   output_vat_account_code text not null,

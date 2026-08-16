@@ -1457,7 +1457,6 @@ Deno.serve(async (req) => {
       const existingResults: any[] = Array.isArray(setup.compliance_results)
         ? setup.compliance_results
         : [];
-      const forceRetest = body.reuseResults !== true;
       const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
       const testCase = complianceCases[caseIndex];
       const { data: passedAuditRows } = await admin
@@ -1471,7 +1470,7 @@ Deno.serve(async (req) => {
       for (const item of existingResults) {
         hydratedResults.set(Number(item.caseIndex), item);
       }
-      for (const auditRow of forceRetest ? [] : (passedAuditRows ?? [])) {
+      for (const auditRow of passedAuditRows ?? []) {
         const restoredIndex = complianceCases.findIndex(
           (item) => `compliance_test_${item.key}` === auditRow.action,
         );
@@ -1491,7 +1490,6 @@ Deno.serve(async (req) => {
       }
       const currentPassed = hydratedResults.get(caseIndex);
       if (
-        !forceRetest &&
         currentPassed?.status === "passed" &&
         currentPassed.invoiceHash
       ) {

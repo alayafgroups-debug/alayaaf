@@ -611,13 +611,7 @@ export default function SalesInvoices() {
                 </div>
               </div>
 
-              <div class="title">${escapeHtml(
-                t(
-                  invoice.invoiceType === "simplified"
-                    ? "فاتورة ضريبية مبسطة"
-                    : "فاتورة ضريبية معيارية",
-                ),
-              )}</div>
+              <div class="title">${escapeHtml(t("فاتورة ضريبية"))}</div>
 
               <div class="meta">
                 <div class="meta-grid">
@@ -1120,17 +1114,9 @@ function InvoiceDetails({
 
             <div className="text-center border-t border-b border-slate-200 py-4">
               <h3 className="text-2xl font-bold text-slate-800">
-                {t(
-                  invoice.invoiceType === "simplified"
-                    ? "فاتورة ضريبية مبسطة"
-                    : "فاتورة ضريبية معيارية",
-                )}
+                {t("فاتورة ضريبية")}
               </h3>
-              <p className="text-sm text-slate-500">
-                {invoice.invoiceType === "simplified"
-                  ? "Simplified Tax Invoice"
-                  : "Standard Tax Invoice"}
-              </p>
+              <p className="text-sm text-slate-500">Tax Invoice</p>
               <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs font-semibold">
                 <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
                   {t("المحاسبة")}:{" "}

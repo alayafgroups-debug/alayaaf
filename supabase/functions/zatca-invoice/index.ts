@@ -259,6 +259,48 @@ function buildQrPayload(input: {
   return Buffer.concat(chunks).toString("base64");
 }
 
+function getAcceptedInvoiceArtifacts(
+  responseData: any,
+  signed: {
+    signedXml: string;
+    qrCodeData: string;
+    signatureValue: string;
+    simplified: boolean;
+  },
+) {
+  if (signed.simplified || !clean(responseData?.clearedInvoice)) {
+    return {
+      invoiceXml: signed.signedXml,
+      qrCodeData: signed.qrCodeData,
+      cryptographicStamp: signed.signatureValue,
+    };
+  }
+
+  try {
+    const invoiceXml = Buffer.from(
+      clean(responseData.clearedInvoice).replace(/\s+/g, ""),
+      "base64",
+    ).toString("utf8");
+    if (!invoiceXml.includes("<Invoice")) throw new Error("Invalid cleared XML");
+    return {
+      invoiceXml,
+      qrCodeData:
+        invoiceXml.match(
+          /<cbc:EmbeddedDocumentBinaryObject[^>]*>([^<]+)<\/cbc:EmbeddedDocumentBinaryObject>/,
+        )?.[1] ?? signed.qrCodeData,
+      cryptographicStamp:
+        invoiceXml.match(/<ds:SignatureValue[^>]*>([^<]+)<\/ds:SignatureValue>/)
+          ?.[1] ?? signed.signatureValue,
+    };
+  } catch {
+    return {
+      invoiceXml: signed.signedXml,
+      qrCodeData: signed.qrCodeData,
+      cryptographicStamp: signed.signatureValue,
+    };
+  }
+}
+
 function buildSignedInvoice(input: {
   setup: any;
   invoice: any;
@@ -1075,6 +1117,10 @@ Deno.serve(async (req) => {
       }
 
       const status = signed.simplified ? "reported" : "cleared";
+      const acceptedArtifacts = getAcceptedInvoiceArtifacts(
+        responseData,
+        signed,
+      );
       const { error: finalizeError } = await admin.rpc(
         "finalize_zatca_accepted_submission",
         {
@@ -1092,9 +1138,9 @@ Deno.serve(async (req) => {
           p_response_text: responseText,
           p_invoice_table: table,
           p_record_id: recordId,
-          p_qr_code_data: signed.qrCodeData,
-          p_cryptographic_stamp: signed.signatureValue,
-          p_invoice_xml: signed.signedXml,
+          p_qr_code_data: acceptedArtifacts.qrCodeData,
+          p_cryptographic_stamp: acceptedArtifacts.cryptographicStamp,
+          p_invoice_xml: acceptedArtifacts.invoiceXml,
           p_submitted_at: submittedAt,
         },
       );
@@ -1122,7 +1168,7 @@ Deno.serve(async (req) => {
         status,
         uuid,
         icv,
-        qrCodeData: signed.qrCodeData,
+        qrCodeData: acceptedArtifacts.qrCodeData,
         message: signed.simplified
           ? "تم إبلاغ ZATCA بالمستند المبسط"
           : "تمت مصادقة ZATCA على المستند المعياري",

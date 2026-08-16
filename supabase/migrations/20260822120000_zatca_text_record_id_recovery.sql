@@ -145,24 +145,47 @@ begin
     v_qr_code_data := nullif(v_log.qr_code_data, '');
     v_cryptographic_stamp := nullif(v_log.cryptographic_stamp, '');
 
-    if v_invoice_xml is null
+    -- For standard invoices, ZATCA's returned cleared XML is authoritative.
+    if v_log.invoice_type = 'standard'
        and nullif(v_log.response->>'clearedInvoice', '') is not null then
       begin
         v_invoice_xml := convert_from(
           decode(regexp_replace(v_log.response->>'clearedInvoice', '\s', '', 'g'), 'base64'),
           'UTF8'
         );
-        v_qr_code_data := substring(
-          v_invoice_xml from '<cbc:EmbeddedDocumentBinaryObject[^>]*>([^<]+)</cbc:EmbeddedDocumentBinaryObject>'
+        v_qr_code_data := coalesce(
+          substring(
+            v_invoice_xml from '<cbc:EmbeddedDocumentBinaryObject[^>]*>([^<]+)</cbc:EmbeddedDocumentBinaryObject>'
+          ),
+          v_qr_code_data
         );
-        v_cryptographic_stamp := substring(
-          v_invoice_xml from '<ds:SignatureValue[^>]*>([^<]+)</ds:SignatureValue>'
+        v_cryptographic_stamp := coalesce(
+          substring(
+            v_invoice_xml from '<ds:SignatureValue[^>]*>([^<]+)</ds:SignatureValue>'
+          ),
+          v_cryptographic_stamp
         );
       exception when others then
-        v_invoice_xml := null;
-        v_qr_code_data := null;
-        v_cryptographic_stamp := null;
+        -- Keep the exact pre-network artifacts when the returned payload cannot be decoded.
+        v_invoice_xml := nullif(v_log.signed_invoice_xml, '');
+        v_qr_code_data := nullif(v_log.qr_code_data, '');
+        v_cryptographic_stamp := nullif(v_log.cryptographic_stamp, '');
       end;
+    end if;
+
+    -- Old simplified logs predate artifact persistence and ZATCA reporting does
+    -- not return the submitted XML. Never claim full local recovery or unblock
+    -- when the exact signed legal document cannot be restored.
+    if v_log.invoice_type = 'simplified'
+       and (v_invoice_xml is null
+         or v_qr_code_data is null
+         or v_cryptographic_stamp is null) then
+      update public.zatca_invoice_submission_logs
+      set last_error = 'ZATCA_SIMPLIFIED_ARTIFACTS_UNRECOVERABLE: لا تعد إرسال المستند؛ يلزم تطابق يدوي مع ZATCA',
+          retry_after = null,
+          updated_at = now()
+      where id = v_log.id;
+      continue;
     end if;
 
     execute format(

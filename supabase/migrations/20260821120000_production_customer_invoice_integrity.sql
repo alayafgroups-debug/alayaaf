@@ -1,4 +1,5 @@
 create sequence if not exists public.customer_number_seq start with 1;
+create sequence if not exists public.customer_number_seq start with 1;
 create sequence if not exists public.vendor_number_seq start with 1;
 
 alter table public.customers
@@ -59,11 +60,16 @@ create unique index if not exists vendors_vendor_number_uidx
   on public.vendors(vendor_number);
 
 alter table public.sales_invoices
-  add column if not exists customer_id uuid,
+  add column if not exists customer_id text,
   add column if not exists buyer_commercial_registration text;
 
 alter table public.sales_invoices
-  drop constraint if exists sales_invoices_customer_id_fkey,
+  drop constraint if exists sales_invoices_customer_id_fkey;
+
+alter table public.sales_invoices
+  alter column customer_id type text using customer_id::text;
+
+alter table public.sales_invoices
   add constraint sales_invoices_customer_id_fkey
     foreign key (customer_id) references public.customers(id) on delete restrict,
   drop constraint if exists sales_invoices_buyer_cr_check,
@@ -89,7 +95,7 @@ alter table public.invoice_adjustment_notes
   alter column reason set not null;
 
 comment on column public.customers.customer_number is
-  'Human-readable customer number. UUID id remains the internal relational key.';
+  'Human-readable customer number. The existing id remains the internal relational key.';
 comment on column public.sales_invoices.buyer_commercial_registration is
   'Buyer commercial registration used as BT-46/CRN on standard B2B invoices.';
 comment on column public.invoice_adjustment_notes.reason is
@@ -174,7 +180,7 @@ create table if not exists public.customer_payments (
   payment_number text not null unique default
     ('RCPT-' || lpad(nextval('public.customer_payment_number_seq')::text, 6, '0')),
   invoice_id text not null references public.sales_invoices(id) on delete restrict,
-  customer_id uuid references public.customers(id) on delete restrict,
+  customer_id text references public.customers(id) on delete restrict,
   amount numeric(14,2) not null check (amount > 0),
   payment_date date not null default current_date,
   payment_method text not null,

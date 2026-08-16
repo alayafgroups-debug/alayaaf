@@ -115,30 +115,48 @@ const escapeXmlText = (value: unknown) =>
 
 function parseRegisteredAddress(location: string, strict = false) {
   const normalized = location.replace(/\s+/g, " ").trim();
-  const buildingMatch = normalized.match(/\b\d{4}\b/)?.[0];
-  const postalMatch = normalized.match(/\b\d{5}\b/)?.[0];
   const parts = normalized
     .split(/[،,]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  const recognizedCity = parts.find((part) =>
-    /مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(part),
-  );
-  const buildingNumber = buildingMatch ?? "0000";
-  const postalZone = postalMatch ?? "00000";
-  const firstPartWithoutBuilding = (parts[0] ?? normalized)
-    .replace(new RegExp(`^${buildingNumber}\\s*`), "")
-    .trim();
-  const streetName = firstPartWithoutBuilding || parts[1] || "";
-  const citySubdivisionName = parts[2] || parts[1] || "";
+  const firstPart = parts[0] ?? "";
+  const combinedFirstPart = firstPart.match(/^(\d{4})\s+(.+)$/u);
+  const separatedBuilding = /^\d{4}$/.test(firstPart);
+
+  const buildingNumber =
+    combinedFirstPart?.[1] ?? (separatedBuilding ? firstPart : "0000");
+  const streetName = combinedFirstPart
+    ? combinedFirstPart[2].trim()
+    : separatedBuilding
+      ? (parts[1] ?? "")
+      : "";
+  const citySubdivisionName = combinedFirstPart
+    ? (parts[1] ?? "")
+    : separatedBuilding
+      ? (parts[2] ?? "")
+      : "";
+  const cityName = combinedFirstPart
+    ? (parts[2] ?? "")
+    : separatedBuilding
+      ? (parts[3] ?? "")
+      : "";
+  const postalCandidate = combinedFirstPart
+    ? (parts[3] ?? "")
+    : separatedBuilding
+      ? (parts[4] ?? "")
+      : "";
+  const postalZone = /^\d{5}$/.test(postalCandidate)
+    ? postalCandidate
+    : "00000";
+  const hasText = (value: string) => /[\p{L}]/u.test(value);
 
   if (
     strict &&
-    (!buildingMatch ||
-      !postalMatch ||
-      !recognizedCity ||
-      !streetName ||
-      !citySubdivisionName)
+    (buildingNumber === "0000" ||
+      postalZone === "00000" ||
+      !hasText(streetName) ||
+      !hasText(citySubdivisionName) ||
+      !hasText(cityName))
   ) {
     throw new Error("INVALID_REGISTERED_ADDRESS");
   }
@@ -146,7 +164,7 @@ function parseRegisteredAddress(location: string, strict = false) {
   return {
     buildingNumber,
     postalZone,
-    cityName: recognizedCity ?? "الرياض",
+    cityName: cityName || "الرياض",
     citySubdivisionName: citySubdivisionName || "الفرع الرئيسي",
     streetName: streetName || "العنوان الوطني",
   };

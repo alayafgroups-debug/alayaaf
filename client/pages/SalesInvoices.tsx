@@ -264,6 +264,44 @@ type CustomerOption = {
 const parseCurrency = (value: string) =>
   Number(value.replace(/[^0-9.]/g, "")) || 0;
 
+const hasCompleteNationalAddress = (value: string) => {
+  const parts = value
+    .replace(/\s+/g, " ")
+    .split(/[،,]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const combinedFirstPart = (parts[0] ?? "").match(/^(\d{4})\s+(.+)$/u);
+  const separatedBuilding = /^\d{4}$/.test(parts[0] ?? "");
+  const street = combinedFirstPart
+    ? combinedFirstPart[2]
+    : separatedBuilding
+      ? (parts[1] ?? "")
+      : "";
+  const district = combinedFirstPart
+    ? (parts[1] ?? "")
+    : separatedBuilding
+      ? (parts[2] ?? "")
+      : "";
+  const city = combinedFirstPart
+    ? (parts[2] ?? "")
+    : separatedBuilding
+      ? (parts[3] ?? "")
+      : "";
+  const postalCode = combinedFirstPart
+    ? (parts[3] ?? "")
+    : separatedBuilding
+      ? (parts[4] ?? "")
+      : "";
+  const hasText = (part: string) => /[\p{L}]/u.test(part);
+  return (
+    Boolean(combinedFirstPart || separatedBuilding) &&
+    hasText(street) &&
+    hasText(district) &&
+    hasText(city) &&
+    /^\d{5}$/.test(postalCode)
+  );
+};
+
 const initialInvoices: Invoice[] = [];
 
 async function submitInvoiceToZatca(
@@ -2230,11 +2268,7 @@ function InvoiceForm({
       });
       return;
     }
-    if (
-      !/\b\d{4}\b/.test(customerAddress) ||
-      !/\b\d{5}\b/.test(customerAddress) ||
-      !/مكة|جدة|الرياض|المدينة|الدمام|الخبر|الطائف/.test(customerAddress)
-    ) {
+    if (!hasCompleteNationalAddress(customerAddress)) {
       toast({
         title: t("العنوان الوطني للعميل غير مكتمل"),
         description: t(

@@ -520,6 +520,7 @@ export default function ZATCASettings() {
         const data = await invoke({
           action: "run_compliance_case",
           caseIndex: document.caseIndex,
+          forceRetest: true,
         });
         if (data.result?.status === "passed") passed += 1;
         setSetup((current) =>

@@ -586,19 +586,20 @@ function buildComplianceDocument(
 
   const buyer = new BuyerData()
     .setRegistrationName(
-      testCase.scope === "standard" ? "شركة المشتري التجريبية" : "عميل تجريبي",
+      testCase.scope === "standard" ? "شركة المشتري التجريبية" : "عميل نقدي",
     )
-    .setPartyIdentification(
-      testCase.scope === "standard" ? "1010000000" : "1234567890",
-    )
-    .setPartyIdentificationId(testCase.scope === "standard" ? "CRN" : "NAT")
     .setStreetName("شارع الملك فهد")
     .setBuildingNumber("1234")
     .setCitySubdivisionName("حي العليا")
     .setCityName("الرياض")
     .setPostalZone("12345")
     .setCountryCode("SA");
-  if (testCase.scope === "standard") buyer.setVatNumber("310000000000003");
+  if (testCase.scope === "standard") {
+    buyer
+      .setPartyIdentification("1010000000")
+      .setPartyIdentificationId("CRN")
+      .setVatNumber("310000000000003");
+  }
 
   const line = new InvoiceLineData()
     .setId(1)
@@ -1456,6 +1457,7 @@ Deno.serve(async (req) => {
       const existingResults: any[] = Array.isArray(setup.compliance_results)
         ? setup.compliance_results
         : [];
+      const forceRetest = body.forceRetest === true;
       const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
       const testCase = complianceCases[caseIndex];
       const { data: passedAuditRows } = await admin
@@ -1469,7 +1471,7 @@ Deno.serve(async (req) => {
       for (const item of existingResults) {
         hydratedResults.set(Number(item.caseIndex), item);
       }
-      for (const auditRow of passedAuditRows ?? []) {
+      for (const auditRow of forceRetest ? [] : (passedAuditRows ?? [])) {
         const restoredIndex = complianceCases.findIndex(
           (item) => `compliance_test_${item.key}` === auditRow.action,
         );
@@ -1488,7 +1490,11 @@ Deno.serve(async (req) => {
         });
       }
       const currentPassed = hydratedResults.get(caseIndex);
-      if (currentPassed?.status === "passed" && currentPassed.invoiceHash) {
+      if (
+        !forceRetest &&
+        currentPassed?.status === "passed" &&
+        currentPassed.invoiceHash
+      ) {
         const restoredResults = [...hydratedResults.values()]
           .filter((item) => requiredIndexes.includes(Number(item.caseIndex)))
           .sort((a, b) => a.caseIndex - b.caseIndex);

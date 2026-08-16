@@ -426,6 +426,18 @@ export default function SalesCreditNote() {
       return;
     }
 
+    const productionConfirmation = window.prompt(
+      "هذا إشعار إنتاج حقيقي وملزم قانونيًا لدى ZATCA. اكتب SUBMIT_REAL_ZATCA_INVOICE للمتابعة:",
+    );
+    if (productionConfirmation?.trim() !== "SUBMIT_REAL_ZATCA_INVOICE") {
+      toast({
+        title: t("تم إلغاء الإرسال الحقيقي"),
+        description: t("لم يتم إنشاء أو إرسال الإشعار إلى ZATCA."),
+        variant: "destructive",
+      });
+      return;
+    }
+
     const cleanedItems = form.items.filter(
       (item) =>
         item.description.trim() || item.account.trim() || item.unitPrice > 0,
@@ -460,7 +472,14 @@ export default function SalesCreditNote() {
       .single();
 
     const zatca = await supabase.functions.invoke("zatca-invoice", {
-      body: { noteId: String(data) },
+      body: {
+        noteId: String(data),
+        mode: "production",
+        deviceSerial: localStorage.getItem(
+          "zatca-active-production-device-serial",
+        ),
+        productionConfirmation: productionConfirmation.trim(),
+      },
     });
     if (zatca.error || zatca.data?.error) {
       const context = (zatca.error as { context?: Response } | null)?.context;

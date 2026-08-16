@@ -315,6 +315,67 @@ function toCertificatePem(binarySecurityToken: string) {
   return `-----BEGIN CERTIFICATE-----\n${certificateBody.match(/.{1,64}/g)?.join("\n") ?? certificateBody}\n-----END CERTIFICATE-----`;
 }
 
+function parseX509TimeToIso(value: unknown) {
+  const raw = clean(value);
+  const match = raw.match(
+    /^(?:(\d{4})|(\d{2}))(\d{2})(\d{2})(\d{2})(\d{2})(?:(\d{2})(?:[.,](\d+))?)?(Z|[+-]\d{4})$/,
+  );
+  if (!match) {
+    const timestamp = Date.parse(raw);
+    if (!Number.isFinite(timestamp)) return null;
+    return new Date(timestamp).toISOString();
+  }
+
+  const year = match[1]
+    ? Number(match[1])
+    : Number(match[2]) >= 50
+      ? 1900 + Number(match[2])
+      : 2000 + Number(match[2]);
+  const month = Number(match[3]);
+  const day = Number(match[4]);
+  const hour = Number(match[5]);
+  const minute = Number(match[6]);
+  const second = Number(match[7] ?? 0);
+  const millisecond = Number(`0.${match[8] ?? "0"}`) * 1000;
+  const unadjusted = Date.UTC(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second,
+    millisecond,
+  );
+  const date = new Date(unadjusted);
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day ||
+    date.getUTCHours() !== hour ||
+    date.getUTCMinutes() !== minute ||
+    date.getUTCSeconds() !== second
+  ) {
+    return null;
+  }
+
+  const timezone = match[9];
+  if (timezone !== "Z") {
+    const sign = timezone[0] === "+" ? 1 : -1;
+    const offsetHours = Number(timezone.slice(1, 3));
+    const offsetRemainderMinutes = Number(timezone.slice(3, 5));
+    if (offsetHours > 23 || offsetRemainderMinutes > 59) return null;
+    const offsetMinutes = offsetHours * 60 + offsetRemainderMinutes;
+    return new Date(unadjusted - sign * offsetMinutes * 60_000).toISOString();
+  }
+  return date.toISOString();
+}
+
+function getCertificateExpiryIso(binarySecurityToken: string) {
+  const certificate = new X509();
+  certificate.readCertPEM(toCertificatePem(binarySecurityToken));
+  return parseX509TimeToIso(certificate.getNotAfter());
+}
+
 function parseRegisteredAddress(location: string) {
   const normalized = location.replace(/\s+/g, " ").trim();
   const buildingNumber = normalized.match(/\b\d{4}\b/)?.[0];
@@ -1103,6 +1164,47 @@ Deno.serve(async (req) => {
       }
       const issuedAt = new Date().toISOString();
       const masked = `${productionCsid.slice(0, 8)}••••${productionCsid.slice(-6)}`;
+      let certificateExpiresAt: string | null = null;
+      try {
+        certificateExpiresAt = getCertificateExpiryIso(productionCsid);
+      } catch {
+        certificateExpiresAt = null;
+      }
+      if (!certificateExpiresAt) {
+        const message =
+          "تعذر قراءة تاريخ انتهاء شهادة Production CSID. أعد طلب الشهادة أو تواصل مع الدعم قبل تفعيل الإنتاج.";
+        await admin
+          .from("zatca_onboarding_settings")
+          .update({
+            production_request_id: null,
+            production_csid: null,
+            production_secret: null,
+            production_csid_masked: null,
+            production_issued_at: null,
+            production_status: "failed",
+            production_enabled: false,
+            production_confirmed_by: null,
+            production_confirmed_at: null,
+            certificate_expires_at: null,
+            last_error: message,
+            updated_at: issuedAt,
+          })
+          .eq("id", setup.id);
+        await admin.from("zatca_onboarding_audit").insert({
+          onboarding_id: setup.id,
+          actor_id: user.id,
+          action: "production_csid_requested",
+          result: "failed",
+          http_status: productionResponse.status,
+          details: sanitizeAuditDetails({
+            requestId: productionRequestId,
+            csidMasked: masked,
+            reason: "certificate_expiry_parse_failed",
+            message,
+          }),
+        });
+        return respond({ error: message }, 502);
+      }
       const { error: updateError } = await admin
         .from("zatca_onboarding_settings")
         .update({
@@ -1112,6 +1214,9 @@ Deno.serve(async (req) => {
           production_csid_masked: masked,
           production_issued_at: issuedAt,
           production_status: "issued",
+          production_enabled: false,
+          certificate_expires_at: certificateExpiresAt,
+          certificate_revoked_at: null,
           last_error: null,
           updated_at: issuedAt,
         })
@@ -1123,7 +1228,11 @@ Deno.serve(async (req) => {
         action: "production_csid_requested",
         result: "success",
         http_status: productionResponse.status,
-        details: { requestId: productionRequestId, csidMasked: masked },
+        details: {
+          requestId: productionRequestId,
+          csidMasked: masked,
+          certificateExpiresAt,
+        },
       });
       return respond({
         status: "production_ready",
@@ -1149,7 +1258,7 @@ Deno.serve(async (req) => {
       const { data: setup, error: setupError } = await admin
         .from("zatca_onboarding_settings")
         .select(
-          "id, invoice_type, status, compliance_results, production_csid, production_secret, production_enabled",
+          "id, invoice_type, status, compliance_results, production_csid, production_secret, production_enabled, certificate_expires_at, certificate_revoked_at",
         )
         .eq("id", existingSetup.id)
         .maybeSingle();
@@ -1162,6 +1271,36 @@ Deno.serve(async (req) => {
         );
         if (confirmation !== "ENABLE_REAL_ZATCA_PRODUCTION") {
           return respond({ error: "عبارة تأكيد تفعيل الإنتاج غير صحيحة" }, 400);
+        }
+        const certificateExpiresAt = Date.parse(
+          clean(setup.certificate_expires_at),
+        );
+        if (
+          !setup.certificate_expires_at ||
+          !Number.isFinite(certificateExpiresAt)
+        ) {
+          return respond(
+            {
+              error:
+                "لا يمكن تفعيل الإنتاج بدون تاريخ انتهاء صالح لشهادة Production CSID. أعد إصدار الشهادة أولاً.",
+            },
+            409,
+          );
+        }
+        if (setup.certificate_revoked_at) {
+          return respond(
+            { error: "شهادة Production CSID ملغاة ولا يمكن تفعيل الإنتاج" },
+            409,
+          );
+        }
+        if (certificateExpiresAt <= Date.now()) {
+          return respond(
+            {
+              error:
+                "انتهت صلاحية شهادة Production CSID. أعد إصدار الشهادة أولاً.",
+            },
+            409,
+          );
         }
         const requiredIndexes = requiredCaseIndexes(String(setup.invoice_type));
         const results = Array.isArray(setup.compliance_results)

@@ -15,11 +15,16 @@ import {
 
 type ZatcaMode = "simulation" | "production";
 
-const getCorsHeaders = () => ({
-  "Access-Control-Allow-Origin": clean(Deno.env.get("APP_ORIGIN")) || "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-});
+const getCorsHeaders = () => {
+  const appOrigin = clean(Deno.env.get("APP_ORIGIN"));
+  return {
+    ...(appOrigin ? { "Access-Control-Allow-Origin": appOrigin } : {}),
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
+  };
+};
 const SIMULATION_URL = "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation";
 const PRODUCTION_URL = "https://gw-fatoora.zatca.gov.sa/e-invoicing/core";
 const ZATCA_INITIAL_PIH =
@@ -665,6 +670,11 @@ function getValidationSummary(responseData: any) {
 }
 
 Deno.serve(async (req) => {
+  const appOrigin = clean(Deno.env.get("APP_ORIGIN"));
+  const requestOrigin = clean(req.headers.get("Origin"));
+  if (appOrigin && requestOrigin && requestOrigin !== appOrigin) {
+    return respond({ error: "Origin not allowed" }, 403);
+  }
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: getCorsHeaders() });
   if (req.method !== "POST")

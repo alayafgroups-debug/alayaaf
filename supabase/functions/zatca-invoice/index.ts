@@ -464,7 +464,31 @@ Deno.serve(async (req) => {
       });
     }
     if (clean(existingLog?.status) === "submitted") {
-      return respond({ error: "يوجد إرسال جارٍ بالفعل لهذا المستند" }, 409);
+      const submittedTimestamps = [
+        Date.parse(clean(existingLog.updated_at)),
+        Date.parse(clean(existingLog.created_at)),
+      ].filter(Number.isFinite);
+      const latestSubmittedAt = submittedTimestamps.length
+        ? Math.max(...submittedTimestamps)
+        : Number.NEGATIVE_INFINITY;
+      if (latestSubmittedAt > Date.now() - 5 * 60 * 1000) {
+        return respond({ error: "يوجد إرسال جارٍ بالفعل لهذا المستند" }, 409);
+      }
+
+      const staleInvocationError =
+        "Stale submitted invocation exceeded 5 minutes; retry allowed";
+      const { error: staleLogError } = await admin
+        .from("zatca_invoice_submission_logs")
+        .update({
+          status: "failed",
+          retry_after: null,
+          last_error: staleInvocationError,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingLog.id);
+      if (staleLogError) throw staleLogError;
+      existingLog.status = "failed";
+      existingLog.last_error = staleInvocationError;
     }
 
     let setupQuery = admin
@@ -727,6 +751,32 @@ Deno.serve(async (req) => {
     }
 
     let sequenceFinalized = false;
+    let sequenceBlocked = false;
+    const markAmbiguousAndBlock = async (
+      values: Record<string, unknown>,
+      reason: string,
+    ) => {
+      sequenceBlocked = true;
+      let logError: unknown = null;
+      try {
+        await saveLog({
+          ...values,
+          status: "ambiguous",
+          retry_after: null,
+          last_error: reason,
+        });
+      } catch (error) {
+        logError = error;
+      }
+
+      const { error: blockError } = await admin.rpc("block_zatca_sequence", {
+        p_onboarding_id: setup.id,
+        p_reservation_token: reservationToken,
+        p_reason: reason,
+      });
+      if (blockError) throw blockError;
+      if (logError) throw logError;
+    };
     try {
       const uuid = clean(record.uuid) || crypto.randomUUID();
       const signed = buildSignedInvoice({
@@ -790,23 +840,42 @@ Deno.serve(async (req) => {
         });
       } catch (error: any) {
         const message = clean(error?.message) || "ZATCA network error";
-        await saveLog({
-          status: "failed",
-          http_status: null,
-          request_uuid: uuid,
-          invoice_hash: signed.invoiceHash,
-          icv,
-          previous_pih: previousHash,
-          request_payload: requestPayload,
-          response: {},
-          response_text: "",
-          retry_after: getRetryAfter(),
-          last_error: message,
-        });
-        return respond({ error: message, retryable: true }, 503);
+        await markAmbiguousAndBlock(
+          {
+            http_status: null,
+            request_uuid: uuid,
+            invoice_hash: signed.invoiceHash,
+            icv,
+            previous_pih: previousHash,
+            request_payload: requestPayload,
+            response: {},
+            response_text: "",
+          },
+          message,
+        );
+        return respond({ error: message, retryable: false }, 503);
       }
 
-      const responseText = await zatcaResponse.text();
+      let responseText: string;
+      try {
+        responseText = await zatcaResponse.text();
+      } catch (error: any) {
+        const message = clean(error?.message) || "ZATCA network error";
+        await markAmbiguousAndBlock(
+          {
+            http_status: zatcaResponse.status,
+            request_uuid: uuid,
+            invoice_hash: signed.invoiceHash,
+            icv,
+            previous_pih: previousHash,
+            request_payload: requestPayload,
+            response: {},
+            response_text: "",
+          },
+          message,
+        );
+        return respond({ error: message, retryable: false }, 503);
+      }
       let responseData: any = {};
       try {
         responseData = responseText ? JSON.parse(responseText) : {};
@@ -824,9 +893,8 @@ Deno.serve(async (req) => {
           validation.message ||
           responseText ||
           `ZATCA HTTP ${zatcaResponse.status}`;
-        const failureStatus = retryable ? "failed" : "rejected";
-        await saveLog({
-          status: failureStatus,
+        const failureStatus = retryable ? "ambiguous" : "rejected";
+        const failureValues = {
           http_status: zatcaResponse.status,
           request_uuid: uuid,
           invoice_hash: signed.invoiceHash,
@@ -835,9 +903,17 @@ Deno.serve(async (req) => {
           request_payload: requestPayload,
           response: responseData,
           response_text: responseText,
-          retry_after: retryable ? getRetryAfter(zatcaResponse) : null,
-          last_error: errorMessage,
-        });
+        };
+        if (retryable) {
+          await markAmbiguousAndBlock(failureValues, errorMessage);
+        } else {
+          await saveLog({
+            ...failureValues,
+            status: failureStatus,
+            retry_after: null,
+            last_error: errorMessage,
+          });
+        }
         await admin
           .from(table)
           .update({
@@ -847,7 +923,7 @@ Deno.serve(async (req) => {
           })
           .eq("id", recordId);
         return respond(
-          { error: errorMessage, details: responseData, retryable },
+          { error: errorMessage, details: responseData, retryable: false },
           retryable ? 503 : 422,
         );
       }
@@ -906,7 +982,7 @@ Deno.serve(async (req) => {
       });
     } catch (error: any) {
       const message = clean(error?.message) || "Unexpected submission error";
-      if (!sequenceFinalized) {
+      if (!sequenceFinalized && !sequenceBlocked) {
         await saveLog({
           status: "failed",
           request_payload: {
@@ -926,7 +1002,7 @@ Deno.serve(async (req) => {
       }
       throw error;
     } finally {
-      if (!sequenceFinalized) {
+      if (!sequenceFinalized && !sequenceBlocked) {
         const { error: releaseError } = await admin.rpc(
           "release_zatca_sequence",
           {

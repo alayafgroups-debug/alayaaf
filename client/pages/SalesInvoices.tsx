@@ -590,8 +590,8 @@ export default function SalesInvoices() {
 
     const qrDataUrl = invoice.qrCodeData
       ? await QRCode.toDataURL(invoice.qrCodeData, {
-          width: 120,
-          margin: 1,
+          width: 512,
+          margin: 4,
           errorCorrectionLevel: "M",
         }).catch(() => "")
       : "";
@@ -629,7 +629,7 @@ export default function SalesInvoices() {
             .vat-rate { font-size: 10px; color: #6b7280; margin-top: 2px; }
             .bottom { display: grid; grid-template-columns: 1fr 300px; gap: 14px; margin-top: 12px; align-items: start; }
             .qr-note { display: flex; align-items: center; gap: 10px; }
-            .qr-box { width: 96px; height: 96px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; object-fit: contain; }
+            .qr-box { width: 45mm; height: 45mm; flex: 0 0 45mm; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; object-fit: contain; image-rendering: pixelated; }
             .qr-text { font-size: 10px; color: #6b7280; line-height: 1.5; }
             .notes { margin-top: 8px; font-size: 11px; line-height: 1.6; }
             .totals { font-size: 13px; border-top: 1px solid #d1d5db; padding-top: 6px; }
@@ -1341,7 +1341,7 @@ function InvoiceDetails({
                   <ZatcaQrCode
                     value={invoice.qrCodeData}
                     status={invoice.zatcaStatus}
-                    size={112}
+                    size={220}
                     className="rounded"
                   />
                   <div className="text-xs text-slate-500">

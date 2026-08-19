@@ -291,6 +291,23 @@ function buildQrPayload(input: {
   return Buffer.concat(chunks).toString("base64");
 }
 
+function extractQrCodeData(xml: string) {
+  const documentReferences =
+    xml.match(
+      /<cac:AdditionalDocumentReference>[\s\S]*?<\/cac:AdditionalDocumentReference>/g,
+    ) ?? [];
+  const qrReference = documentReferences.find((reference) =>
+    /<cbc:ID>\s*QR\s*<\/cbc:ID>/.test(reference),
+  );
+  return (
+    qrReference
+      ?.match(
+        /<cbc:EmbeddedDocumentBinaryObject[^>]*>([^<]+)<\/cbc:EmbeddedDocumentBinaryObject>/,
+      )?.[1]
+      ?.trim() ?? null
+  );
+}
+
 function getAcceptedInvoiceArtifacts(
   responseData: any,
   signed: {
@@ -316,10 +333,7 @@ function getAcceptedInvoiceArtifacts(
     if (!invoiceXml.includes("<Invoice")) throw new Error("Invalid cleared XML");
     return {
       invoiceXml,
-      qrCodeData:
-        invoiceXml.match(
-          /<cbc:EmbeddedDocumentBinaryObject[^>]*>([^<]+)<\/cbc:EmbeddedDocumentBinaryObject>/,
-        )?.[1] ?? signed.qrCodeData,
+      qrCodeData: extractQrCodeData(invoiceXml) ?? signed.qrCodeData,
       cryptographicStamp:
         invoiceXml.match(/<ds:SignatureValue[^>]*>([^<]+)<\/ds:SignatureValue>/)
           ?.[1] ?? signed.signatureValue,

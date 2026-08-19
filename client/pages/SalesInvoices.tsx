@@ -304,6 +304,19 @@ const hasCompleteNationalAddress = (value: string) => {
 
 const initialInvoices: Invoice[] = [];
 
+async function downloadZatcaQrImage(invoiceId: string, qrCodeData: string) {
+  const dataUrl = await QRCode.toDataURL(qrCodeData, {
+    width: 1024,
+    margin: 4,
+    errorCorrectionLevel: "M",
+    color: { dark: "#000000", light: "#ffffff" },
+  });
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = `zatca-qr-${invoiceId}.png`;
+  link.click();
+}
+
 async function submitInvoiceToZatca(
   invoiceId: string,
   productionConfirmation: string,
@@ -590,9 +603,9 @@ export default function SalesInvoices() {
 
     const qrDataUrl = invoice.qrCodeData
       ? await QRCode.toDataURL(invoice.qrCodeData, {
-          width: 1200,
+          width: 1024,
           margin: 4,
-          errorCorrectionLevel: "L",
+          errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#ffffff" },
         }).catch(() => "")
       : "";
@@ -607,7 +620,7 @@ export default function SalesInvoices() {
             @page { size: A4 portrait; margin: 10mm; }
             * { box-sizing: border-box; }
             html, body { width: 210mm; min-height: 297mm; }
-            body { margin: 0; font-family: Arial, sans-serif; color: #111827; }
+            body { margin: 0; font-family: Arial, sans-serif; color: #111827; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .sheet { width: 190mm; max-width: 190mm; margin: 0 auto; background: #fff; }
             @media print { html, body { width: 210mm; } .sheet { width: 190mm; max-width: 190mm; } }
             .head { border: 1px solid #d1d5db; padding: 10px 12px; }
@@ -630,7 +643,7 @@ export default function SalesInvoices() {
             .vat-rate { font-size: 10px; color: #6b7280; margin-top: 2px; }
             .bottom { display: grid; grid-template-columns: 1fr 300px; gap: 14px; margin-top: 12px; align-items: start; }
             .qr-note { display: flex; align-items: center; gap: 10px; }
-            .qr-box { width: 55mm; height: 55mm; flex: 0 0 55mm; display: block; font-size: 12px; color: #6b7280; background: #fff; object-fit: contain; }
+            .qr-box { width: 55mm; height: 55mm; flex: 0 0 55mm; display: block; font-size: 12px; color: #6b7280; background: #fff; object-fit: contain; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .qr-text { font-size: 10px; color: #6b7280; line-height: 1.5; }
             .notes { margin-top: 8px; font-size: 11px; line-height: 1.6; }
             .totals { font-size: 13px; border-top: 1px solid #d1d5db; padding-top: 6px; }
@@ -1344,10 +1357,31 @@ function InvoiceDetails({
                     size={220}
                     className="rounded"
                   />
-                  <div className="text-xs text-slate-500">
-                    {t(
-                      "تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية",
-                    )}
+                  <div className="space-y-2 text-xs text-slate-500">
+                    <p>
+                      {t(
+                        "تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية",
+                      )}
+                    </p>
+                    {invoice.qrCodeData ? (
+                      <button
+                        type="button"
+                        className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        onClick={() =>
+                          downloadZatcaQrImage(
+                            invoice.id,
+                            invoice.qrCodeData ?? "",
+                          ).catch(() =>
+                            toast({
+                              title: t("تعذر تنزيل صورة الرمز"),
+                              variant: "destructive",
+                            }),
+                          )
+                        }
+                      >
+                        {t("تنزيل صورة الرمز")}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <div className="space-y-2 text-sm text-slate-700">

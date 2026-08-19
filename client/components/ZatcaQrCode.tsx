@@ -27,7 +27,7 @@ export default function ZatcaQrCode({
     QRCode.toDataURL(value, {
       width: size,
       margin: 4,
-      errorCorrectionLevel: "L",
+      errorCorrectionLevel: "M",
     })
       .then((url) => {
         if (active) setDataUrl(url);

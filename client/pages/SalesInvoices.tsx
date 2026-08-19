@@ -601,13 +601,20 @@ export default function SalesInvoices() {
       )
       .join("");
 
-    const qrDataUrl = invoice.qrCodeData
-      ? await QRCode.toDataURL(invoice.qrCodeData, {
-          width: 1024,
+    const qrSvg = invoice.qrCodeData
+      ? await QRCode.toString(invoice.qrCodeData, {
+          type: "svg",
           margin: 4,
           errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#ffffff" },
-        }).catch(() => "")
+        })
+          .then((svg) =>
+            svg.replace(
+              "<svg ",
+              '<svg width="55mm" height="55mm" preserveAspectRatio="xMidYMid meet" ',
+            ),
+          )
+          .catch(() => "")
       : "";
 
     printWindow.document.open();
@@ -643,7 +650,8 @@ export default function SalesInvoices() {
             .vat-rate { font-size: 10px; color: #6b7280; margin-top: 2px; }
             .bottom { display: grid; grid-template-columns: 1fr 300px; gap: 14px; margin-top: 12px; align-items: start; }
             .qr-note { display: flex; align-items: center; gap: 10px; }
-            .qr-box { width: 55mm; height: 55mm; flex: 0 0 55mm; display: block; font-size: 12px; color: #6b7280; background: #fff; object-fit: contain; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .qr-box { width: 55mm; height: 55mm; flex: 0 0 55mm; display: block; font-size: 12px; color: #6b7280; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .qr-box svg { display: block; width: 55mm; height: 55mm; }
             .qr-text { font-size: 10px; color: #6b7280; line-height: 1.5; }
             .notes { margin-top: 8px; font-size: 11px; line-height: 1.6; }
             .totals { font-size: 13px; border-top: 1px solid #d1d5db; padding-top: 6px; }
@@ -712,7 +720,7 @@ export default function SalesInvoices() {
               <div class="bottom">
                 <div>
                   <div class="qr-note">
-                    ${qrDataUrl ? `<img src="${qrDataUrl}" class="qr-box" alt="QR ZATCA" />` : `<div class="qr-box">${escapeHtml(t("QR بعد الاعتماد"))}</div>`}
+                    ${qrSvg ? `<div class="qr-box">${qrSvg}</div>` : `<div class="qr-box">${escapeHtml(t("QR بعد الاعتماد"))}</div>`}
                     <div class="qr-text">${escapeHtml(t("تم ترميز هذا الرمز وفقاً لمتطلبات هيئة الزكاة والضريبة والجمارك للفوترة الإلكترونية"))}</div>
                   </div>
                   <div class="notes">

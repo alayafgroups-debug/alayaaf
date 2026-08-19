@@ -261,36 +261,6 @@ function correctXadesDigests(xml: string, certificate: Certificate) {
   );
 }
 
-function tlv(tag: number, value: Buffer) {
-  return Buffer.concat([Buffer.from([tag, value.length]), value]);
-}
-
-function buildQrPayload(input: {
-  sellerName: string;
-  vatNumber: string;
-  timestamp: string;
-  total: string;
-  vatTotal: string;
-  invoiceHash: string;
-  signature: string;
-  publicKey: Buffer;
-  certificateSignature: Buffer;
-  simplified: boolean;
-}) {
-  const chunks = [
-    tlv(1, Buffer.from(input.sellerName, "utf8")),
-    tlv(2, Buffer.from(input.vatNumber, "utf8")),
-    tlv(3, Buffer.from(input.timestamp, "utf8")),
-    tlv(4, Buffer.from(input.total, "utf8")),
-    tlv(5, Buffer.from(input.vatTotal, "utf8")),
-    tlv(6, Buffer.from(input.invoiceHash, "utf8")),
-    tlv(7, Buffer.from(input.signature, "base64")),
-    tlv(8, input.publicKey),
-  ];
-  if (input.simplified) chunks.push(tlv(9, input.certificateSignature));
-  return Buffer.concat(chunks).toString("base64");
-}
-
 function extractQrCodeData(xml: string) {
   const documentReferences =
     xml.match(
@@ -488,27 +458,10 @@ function buildSignedInvoice(input: {
     signedXml.match(/<ds:SignatureValue>([^<]+)<\/ds:SignatureValue>/)?.[1] ??
     "";
 
-  const totals = lines.reduce(
-    (acc, line) => {
-      const net = line.quantity * line.unitPrice - line.discount;
-      const tax = (net * line.taxPercent) / 100;
-      return { net: acc.net + net, tax: acc.tax + tax };
-    },
-    { net: 0, tax: 0 },
-  );
-
-  const qrCodeData = buildQrPayload({
-    sellerName: String(setup.company_name_ar),
-    vatNumber: String(setup.vat_number),
-    timestamp: `${now.slice(0, 10)}T${now.slice(11, 19)}Z`,
-    total: (totals.net + totals.tax).toFixed(2),
-    vatTotal: totals.tax.toFixed(2),
-    invoiceHash,
-    signature: signatureValue,
-    publicKey: Buffer.from(certificate.getRawPublicKey(), "base64"),
-    certificateSignature: certificate.getCertSignature(),
-    simplified,
-  });
+  const qrCodeData = extractQrCodeData(signedXml);
+  if (!qrCodeData) {
+    throw new Error("SIGNED_XML_QR_MISSING");
+  }
 
   return { signedXml, invoiceHash, qrCodeData, simplified, signatureValue };
 }

@@ -630,7 +630,7 @@ export default function SalesInvoices() {
             .vat-rate { font-size: 10px; color: #6b7280; margin-top: 2px; }
             .bottom { display: grid; grid-template-columns: 1fr 300px; gap: 14px; margin-top: 12px; align-items: start; }
             .qr-note { display: flex; align-items: center; gap: 10px; }
-            .qr-box { width: 55mm; height: 55mm; flex: 0 0 55mm; display: block; font-size: 12px; color: #6b7280; background: #fff; object-fit: contain; image-rendering: pixelated; }
+            .qr-box { width: 55mm; height: 55mm; flex: 0 0 55mm; display: block; font-size: 12px; color: #6b7280; background: #fff; object-fit: contain; }
             .qr-text { font-size: 10px; color: #6b7280; line-height: 1.5; }
             .notes { margin-top: 8px; font-size: 11px; line-height: 1.6; }
             .totals { font-size: 13px; border-top: 1px solid #d1d5db; padding-top: 6px; }

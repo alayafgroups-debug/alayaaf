@@ -31,6 +31,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import QRCode from "qrcode";
 import ZatcaQrCode from "@/components/ZatcaQrCode";
+import PartyRegistrationDialog from "@/components/PartyRegistrationDialog";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
@@ -2133,6 +2134,7 @@ function InvoiceForm({
   const [buyerVat, setBuyerVat] = useState("");
   const [buyerCommercialRegistration, setBuyerCommercialRegistration] =
     useState("");
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [saveIntent, setSaveIntent] = useState<"save" | "print" | null>(null);
   const saveInFlight = useRef(false);
 
@@ -2575,10 +2577,7 @@ function InvoiceForm({
                     {t("العميل")}
                   </label>
                   <select
-                    value={
-                      customerOptions.find((option) => option.name === customer)
-                        ?.id ?? ""
-                    }
+                    value={customerId}
                     onChange={(event) => {
                       const selected = customerOptions.find(
                         (option) => option.id === event.target.value,
@@ -2610,6 +2609,7 @@ function InvoiceForm({
                       </option>
                     ))}
                   </select>
+                  <button type="button" onClick={() => setCreatingCustomer(true)} className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء عميل جديد +")}</button>
                 </div>
 
                 <div className="space-y-1">
@@ -2618,11 +2618,14 @@ function InvoiceForm({
                   </label>
                   <select
                     value={invoiceType}
-                    onChange={(event) =>
-                      setInvoiceType(
-                        event.target.value as "standard" | "simplified",
-                      )
-                    }
+                    onChange={(event) => {
+                      const nextType = event.target.value as "standard" | "simplified";
+                      setInvoiceType(nextType);
+                      if (nextType === "simplified") {
+                        setBuyerVat("");
+                        setBuyerCommercialRegistration("");
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   >
                     <option value="simplified">
@@ -2634,49 +2637,10 @@ function InvoiceForm({
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
-                    {t("الرقم الضريبي للعميل")}
-                  </label>
-                  <input
-                    type="text"
-                    value={buyerVat}
-                    onChange={(event) =>
-                      setBuyerVat(
-                        event.target.value.replace(/\D/g, "").slice(0, 15),
-                      )
-                    }
-                    placeholder={
-                      invoiceType === "standard"
-                        ? t("مطلوب لفاتورة B2B")
-                        : t("اختياري لـ B2C")
-                    }
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
-                    dir="ltr"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
-                    {t("رقم السجل التجاري للعميل")}
-                  </label>
-                  <input
-                    type="text"
-                    value={buyerCommercialRegistration}
-                    onChange={(event) =>
-                      setBuyerCommercialRegistration(
-                        event.target.value.replace(/\D/g, "").slice(0, 15),
-                      )
-                    }
-                    placeholder={
-                      invoiceType === "standard"
-                        ? t("مطلوب لفاتورة B2B")
-                        : t("اختياري لـ B2C")
-                    }
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
-                    dir="ltr"
-                  />
-                </div>
+                {invoiceType === "standard" && <>
+                  <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground text-start block">{t("الرقم الضريبي للعميل")}</label><input type="text" value={buyerVat} onChange={(event) => setBuyerVat(event.target.value.replace(/\D/g, "").slice(0, 15))} placeholder={t("مطلوب لفاتورة B2B")} className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white" dir="ltr" /></div>
+                  <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground text-start block">{t("رقم السجل التجاري للعميل")}</label><input type="text" value={buyerCommercialRegistration} onChange={(event) => setBuyerCommercialRegistration(event.target.value.replace(/\D/g, "").slice(0, 15))} placeholder={t("مطلوب لفاتورة B2B")} className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white" dir="ltr" /></div>
+                </>}
 
                 <div className="space-y-1">
                   <label className="text-[12px] font-semibold text-muted-foreground text-start block">
@@ -2973,6 +2937,7 @@ function InvoiceForm({
                 })}
               </tbody>
             </table>
+            {creatingCustomer && <PartyRegistrationDialog kind="customer" b2c={invoiceType === "simplified"} onClose={() => setCreatingCustomer(false)} onCreated={(party) => { const option = { id: party.id, name: party.name, vatNumber: party.vatNumber, commercialRegistration: party.commercialRegistration, address: party.address }; setCustomerOptions((current) => [...current, option]); setCustomerId(party.id); setCustomer(party.name); setBuyerVat(party.vatNumber); setBuyerCommercialRegistration(party.commercialRegistration); setCustomerAddress(party.address); setInvoiceType(party.vatNumber && party.commercialRegistration ? "standard" : "simplified"); setCreatingCustomer(false); }} />}
 
             {/* Totals */}
             <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">

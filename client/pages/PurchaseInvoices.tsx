@@ -20,6 +20,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
+import PartyRegistrationDialog from "@/components/PartyRegistrationDialog";
 import {
   PageHeader,
   FilterBar,
@@ -1143,11 +1144,13 @@ function FormFields({
   setField,
   invoiceNumber,
   accentClass = "focus:border-blue-500 focus:ring-blue-500",
+  onCreateVendor,
 }: {
   form: ReturnType<typeof useInvoiceForm>["form"];
   setField: ReturnType<typeof useInvoiceForm>["setField"];
   invoiceNumber?: string;
   accentClass?: string;
+  onCreateVendor?: () => void;
 }) {
   const { t, direction } = useI18n();
   const inputClass = `w-full h-10 px-3 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none`;
@@ -1170,12 +1173,7 @@ function FormFields({
       <label className="text-sm font-medium text-slate-700">
         {t("المورد")}*
       </label>
-      <input
-        value={form.vendor}
-        onChange={(e) => setField("vendor", e.target.value)}
-        placeholder={t("مطلوب")}
-        className={inputClass}
-      />
+      <div><input value={form.vendor} onChange={(e) => setField("vendor", e.target.value)} placeholder={t("مطلوب")} className={inputClass} />{onCreateVendor && <button type="button" onClick={onCreateVendor} className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء مورد جديد +")}</button>}</div>
 
       <label className="text-sm font-medium text-slate-700">
         {t("العملة")}*
@@ -1262,6 +1260,7 @@ function InvoiceForm({
   const saveInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [creatingVendor, setCreatingVendor] = useState(false);
 
   useEffect(() => {
     const loadInvoiceNumber = async () => {
@@ -1400,8 +1399,10 @@ function InvoiceForm({
           form={form}
           setField={setField}
           invoiceNumber={invoiceNumber}
+          onCreateVendor={() => setCreatingVendor(true)}
         />
       </div>
+      {creatingVendor && <PartyRegistrationDialog kind="vendor" onClose={() => setCreatingVendor(false)} onCreated={(party) => { setField("vendor", party.name); setCreatingVendor(false); }} />}
 
       <ItemsTable
         items={items}

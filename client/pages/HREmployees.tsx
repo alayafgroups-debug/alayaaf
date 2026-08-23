@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { PageHeader } from "@/components/SalesPageUI";
 import EmployeeForm, { emptyForm, mapRowToForm } from "./EmployeeForm";
 import type { EmpFormData } from "./EmployeeForm";
+import { useI18n } from "@/i18n";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const DEPARTMENTS = ["قسم الصيانة والتشغيل", "قسم شركة البرمجيات", "قسم المبيعات", "قسم الموارد البشرية", "قسم المحاسبة", "الإدارة العليا"];
@@ -48,6 +49,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HREmployees() {
+  const { t, direction, locale, formatNumber } = useI18n();
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
@@ -115,7 +117,7 @@ export default function HREmployees() {
 
   const exportCsv = () => {
     if (!filtered.length) {
-      toast({ title: "لا توجد بيانات للتصدير" });
+      toast({ title: t("لا توجد بيانات للتصدير") });
       return;
     }
     const rows = filtered.map((employee) => [
@@ -123,7 +125,7 @@ export default function HREmployees() {
       employee.department, employee.jobTitle, employee.directorate, employee.nationality,
       employee.nationalId, employee.hireDate, employee.phone, employee.email,
     ]);
-    const csv = [["رقم الموظف", "الاسم العربي", "الاسم بالإنجليزية", "الحالة", "الفرع", "القسم", "المسمى الوظيفي", "الإدارة", "الجنسية", "رقم الهوية", "تاريخ التعيين", "الجوال", "البريد الإلكتروني"], ...rows]
+    const csv = [[t("رقم الموظف"), t("الاسم العربي"), t("الاسم بالإنجليزية"), t("الحالة"), t("الفرع"), t("القسم"), t("المسمى الوظيفي"), t("الإدارة"), t("الجنسية"), t("رقم الهوية"), t("تاريخ التعيين"), t("رقم الجوال"), t("البريد الإلكتروني")], ...rows]
       .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
       .join("\n");
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
@@ -170,18 +172,18 @@ export default function HREmployees() {
 
   return (
     <Layout>
-      <div dir="rtl" className="space-y-4">
+      <div dir={direction} className="space-y-4">
         {/* ─── Header bar ─────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-600" />
-            قائمة الموظفين
+            {t("قائمة الموظفين")}
           </h1>
           <button
             onClick={() => setMode("create")}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition shadow"
           >
-            + إضافة موظف جديد
+            + {t("إضافة موظف جديد")}
           </button>
         </div>
 
@@ -190,16 +192,16 @@ export default function HREmployees() {
           {/* Blue title bar */}
           <div className="bg-blue-700 px-4 py-2.5 flex items-center justify-between text-white">
             <span className="font-semibold text-sm">
-              قائمة الموظفين — {filtered.length} موظف
+              {t("قائمة الموظفين")} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <div className="flex items-center gap-1">
-              <button onClick={exportCsv} title="تصدير CSV" className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
-              <button title="طباعة" className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
-              <button onClick={() => setRefreshKey((k) => k + 1)} title="تحديث" className="p-1.5 rounded hover:bg-white/20 transition"><RefreshCw className="h-4 w-4" /></button>
+              <button onClick={exportCsv} title={t("تصدير CSV")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
+              <button title={t("طباعة")} className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
+              <button onClick={() => setRefreshKey((k) => k + 1)} title={t("تحديث")} className="p-1.5 rounded hover:bg-white/20 transition"><RefreshCw className="h-4 w-4" /></button>
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowColumnMenu((v) => !v); }}
-                  title="إظهار/إخفاء الأعمدة"
+                  title={t("إظهار/إخفاء الأعمدة")}
                   className="p-1.5 rounded hover:bg-white/20 transition"
                 >
                   <Columns3 className="h-4 w-4" />
@@ -209,7 +211,7 @@ export default function HREmployees() {
                     className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-2 space-y-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className="text-xs font-semibold text-gray-500 px-2 pb-1">إظهار / إخفاء الأعمدة</p>
+                    <p className="text-xs font-semibold text-gray-500 px-2 pb-1">{t("إظهار / إخفاء الأعمدة")}</p>
                     {OPTIONAL_COLUMNS.map(({ key, label }) => (
                       <label key={key} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 cursor-pointer text-sm text-gray-700">
                         <input
@@ -218,7 +220,7 @@ export default function HREmployees() {
                           onChange={() => setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }))}
                           className="rounded"
                         />
-                        {label}
+                        {t(label)}
                       </label>
                     ))}
                   </div>
@@ -233,10 +235,10 @@ export default function HREmployees() {
               <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder="بحث سريع..."
+                placeholder={t("بحث سريع...")}
                 value={fSearch}
                 onChange={(e) => setFSearch(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white pr-8 pl-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
+                className="w-full rounded-md border border-gray-300 bg-white pe-8 ps-3 py-1.5 text-sm text-start focus:outline-none focus:border-blue-400"
               />
             </div>
             <select
@@ -244,7 +246,7 @@ export default function HREmployees() {
               onChange={(e) => setFDepartment(e.target.value)}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
             >
-              <option value="">جميع الأقسام</option>
+              <option value="">{t("جميع الأقسام")}</option>
               {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
             </select>
             <select
@@ -259,18 +261,18 @@ export default function HREmployees() {
               onClick={() => { setFSearch(""); setFDepartment(""); setFStatus(""); }}
               className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-100 transition text-gray-600"
             >
-              مسح
+              {t("مسح")}
             </button>
             {selectedIds.size > 0 && (
               <span className="text-xs text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
-                {selectedIds.size} محدد
+                {formatNumber(selectedIds.size)} {t("محدد")}
               </span>
             )}
           </div>
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-xs" dir="rtl">
+            <table className="w-full text-xs" dir={direction}>
               <thead>
                 <tr className="bg-slate-100 border-b border-gray-200">
                   <th className="px-3 py-2.5 text-center font-semibold text-gray-600 w-8 whitespace-nowrap">
@@ -281,27 +283,27 @@ export default function HREmployees() {
                       className="rounded"
                     />
                   </th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الرقم الوظيفي</th>
-                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
-                  {visibleColumns.englishName && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم بالإنجليزية</th>}
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الفرع</th>
+                  <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الرقم الوظيفي")}</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">{t("إجراءات")}</th>
+                  <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الاسم")}</th>
+                  {visibleColumns.englishName && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الاسم بالإنجليزية")}</th>}
+                  <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الفرع")}</th>
                   {visibleColumns.directorate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الإدارة</th>}
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">القسم</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">المسمى الوظيفي</th>
+                  <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("القسم")}</th>
+                  <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("المسمى الوظيفي")}</th>
                   {visibleColumns.nationality && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الجنسية</th>}
                   {visibleColumns.nationalId && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الهوية</th>}
                   {visibleColumns.hireDate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">تاريخ التعيين</th>}
                   {visibleColumns.phone && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الجوال</th>}
                   {visibleColumns.email && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">البريد الإلكتروني</th>}
                   <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">وضع العمل</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الحالة</th>
+                  <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الحالة")}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={visibleColumnCount + 2} className="py-12 text-center text-gray-400 text-sm">جاري التحميل...</td>
+                    <td colSpan={visibleColumnCount + 2} className="py-12 text-center text-gray-400 text-sm">{t("جاري التحميل...")}</td>
                   </tr>
                 )}
                 {!loading && pageData.map((emp, idx) => (
@@ -334,12 +336,12 @@ export default function HREmployees() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-center gap-0.5">
-                        <button onClick={() => { setSelected(emp); setMode("view"); }} className="p-1 text-blue-600 hover:bg-blue-100 rounded" title="عرض"><Eye className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => { setSelected(emp); setMode("edit"); }} className="p-1 text-emerald-600 hover:bg-emerald-100 rounded" title="تعديل"><Edit className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => handleDelete(emp)} className="p-1 text-rose-600 hover:bg-rose-100 rounded" title="حذف"><Trash2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { setSelected(emp); setMode("view"); }} className="p-1 text-blue-600 hover:bg-blue-100 rounded" title={t("عرض")}><Eye className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { setSelected(emp); setMode("edit"); }} className="p-1 text-emerald-600 hover:bg-emerald-100 rounded" title={t("تعديل")}><Edit className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => handleDelete(emp)} className="p-1 text-rose-600 hover:bg-rose-100 rounded" title={t("حذف")}><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                     </td>
-                    <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">{emp.name || emp.firstName || "—"}</td>
+                    <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">{locale === "en" ? emp.firstName || emp.name || "—" : emp.name || emp.firstName || "—"}</td>
                     {visibleColumns.englishName && <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.firstName || "—"}</td>}
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || "—"}</td>
                     {visibleColumns.directorate && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.directorate || "—"}</td>}
@@ -353,14 +355,14 @@ export default function HREmployees() {
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.employmentType || "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className={cn("inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600 border-gray-200")}>
-                        {emp.status || "—"}
+                        {emp.status ? t(emp.status) : "—"}
                       </span>
                     </td>
                   </tr>
                 ))}
                 {!loading && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={visibleColumnCount + 2} className="py-14 text-center text-gray-400">لا يوجد موظفون</td>
+                    <td colSpan={visibleColumnCount + 2} className="py-14 text-center text-gray-400">{t("لا يوجد موظفون")}</td>
                   </tr>
                 )}
               </tbody>

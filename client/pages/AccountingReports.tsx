@@ -1,106 +1,96 @@
 import Layout from "@/components/Layout";
-import {
-  ChevronDown,
-  Download,
-  FileSpreadsheet,
-  FileText,
-  Printer,
-  RefreshCw,
-  Search,
-} from "lucide-react";
-import { useState } from "react";
+import { Download, Printer, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/i18n";
+import { supabase } from "@/lib/supabaseClient";
 
-const reports = [
-  "قائمة الدخل",
-  "الميزانية العمومية",
-  "دفتر الأستاذ العام",
-  "التدفقات النقدية - الطريقة غير المباشرة",
-  "ميزان المراجعة المالي",
-  "الإيرادات النقدية",
-  "تقارير الإدارة (PDF)",
-] as const;
+type ReportKind = "income" | "comprehensive" | "position";
+type Account = { code: string; name_ar: string; name_en: string | null };
+type Entry = { id: string; entry_date: string };
+type Line = { journal_entry_id: string; account_code: string; debit: number; credit: number };
+type Row = { label: string; values: number[]; total: number };
 
-const months = ["الإجمالي", "يناير 2026", "فبراير 2026", "مارس 2026", "أبريل 2026", "مايو 2026", "يونيو 2026", "يوليو 2026", "أغسطس 2026"];
-const incomeRows = ["إيرادات المبيعات", "إيرادات الخدمات", "إجمالي الإيرادات", "تكلفة المبيعات", "مجمل الربح", "المصروفات التشغيلية", "صافي الربح"];
-const ledgerRows = ["411 إيرادات المبيعات", "413 إيرادات الخدمات", "511 تكلفة المبيعات", "521 المصروفات التشغيلية", "111 النقد وما يعادله", "112 الذمم المدينة"];
+const REPORTS: { kind: ReportKind; label: string }[] = [
+  { kind: "income", label: "قائمة الدخل" },
+  { kind: "comprehensive", label: "قائمة الدخل الشامل" },
+  { kind: "position", label: "قائمة المركز المالي" },
+];
 
-function value(row: number, column: number) {
-  const base = (row + 1) * (column + 2) * 1243.75;
-  return column < 2 ? "0.00" : base.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function monthKeys(end: string) {
+  const date = new Date(`${end}T00:00:00`);
+  return Array.from({ length: date.getMonth() + 1 }, (_, index) => `${date.getFullYear()}-${String(index + 1).padStart(2, "0")}`);
 }
 
 export default function AccountingReports() {
-  const { t, direction, formatNumber } = useI18n();
-  const [activeReport, setActiveReport] = useState<(typeof reports)[number]>(reports[0]);
-  const [period, setPeriod] = useState("2026-08-31");
-  const isLedger = activeReport === "دفتر الأستاذ العام";
-  const isPdf = activeReport === "تقارير الإدارة (PDF)";
-  const isCash = activeReport === "التدفقات النقدية - الطريقة غير المباشرة";
-  const rows = isLedger ? ledgerRows : incomeRows;
+  const { t, direction, locale, formatNumber } = useI18n();
+  const [active, setActive] = useState<ReportKind>("income");
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  return (
-    <Layout>
-      <main dir={direction} className="min-h-full bg-slate-50/70 text-slate-800">
-        <div className="border-t-2 border-red-600 bg-white px-5 py-2 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-            <div className="flex items-center gap-2">
-              <button className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50"><Download className="h-3.5 w-3.5" />{t("تصدير")}</button>
-              <button className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50"><Printer className="h-3.5 w-3.5" />{t("طباعة")}</button>
-            </div>
-            <div className="flex items-center gap-2">
-              <select className="rounded border border-slate-200 bg-white px-2 py-1 text-xs"><option>{t("SAR")}</option></select>
-              <input value={period} onChange={(event) => setPeriod(event.target.value)} type="date" className="rounded border border-slate-200 px-2 py-1 text-xs" />
-              <select className="rounded border border-slate-200 bg-white px-2 py-1 text-xs"><option>{t("حتى تاريخ")}</option><option>{t("حسب الفترة")}</option></select>
-            </div>
-          </div>
+  const load = async () => {
+    setLoading(true); setError("");
+    const [{ data: accountData, error: accountError }, { data: entryData, error: entryError }] = await Promise.all([
+      supabase.from("accounting_accounts").select("code, name_ar, name_en").order("code"),
+      supabase.from("accounting_journal_entries").select("id, entry_date").eq("status", "posted").lte("entry_date", endDate).order("entry_date"),
+    ]);
+    if (accountError || entryError) { setError(accountError?.message ?? entryError?.message ?? t("تعذر تحميل التقارير")); setLoading(false); return; }
+    const ids = (entryData ?? []).map((entry) => entry.id);
+    const { data: lineData, error: lineError } = ids.length
+      ? await supabase.from("accounting_journal_lines").select("journal_entry_id, account_code, debit, credit").in("journal_entry_id", ids)
+      : { data: [], error: null };
+    if (lineError) { setError(lineError.message); setLoading(false); return; }
+    setAccounts((accountData ?? []) as Account[]); setEntries((entryData ?? []) as Entry[]); setLines((lineData ?? []) as Line[]); setLoading(false);
+  };
+
+  useEffect(() => { void load(); }, [endDate]);
+
+  const report = useMemo(() => buildReport(active, endDate, accounts, entries, lines, locale), [active, endDate, accounts, entries, lines, locale]);
+  const activeLabel = REPORTS.find((report) => report.kind === active)?.label ?? "";
+
+  return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4">
+    <div className="mx-auto max-w-[1600px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
+      <header className="border-t-2 border-red-600 px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex gap-1">{REPORTS.map((reportItem) => <button key={reportItem.kind} onClick={() => setActive(reportItem.kind)} className={`rounded px-3 py-1.5 text-xs font-semibold ${active === reportItem.kind ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{t(reportItem.label)}</button>)}</div>
+          <div className="flex items-center gap-2"><input value={endDate} onChange={(event) => setEndDate(event.target.value)} type="date" className="rounded border border-slate-200 px-2 py-1 text-xs" /><button onClick={() => void load()} className="rounded border border-slate-200 p-1.5" title={t("تحديث")}><RefreshCw className="h-3.5 w-3.5" /></button><button className="rounded border border-slate-200 p-1.5" title={t("طباعة")}><Printer className="h-3.5 w-3.5" /></button><button className="rounded border border-slate-200 p-1.5" title={t("تصدير")}><Download className="h-3.5 w-3.5" /></button></div>
         </div>
-
-        <div className="flex min-h-[calc(100vh-150px)]">
-          <aside className="w-56 flex-shrink-0 border-e border-slate-200 bg-white p-3">
-            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><FileSpreadsheet className="h-4 w-4 text-blue-700" />{t("التقارير")}</div>
-            <nav className="space-y-1">
-              {reports.map((report) => (
-                <button key={report} onClick={() => setActiveReport(report)} className={`flex w-full items-center justify-between rounded px-3 py-2 text-start text-xs transition ${activeReport === report ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
-                  <span>{t(report)}</span><ChevronDown className="h-3.5 w-3.5 -rotate-90 opacity-60" />
-                </button>
-              ))}
-            </nav>
-          </aside>
-
-          <section className="min-w-0 flex-1 p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs text-slate-400">{t("التقارير")} / {t("المحاسبة والمالية")}</p>
-                <h1 className="mt-1 text-lg font-bold text-slate-900">{t(activeReport)}</h1>
-              </div>
-              <button className="inline-flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 hover:bg-slate-50"><RefreshCw className="h-3.5 w-3.5" />{t("تحديث")}</button>
-            </div>
-
-            {isPdf ? <PdfReports /> : <ReportGrid title={t(activeReport)} rows={rows} isLedger={isLedger} isCash={isCash} />}
-          </section>
-        </div>
-      </main>
-    </Layout>
-  );
+      </header>
+      <section className="p-4">
+        <h1 className="text-center text-sm font-bold text-slate-800">{t(activeLabel)}</h1><p className="mt-1 text-center text-[11px] text-slate-400">{t("حتى تاريخ")} {endDate}</p>
+        {loading ? <State text={t("جاري التحميل...")} /> : error ? <State text={error} /> : <ReportTable report={report} headers={active === "position" ? [t("الرصيد")] : report.months.map((month) => month)} formatNumber={formatNumber} />}
+      </section>
+    </div>
+  </main></Layout>;
 }
 
-function ReportGrid({ title, rows, isLedger, isCash }: { title: string; rows: readonly string[]; isLedger: boolean; isCash: boolean }) {
-  const { t, formatNumber } = useI18n();
-  return <div className="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
-    <div className="border-b border-slate-100 px-4 py-3 text-center"><h2 className="text-sm font-bold">{title}</h2><p className="mt-1 text-[11px] text-slate-400">{t("الفترة المنتهية في")} 31/08/2026</p></div>
-    <div className="overflow-x-auto"><table className="min-w-[1000px] w-full border-collapse text-[11px]">
-      <thead className="bg-slate-100 text-slate-600"><tr><th className="sticky end-0 z-10 min-w-60 border-b border-slate-200 bg-slate-100 px-3 py-2 text-start">{isLedger ? t("الحساب") : t("البند")}</th>{months.map(m => <th key={m} className="min-w-24 border-b border-slate-200 px-2 py-2 text-center font-medium">{t(m)}</th>)}</tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={row} className={index % 2 ? "bg-slate-50/70" : "bg-white"}><td className="sticky end-0 border-b border-slate-100 bg-inherit px-3 py-2 font-medium text-slate-700">{t(row)}</td>{months.map((month, col) => <td key={month} className={`border-b border-slate-100 px-2 py-2 text-center ${col > 1 ? "text-indigo-600" : "text-slate-500"}`}>{isCash && index > 3 && col > 3 ? `-${value(index, col)}` : value(index, col)}</td>)}</tr>)}</tbody>
-      <tfoot className="bg-slate-100 font-bold"><tr><td className="px-3 py-2">{t("الإجمالي")}</td>{months.map((month, index) => <td key={month} className="px-2 py-2 text-center">{formatNumber((index + 1) * 17733.34, { minimumFractionDigits: 2 })}</td>)}</tr></tfoot>
-    </table></div>
-  </div>;
+function buildReport(kind: ReportKind, endDate: string, accounts: Account[], entries: Entry[], lines: Line[], locale: string) {
+  const accountName = new Map(accounts.map((account) => [account.code, locale === "en" && account.name_en ? account.name_en : account.name_ar]));
+  const entryMonth = new Map(entries.map((entry) => [entry.id, entry.entry_date.slice(0, 7)]));
+  const months = kind === "position" ? [endDate] : monthKeys(endDate);
+  const buckets = new Map<string, number[]>();
+  for (const line of lines) {
+    const root = line.account_code.charAt(0); const month = entryMonth.get(line.journal_entry_id); const index = months.indexOf(month ?? "");
+    if (index < 0 && kind !== "position") continue;
+    const include = kind === "position" ? ["1", "2", "3"].includes(root) : ["4", "5"].includes(root);
+    if (!include) continue;
+    const normal = root === "4" || root === "2" || root === "3" ? Number(line.credit) - Number(line.debit) : Number(line.debit) - Number(line.credit);
+    const values = buckets.get(line.account_code) ?? Array(months.length).fill(0);
+    if (kind === "position") for (let i = 0; i < values.length; i++) values[i] += normal; else values[index] += normal;
+    buckets.set(line.account_code, values);
+  }
+  const rows: Row[] = [...buckets.entries()].map(([code, values]) => ({ label: `${code} - ${accountName.get(code) ?? code}`, values, total: values.reduce((sum, value) => sum + value, 0) }));
+  if (kind === "comprehensive") rows.push({ label: locale === "en" ? "Other comprehensive income" : "الدخل الشامل الآخر", values: Array(months.length).fill(0), total: 0 });
+  return { months: kind === "position" ? [endDate] : months, rows };
 }
 
-function PdfReports() {
+function ReportTable({ report, headers, formatNumber }: { report: { rows: Row[] }; headers: string[]; formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string }) {
   const { t } = useI18n();
-  return <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
-    <div className="rounded border border-slate-200 bg-white p-4"><div className="flex items-center gap-2 font-bold"><FileText className="h-5 w-5 text-red-500" />{t("تقارير الإدارة (PDF)")}</div><p className="mt-2 text-xs text-slate-500">{t("أنشئ تقارير PDF قابلة للطباعة والمشاركة")}</p><div className="mt-4 space-y-3"><select className="w-full rounded border border-slate-200 p-2 text-xs"><option>{t("اختر التقرير")}</option></select><select className="w-full rounded border border-slate-200 p-2 text-xs"><option>{t("SAR")}</option></select><button className="w-full rounded bg-indigo-600 p-2 text-xs font-semibold text-white">{t("إنشاء التقرير")}</button></div></div>
-    <div className="flex min-h-96 flex-col items-center justify-center rounded border border-slate-200 bg-white text-center"><FileText className="h-14 w-14 text-slate-200" /><h2 className="mt-4 font-bold text-slate-700">{t("سيتم عرض التقرير هنا")}</h2><p className="mt-2 max-w-sm text-xs text-slate-400">{t("اختر التقرير والفترة ثم أنشئ التقرير لعرضه أو طباعته")}</p></div>
-  </div>;
+  const total = Array(headers.length).fill(0) as number[];
+  report.rows.forEach((row) => row.values.forEach((value, index) => { if (index < total.length) total[index] += value; }));
+  return <div className="mt-4 overflow-x-auto"><table className="min-w-full text-[11px]"><thead className="bg-slate-100 text-slate-600"><tr><th className="min-w-64 border-b px-3 py-2 text-start">{t("البند")}</th>{headers.map((header) => <th key={header} className="min-w-28 border-b px-2 py-2">{header}</th>)}</tr></thead><tbody>{report.rows.map((row) => <tr key={row.label} className="border-b border-slate-100"><td className="px-3 py-2 font-medium">{row.label}</td>{headers.map((_, index) => <td key={index} className="px-2 py-2 text-center text-indigo-600">{formatNumber(row.values[index] ?? row.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>)}</tr>)}</tbody><tfoot className="bg-slate-100 font-bold"><tr><td className="px-3 py-2">{t("الإجمالي")}</td>{total.map((value, index) => <td key={index} className="px-2 py-2 text-center">{formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>)}</tr></tfoot></table></div>;
 }
+function State({ text }: { text: string }) { return <div className="py-16 text-center text-sm text-slate-500">{text}</div>; }

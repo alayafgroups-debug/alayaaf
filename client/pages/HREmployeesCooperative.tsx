@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { PageHeader } from "@/components/SalesPageUI";
 import EmployeeForm, { emptyForm, mapRowToForm } from "./EmployeeForm";
 import type { EmpFormData } from "./EmployeeForm";
+import { useI18n } from "@/i18n";
 
 const STATUS_COLORS: Record<string, string> = {
   نشط: "bg-green-100 text-green-700 border-green-200",
@@ -35,6 +36,7 @@ function getCooperativeInitialData(): EmpFormData {
 }
 
 export default function HREmployeesCooperative() {
+  const { t, direction, locale, formatNumber } = useI18n();
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -57,7 +59,7 @@ export default function HREmployeesCooperative() {
           .order("created_at", { ascending: false });
 
         if (error) {
-          toast({ title: "تعذر تحميل الموظفين المتعاونين", description: error.message });
+          toast({ title: t("تعذر تحميل الموظفين المتعاونين"), description: error.message });
           return;
         }
 
@@ -94,16 +96,16 @@ export default function HREmployeesCooperative() {
   const refresh = () => setRefreshKey((k) => k + 1);
 
   const handleDelete = async (emp: EmpFormData) => {
-    if (!confirm(`هل تريد حذف الموظف المتعاون "${emp.name || emp.firstName}"؟`)) return;
+    if (!confirm(`${t("هل تريد حذف الموظف المتعاون")} "${emp.name || emp.firstName}"؟`)) return;
 
     const { error } = await supabase.from("employees").delete().eq("id", emp.id);
     if (error) {
-      toast({ title: "تعذر الحذف", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر الحذف"), description: error.message, variant: "destructive" });
       return;
     }
 
     setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
-    toast({ title: "تم الحذف", description: "تم حذف الموظف المتعاون" });
+    toast({ title: t("تم الحذف"), description: t("تم حذف الموظف المتعاون") });
   };
 
   if (mode === "create") {
@@ -115,7 +117,7 @@ export default function HREmployeesCooperative() {
         onSaved={() => {
           setMode("list");
           refresh();
-          toast({ title: "تمت إضافة موظف متعاون", description: "تم ربطه فعلياً بقاعدة البيانات" });
+          toast({ title: t("تمت إضافة موظف متعاون"), description: t("تم ربطه فعلياً بقاعدة البيانات") });
         }}
       />
     );
@@ -130,7 +132,7 @@ export default function HREmployeesCooperative() {
         onSaved={() => {
           setMode("list");
           refresh();
-          toast({ title: "تم تحديث بيانات الموظف المتعاون" });
+          toast({ title: t("تم تحديث بيانات الموظف المتعاون") });
         }}
       />
     );
@@ -138,7 +140,7 @@ export default function HREmployeesCooperative() {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-7xl space-y-6" dir="rtl">
+      <div className="mx-auto max-w-7xl space-y-6" dir={direction}>
         <PageHeader
           icon={Users}
           title="الموظفون المتعاونون"
@@ -152,14 +154,14 @@ export default function HREmployeesCooperative() {
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-5 py-3 flex items-center justify-between text-white rounded-t-lg">
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5" />
-              <h2 className="font-semibold">قائمة المتعاونين ({filtered.length})</h2>
+              <h2 className="font-semibold">{t("قائمة المتعاونين")} ({formatNumber(filtered.length)})</h2>
             </div>
             <button
               onClick={() => setMode("create")}
               className="inline-flex items-center gap-2 rounded-lg bg-white/15 hover:bg-white/25 transition px-3 py-1.5 text-sm font-medium"
             >
               <UserPlus className="h-4 w-4" />
-              إضافة متعاون
+              {t("إضافة متعاون")}
             </button>
           </div>
 
@@ -168,7 +170,7 @@ export default function HREmployeesCooperative() {
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
-                placeholder="بحث بالاسم / رقم الموظف / الهاتف"
+                placeholder={t("بحث بالاسم / رقم الموظف / الهاتف")}
                 value={fSearch}
                 onChange={(e) => setFSearch(e.target.value)}
                 className="w-full rounded-lg border border-border bg-background pr-9 pl-3 py-2 text-sm text-right"
@@ -180,11 +182,11 @@ export default function HREmployeesCooperative() {
               onChange={(e) => setFStatus(e.target.value)}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
             >
-              <option value="">جميع الحالات</option>
-              <option value="فعال">فعال</option>
-              <option value="غير فعال">غير فعال</option>
-              <option value="إجازة">إجازة</option>
-              <option value="منتهي">منتهي</option>
+              <option value="">{t("جميع الحالات")}</option>
+              <option value="فعال">{t("فعال")}</option>
+              <option value="غير فعال">{t("غير فعال")}</option>
+              <option value="إجازة">{t("إجازة")}</option>
+              <option value="منتهي">{t("منتهي")}</option>
             </select>
 
             <select
@@ -192,7 +194,7 @@ export default function HREmployeesCooperative() {
               onChange={(e) => setFBranch(e.target.value)}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-right"
             >
-              <option value="">جميع الفروع</option>
+              <option value="">{t("جميع الفروع")}</option>
               {branches.map((b) => (
                 <option key={b} value={b}>{b}</option>
               ))}
@@ -206,31 +208,31 @@ export default function HREmployeesCooperative() {
               }}
               className="px-3 py-2 text-sm rounded-lg border border-border hover:bg-muted/50 transition"
             >
-              إعادة تعيين
+              {t("إعادة تعيين")}
             </button>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" dir="rtl">
+            <table className="w-full text-sm" dir={direction}>
               <thead>
                 <tr className="border-b border-border/30 bg-muted/40">
-                  <th className="px-4 py-3 text-right font-semibold">الإجراءات</th>
-                  <th className="px-4 py-3 text-right font-semibold">الحالة</th>
-                  <th className="px-4 py-3 text-right font-semibold">نوع التوظيف</th>
-                  <th className="px-4 py-3 text-right font-semibold">الراتب الأساسي</th>
-                  <th className="px-4 py-3 text-right font-semibold">تاريخ التعيين</th>
-                  <th className="px-4 py-3 text-right font-semibold">الفرع</th>
-                  <th className="px-4 py-3 text-right font-semibold">القسم</th>
-                  <th className="px-4 py-3 text-right font-semibold">المسمى الوظيفي</th>
-                  <th className="px-4 py-3 text-right font-semibold">الهاتف</th>
-                  <th className="px-4 py-3 text-right font-semibold">الاسم</th>
-                  <th className="px-4 py-3 text-right font-semibold">رقم الموظف</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("إجراءات")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("الحالة")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("نوع التوظيف")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("الراتب الأساسي")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("تاريخ التعيين")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("الفرع")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("القسم")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("المسمى الوظيفي")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("الهاتف")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("الاسم")}</th>
+                  <th className="px-4 py-3 text-start font-semibold">{t("رقم الموظف")}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={11} className="py-10 text-center text-muted-foreground text-sm">جاري التحميل...</td>
+                    <td colSpan={11} className="py-10 text-center text-muted-foreground text-sm">{t("جاري التحميل...")}</td>
                   </tr>
                 )}
 
@@ -241,7 +243,7 @@ export default function HREmployeesCooperative() {
                         <button
                           onClick={() => setSelected(emp)}
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                          title="عرض"
+                          title={t("عرض")}
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -251,14 +253,14 @@ export default function HREmployeesCooperative() {
                             setMode("edit");
                           }}
                           className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
-                          title="تعديل"
+                          title={t("تعديل")}
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(emp)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
-                          title="حذف"
+                          title={t("حذف")}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -266,16 +268,16 @@ export default function HREmployeesCooperative() {
                     </td>
 
                     <td className="px-4 py-3 align-middle">
-                      <span className={cn("inline-block px-2 py-0.5 rounded-full text-xs font-semibold border", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600")}>{emp.status}</span>
+                      <span className={cn("inline-block px-2 py-0.5 rounded-full text-xs font-semibold border", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600")}>{emp.status ? t(emp.status) : "-"}</span>
                     </td>
-                    <td className="px-4 py-3 align-middle text-muted-foreground">{emp.employmentType || "-"}</td>
-                    <td className="px-4 py-3 align-middle font-medium">{emp.baseSalary.toLocaleString()} ر.س</td>
+                    <td className="px-4 py-3 align-middle text-muted-foreground">{emp.employmentType ? t(emp.employmentType) : "-"}</td>
+                    <td className="px-4 py-3 align-middle font-medium">{formatNumber(emp.baseSalary)} {t("ر.س")}</td>
                     <td className="px-4 py-3 align-middle text-muted-foreground">{emp.hireDate || "-"}</td>
                     <td className="px-4 py-3 align-middle text-muted-foreground">{emp.branch || "-"}</td>
                     <td className="px-4 py-3 align-middle text-muted-foreground">{emp.department || "-"}</td>
                     <td className="px-4 py-3 align-middle text-muted-foreground">{emp.jobTitle || "-"}</td>
                     <td className="px-4 py-3 align-middle text-muted-foreground">{emp.phone || "-"}</td>
-                    <td className="px-4 py-3 align-middle font-semibold">{emp.name || emp.firstName || "-"}</td>
+                    <td className="px-4 py-3 align-middle font-semibold">{locale === "en" ? emp.firstName || emp.name || "-" : emp.name || emp.firstName || "-"}</td>
                     <td className="px-4 py-3 align-middle font-mono text-blue-700 font-semibold">{emp.empId || "-"}</td>
                   </tr>
                 ))}
@@ -283,7 +285,7 @@ export default function HREmployeesCooperative() {
                 {!loading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={11} className="py-12 text-center text-muted-foreground">
-                      لا يوجد موظفون متعاونون. يمكنك الضغط على "إضافة موظف متعاون" للبدء.
+                      {t("لا يوجد موظفون متعاونون. يمكنك الضغط على إضافة موظف متعاون للبدء.")}
                     </td>
                   </tr>
                 )}
@@ -315,36 +317,38 @@ function EmployeeQuickView({
   onClose: () => void;
   onEdit: () => void;
 }) {
+  const { t, direction, locale, formatNumber } = useI18n();
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir="rtl">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir={direction}>
       <div className="w-full max-w-xl bg-white rounded-xl shadow-xl border border-border">
         <div className="px-5 py-4 border-b border-border/40 flex items-center justify-between">
           <button
             onClick={onClose}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ArrowRight className="h-4 w-4" /> إغلاق
+            <ArrowRight className="h-4 w-4" /> {t("إغلاق")}
           </button>
-          <h3 className="font-bold">بيانات الموظف المتعاون</h3>
+          <h3 className="font-bold">{t("بيانات الموظف المتعاون")}</h3>
           <button
             onClick={onEdit}
             className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700"
           >
-            تعديل
+            {t("تعديل")}
           </button>
         </div>
 
         <div className="p-5 grid grid-cols-2 gap-4 text-sm">
-          <InfoRow label="الاسم" value={employee.name || employee.firstName} />
-          <InfoRow label="رقم الموظف" value={employee.empId || "-"} />
-          <InfoRow label="الهاتف" value={employee.phone || "-"} />
-          <InfoRow label="البريد" value={employee.email || "-"} />
-          <InfoRow label="المسمى الوظيفي" value={employee.jobTitle || "-"} />
-          <InfoRow label="القسم" value={employee.department || "-"} />
-          <InfoRow label="الفرع" value={employee.branch || "-"} />
-          <InfoRow label="نوع التوظيف" value={employee.employmentType || "-"} />
-          <InfoRow label="الحالة" value={employee.status || "-"} />
-          <InfoRow label="الراتب الأساسي" value={`${employee.baseSalary.toLocaleString()} ر.س`} />
+          <InfoRow label={t("الاسم")} value={locale === "en" ? employee.firstName || employee.name : employee.name || employee.firstName} />
+          <InfoRow label={t("رقم الموظف")} value={employee.empId || "-"} />
+          <InfoRow label={t("الهاتف")} value={employee.phone || "-"} />
+          <InfoRow label={t("البريد")} value={employee.email || "-"} />
+          <InfoRow label={t("المسمى الوظيفي")} value={employee.jobTitle || "-"} />
+          <InfoRow label={t("القسم")} value={employee.department || "-"} />
+          <InfoRow label={t("الفرع")} value={employee.branch || "-"} />
+          <InfoRow label={t("نوع التوظيف")} value={employee.employmentType ? t(employee.employmentType) : "-"} />
+          <InfoRow label={t("الحالة")} value={employee.status ? t(employee.status) : "-"} />
+          <InfoRow label={t("الراتب الأساسي")} value={`${formatNumber(employee.baseSalary)} ${t("ر.س")}`} />
         </div>
       </div>
     </div>

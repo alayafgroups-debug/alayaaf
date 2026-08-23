@@ -9,6 +9,7 @@ import {
 } from "react-leaflet";
 import { Loader2, MapPin, Search } from "lucide-react";
 import "leaflet/dist/leaflet.css";
+import { useI18n } from "@/i18n";
 
 const DEFAULT_CENTER: [number, number] = [21.4373, 40.5127];
 
@@ -66,6 +67,7 @@ export default function WorkLocationMap({
   onLocationChange,
   onPlaceSelected,
 }: WorkLocationMapProps) {
+  const { t, direction } = useI18n();
   const [query, setQuery] = useState(initialSearch);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -121,10 +123,10 @@ export default function WorkLocationMap({
       if (!response.ok) throw new Error("SEARCH_FAILED");
       const data = (await response.json()) as SearchResult[];
       setResults(data);
-      if (data.length === 0) setSearchError("لم يتم العثور على نتائج");
+      if (data.length === 0) setSearchError(t("لم يتم العثور على نتائج"));
     } catch {
       setResults([]);
-      setSearchError("تعذر البحث عن المكان، حاول مرة أخرى");
+      setSearchError(t("تعذر البحث عن المكان، حاول مرة أخرى"));
     } finally {
       setSearching(false);
     }
@@ -144,14 +146,14 @@ export default function WorkLocationMap({
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" dir={direction}>
       <div>
         <h4 className="flex items-center gap-2 font-semibold text-slate-800">
           <MapPin className="h-4 w-4 text-red-600" />
-          تحديد موقع العمل على الخريطة
+          {t("تحديد موقع العمل على الخريطة")}
         </h4>
         <p className="mt-1 text-xs text-slate-500">
-          ابحث عن المكان، ثم اضغط على الخريطة أو حرّك الدبوس لتحديد الموقع بدقة.
+          {t("ابحث عن المكان، ثم اضغط على الخريطة أو حرّك الدبوس لتحديد الموقع بدقة.")}
         </p>
       </div>
 
@@ -167,7 +169,7 @@ export default function WorkLocationMap({
               }
             }}
             className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400"
-            placeholder="ابحث باسم المكان أو العنوان، مثال: حي الأندلس جدة"
+            placeholder={t("ابحث باسم المكان أو العنوان، مثال: حي الأندلس جدة")}
           />
           <button
             type="button"
@@ -180,7 +182,7 @@ export default function WorkLocationMap({
             ) : (
               <Search className="h-4 w-4" />
             )}
-            بحث
+            {t("بحث")}
           </button>
         </div>
 
@@ -191,7 +193,7 @@ export default function WorkLocationMap({
                 key={result.place_id}
                 type="button"
                 onClick={() => chooseResult(result)}
-                className="block w-full border-b border-slate-100 px-3 py-2 text-right text-sm text-slate-700 last:border-0 hover:bg-blue-50"
+                className="block w-full border-b border-slate-100 px-3 py-2 text-start text-sm text-slate-700 last:border-0 hover:bg-blue-50"
               >
                 {result.display_name}
               </button>
@@ -229,13 +231,13 @@ export default function WorkLocationMap({
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-          <span className="text-xs text-slate-500">خط العرض</span>
+          <span className="text-xs text-slate-500">{t("خط العرض")}</span>
           <p className="mt-1 font-mono text-sm font-semibold text-slate-800" dir="ltr">
             {latitude || "—"}
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-          <span className="text-xs text-slate-500">خط الطول</span>
+          <span className="text-xs text-slate-500">{t("خط الطول")}</span>
           <p className="mt-1 font-mono text-sm font-semibold text-slate-800" dir="ltr">
             {longitude || "—"}
           </p>

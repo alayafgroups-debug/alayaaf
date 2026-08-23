@@ -1363,6 +1363,8 @@ Object.assign(translations, {
   "جدول العمل": "Work schedule",
   "الراتب الأساسي": "Basic salary",
   "ر.س": "SAR",
+  "إجازة": "On leave",
+  "منتهي": "Terminated",
 });
 
 const getInitialLocale = (): Locale => {

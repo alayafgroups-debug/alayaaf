@@ -254,8 +254,8 @@ export default function HREmployees() {
               onChange={(e) => setFStatus(e.target.value)}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
             >
-              <option value="">جميع الحالات</option>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
+              <option value="">{t("جميع الحالات")}</option>
+              {STATUSES.map((s) => <option key={s}>{t(s)}</option>)}
             </select>
             <button
               onClick={() => { setFSearch(""); setFDepartment(""); setFStatus(""); }}
@@ -288,15 +288,15 @@ export default function HREmployees() {
                   <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الاسم")}</th>
                   {visibleColumns.englishName && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الاسم بالإنجليزية")}</th>}
                   <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الفرع")}</th>
-                  {visibleColumns.directorate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الإدارة</th>}
+                  {visibleColumns.directorate && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الإدارة")}</th>}
                   <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("القسم")}</th>
                   <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("المسمى الوظيفي")}</th>
-                  {visibleColumns.nationality && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الجنسية</th>}
-                  {visibleColumns.nationalId && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الهوية</th>}
-                  {visibleColumns.hireDate && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">تاريخ التعيين</th>}
-                  {visibleColumns.phone && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الجوال</th>}
-                  {visibleColumns.email && <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">البريد الإلكتروني</th>}
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">وضع العمل</th>
+                  {visibleColumns.nationality && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الجنسية")}</th>}
+                  {visibleColumns.nationalId && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("رقم الهوية")}</th>}
+                  {visibleColumns.hireDate && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("تاريخ التعيين")}</th>}
+                  {visibleColumns.phone && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("رقم الجوال")}</th>}
+                  {visibleColumns.email && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("البريد الإلكتروني")}</th>}
+                  <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("وضع العمل")}</th>
                   <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الحالة")}</th>
                 </tr>
               </thead>
@@ -372,7 +372,7 @@ export default function HREmployees() {
           {/* Footer: pagination + page size + count */}
           <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
             <div className="flex items-center gap-2">
-              <span>عرض</span>
+              <span>{t("عرض")}</span>
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value) || 10)}
@@ -380,11 +380,13 @@ export default function HREmployees() {
               >
                 {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
-              <span>من أصل {filtered.length}</span>
+              <span>{t("من أصل")} {formatNumber(filtered.length)}</span>
             </div>
             <div className="flex items-center gap-1">
               <span className="px-2 text-gray-500">
-                {filtered.length > 0 ? `${pageStart + 1} إلى ${Math.min(pageStart + pageSize, filtered.length)} من ${filtered.length}` : "0 نتائج"}
+                {filtered.length > 0
+                  ? `${formatNumber(pageStart + 1)} ${t("إلى")} ${formatNumber(Math.min(pageStart + pageSize, filtered.length))} ${t("من")} ${formatNumber(filtered.length)}`
+                  : `0 ${t("نتائج")}`}
               </span>
               <button
                 disabled={safePage <= 1}
@@ -420,8 +422,8 @@ export default function HREmployees() {
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-700">العدد</span>
-              <span className="font-bold text-blue-700">{filtered.length}</span>
+              <span className="font-semibold text-gray-700">{t("العدد")}</span>
+              <span className="font-bold text-blue-700">{formatNumber(filtered.length)}</span>
             </div>
           </div>
         </div>
@@ -430,30 +432,33 @@ export default function HREmployees() {
   );
 
   async function handleDelete(emp: EmpFormData) {
-    if (!confirm(`هل تريد حذف الموظف "${emp.name || emp.firstName}"؟`)) return;
+    if (!confirm(`${t("هل تريد حذف الموظف")} "${emp.name || emp.firstName}"؟`)) return;
     try {
-      await supabase.from("employees").delete().eq("id", emp.id);
+      const { error } = await supabase.from("employees").delete().eq("id", emp.id);
+      if (error) throw error;
       setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
-      toast({ title: "تم الحذف", description: `تم حذف الموظف ${emp.name || emp.firstName}` });
+      toast({ title: t("تم الحذف"), description: `${t("تم حذف الموظف")}: ${emp.name || emp.firstName}` });
     } catch {
-      toast({ title: "خطأ", description: "فشل حذف الموظف", variant: "destructive" });
+      toast({ title: t("خطأ"), description: t("فشل حذف الموظف"), variant: "destructive" });
     }
   }
 }
 
 // ─── Employee View ────────────────────────────────────────────────────────────
 function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData; onBack: () => void; onEdit: () => void }) {
+  const { t, direction, locale, formatNumber } = useI18n();
+
   return (
     <Layout>
-      <div dir="rtl" className="space-y-6 w-full">
+      <div dir={direction} className="space-y-6 w-full">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">بيانات الموظف</h1>
+          <h1 className="text-2xl font-bold">{t("بيانات الموظف")}</h1>
           <div className="flex gap-2">
             <button onClick={onBack} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50">
-              <ArrowRight className="h-4 w-4" /> رجوع
+              <ArrowRight className="h-4 w-4" /> {t("رجوع")}
             </button>
             <button onClick={onEdit} className="flex items-center gap-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
-              <Edit className="h-4 w-4" /> تعديل
+              <Edit className="h-4 w-4" /> {t("تعديل")}
             </button>
           </div>
         </div>
@@ -465,37 +470,37 @@ function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData
               {(emp.name || emp.firstName || "م").charAt(0)}
             </div>
             <div>
-              <div className="text-xl font-bold">{emp.name || emp.firstName}</div>
+              <div className="text-xl font-bold">{locale === "en" ? emp.firstName || emp.name : emp.name || emp.firstName}</div>
               <div className="text-sm text-gray-500">{emp.empId} | {emp.jobTitle || "—"}</div>
               <span className={cn("inline-block px-2 py-0.5 rounded-full text-xs font-semibold border mt-1", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600")}>
-                {emp.status}
+                {emp.status ? t(emp.status) : "—"}
               </span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-6">
-            <InfoGroup title="المعلومات الشخصية">
-              <InfoRow label="الجنسية" value={emp.nationality} />
-              <InfoRow label="رقم الهوية" value={emp.nationalId} />
-              <InfoRow label="الجنس" value={emp.gender} />
-              <InfoRow label="الحالة الاجتماعية" value={emp.maritalStatus} />
-              <InfoRow label="الهاتف" value={emp.phone} />
-              <InfoRow label="البريد الإلكتروني" value={emp.email} />
+            <InfoGroup title={t("المعلومات الشخصية")}>
+              <InfoRow label={t("الجنسية")} value={emp.nationality} />
+              <InfoRow label={t("رقم الهوية")} value={emp.nationalId} />
+              <InfoRow label={t("الجنس")} value={emp.gender} />
+              <InfoRow label={t("الحالة الاجتماعية")} value={emp.maritalStatus} />
+              <InfoRow label={t("الهاتف")} value={emp.phone} />
+              <InfoRow label={t("البريد الإلكتروني")} value={emp.email} />
             </InfoGroup>
-            <InfoGroup title="المعلومات الوظيفية">
-              <InfoRow label="القسم" value={emp.department} />
-              <InfoRow label="المسمى الوظيفي" value={emp.jobTitle} />
-              <InfoRow label="الفرع" value={emp.branch} />
-              <InfoRow label="تاريخ التعيين" value={emp.hireDate} />
-              <InfoRow label="المدير المباشر" value={emp.directManager} />
-              <InfoRow label="جدول العمل" value={emp.workSchedule} />
+            <InfoGroup title={t("المعلومات الوظيفية")}>
+              <InfoRow label={t("القسم")} value={emp.department} />
+              <InfoRow label={t("المسمى الوظيفي")} value={emp.jobTitle} />
+              <InfoRow label={t("الفرع")} value={emp.branch} />
+              <InfoRow label={t("تاريخ التعيين")} value={emp.hireDate} />
+              <InfoRow label={t("المدير المباشر")} value={emp.directManager} />
+              <InfoRow label={t("جدول العمل")} value={emp.workSchedule} />
             </InfoGroup>
           </div>
 
           <div className="bg-blue-50 rounded-xl p-4 flex items-center justify-between">
-            <span className="text-blue-700 font-semibold">الراتب الأساسي</span>
+            <span className="text-blue-700 font-semibold">{t("الراتب الأساسي")}</span>
             <span className="text-2xl font-bold text-blue-700">
-              {emp.baseSalary.toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س
+              {formatNumber(emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ر.س")}
             </span>
           </div>
         </div>

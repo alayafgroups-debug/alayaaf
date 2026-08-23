@@ -3,6 +3,7 @@ import Layout from "@/components/Layout";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 import {
   ChevronLeft,
   ChevronRight,
@@ -335,6 +336,7 @@ export default function EmployeeForm({
   onBack: () => void;
   onSaved: () => void;
 }) {
+  const { t, direction } = useI18n();
   const [form, setForm] = useState<EmpFormData>(initialData ?? emptyForm());
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -391,7 +393,7 @@ export default function EmployeeForm({
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast({ title: "خطأ", description: "الاسم الكامل مطلوب", variant: "destructive" });
+      toast({ title: t("خطأ"), description: t("الاسم الكامل مطلوب"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -525,11 +527,11 @@ export default function EmployeeForm({
         }
       }
 
-      toast({ title: mode === "create" ? "تم إضافة الموظف" : "تم تحديث البيانات", description: `بيانات ${form.name} تم حفظها بنجاح` });
+      toast({ title: mode === "create" ? t("تم إضافة الموظف") : t("تم تحديث البيانات"), description: `${t("بيانات")} ${form.name} ${t("تم حفظها بنجاح")}` });
       onSaved();
     } catch (e: unknown) {
-      const message = (e as { message?: string })?.message ?? "حدث خطأ أثناء الحفظ";
-      toast({ title: "خطأ في الحفظ", description: message, variant: "destructive" });
+      const message = (e as { message?: string })?.message ?? t("حدث خطأ أثناء الحفظ");
+      toast({ title: t("خطأ في الحفظ"), description: message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -537,12 +539,12 @@ export default function EmployeeForm({
 
   return (
     <Layout>
-      <div dir="rtl" className="max-w-6xl mx-auto pb-10">
+      <div dir={direction} className="max-w-6xl mx-auto pb-10">
         {/* Page Title */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-gray-800">{mode === "create" ? "إضافة موظف" : "تعديل موظف"}</h1>
+          <h1 className="text-xl font-bold text-gray-800">{mode === "create" ? t("إضافة موظف") : t("تعديل موظف")}</h1>
           <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-            <X className="h-4 w-4" /> إغلاق
+            <X className="h-4 w-4" /> {t("إغلاق")}
           </button>
         </div>
 
@@ -568,14 +570,14 @@ export default function EmployeeForm({
             disabled={step === 0}
             className="flex items-center gap-1 px-5 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ChevronRight className="h-4 w-4" /> السابق
+            <ChevronRight className="h-4 w-4" /> {t("السابق")}
           </button>
           <button
             onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
             disabled={step === STEPS.length - 1}
             className="flex items-center gap-1 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            التالي <ChevronLeft className="h-4 w-4" />
+            {t("التالي")} <ChevronLeft className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -585,6 +587,8 @@ export default function EmployeeForm({
 
 // ─── Stepper Header ──────────────────────────────────────────────────────────
 function StepperHeader({ steps, current, onStepClick }: { steps: typeof STEPS; current: number; onStepClick: (i: number) => void }) {
+  const { t } = useI18n();
+
   return (
     <div className="bg-white border border-b-0 border-gray-200 rounded-t-xl px-6 py-4">
       <div className="flex items-center justify-between">
@@ -608,7 +612,7 @@ function StepperHeader({ steps, current, onStepClick }: { steps: typeof STEPS; c
                 "text-[10px] text-center leading-tight max-w-[70px] hidden sm:block",
                 i === current ? "text-blue-600 font-semibold" : "text-gray-500"
               )}>
-                {s.label}
+                {t(s.label)}
               </span>
             </button>
             {i < steps.length - 1 && (
@@ -1198,14 +1202,16 @@ function FInput({ label, value, onChange, placeholder, type = "text" }: {
   placeholder?: string;
   type?: string;
 }) {
+  const { t } = useI18n();
+
   return (
     <div>
-      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{t(label)}</label>}
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ? t(placeholder) : undefined}
         className={inputCls}
       />
     </div>
@@ -1219,12 +1225,14 @@ function FSelect({ label, value, onChange, options, placeholder }: {
   options: string[];
   placeholder?: string;
 }) {
+  const { t } = useI18n();
+
   return (
     <div>
-      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{t(label)}</label>}
       <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls}>
-        {placeholder && <option value="">{placeholder}</option>}
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        {placeholder && <option value="">{t(placeholder)}</option>}
+        {options.map((o) => <option key={o} value={o}>{t(o)}</option>)}
       </select>
     </div>
   );

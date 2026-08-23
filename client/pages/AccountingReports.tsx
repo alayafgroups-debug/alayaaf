@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import { Download, Printer, RefreshCw } from "lucide-react";
+import { Download, Printer, RefreshCw, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
@@ -34,6 +34,7 @@ function monthKeys(end: string) {
 export default function AccountingReports() {
   const { t, direction, locale, formatNumber } = useI18n();
   const [active, setActive] = useState<ReportKind>("income");
+  const [selectedCatalogReport, setSelectedCatalogReport] = useState<string | null>(null);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -78,12 +79,13 @@ export default function AccountingReports() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {REPORT_CATALOG.map((section) => <div key={section.title} className="overflow-hidden rounded border border-slate-200 bg-white">
               <h3 className="bg-slate-800 px-3 py-2 text-xs font-bold text-white">{t(section.title)}</h3>
-              <div className="divide-y divide-slate-100">{section.items.map((item) => <button key={item} className="flex w-full items-center justify-between px-3 py-2 text-start text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700"><span>{t(item)}</span><span className="text-slate-300">‹</span></button>)}</div>
+              <div className="divide-y divide-slate-100">{section.items.map((item) => <button key={item} onClick={() => setSelectedCatalogReport(item)} className="flex w-full items-center justify-between px-3 py-2 text-start text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700"><span>{t(item)}</span><span className="text-slate-300">‹</span></button>)}</div>
             </div>)}
           </div>
         </section>
       </section>
     </div>
+    {selectedCatalogReport ? <ReportDetailsModal report={selectedCatalogReport} endDate={endDate} onClose={() => setSelectedCatalogReport(null)} /> : null}
   </main></Layout>;
 }
 
@@ -114,3 +116,25 @@ function ReportTable({ report, headers, formatNumber }: { report: { rows: Row[] 
   return <div className="mt-4 overflow-x-auto"><table className="min-w-full text-[11px]"><thead className="bg-slate-100 text-slate-600"><tr><th className="min-w-64 border-b px-3 py-2 text-start">{t("البند")}</th>{headers.map((header) => <th key={header} className="min-w-28 border-b px-2 py-2">{header}</th>)}</tr></thead><tbody>{report.rows.map((row) => <tr key={row.label} className="border-b border-slate-100"><td className="px-3 py-2 font-medium">{row.label}</td>{headers.map((_, index) => <td key={index} className="px-2 py-2 text-center text-indigo-600">{formatNumber(row.values[index] ?? row.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>)}</tr>)}</tbody><tfoot className="bg-slate-100 font-bold"><tr><td className="px-3 py-2">{t("الإجمالي")}</td>{total.map((value, index) => <td key={index} className="px-2 py-2 text-center">{formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>)}</tr></tfoot></table></div>;
 }
 function State({ text }: { text: string }) { return <div className="py-16 text-center text-sm text-slate-500">{text}</div>; }
+
+function ReportDetailsModal({ report, endDate, onClose }: { report: string; endDate: string; onClose: () => void }) {
+  const { t, direction, formatNumber } = useI18n();
+  const detailRows = [
+    { counterparty: "", date: "", reference: "", debit: 0, credit: 0, balance: 0 },
+  ];
+
+  return <div dir={direction} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={onClose}>
+    <section className="max-h-[90vh] w-full max-w-6xl overflow-auto rounded-xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+      <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div><p className="text-xs text-slate-400">{t("التقارير")} / {t("المبيعات")}</p><h2 className="mt-1 text-lg font-bold text-slate-800">{t(report)}</h2></div>
+        <button onClick={onClose} className="rounded p-2 text-slate-500 hover:bg-slate-100" title={t("إغلاق")}><X className="h-5 w-5" /></button>
+      </header>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
+        <div className="flex flex-wrap gap-2"><select className="rounded border border-slate-200 bg-white px-3 py-2 text-xs"><option>{t("كل العملاء")}</option></select><select className="rounded border border-slate-200 bg-white px-3 py-2 text-xs"><option>{t("كل الفروع")}</option></select><input type="date" value={endDate} readOnly className="rounded border border-slate-200 bg-white px-3 py-2 text-xs" /></div>
+        <div className="flex gap-2"><button className="rounded border border-slate-200 bg-white px-3 py-2 text-xs">{t("تفاصيل")}</button><button className="rounded bg-blue-700 px-3 py-2 text-xs text-white">{t("تحديث")}</button></div>
+      </div>
+      <div className="p-5"><div className="overflow-x-auto rounded border border-slate-200"><table className="min-w-full text-xs"><thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-3 text-start">{t("جهة التعامل")}</th><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الرقم")}</th><th className="px-3 py-3">{t("الحركة")}</th><th className="px-3 py-3">{t("مدين")}</th><th className="px-3 py-3">{t("دائن")}</th><th className="px-3 py-3">{t("الرصيد")}</th></tr></thead><tbody>{detailRows.map((row, index) => <tr key={index} className="border-t border-slate-100"><td className="px-3 py-4 text-slate-400">{t("لا توجد بيانات للفترة المحددة")}</td><td className="px-3 py-4 text-center">—</td><td className="px-3 py-4 text-center">—</td><td className="px-3 py-4 text-center">—</td><td className="px-3 py-4 text-center">{formatNumber(row.debit, { minimumFractionDigits: 2 })}</td><td className="px-3 py-4 text-center">{formatNumber(row.credit, { minimumFractionDigits: 2 })}</td><td className="px-3 py-4 text-center">{formatNumber(row.balance, { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div>
+      <p className="mt-3 text-xs text-slate-400">{t("سيتم ربط هذا التقرير بحركات العملاء والفواتير والسداد الفعلية عند تفعيل مصدره المحاسبي.")}</p></div>
+    </section>
+  </div>;
+}

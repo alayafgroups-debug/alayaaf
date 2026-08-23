@@ -40,7 +40,7 @@ import {
   MapPin,
   Wrench,
   Boxes,
-  Building2,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -92,8 +92,13 @@ const navSubMenus: Record<
     { label: "إشعارات تسليم", href: "/inventory/delivery-notes" },
     { label: "تقارير المخزون", href: "/inventory/reports" },
   ],
-  "/residency": [
-    { label: "إدارة الإقامة", href: "/residency" },
+  "/fleet": [
+    { label: "السيارات والمركبات", href: "/fleet/vehicles" },
+    { label: "السائقون", href: "/fleet/drivers" },
+    { label: "صيانة المركبات", href: "/fleet/maintenance" },
+    { label: "التأمين والفحص", href: "/fleet/insurance" },
+    { label: "سجل الحركة والرحلات", href: "/fleet/trips" },
+    { label: "الوقود", href: "/fleet/fuel" },
   ],
   "/crm": [
     { label: "العملاء", href: "/crm/customers" },
@@ -1042,7 +1047,7 @@ function MainSidebar({
       hasSubmenu: true,
     },
     { icon: Boxes, label: "المخزون", href: "/inventory", hasSubmenu: true },
-    { icon: Building2, label: "الإقامة", href: "/residency", hasSubmenu: true },
+    { icon: Truck, label: "الأسطول والسيارات", href: "/fleet", hasSubmenu: true },
     { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];

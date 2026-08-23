@@ -6,7 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Boxes, Building2 } from "lucide-react";
+import { Boxes, Truck } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Sales from "./pages/Sales";
 import Quotations from "./pages/Quotations";
@@ -248,7 +248,7 @@ const App = () => (
           <Route path="/hr/settings" element={<HRSettings />} />
           <Route path="/inventory/reports" element={<InventoryReports />} />
           <Route path="/inventory/*" element={<PlaceholderModule title="المخزون" description="إدارة المنتجات والخدمات والمستودعات وعمليات المخزون." icon={Boxes} features={["المنتجات والخدمات", "عمليات جرد المخزون", "تسويات المخزون", "أوامر التصنيع", "أوامر التركيب", "المستودعات", "إشعارات تسليم"]} />} />
-          <Route path="/residency/*" element={<PlaceholderModule title="الإقامة" description="إدارة بيانات الإقامة والمعاملات المرتبطة بها." icon={Building2} features={["إدارة الإقامة"]} />} />
+          <Route path="/fleet/*" element={<PlaceholderModule title="الأسطول والسيارات" description="إدارة المركبات والسائقين والصيانة والوقود والرحلات." icon={Truck} features={["السيارات والمركبات", "السائقون", "صيانة المركبات", "التأمين والفحص", "سجل الحركة والرحلات", "الوقود"]} />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />

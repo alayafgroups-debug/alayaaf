@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Edit, Save, X, Printer, FileText, MapPin, Navigation } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import WorkLocationMap from "@/components/hr/WorkLocationMap";
 
 type LocationRow = {
   id: string;
@@ -158,6 +159,19 @@ export default function HROrgWorkLocations() {
               <div><label className="block text-sm font-medium mb-1">خط الطول</label><input type="number" step="any" value={formLongitude} onChange={(e) => setFormLongitude(e.target.value)} className={inputCls} placeholder="مثال: 39.8579" /></div>
               <div className="flex items-end"><Button type="button" variant="outline" onClick={captureLocation} className="w-full gap-2"><Navigation className="h-4 w-4" /> استخدام موقعي الحالي</Button></div>
             </div>
+            <WorkLocationMap
+              latitude={formLatitude}
+              longitude={formLongitude}
+              initialSearch={formAddress}
+              onLocationChange={(latitude, longitude) => {
+                setFormLatitude(latitude);
+                setFormLongitude(longitude);
+              }}
+              onPlaceSelected={(address, city) => {
+                setFormAddress(address);
+                if (city) setFormCity(city);
+              }}
+            />
             <p className="text-xs text-slate-500">الموقع الذي يحتوي على إحداثيات يمكن تعيينه للموظفين كنطاق حضور بمسافة 10 أمتار.</p>
             <div className="flex gap-2">
               <Button onClick={handleSave} className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1"><Save className="h-4 w-4" /> حفظ</Button>

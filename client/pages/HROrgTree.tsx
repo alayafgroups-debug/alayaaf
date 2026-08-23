@@ -5,11 +5,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { useI18n } from "@/i18n";
 
 type Dept = { id: string; name: string; manager: string };
 type Branch = { id: string; name: string };
 
 export default function HROrgTree() {
+  const { t, direction } = useI18n();
   const [zoom, setZoom] = useState(100);
   const [departments, setDepartments] = useState<Dept[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -36,17 +38,17 @@ export default function HROrgTree() {
     </div>
   );
 
-  const mainBranch = branches.length > 0 ? branches[0].name : "الفرع الرئيسي";
+  const mainBranch = branches.length > 0 ? branches[0].name : t("الفرع الرئيسي");
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
-          <div className="flex items-center space-x-2 space-x-reverse">
+          <div className="flex items-center gap-2">
             <Checkbox id="show_all" />
-            <Label htmlFor="show_all" className="text-sm font-medium cursor-pointer">عرض إدارات (كل الفروع) بشكل منفصل</Label>
+            <Label htmlFor="show_all" className="text-sm font-medium cursor-pointer">{t("عرض إدارات (كل الفروع) بشكل منفصل")}</Label>
           </div>
-          <h1 className="text-lg font-bold text-[#004e89]">الهيكل التنظيمي</h1>
+          <h1 className="text-lg font-bold text-[#004e89]">{t("الهيكل التنظيمي")}</h1>
         </div>
 
         <div className="bg-white rounded-lg border shadow-sm h-[600px] relative overflow-hidden flex flex-col">
@@ -58,7 +60,7 @@ export default function HROrgTree() {
 
           <div className="flex-1 overflow-auto bg-gray-50 flex items-center justify-center p-10">
             {loading ? (
-              <span className="text-gray-400">جاري التحميل...</span>
+              <span className="text-gray-400">{t("جاري التحميل...")}</span>
             ) : (
               <div style={{ transform: `scale(${zoom / 100})`, transition: "transform 0.2s" }} className="flex flex-col items-center">
                 {/* Root */}
@@ -83,7 +85,7 @@ export default function HROrgTree() {
                 </div>
 
                 {departments.length === 0 && (
-                  <div className="text-gray-400 mt-8">لا توجد إدارات مسجلة</div>
+                  <div className="text-gray-400 mt-8">{t("لا توجد إدارات مسجلة")}</div>
                 )}
               </div>
             )}

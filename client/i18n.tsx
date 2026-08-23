@@ -1233,6 +1233,20 @@ Object.assign(translations, {
   "بحث": "Search",
   "لم يتم العثور على نتائج": "No results found",
   "تعذر البحث عن المكان، حاول مرة أخرى": "Unable to search for the place. Try again.",
+  "الفرع الرئيسي": "Main branch",
+  "عرض إدارات (كل الفروع) بشكل منفصل": "Show departments for each branch separately",
+  "الهيكل التنظيمي": "Organization chart",
+  "لا توجد إدارات مسجلة": "No departments registered",
+  "حذف الفرع": "Delete branch",
+  "اسم الفرع مطلوب": "Branch name is required",
+  "قائمة الفروع": "Branches",
+  "تعديل الفرع": "Edit branch",
+  "إضافة فرع جديد": "Add new branch",
+  "اسم الفرع": "Branch name",
+  "الهاتف": "Phone",
+  "لا توجد فروع": "No branches found",
+  "إظهار": "Showing",
+  "فرع": "branch",
 });
 
 const getInitialLocale = (): Locale => {

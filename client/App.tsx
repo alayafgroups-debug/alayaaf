@@ -6,6 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Boxes, Building2 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Sales from "./pages/Sales";
 import Quotations from "./pages/Quotations";
@@ -113,6 +114,7 @@ import ZATCASettings from "./pages/ZATCASettings";
 import NotFound from "./pages/NotFound";
 import TasksProjects from "./pages/TasksProjects";
 import RequireAuth from "./components/RequireAuth";
+import PlaceholderModule from "./components/PlaceholderModule";
 import { I18nProvider } from "./i18n";
 
 const queryClient = new QueryClient();
@@ -242,6 +244,8 @@ const App = () => (
           <Route path="/hr/reports" element={<HRReports />} />
           <Route path="/hr/reports/full-employee" element={<HREmployeeFullReport />} />
           <Route path="/hr/settings" element={<HRSettings />} />
+          <Route path="/inventory/*" element={<PlaceholderModule title="المخزون" description="إدارة المنتجات والخدمات والمستودعات وعمليات المخزون." icon={Boxes} features={["المنتجات والخدمات", "عمليات جرد المخزون", "تسويات المخزون", "أوامر التصنيع", "أوامر التركيب", "المستودعات", "إشعارات تسليم"]} />} />
+          <Route path="/residency/*" element={<PlaceholderModule title="الإقامة" description="إدارة بيانات الإقامة والمعاملات المرتبطة بها." icon={Building2} features={["إدارة الإقامة"]} />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />

@@ -39,6 +39,8 @@ import {
   Scale,
   MapPin,
   Wrench,
+  Boxes,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -79,6 +81,18 @@ const navSubMenus: Record<
     { label: "إشعارات مدينة", href: "/purchases/debit-notes" },
     { label: "أوامر الشراء", href: "/purchases/orders" },
     { label: "تقارير المشتريات الشاملة", href: "/purchases/reports" },
+  ],
+  "/inventory": [
+    { label: "المنتجات والخدمات", href: "/inventory/products" },
+    { label: "عمليات جرد المخزون", href: "/inventory/counts" },
+    { label: "تسويات المخزون", href: "/inventory/adjustments" },
+    { label: "أوامر التصنيع", href: "/inventory/manufacturing" },
+    { label: "أوامر التركيب", href: "/inventory/assembly" },
+    { label: "المستودعات", href: "/inventory/warehouses" },
+    { label: "إشعارات تسليم", href: "/inventory/delivery-notes" },
+  ],
+  "/residency": [
+    { label: "إدارة الإقامة", href: "/residency" },
   ],
   "/crm": [
     { label: "العملاء", href: "/crm/customers" },
@@ -1021,6 +1035,8 @@ function MainSidebar({
       href: "/expenses",
       hasSubmenu: true,
     },
+    { icon: Boxes, label: "المخزون", href: "/inventory", hasSubmenu: true },
+    { icon: Building2, label: "الإقامة", href: "/residency", hasSubmenu: true },
     { icon: Bot, label: "الذكاء الاصطناعي", href: "/ai", hasSubmenu: true },
     { icon: Settings, label: "الإعدادات", href: "/settings" },
   ];

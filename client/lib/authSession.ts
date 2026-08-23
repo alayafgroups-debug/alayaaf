@@ -91,6 +91,7 @@ export function permissionForMainPath(path: string): string | null {
   if (path.startsWith("/hr")) return "module.hr";
   if (path.startsWith("/crm")) return "module.crm";
   if (path.startsWith("/expenses")) return "module.accounting";
+  if (path.startsWith("/inventory")) return "module.inventory";
   if (path.startsWith("/users")) return "module.users";
   if (path.startsWith("/ai")) return "module.ai";
   if (path.startsWith("/zatca")) return "module.settings";

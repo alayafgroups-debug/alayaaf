@@ -2313,7 +2313,7 @@ function InvoiceForm({
       });
       return;
     }
-    if (!hasCompleteNationalAddress(customerAddress)) {
+    if (invoiceType === "standard" && !hasCompleteNationalAddress(customerAddress)) {
       toast({
         title: t("العنوان الوطني للعميل غير مكتمل"),
         description: t(
@@ -2616,7 +2616,7 @@ function InvoiceForm({
                   <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground text-start block">{t("رقم السجل التجاري للعميل")}</label><input type="text" value={buyerCommercialRegistration} onChange={(event) => setBuyerCommercialRegistration(event.target.value.replace(/\D/g, "").slice(0, 15))} placeholder={t("مطلوب لفاتورة B2B")} className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white" dir="ltr" /></div>
                 </>}
 
-                <div className="space-y-1">
+                {invoiceType === "standard" && <div className="space-y-1">
                   <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                     {t("العنوان الوطني")}
                   </label>
@@ -2629,7 +2629,7 @@ function InvoiceForm({
                     )}
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   />
-                </div>
+                </div>}
 
                 <div className="space-y-1">
                   <label className="text-[12px] font-semibold text-muted-foreground text-start block">

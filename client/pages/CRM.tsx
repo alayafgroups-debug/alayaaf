@@ -749,7 +749,7 @@ export default function CRM() {
                 {t("المنشأة والتسجيل الضريبي مطلوب")}
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+              <div className="grid gap-4 md:grid-cols-2 items-center">
                 <input
                   value={form.name ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -759,7 +759,7 @@ export default function CRM() {
                 <label className="text-sm font-medium text-slate-700 text-end">{t("اسم المنشأة *")}</label>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+              <div className="grid gap-4 md:grid-cols-2 items-center">
                 <select
                   value={form.country ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
@@ -774,7 +774,7 @@ export default function CRM() {
                 <label className="text-sm font-medium text-slate-700 text-end">{t("البلد")}</label>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-start">
+              <div className="grid gap-4 md:grid-cols-2 items-start">
                 <div className="space-y-2 text-end">
                   <label className="flex items-center justify-end gap-2 text-sm text-slate-700">
                     <input
@@ -796,7 +796,7 @@ export default function CRM() {
                 <label className="text-sm font-medium text-slate-700 text-end">{t("التسجيل في ضريبة القيمة المضافة *")}</label>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+              <div className="grid gap-4 md:grid-cols-2 items-center">
                 <input
                   value={form.taxNumber ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, taxNumber: e.target.value }))}
@@ -806,7 +806,7 @@ export default function CRM() {
                 <label className="text-sm font-medium text-slate-700 text-end">{t("رقم التسجيل الضريبي")}</label>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+              <div className="grid gap-4 md:grid-cols-2 items-center">
                 <input
                   value={form.commercialRegistration ?? ""}
                   onChange={(e) =>
@@ -828,23 +828,23 @@ export default function CRM() {
               <details open className="space-y-3">
                 <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-end">{t("العنوان اختياري")}</summary>
                 <div className="space-y-3 pt-2">
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.city ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("المدينة")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.street ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("الشارع")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.buildingNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, buildingNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("رقم المبنى")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.district ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("الحي")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.postalCode ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, postalCode: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("الرمز البريدي")}</label>
                   </div>
@@ -854,19 +854,19 @@ export default function CRM() {
               <details open className="space-y-3">
                 <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-end">{t("بيانات الفوترة اختياري")}</summary>
                 <div className="space-y-3 pt-2">
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.invoiceRef ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceRef: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("المعرّف")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.invoiceEmail ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoiceEmail: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("البريد الإلكتروني")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.invoicePhone ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, invoicePhone: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
                     <label className="text-sm font-medium text-slate-700 text-end">{t("الهاتف")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <select value={form.currency ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end">
                       <option value="SAR">SAR</option>
                       <option value="USD">USD</option>
@@ -874,7 +874,7 @@ export default function CRM() {
                     </select>
                     <label className="text-sm font-medium text-slate-700 text-end">{t("العملة")}</label>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_220px] items-center">
+                  <div className="grid gap-4 md:grid-cols-2 items-center">
                     <select value={form.paymentTerms ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, paymentTerms: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end">
                       <option value="">{t("تحديد")}</option>
                       <option value="فوري">{t("فوري")}</option>
@@ -883,7 +883,7 @@ export default function CRM() {
                     </select>
                     <label className="text-sm font-medium text-slate-700 text-end">{t("شروط الدفع")}</label>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_220px] items-center">
+                  <div className="grid gap-3 md:grid-cols-3 items-center">
                     <input value={form.licenseNumber ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, licenseNumber: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("رقم الترخيص")} />
                     <select value={form.businessType ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, businessType: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end">
                       <option value="">{t("تحديد")}</option>

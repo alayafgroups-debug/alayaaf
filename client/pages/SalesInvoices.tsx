@@ -2135,6 +2135,7 @@ function InvoiceForm({
   const [buyerCommercialRegistration, setBuyerCommercialRegistration] =
     useState("");
   const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [customerSelectorOpen, setCustomerSelectorOpen] = useState(false);
   const [saveIntent, setSaveIntent] = useState<"save" | "print" | null>(null);
   const saveInFlight = useRef(false);
 
@@ -2576,45 +2577,13 @@ function InvoiceForm({
                   <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                     {t("العميل")}
                   </label>
-                  <select
-                    value={customerId}
-                    onChange={(event) => {
-                      if (event.target.value === "__create_customer__") {
-                        setCreatingCustomer(true);
-                        return;
-                      }
-                      const selected = customerOptions.find(
-                        (option) => option.id === event.target.value,
-                      );
-                      setCustomerId(selected?.id ?? "");
-                      setCustomer(selected?.name ?? "");
-                      setBuyerVat(selected?.vatNumber ?? "");
-                      setBuyerCommercialRegistration(
-                        selected?.commercialRegistration ?? "",
-                      );
-                      setCustomerAddress(selected?.address ?? "");
-                      if (selected) {
-                        setInvoiceType(
-                          /^3\d{14}$/.test(selected.vatNumber) &&
-                            /^\d{10,15}$/.test(
-                              selected.commercialRegistration,
-                            )
-                            ? "standard"
-                            : "simplified",
-                        );
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
-                  >
-                    <option value="">{t("اختر العميل")}</option>
-                    <option value="__create_customer__">{t("إنشاء عميل جديد +")}</option>
-                    {customerOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={() => setCreatingCustomer(true)} className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء عميل جديد +")}</button>
+                  <div className="relative">
+                    <button type="button" onClick={() => setCustomerSelectorOpen((open) => !open)} className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2 text-sm text-start">{customer || t("اختر العميل")}<span className="text-slate-400">⌄</span></button>
+                    {customerSelectorOpen && <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                      <button type="button" onClick={() => { setCreatingCustomer(true); setCustomerSelectorOpen(false); }} className="mb-1 w-full rounded bg-emerald-600 px-3 py-2 text-start text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء عميل جديد +")}</button>
+                      {customerOptions.map((option) => <button type="button" key={option.id} onClick={() => { setCustomerId(option.id); setCustomer(option.name); setBuyerVat(option.vatNumber); setBuyerCommercialRegistration(option.commercialRegistration); setCustomerAddress(option.address); setInvoiceType(/^3\d{14}$/.test(option.vatNumber) && /^\d{10,15}$/.test(option.commercialRegistration) ? "standard" : "simplified"); setCustomerSelectorOpen(false); }} className="w-full rounded px-3 py-2 text-start text-sm text-slate-700 hover:bg-slate-100">{option.name}</button>)}
+                    </div>}
+                  </div>
                 </div>
 
                 <div className="space-y-1">

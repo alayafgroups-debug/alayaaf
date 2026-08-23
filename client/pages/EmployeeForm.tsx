@@ -727,6 +727,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
 
 // ─── Step 2: Job Data ────────────────────────────────────────────────────────
 function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[]; jobs: string[] }) {
+  const { t } = useI18n();
   const availableSections = form.departmentId
     ? sections.filter((s) => s.departmentId === form.departmentId)
     : sections;
@@ -766,18 +767,18 @@ function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormDat
       {/* Row 3: Directorate / Department (real FK links) */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">الإدارة *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الإدارة")} *</label>
           <select value={form.departmentId} onChange={(e) => onDirectorateChange(e.target.value)} className={inputCls}>
-            <option value="">{departments.length ? "--" : "أضف الإدارات من الهيكل التنظيمي"}</option>
+            <option value="">{departments.length ? "--" : t("أضف الإدارات من الهيكل التنظيمي")}</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">القسم *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("القسم")} *</label>
           <select value={form.sectionId} onChange={(e) => onSectionChange(e.target.value)} className={inputCls}>
-            <option value="">{availableSections.length ? "--" : "لا توجد أقسام لهذه الإدارة"}</option>
+            <option value="">{availableSections.length ? "--" : t("لا توجد أقسام لهذه الإدارة")}</option>
             {availableSections.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -790,7 +791,7 @@ function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormDat
         <FInput label="مواقع العمل الأخرى" value={form.otherWorkLocations} onChange={(v) => set("otherWorkLocations", v)} />
         <FSelect label="مكان العمل *" value={form.workLocation} onChange={(v) => set("workLocation", v)} options={DEFAULT_WORK_LOCATIONS} placeholder="--" />
       </div>
-      <p className="text-xs text-gray-400 -mt-3">يمكنك إضافة مواقع متعددة بعد إدارة هذا الموظف للأساسي</p>
+      <p className="text-xs text-gray-400 -mt-3">{t("يمكنك إضافة مواقع متعددة بعد إدارة هذا الموظف للأساسي")}</p>
 
       {/* Row 5: Direct Manager / Hire Date */}
       <div className="grid grid-cols-2 gap-4">
@@ -800,14 +801,14 @@ function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormDat
 
       {/* Row 6: Is Contract End (radio) */}
       <div className="flex items-center gap-6">
-        <span className="text-sm font-medium text-gray-700">فترة تجربة</span>
+        <span className="text-sm font-medium text-gray-700">{t("فترة تجربة")}</span>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" name="isContractEnd" checked={form.isContractEnd === true} onChange={() => set("isContractEnd", true)} className="accent-blue-600" />
-          <span className="text-sm">نعم</span>
+          <span className="text-sm">{t("نعم")}</span>
         </label>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" name="isContractEnd" checked={form.isContractEnd === false} onChange={() => set("isContractEnd", false)} className="accent-blue-600" />
-          <span className="text-sm">لا</span>
+          <span className="text-sm">{t("لا")}</span>
         </label>
       </div>
 
@@ -827,55 +828,56 @@ function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormDat
       <div className="grid grid-cols-2 gap-4">
         <FSelect label="معفي من الحضور اليومي" value={form.attendanceExempt ? "نعم" : "لا"} onChange={(v) => set("attendanceExempt", v === "نعم")} options={["نعم", "لا"]} placeholder="--" />
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">عدد ساعات اليوم</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("عدد ساعات اليوم")}</label>
           <input type="number" value={form.dailyHours} onChange={(e) => set("dailyHours", Number(e.target.value))} min={0} max={24} className={inputCls} />
         </div>
       </div>
 
       {/* Remote Upload Radio */}
       <div className="flex items-center gap-4 border rounded-lg p-3 bg-gray-50">
-        <span className="text-sm font-medium text-gray-700 flex-1">السماح بالتحميل من خلال الموقع والتطبيق *</span>
+        <span className="text-sm font-medium text-gray-700 flex-1">{t("السماح بالتحميل من خلال الموقع والتطبيق *")}</span>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" name="allowUpload" checked={form.allowRemoteUpload} onChange={() => set("allowRemoteUpload", true)} className="accent-blue-600" />
-          <span className="text-sm">نعم</span>
+          <span className="text-sm">{t("نعم")}</span>
         </label>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" name="allowUpload" checked={!form.allowRemoteUpload} onChange={() => set("allowRemoteUpload", false)} className="accent-blue-600" />
-          <span className="text-sm">لا</span>
+          <span className="text-sm">{t("لا")}</span>
         </label>
       </div>
 
       {/* Remote Attendance Radio */}
       <div className="flex items-center gap-4 border rounded-lg p-3 bg-gray-50">
-        <span className="text-sm font-medium text-gray-700 flex-1">السماح للموظف باحتساب من خلال الموقع والتطبيق</span>
+        <span className="text-sm font-medium text-gray-700 flex-1">{t("السماح للموظف باحتساب من خلال الموقع والتطبيق")}</span>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" name="allowAttend" checked={form.allowRemoteAttendance} onChange={() => set("allowRemoteAttendance", true)} className="accent-blue-600" />
-          <span className="text-sm">نعم</span>
+          <span className="text-sm">{t("نعم")}</span>
         </label>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" name="allowAttend" checked={!form.allowRemoteAttendance} onChange={() => set("allowRemoteAttendance", false)} className="accent-blue-600" />
-          <span className="text-sm">لا</span>
+          <span className="text-sm">{t("لا")}</span>
         </label>
       </div>
 
       {/* Management Days / Training Days */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">عدد أيام الإجازة المسموح بها خلال السنة التعاقدية *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("عدد أيام الإجازة المسموح بها خلال السنة التعاقدية *")}</label>
           <input type="number" value={form.managementDaysAfter} onChange={(e) => set("managementDaysAfter", Number(e.target.value))} min={0} className={inputCls} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">بدء أيام التدريب</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("بدء أيام التدريب")}</label>
           <input type="number" value={form.trainingDaysStart} onChange={(e) => set("trainingDaysStart", Number(e.target.value))} min={0} className={inputCls} />
         </div>
       </div>
-      <p className="text-xs text-gray-400">هذا الحقل فقط إذا كان الموظف لديه يرتب الخصم مرة واحدة فقط</p>
+      <p className="text-xs text-gray-400">{t("هذا الحقل فقط إذا كان الموظف لديه يرتب الخصم مرة واحدة فقط")}</p>
     </div>
   );
 }
 
 // ─── Step 3: Financial ───────────────────────────────────────────────────────
 function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void }) {
+  const { t } = useI18n();
   const addAllowance = () => {
     const newAllowance: Allowance = { id: crypto.randomUUID(), type: "", amount: 0, from: "", to: "", effect: "" };
     set("allowances", [...form.allowances, newAllowance]);
@@ -892,7 +894,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
       {/* Base Salary / Currency */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">الراتب الأساسي *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الراتب الأساسي *")}</label>
           <input
             type="number"
             value={form.baseSalary}
@@ -914,13 +916,13 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
       {/* Allowances Table */}
       <div>
         <div className="bg-blue-600 text-white px-4 py-2 rounded-t-lg flex items-center justify-between">
-          <span className="text-sm font-semibold">بدلات</span>
+          <span className="text-sm font-semibold">{t("بدلات")}</span>
           <div className="flex gap-2 text-xs opacity-80">
-            <span>الأثر</span>
-            <span className="w-16 text-center">إلى</span>
-            <span className="w-16 text-center">من</span>
-            <span className="w-20 text-center">القيمة الأول</span>
-            <span className="w-32 text-center">نوع البدل</span>
+            <span>{t("الأثر")}</span>
+            <span className="w-16 text-center">{t("إلى")}</span>
+            <span className="w-16 text-center">{t("من")}</span>
+            <span className="w-20 text-center">{t("القيمة الأول")}</span>
+            <span className="w-32 text-center">{t("نوع البدل")}</span>
           </div>
         </div>
         <div className="border border-t-0 border-gray-200 rounded-b-lg">
@@ -930,16 +932,16 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
               <select value={a.effect} onChange={(e) => updateAllowance(a.id, "effect", e.target.value)} className="flex-1 border rounded px-2 py-1 text-sm">
-                <option value="">الأثر</option>
-                <option value="مضاف">مضاف</option>
-                <option value="مخصوم">مخصوم</option>
+                <option value="">{t("الأثر")}</option>
+                <option value="مضاف">{t("مضاف")}</option>
+                <option value="مخصوم">{t("مخصوم")}</option>
               </select>
               <input type="date" value={a.to} onChange={(e) => updateAllowance(a.id, "to", e.target.value)} className="w-24 border rounded px-2 py-1 text-sm" />
               <input type="date" value={a.from} onChange={(e) => updateAllowance(a.id, "from", e.target.value)} className="w-24 border rounded px-2 py-1 text-sm" />
               <input type="number" value={a.amount} onChange={(e) => updateAllowance(a.id, "amount", Number(e.target.value))} className="w-24 border rounded px-2 py-1 text-sm" placeholder="0" />
               <select value={a.type} onChange={(e) => updateAllowance(a.id, "type", e.target.value)} className="w-32 border rounded px-2 py-1 text-sm">
-                <option value="">نوع البدل</option>
-                {ALLOWANCE_TYPES.map((t) => <option key={t}>{t}</option>)}
+                <option value="">{t("نوع البدل")}</option>
+                {ALLOWANCE_TYPES.map((type) => <option key={type}>{t(type)}</option>)}
               </select>
             </div>
           ))}
@@ -953,24 +955,24 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
 
       {/* Insurance Info */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">معلومات التأمين</h3>
+        <h3 className="text-sm font-semibold text-gray-800 mb-3">{t("معلومات التأمين")}</h3>
         <div className="space-y-4">
           <div className="flex items-center gap-6">
-            <span className="text-sm font-medium text-gray-700">التأمينات الاجتماعية *</span>
+            <span className="text-sm font-medium text-gray-700">{t("التأمينات الاجتماعية *")}</span>
             <label className="flex items-center gap-1 cursor-pointer">
               <input type="radio" name="socialInsurance" checked={form.socialInsurance === "نعم"} onChange={() => set("socialInsurance", "نعم")} className="accent-blue-600" />
-              <span className="text-sm">نعم</span>
+              <span className="text-sm">{t("نعم")}</span>
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
               <input type="radio" name="socialInsurance" checked={form.socialInsurance !== "نعم"} onChange={() => set("socialInsurance", "لا")} className="accent-blue-600" />
-              <span className="text-sm">لا</span>
+              <span className="text-sm">{t("لا")}</span>
             </label>
           </div>
           {form.socialInsurance === "نعم" && (
             <div className="bg-blue-50 rounded-lg p-4 space-y-4 border border-blue-200">
               <FSelect label="نوع التأمين *" value={form.socialInsuranceType} onChange={(v) => set("socialInsuranceType", v)} options={SOCIAL_INSURANCE_TYPES} placeholder="اختر نوع التأمين" />
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ الاشتراك (ميلادي) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ الاشتراك (ميلادي) *")}</label>
                 <input
                   type="date"
                   value={form.socialInsuranceStartDate}
@@ -979,7 +981,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
                 />
                 {form.socialInsuranceStartDate && (
                   <p className="text-xs text-gray-500 mt-1">
-                    التاريخ بالهجري: {
+                    {t("التاريخ بالهجري")}: {
                       (() => {
                         try {
                           const d = new Date(form.socialInsuranceStartDate);
@@ -997,7 +999,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
 
       {/* Bank Info */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">معلومات البنك</h3>
+        <h3 className="text-sm font-semibold text-gray-800 mb-3">{t("معلومات البنك")}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FInput label="اسم الحساب البنكي" value={form.bankName} onChange={(v) => set("bankName", v)} />
           <FInput label="اسم الفرع" value={form.bankBranch} onChange={(v) => set("bankBranch", v)} />
@@ -1011,6 +1013,8 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
 
 // ─── Step 4: Permissions ─────────────────────────────────────────────────────
 function Step4Permissions({ form, togglePermission }: { form: EmpFormData; togglePermission: (p: string) => void }) {
+  const { t } = useI18n();
+
   return (
     <div>
       <div className="grid grid-cols-5 gap-4">
@@ -1024,7 +1028,7 @@ function Step4Permissions({ form, togglePermission }: { form: EmpFormData; toggl
                   onChange={() => togglePermission(perm)}
                   className="rounded border-gray-300 accent-blue-600"
                 />
-                <span className="text-sm text-gray-700 group-hover:text-blue-600">{perm}</span>
+                <span className="text-sm text-gray-700 group-hover:text-blue-600">{t(perm)}</span>
               </label>
             ))}
           </div>
@@ -1036,6 +1040,7 @@ function Step4Permissions({ form, togglePermission }: { form: EmpFormData; toggl
 
 // ─── Step 5: Insurance ───────────────────────────────────────────────────────
 function Step5Insurance({ form, set }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void }) {
+  const { t } = useI18n();
   const addItem = () => {
     const newItem: InsuranceItem = { id: crypto.randomUUID(), type: "", value: "", notes: "" };
     set("insuranceItems", [...form.insuranceItems, newItem]);
@@ -1052,9 +1057,9 @@ function Step5Insurance({ form, set }: { form: EmpFormData; set: <K extends keyo
           <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600">
             <Trash2 className="h-4 w-4" />
           </button>
-          <input value={item.type} onChange={(e) => updateItem(item.id, "type", e.target.value)} placeholder="نوع التأمين" className={cn(inputCls, "flex-1")} />
-          <input value={item.value} onChange={(e) => updateItem(item.id, "value", e.target.value)} placeholder="القيمة" className={cn(inputCls, "flex-1")} />
-          <input value={item.notes} onChange={(e) => updateItem(item.id, "notes", e.target.value)} placeholder="ملاحظات" className={cn(inputCls, "flex-1")} />
+          <input value={item.type} onChange={(e) => updateItem(item.id, "type", e.target.value)} placeholder={t("نوع التأمين")} className={cn(inputCls, "flex-1")} />
+          <input value={item.value} onChange={(e) => updateItem(item.id, "value", e.target.value)} placeholder={t("القيمة")} className={cn(inputCls, "flex-1")} />
+          <input value={item.notes} onChange={(e) => updateItem(item.id, "notes", e.target.value)} placeholder={t("ملاحظات")} className={cn(inputCls, "flex-1")} />
         </div>
       ))}
       <button
@@ -1062,7 +1067,7 @@ function Step5Insurance({ form, set }: { form: EmpFormData; set: <K extends keyo
         className="flex items-center gap-2 px-4 py-2 border border-dashed border-blue-400 rounded-lg text-blue-600 hover:bg-blue-50 text-sm"
       >
         <Plus className="h-4 w-4" />
-        إضافة
+        {t("إضافة")}
       </button>
     </div>
   );
@@ -1070,6 +1075,7 @@ function Step5Insurance({ form, set }: { form: EmpFormData; set: <K extends keyo
 
 // ─── Step 6: Documents ───────────────────────────────────────────────────────
 function Step6Documents({ form, set }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void }) {
+  const { t } = useI18n();
   const setDoc = (key: string, val: string) => {
     set("documents", { ...form.documents, [key]: val });
   };
@@ -1079,13 +1085,13 @@ function Step6Documents({ form, set }: { form: EmpFormData; set: <K extends keyo
       <div className="grid grid-cols-2 gap-5">
         {DOCUMENT_TYPES.map((doc) => (
           <div key={doc.key}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{doc.label}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t(doc.label)}</label>
             <label className="flex items-center gap-2 px-3 py-2.5 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm text-gray-600">
               <Upload className="h-4 w-4 text-blue-500" />
               {form.documents[doc.key] ? (
                 <span className="text-blue-600 truncate text-xs">{form.documents[doc.key]}</span>
               ) : (
-                <span>اختر الملف</span>
+                <span>{t("اختر الملف")}</span>
               )}
               <input
                 type="file"
@@ -1115,6 +1121,8 @@ function Step7Account({
   setShowPassword: (v: boolean) => void;
   generatePassword: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className="space-y-5">
       {/* Job Number / Username */}
@@ -1126,8 +1134,8 @@ function Step7Account({
       {/* Password */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          كلمة المرور
-          {mode === "edit" && <span className="text-xs text-amber-600 mr-2">(اتركها فارغة إذا لم تريد تغييرها)</span>}
+          {t("كلمة المرور")}
+          {mode === "edit" && <span className="text-xs text-amber-600 mr-2">({t("اتركها فارغة إذا لم تريد تغييرها")})</span>}
         </label>
         <div className="flex items-center gap-2">
           <div className="flex-1 relative">
@@ -1136,7 +1144,7 @@ function Step7Account({
               value={form.password}
               onChange={(e) => set("password", e.target.value)}
               className={cn(inputCls, "pl-10")}
-              placeholder={mode === "edit" ? "اتركها فارغة للإبقاء على كلمة المرور الحالية" : "أدخل كلمة مرور قوية"}
+              placeholder={mode === "edit" ? t("اتركها فارغة للإبقاء على كلمة المرور الحالية") : t("أدخل كلمة مرور قوية")}
             />
             <button
               type="button"
@@ -1150,14 +1158,14 @@ function Step7Account({
             type="button"
             onClick={generatePassword}
             className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition"
-            title="توليد تلقائي"
+            title={t("توليد تلقائي")}
           >
             <RefreshCw className="h-4 w-4" />
-            توليد تلقائي
+            {t("توليد تلقائي")}
           </button>
         </div>
         {mode === "create" && form.password && (
-          <p className="text-xs text-emerald-600 mt-1">سيتم إنشاء حساب دخول للموظف بهذه كلمة المرور تلقائياً.</p>
+          <p className="text-xs text-emerald-600 mt-1">{t("سيتم إنشاء حساب دخول للموظف بهذه كلمة المرور تلقائياً.")}</p>
         )}
       </div>
 
@@ -1167,9 +1175,9 @@ function Step7Account({
         <div />
       </div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-        <p className="text-xs text-blue-800 font-medium mb-1">بيانات الدخول للموظف:</p>
-        <p className="text-xs text-blue-700">الرقم الوظيفي: <span className="font-mono font-bold">{form.accountTitle || form.empId || "—"}</span></p>
-        <p className="text-xs text-blue-700 mt-0.5">يدخل الموظف بالرقم الوظيفي + كلمة المرور من بوابة الموظفين.</p>
+        <p className="text-xs text-blue-800 font-medium mb-1">{t("بيانات الدخول للموظف:")}</p>
+        <p className="text-xs text-blue-700">{t("الرقم الوظيفي")}: <span className="font-mono font-bold">{form.accountTitle || form.empId || "—"}</span></p>
+        <p className="text-xs text-blue-700 mt-0.5">{t("يدخل الموظف بالرقم الوظيفي + كلمة المرور من بوابة الموظفين.")}</p>
       </div>
     </div>
   );
@@ -1177,10 +1185,12 @@ function Step7Account({
 
 // ─── Step 8: Finish ──────────────────────────────────────────────────────────
 function Step8Finish({ saving, onSave }: { saving: boolean; onSave: () => void }) {
+  const { t } = useI18n();
+
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-6">
       <div className="text-center text-gray-500 text-sm">
-        تأكد من صحة جميع البيانات قبل الحفظ
+        {t("تأكد من صحة جميع البيانات قبل الحفظ")}
       </div>
       <button
         onClick={onSave}
@@ -1188,7 +1198,7 @@ function Step8Finish({ saving, onSave }: { saving: boolean; onSave: () => void }
         className="flex items-center gap-2 px-10 py-3 bg-blue-600 text-white rounded-lg text-base font-semibold hover:bg-blue-700 transition disabled:opacity-50"
       >
         <Save className="h-5 w-5" />
-        {saving ? "جاري الحفظ..." : "حفظ"}
+        {saving ? t("جاري الحفظ...") : t("حفظ")}
       </button>
     </div>
   );

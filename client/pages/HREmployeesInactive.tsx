@@ -12,6 +12,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import EmployeeForm, { mapRowToForm } from "./EmployeeForm";
@@ -28,6 +29,13 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function HREmployeesInactive() {
+  const { t, direction, formatDate, formatNumber } = useI18n();
+  const emptyValue = t("—");
+  const BackIcon = direction === "rtl" ? ArrowRight : ChevronLeft;
+  const PreviousIcon = direction === "rtl" ? ChevronRight : ChevronLeft;
+  const NextIcon = direction === "rtl" ? ChevronLeft : ChevronRight;
+  const formatHireDate = (value: string) =>
+    value ? formatDate(value, { dateStyle: "medium" }) : emptyValue;
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -52,7 +60,7 @@ export default function HREmployeesInactive() {
           .order("created_at", { ascending: false });
 
         if (error) {
-          toast({ title: "خطأ في تحميل البيانات", description: error.message });
+          toast({ title: t("خطأ في تحميل البيانات"), description: error.message });
           return;
         }
 
@@ -65,13 +73,13 @@ export default function HREmployeesInactive() {
           setEmployees(inactive);
         }
       } catch {
-        toast({ title: "خطأ", description: "فشل تحميل بيانات الموظفين" });
+        toast({ title: t("خطأ"), description: t("فشل تحميل بيانات الموظفين") });
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [refreshKey]);
+  }, [refreshKey, t]);
 
   const filtered = useMemo(
     () =>
@@ -101,7 +109,7 @@ export default function HREmployeesInactive() {
 
   const exportCsv = () => {
     if (!filtered.length) {
-      toast({ title: "لا توجد بيانات للتصدير" });
+      toast({ title: t("لا توجد بيانات للتصدير") });
       return;
     }
     const rows = filtered.map((e) => [
@@ -110,9 +118,11 @@ export default function HREmployeesInactive() {
       e.hireDate, e.phone, e.email,
     ]);
     const csv = [
-      ["رقم الموظف", "الاسم العربي", "الاسم الإنجليزي", "الحالة", "الفرع",
-       "القسم", "المسمى الوظيفي", "الجنسية", "رقم الهوية",
-       "تاريخ التعيين", "الجوال", "البريد الإلكتروني"],
+      [
+        t("رقم الموظف"), t("الاسم العربي"), t("الاسم الإنجليزي"), t("الحالة"), t("الفرع"),
+        t("القسم"), t("المسمى الوظيفي"), t("الجنسية"), t("رقم الهوية"),
+        t("تاريخ التعيين"), t("الجوال"), t("البريد الإلكتروني"),
+      ],
       ...rows,
     ]
       .map((r) =>
@@ -147,21 +157,21 @@ export default function HREmployeesInactive() {
   if (mode === "view" && selected) {
     return (
       <Layout>
-        <div dir="rtl" className="space-y-6 max-w-4xl">
+        <div dir={direction} className="space-y-6 max-w-4xl">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">بيانات الموظف</h1>
+            <h1 className="text-2xl font-bold">{t("بيانات الموظف")}</h1>
             <div className="flex gap-2">
               <button
                 onClick={() => setMode("list")}
                 className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50"
               >
-                <ArrowRight className="h-4 w-4" /> رجوع
+                <BackIcon className="h-4 w-4" /> {t("رجوع")}
               </button>
               <button
                 onClick={() => setMode("edit")}
                 className="flex items-center gap-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
               >
-                <Edit className="h-4 w-4" /> تعديل
+                <Edit className="h-4 w-4" /> {t("تعديل")}
               </button>
             </div>
           </div>
@@ -169,12 +179,12 @@ export default function HREmployeesInactive() {
           <div className="bg-white rounded-xl shadow border border-gray-100 p-6 space-y-5">
             <div className="flex items-center gap-4 pb-4 border-b">
               <div className="h-16 w-16 rounded-full bg-slate-600 flex items-center justify-center text-white text-2xl font-bold">
-                {(selected.name || selected.firstName || "م").charAt(0)}
+                {(selected.name || selected.firstName || t("م")).charAt(0)}
               </div>
               <div>
                 <div className="text-xl font-bold">{selected.name || selected.firstName}</div>
                 <div className="text-sm text-gray-500">
-                  {selected.empId} | {selected.jobTitle || "—"}
+                  {selected.empId || emptyValue} | {selected.jobTitle || emptyValue}
                 </div>
                 <span
                   className={cn(
@@ -182,25 +192,25 @@ export default function HREmployeesInactive() {
                     STATUS_COLORS[selected.status] ?? "bg-gray-100 text-gray-600 border-gray-200"
                   )}
                 >
-                  {selected.status}
+                  {t(selected.status)}
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-6">
-              <InfoGroup title="المعلومات الشخصية">
-                <InfoRow label="الجنسية" value={selected.nationality} />
-                <InfoRow label="رقم الهوية" value={selected.nationalId} />
-                <InfoRow label="الجنس" value={selected.gender} />
-                <InfoRow label="الهاتف" value={selected.phone} />
-                <InfoRow label="البريد الإلكتروني" value={selected.email} />
+              <InfoGroup title={t("المعلومات الشخصية")}>
+                <InfoRow label={t("الجنسية")} value={selected.nationality} />
+                <InfoRow label={t("رقم الهوية")} value={selected.nationalId} />
+                <InfoRow label={t("الجنس")} value={selected.gender} />
+                <InfoRow label={t("الهاتف")} value={selected.phone} />
+                <InfoRow label={t("البريد الإلكتروني")} value={selected.email} />
               </InfoGroup>
-              <InfoGroup title="المعلومات الوظيفية">
-                <InfoRow label="القسم" value={selected.department} />
-                <InfoRow label="المسمى الوظيفي" value={selected.jobTitle} />
-                <InfoRow label="الفرع" value={selected.branch} />
-                <InfoRow label="تاريخ التعيين" value={selected.hireDate} />
-                <InfoRow label="المدير المباشر" value={selected.directManager} />
+              <InfoGroup title={t("المعلومات الوظيفية")}>
+                <InfoRow label={t("القسم")} value={selected.department} />
+                <InfoRow label={t("المسمى الوظيفي")} value={selected.jobTitle} />
+                <InfoRow label={t("الفرع")} value={selected.branch} />
+                <InfoRow label={t("تاريخ التعيين")} value={formatHireDate(selected.hireDate)} />
+                <InfoRow label={t("المدير المباشر")} value={selected.directManager} />
               </InfoGroup>
             </div>
           </div>
@@ -212,18 +222,18 @@ export default function HREmployeesInactive() {
   // ── List mode ──────────────────────────────────────────────────────────────
   return (
     <Layout>
-      <div dir="rtl" className="space-y-4">
+      <div dir={direction} className="space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <UserX className="h-5 w-5 text-slate-600" />
-            الموظفون غير الفعالين
+            {t("الموظفون غير الفعالين")}
           </h1>
           <button
             onClick={() => setRefreshKey((k) => k + 1)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition"
           >
             <RefreshCw className="h-4 w-4" />
-            تحديث
+            {t("تحديث")}
           </button>
         </div>
 
@@ -231,11 +241,11 @@ export default function HREmployeesInactive() {
           {/* Title bar */}
           <div className="bg-slate-700 px-4 py-2.5 flex items-center justify-between text-white">
             <span className="font-semibold text-sm">
-              الموظفون غير الفعالين — {filtered.length} موظف
+              {t("الموظفون غير الفعالين")} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <button
               onClick={exportCsv}
-              title="تصدير CSV"
+              title={t("تصدير CSV")}
               className="p-1.5 rounded hover:bg-white/20 transition"
             >
               <Download className="h-4 w-4" />
@@ -245,56 +255,56 @@ export default function HREmployeesInactive() {
           {/* Filters */}
           <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <Search className={cn("absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none", direction === "rtl" ? "right-2.5" : "left-2.5")} />
               <input
                 type="text"
-                placeholder="بحث..."
+                placeholder={t("بحث...")}
                 value={fSearch}
                 onChange={(e) => setFSearch(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white pr-8 pl-3 py-1.5 text-sm text-right focus:outline-none focus:border-slate-400"
+                className={cn("w-full rounded-md border border-gray-300 bg-white py-1.5 text-sm focus:outline-none focus:border-slate-400", direction === "rtl" ? "pr-8 pl-3 text-right" : "pl-8 pr-3 text-left")}
               />
             </div>
             <select
               value={fStatus}
               onChange={(e) => setFStatus(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none"
+              className={cn("rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:outline-none", direction === "rtl" ? "text-right" : "text-left")}
             >
-              <option value="">جميع الحالات</option>
+              <option value="">{t("جميع الحالات")}</option>
               {INACTIVE_STATUSES.map((s) => (
-                <option key={s}>{s}</option>
+                <option key={s}>{t(s)}</option>
               ))}
             </select>
             <button
               onClick={() => { setFSearch(""); setFStatus(""); }}
               className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-100 transition text-gray-600"
             >
-              مسح
+              {t("مسح")}
             </button>
           </div>
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-xs" dir="rtl">
+            <table className="w-full text-xs" dir={direction}>
               <thead>
                 <tr className="bg-slate-100 border-b border-gray-200">
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الرقم الوظيفي</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الفرع</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">القسم</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">المسمى الوظيفي</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الجنسية</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الهوية</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">تاريخ التعيين</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">رقم الجوال</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">الحالة</th>
-                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("الرقم الوظيفي")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("الاسم")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("الفرع")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("القسم")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("المسمى الوظيفي")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("الجنسية")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("رقم الهوية")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("تاريخ التعيين")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("رقم الجوال")}</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">{t("الحالة")}</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">{t("إجراءات")}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
                     <td colSpan={11} className="py-12 text-center text-gray-400 text-sm">
-                      جاري التحميل...
+                      {t("جاري التحميل...")}
                     </td>
                   </tr>
                 )}
@@ -308,18 +318,18 @@ export default function HREmployeesInactive() {
                       )}
                     >
                       <td className="px-3 py-2 font-mono text-slate-700 font-semibold whitespace-nowrap">
-                        {emp.empId || "—"}
+                        {emp.empId || emptyValue}
                       </td>
                       <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">
-                        {emp.name || emp.firstName || "—"}
+                        {emp.name || emp.firstName || emptyValue}
                       </td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || "—"}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.department || "—"}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.jobTitle || "—"}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.nationality || "—"}</td>
-                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{emp.nationalId || "—"}</td>
-                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.hireDate || "—"}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.phone || "—"}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.department || emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.jobTitle || emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.nationality || emptyValue}</td>
+                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{emp.nationalId || emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{formatHireDate(emp.hireDate)}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.phone || emptyValue}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span
                           className={cn(
@@ -327,7 +337,7 @@ export default function HREmployeesInactive() {
                             STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600 border-gray-200"
                           )}
                         >
-                          {emp.status || "—"}
+                          {emp.status ? t(emp.status) : emptyValue}
                         </span>
                       </td>
                       <td className="px-3 py-2">
@@ -335,14 +345,14 @@ export default function HREmployeesInactive() {
                           <button
                             onClick={() => { setSelected(emp); setMode("view"); }}
                             className="p-1 text-blue-600 hover:bg-blue-100 rounded"
-                            title="عرض"
+                            title={t("عرض")}
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => { setSelected(emp); setMode("edit"); }}
                             className="p-1 text-emerald-600 hover:bg-emerald-100 rounded"
-                            title="تعديل / تفعيل"
+                            title={t("تعديل / تفعيل")}
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </button>
@@ -353,7 +363,7 @@ export default function HREmployeesInactive() {
                 {!loading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={11} className="py-14 text-center text-gray-400">
-                      لا يوجد موظفون غير فعالين
+                      {t("لا يوجد موظفون غير فعالين")}
                     </td>
                   </tr>
                 )}
@@ -364,30 +374,30 @@ export default function HREmployeesInactive() {
           {/* Footer */}
           <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
             <div className="flex items-center gap-2">
-              <span>عرض</span>
+              <span>{t("عرض")}</span>
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value) || 10)}
                 className="rounded border border-gray-300 bg-white px-2 py-1 text-xs focus:outline-none"
               >
                 {[10, 25, 50, 100].map((n) => (
-                  <option key={n} value={n}>{n}</option>
+                  <option key={n} value={n}>{formatNumber(n)}</option>
                 ))}
               </select>
-              <span>من أصل {filtered.length}</span>
+              <span>{t("من أصل")} {formatNumber(filtered.length)}</span>
             </div>
             <div className="flex items-center gap-1">
               <span className="px-2 text-gray-500">
                 {filtered.length > 0
-                  ? `${pageStart + 1} إلى ${Math.min(pageStart + pageSize, filtered.length)} من ${filtered.length}`
-                  : "0 نتائج"}
+                  ? `${formatNumber(pageStart + 1)} ${t("إلى")} ${formatNumber(Math.min(pageStart + pageSize, filtered.length))} ${t("من")} ${formatNumber(filtered.length)}`
+                  : `${formatNumber(0)} ${t("نتائج")}`}
               </span>
               <button
                 disabled={safePage <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 className="p-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 transition"
               >
-                <ChevronRight className="h-3.5 w-3.5" />
+                <PreviousIcon className="h-3.5 w-3.5" />
               </button>
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 const n = safePage <= 3 ? i + 1 : safePage + i - 2;
@@ -403,7 +413,7 @@ export default function HREmployeesInactive() {
                         : "bg-white border-gray-300 hover:bg-gray-100"
                     )}
                   >
-                    {n}
+                    {formatNumber(n)}
                   </button>
                 );
               })}
@@ -412,12 +422,12 @@ export default function HREmployeesInactive() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 className="p-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 transition"
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
+                <NextIcon className="h-3.5 w-3.5" />
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-700">العدد</span>
-              <span className="font-bold text-slate-700">{filtered.length}</span>
+              <span className="font-semibold text-gray-700">{t("العدد")}</span>
+              <span className="font-bold text-slate-700">{formatNumber(filtered.length)}</span>
             </div>
           </div>
         </div>
@@ -436,10 +446,12 @@ function InfoGroup({ title, children }: { title: string; children: React.ReactNo
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
+  const { t } = useI18n();
+
   return (
     <div className="flex justify-between text-sm">
       <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-gray-800">{value || "—"}</span>
+      <span className="font-medium text-gray-800">{value || t("—")}</span>
     </div>
   );
 }

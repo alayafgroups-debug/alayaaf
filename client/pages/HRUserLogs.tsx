@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { Search, Download, Printer } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -23,6 +24,7 @@ const MODULE_COLORS: Record<string, string> = {
 };
 
 export default function HRUserLogs() {
+  const { t, direction, formatDate, formatNumber } = useI18n();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -49,10 +51,12 @@ export default function HRUserLogs() {
   });
 
   const modules = [...new Set(logs.map((l) => l.module).filter(Boolean))];
+  const formatLogDate = (value: string) =>
+    value ? formatDate(value, { dateStyle: "medium", timeStyle: "short" }) : "";
 
   const handleExport = () => {
-    const headers = ["المستخدم", "التاريخ", "الموديول", "العملية", "التفاصيل"];
-    const rows = filtered.map((l) => [l.user_name, l.created_at, l.module_label, l.operation, l.details]);
+    const headers = [t("المستخدم"), t("التاريخ"), t("الموديول"), t("العملية"), t("التفاصيل")];
+    const rows = filtered.map((l) => [l.user_name, formatLogDate(l.created_at), l.module_label, l.operation, l.details]);
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -63,28 +67,28 @@ export default function HRUserLogs() {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-full space-y-4 p-6" dir="rtl">
+      <div className="mx-auto max-w-full space-y-4 p-6" dir={direction}>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">سجلات المستخدمين</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("سجلات المستخدمين")}</h1>
           <div className="flex items-center gap-2">
-            <button onClick={handleExport} title="تصدير" className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"><Download className="h-4 w-4" /></button>
-            <button onClick={() => window.print()} title="طباعة" className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"><Printer className="h-4 w-4" /></button>
+            <button onClick={handleExport} title={t("تصدير")} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"><Download className="h-4 w-4" /></button>
+            <button onClick={() => window.print()} title={t("طباعة")} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"><Printer className="h-4 w-4" /></button>
           </div>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap bg-white border rounded-xl px-4 py-3 shadow-sm">
           <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-sm bg-white outline-none">
-            <option value="">كل الموديولات</option>
+            <option value="">{t("كل الموديولات")}</option>
             {modules.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
           <div className="flex-1 min-w-[200px] relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-            <input type="text" placeholder="بحث باسم المستخدم أو العملية..." value={search}
+            <input type="text" placeholder={t("بحث باسم المستخدم أو العملية...")} value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pr-9 pl-3 py-1.5 border rounded-lg text-sm outline-none" />
           </div>
-          <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+          <span className="text-sm text-gray-500">{formatNumber(filtered.length)} {t("سجل")}</span>
         </div>
 
         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
@@ -92,22 +96,22 @@ export default function HRUserLogs() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[#004e89] text-white">
-                  <th className="px-4 py-3 text-right font-medium">المستخدم</th>
-                  <th className="px-4 py-3 text-right font-medium">التاريخ</th>
-                  <th className="px-4 py-3 text-right font-medium">الموديول</th>
-                  <th className="px-4 py-3 text-right font-medium">العملية</th>
-                  <th className="px-4 py-3 text-right font-medium">التفاصيل</th>
+                  <th className="px-4 py-3 text-right font-medium">{t("المستخدم")}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t("التاريخ")}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t("الموديول")}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t("العملية")}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t("التفاصيل")}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={5} className="py-12 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-gray-400">لا توجد سجلات</td></tr>
+                  <tr><td colSpan={5} className="py-12 text-center text-gray-400">{t("لا توجد سجلات")}</td></tr>
                 ) : filtered.map((log, i) => (
                   <tr key={log.id} className={cn("border-b hover:bg-blue-50/30", i % 2 === 0 ? "bg-white" : "bg-gray-50/40")}>
                     <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{log.user_name}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap font-mono text-xs">{log.created_at}</td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap font-mono text-xs">{formatLogDate(log.created_at)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium", MODULE_COLORS[log.module] ?? "bg-gray-100 text-gray-600")}>{log.module_label}</span>
                     </td>

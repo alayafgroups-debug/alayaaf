@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
+import { useI18n } from "@/i18n";
 
 type EmpLite = {
   id: string;
@@ -73,6 +74,7 @@ const defaultYear = String(current.getFullYear());
 const defaultMonth = String(current.getMonth() + 1).padStart(2, "0");
 
 export default function HRPayrollStatement() {
+  const { t, direction, formatNumber, formatDate } = useI18n();
   const [search, setSearch] = useState("");
   const [employees, setEmployees] = useState<EmpLite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,7 +111,7 @@ export default function HRPayrollStatement() {
         .order("name");
 
         if (error) {
-          toast({ title: "تعذر تحميل الموظفين", description: error.message });
+          toast({ title: t("تعذر تحميل الموظفين"), description: error.message });
           return;
         }
 
@@ -143,14 +145,14 @@ export default function HRPayrollStatement() {
 
     return {
       years: Array.from({ length: 6 }, (_, idx) => String(Number(defaultYear) - 2 + idx)),
-      months: Object.entries(monthNames).map(([value, label]) => ({ value, label })),
+      months: Object.entries(monthNames).map(([value, label]) => ({ value, label: t(label) })),
       branches: uniq(employees.map((e) => e.branch)),
       departments: uniq(employees.map((e) => e.department)),
       locations: uniq(employees.map((e) => e.workLocation)),
       types: uniq(employees.map((e) => e.employeeType)),
       statuses: ["الكل", "نشط", "موقوف", "غير فعال"],
     };
-  }, [employees]);
+  }, [employees, t]);
 
   const period = `${yearFilter}-${monthFilter}`;
 
@@ -295,24 +297,24 @@ export default function HRPayrollStatement() {
       });
 
     if (payload.length === 0) {
-      toast({ title: "موجود مسبقاً", description: "تم إنشاء مسير هؤلاء الموظفين مسبقاً" });
+      toast({ title: t("موجود مسبقاً"), description: t("تم إنشاء مسير هؤلاء الموظفين مسبقاً") });
       return false;
     }
 
     const { error } = await supabase.from("payroll").insert(payload);
     if (error) {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      toast({ title: t("خطأ"), description: error.message, variant: "destructive" });
       return false;
     }
 
-    toast({ title: "تم الإنشاء", description: `تم إنشاء ${payload.length} سجل رواتب` });
+    toast({ title: t("تم الإنشاء"), description: `${t("تم إنشاء")} ${formatNumber(payload.length)} ${t("سجل رواتب")}` });
     return true;
   };
 
   const handleGenerate = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) {
-      toast({ title: "تنبيه", description: "اختر موظفاً واحداً على الأقل", variant: "destructive" });
+      toast({ title: t("تنبيه"), description: t("اختر موظفاً واحداً على الأقل"), variant: "destructive" });
       return;
     }
 
@@ -322,7 +324,7 @@ export default function HRPayrollStatement() {
       const done = await createPayrollRecords(emps);
       if (done) setSelected(new Set());
     } catch {
-      toast({ title: "خطأ", variant: "destructive" });
+      toast({ title: t("خطأ"), variant: "destructive" });
     } finally {
       setGenerating(false);
     }
@@ -330,7 +332,7 @@ export default function HRPayrollStatement() {
 
   const handleFullReport = async () => {
     if (selectedEmployees.length === 0) {
-      toast({ title: "تنبيه", description: "اختر الموظفين أولاً لعرض التقرير الكامل", variant: "destructive" });
+      toast({ title: t("تنبيه"), description: t("اختر الموظفين أولاً لعرض التقرير الكامل"), variant: "destructive" });
       return;
     }
     const computed = await computePayroll(selectedEmployees);
@@ -339,21 +341,21 @@ export default function HRPayrollStatement() {
   };
 
   const payrollColumns: ReportColumn[] = [
-    { key: "empId", label: "رقم الموظف", width: 15 }, { key: "name", label: "الموظف", width: 25 },
-    { key: "department", label: "القسم", width: 20 }, { key: "branch", label: "الفرع", width: 18 },
-    { key: "workDays", label: "أيام العمل", width: 14 }, { key: "basic", label: "الراتب الأساسي", width: 16 },
-    { key: "allowances", label: "البدلات", width: 14 }, { key: "overtime", label: "الإضافي", width: 14 },
-    { key: "socialInsurance", label: "التأمينات الاجتماعية 9.75%", width: 20 },
-    { key: "deductions", label: "إجمالي الاستقطاعات", width: 18 }, { key: "net", label: "صافي الراتب", width: 16 },
+    { key: "empId", label: t("رقم الموظف"), width: 15 }, { key: "name", label: t("الموظف"), width: 25 },
+    { key: "department", label: t("القسم"), width: 20 }, { key: "branch", label: t("الفرع"), width: 18 },
+    { key: "workDays", label: t("أيام العمل"), width: 14 }, { key: "basic", label: t("الراتب الأساسي"), width: 16 },
+    { key: "allowances", label: t("البدلات"), width: 14 }, { key: "overtime", label: t("الإضافي"), width: 14 },
+    { key: "socialInsurance", label: t("التأمينات الاجتماعية 9.75%"), width: 20 },
+    { key: "deductions", label: t("إجمالي الاستقطاعات"), width: 18 }, { key: "net", label: t("صافي الراتب"), width: 16 },
   ];
   const payrollRows = selectedEmployees.map((employee) => {
     const computed = calc[employee.id];
-    return { empId: employee.empId, name: employee.name, department: employee.department || "-", branch: employee.branch || "-", workDays: computed ? `${computed.presentDays}/${computed.workDays}` : "-", basic: (computed?.basic ?? employee.baseSalary).toFixed(2), allowances: (computed?.allowances ?? 0).toFixed(2), overtime: (computed?.overtime ?? 0).toFixed(2), socialInsurance: (computed?.socialInsurance ?? 0).toFixed(2), deductions: (computed?.deductions ?? 0).toFixed(2), net: (computed?.net ?? employee.baseSalary).toFixed(2) };
+    return { empId: employee.empId, name: employee.name, department: employee.department || t("غير متوفر"), branch: employee.branch || t("غير متوفر"), workDays: computed ? `${formatNumber(computed.presentDays)}/${formatNumber(computed.workDays)}` : t("غير متوفر"), basic: formatNumber(computed?.basic ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), allowances: formatNumber(computed?.allowances ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), overtime: formatNumber(computed?.overtime ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), socialInsurance: formatNumber(computed?.socialInsurance ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), deductions: formatNumber(computed?.deductions ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), net: formatNumber(computed?.net ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
   });
   const payrollTotal = selectedEmployees.reduce((total, employee) => total + (calc[employee.id]?.net ?? employee.baseSalary), 0);
-  const payrollSubtitle = `كشف رواتب ${monthNames[monthFilter]} ${yearFilter}`;
-  const printPayroll = () => printReport({ title: "كشف الرواتب", subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: [{ label: "عدد الموظفين", value: payrollRows.length }, { label: "إجمالي صافي الرواتب", value: `${payrollTotal.toFixed(2)} ر.س` }] });
-  const exportPayroll = () => exportReportExcel({ title: "كشف الرواتب", subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `كشف-الرواتب-${period}`, summary: [{ label: "إجمالي صافي الرواتب", value: payrollTotal.toFixed(2) }] });
+  const payrollSubtitle = `${t("كشف الرواتب")} ${formatDate(`${period}-01`, { month: "long", year: "numeric" })}`;
+  const printPayroll = () => printReport({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: [{ label: t("عدد الموظفين"), value: formatNumber(payrollRows.length) }, { label: t("إجمالي صافي الرواتب"), value: `${formatNumber(payrollTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}` }] });
+  const exportPayroll = () => exportReportExcel({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `كشف-الرواتب-${period}`, summary: [{ label: t("إجمالي صافي الرواتب"), value: formatNumber(payrollTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }] });
 
   const handleOpenApproval = () => {
     setApprovalScope("all");
@@ -402,7 +404,7 @@ export default function HRPayrollStatement() {
   const handleSendApproval = async () => {
     const target = getApprovalEmployees();
     if (target.length === 0) {
-      toast({ title: "لا يوجد موظفون", description: "لا يوجد موظفون مطابقون للاختيار الحالي", variant: "destructive" });
+      toast({ title: t("لا يوجد موظفون"), description: t("لا يوجد موظفون مطابقون للاختيار الحالي"), variant: "destructive" });
       return;
     }
 
@@ -456,14 +458,14 @@ export default function HRPayrollStatement() {
       }
 
       toast({
-        title: "تم إرسال طلب الاعتماد",
-        description: `تم تجهيز ${activeIds.length} موظف وإيقاف راتب ${stoppedIds.length} موظف`,
+        title: t("تم إرسال طلب الاعتماد"),
+        description: `${t("تم تجهيز")} ${formatNumber(activeIds.length)} ${t("موظف")} ${t("وإيقاف راتب")} ${formatNumber(stoppedIds.length)} ${t("موظف")}`,
       });
       setApprovalOpen(false);
       setSelected(new Set());
       setPageMode("setup");
     } catch (error) {
-      toast({ title: "تعذر تطبيق كشف الرواتب", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع", variant: "destructive" });
+      toast({ title: t("تعذر تطبيق كشف الرواتب"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
     } finally {
       setApprovalSubmitting(false);
     }
@@ -471,35 +473,35 @@ export default function HRPayrollStatement() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-gray-800">حساب الراتب</h2>
+            <h2 className="text-lg font-bold text-gray-800">{t("حساب الراتب")}</h2>
           </div>
 
           <div className="p-6 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FilterSelect label="السنة" value={yearFilter} onChange={setYearFilter} options={options.years} />
-              <FilterSelect label="شهر" value={monthFilter} onChange={setMonthFilter} options={options.months.map((m) => ({ value: m.value, label: m.label }))} />
-              <FilterSelect label="الفئة" value={typeFilter} onChange={setTypeFilter} options={options.types} />
+              <FilterSelect t={t} label="السنة" value={yearFilter} onChange={setYearFilter} options={options.years} />
+              <FilterSelect t={t} label="شهر" value={monthFilter} onChange={setMonthFilter} options={options.months.map((m) => ({ value: m.value, label: m.label }))} />
+              <FilterSelect t={t} label="الفئة" value={typeFilter} onChange={setTypeFilter} options={options.types} />
 
-              <FilterSelect label="مكان العمل" value={locationFilter} onChange={setLocationFilter} options={options.locations} />
-              <FilterSelect label="الإدارة" value={departmentFilter} onChange={setDepartmentFilter} options={options.departments} />
-              <FilterSelect label="القسم/الفرع" value={branchFilter} onChange={setBranchFilter} options={options.branches} />
+              <FilterSelect t={t} label="مكان العمل" value={locationFilter} onChange={setLocationFilter} options={options.locations} />
+              <FilterSelect t={t} label="الإدارة" value={departmentFilter} onChange={setDepartmentFilter} options={options.departments} />
+              <FilterSelect t={t} label="القسم/الفرع" value={branchFilter} onChange={setBranchFilter} options={options.branches} />
 
-              <FilterSelect label="إيقاف/تفعيل الموظفين" value={statusFilter} onChange={setStatusFilter} options={options.statuses} />
+              <FilterSelect t={t} label="إيقاف/تفعيل الموظفين" value={statusFilter} onChange={setStatusFilter} options={options.statuses} />
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">نوع الموظفين</label>
+                <label className="text-sm font-medium text-gray-700">{t("نوع الموظفين")}</label>
                 <div className="h-10 border border-gray-300 rounded-md px-3 flex items-center bg-gray-50 text-sm text-gray-700">
-                  {typeFilter}
+                  {t(typeFilter)}
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">بحث الموظفين</label>
+                <label className="text-sm font-medium text-gray-700">{t("بحث الموظفين")}</label>
                 <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="بحث بالاسم / القسم / الفرع"
+                    placeholder={t("بحث بالاسم / القسم / الفرع")}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="pl-3 pr-9 h-10"
@@ -509,9 +511,9 @@ export default function HRPayrollStatement() {
             </div>
 
             <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={handleFullReport}>تقرير كامل</Button>
+              <Button variant="outline" onClick={handleFullReport}>{t("تقرير كامل")}</Button>
               <Button onClick={handleGenerate} disabled={generating || selected.size === 0} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                {generating ? "جاري المعالجة..." : "اختيار الموظفين (تفصيلي)"}
+                {generating ? t("جاري المعالجة...") : t("اختيار الموظفين (تفصيلي)")}
               </Button>
             </div>
           </div>
@@ -520,8 +522,8 @@ export default function HRPayrollStatement() {
         {pageMode === "setup" ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center gap-4">
-              <h2 className="text-lg font-bold text-gray-800">الموظفون ({filtered.length})</h2>
-              <div className="text-sm text-gray-600">فترة المسير: {period}</div>
+              <h2 className="text-lg font-bold text-gray-800">{t("الموظفون")} ({formatNumber(filtered.length)})</h2>
+              <div className="text-sm text-gray-600">{t("فترة المسير")}: {period}</div>
             </div>
 
             <div className="overflow-x-auto">
@@ -535,23 +537,23 @@ export default function HRPayrollStatement() {
                         className="border-white/50 data-[state=checked]:bg-white data-[state=checked]:text-[#004e89]"
                       />
                     </th>
-                    <th className="py-3 px-4 font-medium">الصورة</th>
-                    <th className="py-3 px-4 font-medium">الاسم</th>
-                    <th className="py-3 px-4 font-medium">المسمى الوظيفي</th>
-                    <th className="py-3 px-4 font-medium">الإدارة</th>
-                    <th className="py-3 px-4 font-medium">القسم/الفرع</th>
-                    <th className="py-3 px-4 font-medium">مكان العمل</th>
-                    <th className="py-3 px-4 font-medium">نوع الموظف</th>
-                    <th className="py-3 px-4 font-medium">الحالة</th>
-                    <th className="py-3 px-4 font-medium">الراتب الأساسي</th>
+                    <th className="py-3 px-4 font-medium">{t("الصورة")}</th>
+                    <th className="py-3 px-4 font-medium">{t("الاسم")}</th>
+                    <th className="py-3 px-4 font-medium">{t("المسمى الوظيفي")}</th>
+                    <th className="py-3 px-4 font-medium">{t("الإدارة")}</th>
+                    <th className="py-3 px-4 font-medium">{t("القسم/الفرع")}</th>
+                    <th className="py-3 px-4 font-medium">{t("مكان العمل")}</th>
+                    <th className="py-3 px-4 font-medium">{t("نوع الموظف")}</th>
+                    <th className="py-3 px-4 font-medium">{t("الحالة")}</th>
+                    <th className="py-3 px-4 font-medium">{t("الراتب الأساسي")}</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
-                    <tr><td colSpan={10} className="py-8 text-center text-gray-400">جاري التحميل...</td></tr>
+                    <tr><td colSpan={10} className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={10} className="py-8 text-center text-gray-500">لا يوجد موظفون مطابقون للفلاتر</td></tr>
+                    <tr><td colSpan={10} className="py-8 text-center text-gray-500">{t("لا يوجد موظفون مطابقون للفلاتر")}</td></tr>
                   ) : (
                     filtered.map((emp) => (
                       <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
@@ -564,13 +566,13 @@ export default function HRPayrollStatement() {
                           </Avatar>
                         </td>
                         <td className="py-3 px-4 font-medium text-gray-900">{emp.name}</td>
-                        <td className="py-3 px-4">{emp.jobTitle || "—"}</td>
-                        <td className="py-3 px-4">{emp.department || "—"}</td>
-                        <td className="py-3 px-4">{emp.branch || "—"}</td>
-                        <td className="py-3 px-4">{emp.workLocation || "—"}</td>
-                        <td className="py-3 px-4">{emp.employeeType || "—"}</td>
-                        <td className="py-3 px-4">{emp.status || "—"}</td>
-                        <td className="py-3 px-4 font-semibold text-emerald-700">{emp.baseSalary.toLocaleString()} ر.س</td>
+                        <td className="py-3 px-4">{emp.jobTitle || t("غير متوفر")}</td>
+                        <td className="py-3 px-4">{emp.department || t("غير متوفر")}</td>
+                        <td className="py-3 px-4">{emp.branch || t("غير متوفر")}</td>
+                        <td className="py-3 px-4">{emp.workLocation || t("غير متوفر")}</td>
+                        <td className="py-3 px-4">{emp.employeeType || t("غير متوفر")}</td>
+                        <td className="py-3 px-4">{emp.status ? t(emp.status) : t("غير متوفر")}</td>
+                        <td className="py-3 px-4 font-semibold text-emerald-700">{formatNumber(emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ر.س")}</td>
                       </tr>
                     ))
                   )}
@@ -583,21 +585,21 @@ export default function HRPayrollStatement() {
             <div className="p-4 border-b border-gray-100 flex justify-between items-center gap-4">
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => setPageMode("setup")}>
-                  <ArrowRight className="h-4 w-4" /> رجوع
+                  <><ArrowRight className="h-4 w-4" /> {t("رجوع")}</>
                 </Button>
-                <h2 className="text-lg font-bold text-gray-800">النتائج (تقرير شامل)</h2>
+                <h2 className="text-lg font-bold text-gray-800">{t("النتائج (تقرير شامل)")}</h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" onClick={printPayroll} disabled={payrollRows.length === 0}><Printer className="h-4 w-4" /> طباعة / PDF</Button>
-                <Button variant="outline" onClick={exportPayroll} disabled={payrollRows.length === 0}><Download className="h-4 w-4" /> Excel</Button>
+                <Button variant="outline" onClick={printPayroll} disabled={payrollRows.length === 0}><><Printer className="h-4 w-4" /> {t("طباعة / PDF")}</></Button>
+                <Button variant="outline" onClick={exportPayroll} disabled={payrollRows.length === 0}><><Download className="h-4 w-4" /> {t("Excel")}</></Button>
                 <Button onClick={handleOpenApproval} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                  <Send className="h-4 w-4" /> إرسال طلب اعتماد رواتب الموظفين
+                  <><Send className="h-4 w-4" /> {t("إرسال طلب اعتماد رواتب الموظفين")}</>
                 </Button>
               </div>
             </div>
 
             <div className="p-4 border-b border-gray-100 text-sm text-gray-700">
-              الشهر: {monthNames[monthFilter]} | السنة: {yearFilter} | عدد الموظفين المختارين: {selectedEmployees.length}
+              {t("الشهر")}: {t(monthNames[monthFilter])} | {t("السنة")}: {yearFilter} | {t("عدد الموظفين المختارين")}: {formatNumber(selectedEmployees.length)}
             </div>
 
             <div className="overflow-x-auto">
@@ -605,17 +607,17 @@ export default function HRPayrollStatement() {
                 <thead className="bg-[#0a5a92] text-white">
                   <tr>
                     <th className="py-2 px-2">#</th>
-                    <th className="py-2 px-2">الموظف</th>
-                    <th className="py-2 px-2">القسم</th>
-                    <th className="py-2 px-2">الفرع</th>
-                    <th className="py-2 px-2">أيام العمل</th>
-                    <th className="py-2 px-2">الراتب الأساسي</th>
-                    <th className="py-2 px-2">البدلات</th>
-                    <th className="py-2 px-2">إضافي</th>
-                    <th className="py-2 px-2">عمولات</th>
-                    <th className="py-2 px-2">التأمينات الاجتماعية 9.75%</th>
-                    <th className="py-2 px-2">إجمالي الاستقطاعات</th>
-                    <th className="py-2 px-2">صافي الراتب</th>
+                    <th className="py-2 px-2">{t("الموظف")}</th>
+                    <th className="py-2 px-2">{t("القسم")}</th>
+                    <th className="py-2 px-2">{t("الفرع")}</th>
+                    <th className="py-2 px-2">{t("أيام العمل")}</th>
+                    <th className="py-2 px-2">{t("الراتب الأساسي")}</th>
+                    <th className="py-2 px-2">{t("البدلات")}</th>
+                    <th className="py-2 px-2">{t("إضافي")}</th>
+                    <th className="py-2 px-2">{t("عمولات")}</th>
+                    <th className="py-2 px-2">{t("التأمينات الاجتماعية 9.75%")}</th>
+                    <th className="py-2 px-2">{t("إجمالي الاستقطاعات")}</th>
+                    <th className="py-2 px-2">{t("صافي الراتب")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -623,18 +625,18 @@ export default function HRPayrollStatement() {
                     const c = calc[emp.id];
                     return (
                     <tr key={emp.id} className="hover:bg-gray-50">
-                      <td className="py-2 px-2">{idx + 1}</td>
+                      <td className="py-2 px-2">{formatNumber(idx + 1)}</td>
                       <td className="py-2 px-2 font-medium">{emp.name}</td>
-                      <td className="py-2 px-2">{emp.department || "-"}</td>
-                      <td className="py-2 px-2">{emp.branch || "-"}</td>
-                      <td className="py-2 px-2">{c ? `${c.presentDays}/${c.workDays}` : "-"}</td>
-                      <td className="py-2 px-2">{(c?.basic ?? emp.baseSalary).toFixed(2)}</td>
-                      <td className="py-2 px-2">{(c?.allowances ?? 0).toFixed(2)}</td>
-                      <td className="py-2 px-2">{(c?.overtime ?? 0).toFixed(2)}</td>
-                      <td className="py-2 px-2">0.00</td>
-                      <td className="py-2 px-2 text-orange-600">{(c?.socialInsurance ?? 0).toFixed(2)}</td>
-                      <td className="py-2 px-2 text-red-600">{(c?.deductions ?? 0).toFixed(2)}</td>
-                      <td className="py-2 px-2 font-semibold text-emerald-700">{(c?.net ?? emp.baseSalary).toFixed(2)}</td>
+                      <td className="py-2 px-2">{emp.department || t("غير متوفر")}</td>
+                      <td className="py-2 px-2">{emp.branch || t("غير متوفر")}</td>
+                      <td className="py-2 px-2">{c ? `${formatNumber(c.presentDays)}/${formatNumber(c.workDays)}` : t("غير متوفر")}</td>
+                      <td className="py-2 px-2">{formatNumber(c?.basic ?? emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-2">{formatNumber(c?.allowances ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-2">{formatNumber(c?.overtime ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-2">{formatNumber(0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-2 text-orange-600">{formatNumber(c?.socialInsurance ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-2 text-red-600">{formatNumber(c?.deductions ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-2 font-semibold text-emerald-700">{formatNumber(c?.net ?? emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                     );
                   })}
@@ -645,58 +647,58 @@ export default function HRPayrollStatement() {
         )}
 
         {approvalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir="rtl">
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir={direction}>
             <div className="w-full max-w-3xl bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                 <button onClick={() => setApprovalOpen(false)} className="text-gray-500 hover:text-gray-800">
                   <X className="h-5 w-5" />
                 </button>
-                <h3 className="text-2xl font-bold text-gray-800">إرسال طلب اعتماد رواتب الموظفين</h3>
+                <h3 className="text-2xl font-bold text-gray-800">{t("إرسال طلب اعتماد رواتب الموظفين")}</h3>
               </div>
 
               <div className="p-5 space-y-4">
                 <div className="space-y-2">
-                  <label className="text-2xl font-semibold text-gray-800">كشف الرواتب</label>
+                  <label className="text-2xl font-semibold text-gray-800">{t("كشف الرواتب")}</label>
                   <select
                     value={approvalScope}
                     onChange={(e) => setApprovalScope(e.target.value as "all" | "partial")}
                     className="w-full h-12 border border-gray-300 rounded-md px-3 text-lg"
                   >
-                    <option value="all">لجميع الموظفين</option>
-                    <option value="partial">لجزء من الموظفين</option>
+                    <option value="all">{t("لجميع الموظفين")}</option>
+                    <option value="partial">{t("لجزء من الموظفين")}</option>
                   </select>
                 </div>
 
                 {approvalStep === 2 && approvalScope === "partial" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">اختر الإدارة</label>
+                      <label className="text-lg font-semibold text-gray-700">{t("اختر الإدارة")}</label>
                       <select value={approvalDepartment} onChange={(e) => setApprovalDepartment(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
-                        <option>الكل</option>
+                        <option value="الكل">{t("الكل")}</option>
                         {options.departments.filter((d) => d !== "الكل").map((d) => <option key={d}>{d}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">اختر الفرع</label>
+                      <label className="text-lg font-semibold text-gray-700">{t("اختر الفرع")}</label>
                       <select value={approvalBranch} onChange={(e) => setApprovalBranch(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
-                        <option>الكل</option>
+                        <option value="الكل">{t("الكل")}</option>
                         {options.branches.filter((b) => b !== "الكل").map((b) => <option key={b}>{b}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <label className="text-lg font-semibold text-gray-700">اختر موقع العمل</label>
+                      <label className="text-lg font-semibold text-gray-700">{t("اختر موقع العمل")}</label>
                       <select value={approvalLocation} onChange={(e) => setApprovalLocation(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
-                        <option>الكل</option>
+                        <option value="الكل">{t("الكل")}</option>
                         {options.locations.filter((l) => l !== "الكل").map((l) => <option key={l}>{l}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <label className="text-lg font-semibold text-gray-700">إيقاف رواتب الموظفين</label>
+                      <label className="text-lg font-semibold text-gray-700">{t("إيقاف رواتب الموظفين")}</label>
                       <div className="relative">
                         <Input
                           value={approvalStopKeyword}
                           onChange={(e) => setApprovalStopKeyword(e.target.value)}
-                          placeholder="ابدأ بكتابة اسم الموظف"
+                          placeholder={t("ابدأ بكتابة اسم الموظف")}
                           className="h-12"
                         />
                         {stopSuggestions.length > 0 && (
@@ -709,7 +711,7 @@ export default function HRPayrollStatement() {
                                 className="w-full px-4 py-3 text-right hover:bg-gray-50 border-b border-gray-100 last:border-0"
                               >
                                 <span className="block font-medium text-gray-900">{employee.name}</span>
-                                <span className="block text-xs text-gray-500">{employee.department || employee.jobTitle || "موظف"}</span>
+                                <span className="block text-xs text-gray-500">{employee.department || employee.jobTitle || t("موظف")}</span>
                               </button>
                             ))}
                           </div>
@@ -722,14 +724,14 @@ export default function HRPayrollStatement() {
                             .map((employee) => (
                               <div key={employee.id} className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm text-red-700 border border-red-200">
                                 <span>{employee.name}</span>
-                                <button type="button" onClick={() => removeStoppedEmployee(employee.id)} aria-label={`إلغاء إيقاف راتب ${employee.name}`}>
+                                <button type="button" onClick={() => removeStoppedEmployee(employee.id)} aria-label={`${t("إلغاء إيقاف راتب")} ${employee.name}`}>
                                   <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             ))}
                         </div>
                       )}
-                      <p className="text-xs text-gray-500">سيتم حفظ حالة «موقوف» فعلياً في كشف رواتب الفترة المحددة عند الإرسال.</p>
+                      <p className="text-xs text-gray-500">{t("سيتم حفظ حالة «موقوف» فعلياً في كشف رواتب الفترة المحددة عند الإرسال.")}</p>
                     </div>
                   </div>
                 )}
@@ -737,10 +739,10 @@ export default function HRPayrollStatement() {
 
               <div className="px-5 py-4 border-t border-gray-100 flex justify-start gap-3">
                 {approvalScope === "partial" && approvalStep === 1 ? (
-                  <Button onClick={() => setApprovalStep(2)} className="bg-[#004e89] hover:bg-[#003d6d] text-white">التالي</Button>
+                  <Button onClick={() => setApprovalStep(2)} className="bg-[#004e89] hover:bg-[#003d6d] text-white">{t("التالي")}</Button>
                 ) : (
                   <Button onClick={handleSendApproval} disabled={approvalSubmitting} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                    {approvalSubmitting ? "جاري الإرسال..." : "إرسال"}
+                    {approvalSubmitting ? t("جاري الإرسال...") : t("إرسال")}
                   </Button>
                 )}
               </div>
@@ -753,23 +755,25 @@ export default function HRPayrollStatement() {
 }
 
 function FilterSelect({
+  t,
   label,
   value,
   onChange,
   options,
 }: {
+  t: (value: string) => string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[] | Array<{ value: string; label: string }>;
 }) {
   const normalized = options.map((op) =>
-    typeof op === "string" ? { value: op, label: op } : op
+    typeof op === "string" ? { value: op, label: t(op) } : op
   );
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <label className="text-sm font-medium text-gray-700">{t(label)}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}

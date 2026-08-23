@@ -54,7 +54,17 @@ export default function HROrgWorkLocations() {
       return;
     }
     if (!confirm(`حذف موقع "${loc.name}"؟`)) return;
-    await supabase.from("hr_work_locations").delete().eq("id", loc.id);
+    const { error } = await supabase.rpc("delete_hr_work_location", {
+      p_id: loc.id,
+    });
+    if (error) {
+      toast({
+        title: "تعذر حذف الموقع",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
     setRows((prev) => prev.filter((r) => r.id !== loc.id));
     toast({ title: "تم الحذف" });
   };
@@ -73,13 +83,16 @@ export default function HROrgWorkLocations() {
       toast({ title: "إحداثيات غير صحيحة", description: "أدخل خط العرض وخط الطول ضمن النطاق الصحيح", variant: "destructive" });
       return;
     }
-    const payload = {
-      name: formName, name_en: formNameEn, address: formAddress, city: formCity,
-      status: formStatus, latitude, longitude, attendance_radius_m: 10,
-    };
-    const result = editingId
-      ? await supabase.from("hr_work_locations").update(payload).eq("id", editingId)
-      : await supabase.from("hr_work_locations").insert([payload]);
+    const result = await supabase.rpc("save_hr_work_location", {
+      p_id: editingId,
+      p_name: formName,
+      p_name_en: formNameEn,
+      p_address: formAddress,
+      p_city: formCity,
+      p_status: formStatus,
+      p_latitude: latitude,
+      p_longitude: longitude,
+    });
     if (result.error) {
       toast({ title: "تعذر حفظ الموقع", description: result.error.message, variant: "destructive" });
       return;

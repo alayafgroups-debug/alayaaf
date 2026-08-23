@@ -88,6 +88,7 @@ const navSubMenus: Record<
   "/expenses": [
     { label: "شجرة الحسابات", href: "/expenses" },
     { label: "التقارير", href: "/expenses/reports" },
+    { label: "مساحة عمل المحاسب", href: "/expenses/accountant" },
     { label: "حساب الضرائب", href: "/expenses/tax" },
     { label: "تقارير ضريبية", href: "/expenses/tax-reports" },
   ],

@@ -104,6 +104,7 @@ import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import Tax from "./pages/Tax";
 import AccountingReports from "./pages/AccountingReports";
+import AccountantWorkspace from "./pages/AccountantWorkspace";
 import UsersPermissions from "./pages/UsersPermissions";
 import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
@@ -248,6 +249,7 @@ const App = () => (
           <Route path="/expenses/vouchers" element={<ExpenseManagement />} />
           <Route path="/expenses/petty-cash" element={<ExpenseManagement />} />
           <Route path="/expenses/reports" element={<AccountingReports />} />
+          <Route path="/expenses/accountant" element={<AccountantWorkspace />} />
           <Route path="/expenses/tax" element={<Tax />} />
           <Route path="/expenses/tax-reports" element={<Tax />} />
           <Route path="/users" element={<UsersPermissions />} />

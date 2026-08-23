@@ -7,6 +7,7 @@ import {
   CheckCircle,
   ChevronDown,
   Languages,
+  Landmark,
   LogIn,
   LogOut,
   Mail,
@@ -74,6 +75,12 @@ const actions = [
     label: "اللغة",
     icon: Languages,
     color: "from-purple-500 to-fuchsia-600",
+  },
+  {
+    id: "accountant" as const,
+    label: "المحاسب",
+    icon: Landmark,
+    color: "from-blue-700 to-indigo-800",
   },
   {
     id: "tasks" as const,
@@ -178,6 +185,10 @@ export default function QuickActionsBar() {
     }
     if (id === "tasks") {
       navigate("/tasks-projects");
+      return;
+    }
+    if (id === "accountant") {
+      navigate("/expenses/accountant");
       return;
     }
     setPanel((current) => (current === id ? null : (id as Panel)));

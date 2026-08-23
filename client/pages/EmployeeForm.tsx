@@ -630,13 +630,15 @@ function StepperHeader({ steps, current, onStepClick }: { steps: typeof STEPS; c
 
 // ─── Step 1: Personal Details ────────────────────────────────────────────────
 function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void }) {
+  const { t } = useI18n();
+
   return (
     <div className="space-y-5">
       {/* Photo Upload */}
       <div className="flex flex-col items-center gap-2 pb-4">
         <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border border-gray-300">
           {form.photoUrl ? (
-            <img src={form.photoUrl} alt="صورة الموظف" className="w-full h-full object-cover" />
+            <img src={form.photoUrl} alt={t("صورة الموظف")} className="w-full h-full object-cover" />
           ) : (
             <svg className="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
@@ -644,7 +646,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
           )}
         </div>
         <button className="px-4 py-1.5 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-          صورة
+          {t("صورة")}
         </button>
       </div>
 
@@ -686,7 +688,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
 
       {/* Date Range: ID Expiry */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ نهاية الهوية</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ نهاية الهوية")}</label>
         <div className="grid grid-cols-2 gap-3">
           <FInput label="" value={form.idExpiryDate} onChange={(v) => set("idExpiryDate", v)} type="date" />
           <div />
@@ -696,7 +698,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
       {/* Passport */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ نهاية جواز السفر</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ نهاية جواز السفر")}</label>
           <input type="date" value={form.passportExpiryDate} onChange={(e) => set("passportExpiryDate", e.target.value)} className={inputCls} />
         </div>
         <FInput label="رقم جواز السفر" value={form.passportNumber} onChange={(v) => set("passportNumber", v)} placeholder="" />
@@ -705,7 +707,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
       {/* Work Permit */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ الترجمة</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ الترجمة")}</label>
           <input type="date" value={form.residencePermitDate} onChange={(e) => set("residencePermitDate", e.target.value)} className={inputCls} />
         </div>
         <FInput label="رقم العمل الفعلي" value={form.workPermitNumber} onChange={(v) => set("workPermitNumber", v)} placeholder="" />
@@ -714,7 +716,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
       {/* Kafala */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ انتهاء الكفالة</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ انتهاء الكفالة")}</label>
           <input type="date" value={form.kafalaExpiryDate} onChange={(e) => set("kafalaExpiryDate", e.target.value)} className={inputCls} />
         </div>
         <FInput label="رقم الكفالة" value={form.kafalaNumber} onChange={(v) => set("kafalaNumber", v)} placeholder="" />

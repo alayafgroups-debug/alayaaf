@@ -1278,6 +1278,12 @@ Object.assign(translations, {
   "القسم": "Section",
   "الموظف المسؤول": "Responsible employee",
   "الموظف": "Employee",
+  "اسم الشعبة مطلوب": "Subunit name is required",
+  "قائمة الشعب": "Subunits",
+  "إضافة شعبة": "Add subunit",
+  "إضافة شعبة جديدة": "Add new subunit",
+  "اسم الشعبة": "Subunit name",
+  "الوحدة": "Unit",
 });
 
 const getInitialLocale = (): Locale => {

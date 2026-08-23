@@ -6,6 +6,7 @@ import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
 import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
 import { supabase } from "@/lib/supabaseClient";
+import { useI18n } from "@/i18n";
 
 // ─── Request Types Grid ───────────────────────────────────────────────────────
 const REQUEST_TYPES = [
@@ -51,6 +52,7 @@ const DEPARTMENTS = ["إدارة الموارد البشرية", "الإدارة
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HRRequestsSend() {
+  const { t, direction } = useI18n();
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
   const [delegateDept, setDelegateDept] = useState("");
   const [leaveFormOpen, setLeaveFormOpen] = useState(false);
@@ -98,18 +100,18 @@ export default function HRRequestsSend() {
       setActiveSchemaId(id);
       setDynamicFormOpen(true);
     } else {
-      alert("نموذج " + label + " غير متوفر حالياً");
+      alert(`${t("نموذج")} ${t(label)} ${t("غير متوفر حالياً")}`);
     }
   };
 
   return (
     <Layout>
-      <div className="mx-auto max-w-7xl" dir="rtl">
+      <div className="mx-auto max-w-7xl" dir={direction}>
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <span className="text-blue-600 font-medium cursor-pointer hover:underline">الطلبات</span>
+          <span className="text-blue-600 font-medium cursor-pointer hover:underline">{t("الطلبات")}</span>
           <span>/</span>
-          <span>إرسال الطلبات</span>
+          <span>{t("إرسال الطلبات")}</span>
         </div>
 
         <div className="flex gap-5">
@@ -117,10 +119,10 @@ export default function HRRequestsSend() {
           <div className="flex-1 min-w-0">
             {/* Top action bar */}
             <div className="flex items-center justify-between mb-4 gap-3">
-              <p className="text-sm text-gray-500">قائمة سلسلة الموافقات الخاصة بهذا الحساب</p>
+              <p className="text-sm text-gray-500">{t("قائمة سلسلة الموافقات الخاصة بهذا الحساب")}</p>
               <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm">
                 <Send className="h-4 w-4" />
-                نماذج إرسال الطلبات
+                {t("نماذج إرسال الطلبات")}
               </button>
             </div>
 
@@ -145,7 +147,7 @@ export default function HRRequestsSend() {
                       {req.icon}
                     </div>
                     <span className="text-xs font-medium text-gray-700 text-center leading-tight">
-                      {req.label}
+                      {t(req.label)}
                     </span>
                   </button>
                 );
@@ -175,15 +177,15 @@ export default function HRRequestsSend() {
               {/* Employee Info */}
               <div className="px-4 pb-4 space-y-2 text-sm">
                 <div className="flex justify-between border-b border-gray-100 py-1.5">
-                  <span className="text-gray-500">الاسم</span>
+                  <span className="text-gray-500">{t("الاسم")}</span>
                   <span className="font-medium text-gray-800 text-left">{employeeInfo.empId} - {employeeInfo.name}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 py-1.5">
-                  <span className="text-gray-500">الإدارة</span>
+                  <span className="text-gray-500">{t("الإدارة")}</span>
                   <span className="font-medium text-gray-800">{employeeInfo.department}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
-                  <span className="text-gray-500">المدير المباشر</span>
+                  <span className="text-gray-500">{t("المدير المباشر")}</span>
                   <span className="font-medium text-gray-800">{employeeInfo.directManager}</span>
                 </div>
               </div>
@@ -191,7 +193,7 @@ export default function HRRequestsSend() {
 
             {/* Delegate Section */}
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
-              <h3 className="text-sm font-semibold text-gray-800">إرسال طلب عوضاً عن موظف</h3>
+              <h3 className="text-sm font-semibold text-gray-800">{t("إرسال طلب عوضاً عن موظف")}</h3>
 
               {DEPARTMENTS.map((dept, i) => (
                 <div
@@ -204,7 +206,7 @@ export default function HRRequestsSend() {
                   )}
                   onClick={() => setDelegateDept(delegateDept === dept ? "" : dept)}
                 >
-                  <span className="text-sm text-gray-700">{dept}</span>
+                  <span className="text-sm text-gray-700">{t(dept)}</span>
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 text-gray-400 transition-transform",

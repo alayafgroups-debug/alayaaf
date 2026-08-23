@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/lib/supabaseClient";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
+import { useI18n } from "@/i18n";
 
 type AttendanceDay = { day: number; status: "present" | "absent" | "future" };
 type EmpRow = { id: string; empId: string; name: string; attendance: AttendanceDay[] };
 
 export default function HRAttendanceCalculate() {
+  const { t, direction, formatNumber } = useI18n();
   const [data, setData] = useState<EmpRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -80,32 +82,32 @@ export default function HRAttendanceCalculate() {
   const days = data.length > 0 ? data[0].attendance.map((a) => a.day) : Array.from({ length: 31 }, (_, i) => i + 1);
   const filtered = data.filter((e) => !search || e.name.includes(search));
   const reportColumns: ReportColumn[] = [
-    { key: "empId", label: "رقم الموظف", width: 15 },
-    { key: "name", label: "اسم الموظف", width: 26 },
+    { key: "empId", label: t("رقم الموظف"), width: 15 },
+    { key: "name", label: t("اسم الموظف"), width: 26 },
     ...days.map((day) => ({ key: `day${day}`, label: String(day), width: 8 })),
-    { key: "present", label: "حضور", width: 10 },
-    { key: "absent", label: "غياب", width: 10 },
+    { key: "present", label: t("حضور"), width: 10 },
+    { key: "absent", label: t("غياب"), width: 10 },
   ];
   const reportRows = filtered.map((employee) => ({
     empId: employee.empId,
     name: employee.name,
-    ...Object.fromEntries(employee.attendance.map((item) => [`day${item.day}`, item.status === "present" ? "حاضر" : item.status === "absent" ? "غائب" : "قادم"])),
+    ...Object.fromEntries(employee.attendance.map((item) => [`day${item.day}`, item.status === "present" ? t("حاضر") : item.status === "absent" ? t("غائب") : t("قادم")])),
     present: employee.attendance.filter((item) => item.status === "present").length,
     absent: employee.attendance.filter((item) => item.status === "absent").length,
   }));
-  const printAttendance = () => printReport({ title: "حساب الدوام", subtitle: `سجل الدوام الشهري للفترة ${month}`, columns: reportColumns, rows: reportRows, fileName: `attendance-${month}`, landscape: true, summary: [{ label: "عدد الموظفين", value: reportRows.length }] });
-  const exportAttendance = () => exportReportExcel({ title: "حساب الدوام", subtitle: `سجل الدوام الشهري للفترة ${month}`, columns: reportColumns, rows: reportRows, fileName: `حساب-الدوام-${month}` });
+  const printAttendance = () => printReport({ title: t("حساب الدوام"), subtitle: `${t("سجل الدوام الشهري للفترة")} ${month}`, columns: reportColumns, rows: reportRows, fileName: `attendance-${month}`, landscape: true, summary: [{ label: t("عدد الموظفين"), value: reportRows.length }] });
+  const exportAttendance = () => exportReportExcel({ title: t("حساب الدوام"), subtitle: `${t("سجل الدوام الشهري للفترة")} ${month}`, columns: reportColumns, rows: reportRows, fileName: `attendance-${month}` });
 
   return (
     <Layout>
-      <div className="space-y-6 w-full" dir="rtl">
+      <div className="space-y-6 w-full" dir={direction}>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-[#004e89]">حساب الدوام</h1>
+          <h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1>
           <div className="flex items-center gap-3">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44 text-right" />
-            <Button variant="outline" size="icon" onClick={loadData} title="تحديث"><RefreshCw className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" onClick={printAttendance} disabled={reportRows.length === 0} title="طباعة / PDF"><Printer className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" onClick={exportAttendance} disabled={reportRows.length === 0} title="تحميل Excel"><Download className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" onClick={loadData} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" onClick={printAttendance} disabled={reportRows.length === 0} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" onClick={exportAttendance} disabled={reportRows.length === 0} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button>
           </div>
         </div>
 
@@ -113,16 +115,16 @@ export default function HRAttendanceCalculate() {
           <div className="p-4 border-b flex justify-between items-center">
             <div className="relative w-72">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+              <Input placeholder={t("بحث...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
             </div>
-            <span className="text-sm text-gray-500">{filtered.length} موظف</span>
+            <span className="text-sm text-gray-500">{formatNumber(filtered.length)} {t("موظف")}</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-center">
               <thead className="bg-blue-700 text-white font-bold">
                 <tr>
-                  <th className="py-2 px-3 text-right whitespace-nowrap min-w-[180px] sticky right-0 bg-blue-700 z-10">الموظف</th>
+                  <th className="py-2 px-3 text-right whitespace-nowrap min-w-[180px] sticky right-0 bg-blue-700 z-10">{t("الموظف")}</th>
                   {days.map((day) => (
                     <th key={day} className="py-2 px-0.5 min-w-[32px] font-bold">{day}</th>
                   ))}
@@ -130,9 +132,9 @@ export default function HRAttendanceCalculate() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                  <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((emp, idx) => (
                   <tr key={emp.id} className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-blue-50`}>
                     <td className="py-1.5 px-3 text-right sticky right-0 bg-inherit z-10 flex items-center justify-end gap-2 border-l border-gray-200">

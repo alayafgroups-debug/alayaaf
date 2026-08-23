@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
-import { ArrowRight, Plus, Trash2, Edit2, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, Trash2, Edit2, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
 import type { FormSchema, FormField } from "@/components/hr/formSchemas";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 
 const FIELD_TYPES = [
   { value: "text", label: "نص" },
@@ -45,6 +46,8 @@ function saveSchemas(schemas: SchemasMap) {
 
 export default function HRRequestFormSettings() {
   const navigate = useNavigate();
+  const { t, direction, formatNumber } = useI18n();
+  const BackIcon = direction === "rtl" ? ArrowRight : ArrowLeft;
   const [schemas, setSchemas] = useState<SchemasMap>(loadSchemas);
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<number | null>(null);
@@ -56,13 +59,13 @@ export default function HRRequestFormSettings() {
 
   const handleSave = () => {
     saveSchemas(schemas);
-    toast.success("تم حفظ إعدادات الحقول");
+    toast.success(t("تم حفظ إعدادات الحقول"));
   };
 
   const resetSchema = (id: string) => {
-    if (!confirm("هل تريد إعادة تعيين هذا النموذج للإعدادات الافتراضية؟")) return;
+    if (!confirm(t("هل تريد إعادة تعيين هذا النموذج للإعدادات الافتراضية؟"))) return;
     setSchemas((prev) => ({ ...prev, [id]: requestFormSchemas[id] }));
-    toast.success("تم إعادة تعيين النموذج");
+    toast.success(t("تم إعادة تعيين النموذج"));
   };
 
   const updateField = (schemaId: string, fieldIndex: number, updates: Partial<FormField>) => {
@@ -98,7 +101,7 @@ export default function HRRequestFormSettings() {
 
   const addField = (schemaId: string) => {
     if (!newField.name || !newField.label || !newField.type) {
-      toast.error("يرجى تعبئة اسم الحقل، التسمية، والنوع");
+      toast.error(t("يرجى تعبئة اسم الحقل، التسمية، والنوع"));
       return;
     }
     setSchemas((prev) => {
@@ -115,17 +118,17 @@ export default function HRRequestFormSettings() {
     });
     setNewField({});
     setShowAddField(false);
-    toast.success("تم إضافة الحقل");
+    toast.success(t("تم إضافة الحقل"));
   };
 
   return (
     <Layout>
-      <div dir="rtl" className="space-y-5">
+      <div dir={direction} className="space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Edit2 className="h-5 w-5 text-blue-600" />
-            إعداد حقول الطلبات
+            {t("إعداد حقول الطلبات")}
           </h1>
           <div className="flex items-center gap-2">
             <button
@@ -133,14 +136,14 @@ export default function HRRequestFormSettings() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
             >
               <Save className="h-4 w-4" />
-              حفظ التغييرات
+              {t("حفظ التغييرات")}
             </button>
             <button
               onClick={() => navigate("/hr/requests/send")}
               className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition"
             >
-              <ArrowRight className="h-4 w-4" />
-              رجوع
+              <BackIcon className="h-4 w-4" />
+              {t("رجوع")}
             </button>
           </div>
         </div>
@@ -149,7 +152,7 @@ export default function HRRequestFormSettings() {
           {/* ── Left: Schema List ── */}
           <div className="w-64 flex-shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="bg-blue-700 px-4 py-2.5 text-white text-sm font-semibold">
-              نماذج الطلبات ({schemaList.length})
+              {t("نماذج الطلبات")} ({formatNumber(schemaList.length)})
             </div>
             <div className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
               {schemaList.map((schema) => (
@@ -157,14 +160,14 @@ export default function HRRequestFormSettings() {
                   key={schema.id}
                   onClick={() => { setActiveSchemaId(schema.id); setEditingField(null); setShowAddField(false); }}
                   className={cn(
-                    "w-full text-right px-4 py-3 text-sm transition flex items-center justify-between",
+                    "w-full text-start px-4 py-3 text-sm transition flex items-center justify-between",
                     activeSchemaId === schema.id
                       ? "bg-blue-50 text-blue-700 font-semibold"
                       : "text-gray-700 hover:bg-gray-50"
                   )}
                 >
-                  <span>{schema.title}</span>
-                  <span className="text-xs text-gray-400">{schema.fields.length} حقل</span>
+                  <span>{t(schema.title)}</span>
+                  <span className="text-xs text-gray-400">{formatNumber(schema.fields.length)} {t("حقل")}</span>
                 </button>
               ))}
             </div>
@@ -174,18 +177,18 @@ export default function HRRequestFormSettings() {
           <div className="flex-1 min-w-0">
             {!activeSchema ? (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-16 text-center text-gray-400">
-                اختر نموذجاً من القائمة لتعديل حقوله
+                {t("اختر نموذجاً من القائمة لتعديل حقوله")}
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 {/* Schema header */}
                 <div className="bg-blue-700 px-5 py-3 flex items-center justify-between text-white">
-                  <span className="font-semibold">نموذج: {activeSchema.title}</span>
+                  <span className="font-semibold">{t("نموذج")}: {t(activeSchema.title)}</span>
                   <button
                     onClick={() => resetSchema(activeSchemaId!)}
                     className="text-xs px-3 py-1 rounded bg-white/20 hover:bg-white/30 transition"
                   >
-                    إعادة تعيين
+                    {t("إعادة تعيين")}
                   </button>
                 </div>
 
@@ -194,12 +197,12 @@ export default function HRRequestFormSettings() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50 border-b border-gray-200">
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">الترتيب</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">اسم الحقل (عربي)</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">المفتاح</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">النوع</th>
-                        <th className="px-4 py-3 text-center font-semibold text-gray-600 whitespace-nowrap">إلزامي</th>
-                        <th className="px-4 py-3 text-center font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
+                        <th className="px-4 py-3 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الترتيب")}</th>
+                        <th className="px-4 py-3 text-start font-semibold text-gray-600 whitespace-nowrap">{t("اسم الحقل (عربي)")}</th>
+                        <th className="px-4 py-3 text-start font-semibold text-gray-600 whitespace-nowrap">{t("المفتاح")}</th>
+                        <th className="px-4 py-3 text-start font-semibold text-gray-600 whitespace-nowrap">{t("النوع")}</th>
+                        <th className="px-4 py-3 text-center font-semibold text-gray-600 whitespace-nowrap">{t("إلزامي")}</th>
+                        <th className="px-4 py-3 text-center font-semibold text-gray-600 whitespace-nowrap">{t("إجراءات")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -207,13 +210,13 @@ export default function HRRequestFormSettings() {
                         <tr key={idx} className={cn("border-b border-gray-100 hover:bg-gray-50", editingField === idx && "bg-blue-50")}>
                           {editingField === idx ? (
                             <>
-                              <td className="px-4 py-2 text-xs text-gray-400">{idx + 1}</td>
+                              <td className="px-4 py-2 text-xs text-gray-400">{formatNumber(idx + 1)}</td>
                               <td className="px-4 py-2">
                                 <input
                                   type="text"
                                   value={field.label}
                                   onChange={(e) => updateField(activeSchemaId!, idx, { label: e.target.value })}
-                                  className="w-full border border-blue-300 rounded px-2 py-1 text-sm text-right focus:outline-none"
+                                  className="w-full border border-blue-300 rounded px-2 py-1 text-sm text-start focus:outline-none"
                                 />
                               </td>
                               <td className="px-4 py-2">
@@ -221,7 +224,7 @@ export default function HRRequestFormSettings() {
                                   type="text"
                                   value={field.name}
                                   onChange={(e) => updateField(activeSchemaId!, idx, { name: e.target.value })}
-                                  className="w-full border border-blue-300 rounded px-2 py-1 text-sm text-right focus:outline-none font-mono"
+                                  className="w-full border border-blue-300 rounded px-2 py-1 text-sm text-start focus:outline-none font-mono"
                                 />
                               </td>
                               <td className="px-4 py-2">
@@ -230,8 +233,8 @@ export default function HRRequestFormSettings() {
                                   onChange={(e) => updateField(activeSchemaId!, idx, { type: e.target.value as FormField["type"] })}
                                   className="w-full border border-blue-300 rounded px-2 py-1 text-sm focus:outline-none"
                                 >
-                                  {FIELD_TYPES.map((t) => (
-                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                  {FIELD_TYPES.map((fieldType) => (
+                                    <option key={fieldType.value} value={fieldType.value}>{t(fieldType.label)}</option>
                                   ))}
                                 </select>
                               </td>
@@ -248,7 +251,7 @@ export default function HRRequestFormSettings() {
                                   <button
                                     onClick={() => setEditingField(null)}
                                     className="p-1 text-green-600 hover:bg-green-50 rounded"
-                                    title="حفظ"
+                                    title={t("حفظ")}
                                   >
                                     <Save className="h-4 w-4" />
                                   </button>
@@ -267,10 +270,10 @@ export default function HRRequestFormSettings() {
                                   </button>
                                 </div>
                               </td>
-                              <td className="px-4 py-3 font-medium text-gray-800">{field.label}</td>
+                              <td className="px-4 py-3 font-medium text-gray-800">{t(field.label)}</td>
                               <td className="px-4 py-3 font-mono text-gray-500 text-xs">{field.name}</td>
                               <td className="px-4 py-3 text-gray-600">
-                                {FIELD_TYPES.find((t) => t.value === field.type)?.label ?? field.type}
+                                {t(FIELD_TYPES.find((fieldType) => fieldType.value === field.type)?.label ?? field.type)}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className={cn(
@@ -279,7 +282,7 @@ export default function HRRequestFormSettings() {
                                     ? "bg-rose-50 text-rose-700 border-rose-200"
                                     : "bg-gray-100 text-gray-500 border-gray-200"
                                 )}>
-                                  {field.required ? "إلزامي" : "اختياري"}
+                                  {field.required ? t("إلزامي") : t("اختياري")}
                                 </span>
                               </td>
                               <td className="px-4 py-3">
@@ -287,14 +290,14 @@ export default function HRRequestFormSettings() {
                                   <button
                                     onClick={() => setEditingField(idx)}
                                     className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                    title="تعديل"
+                                    title={t("تعديل")}
                                   >
                                     <Edit2 className="h-3.5 w-3.5" />
                                   </button>
                                   <button
                                     onClick={() => removeField(activeSchemaId!, idx)}
                                     className="p-1 text-rose-600 hover:bg-rose-50 rounded"
-                                    title="حذف"
+                                    title={t("حذف")}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
@@ -316,40 +319,40 @@ export default function HRRequestFormSettings() {
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-blue-400 text-blue-600 text-sm hover:bg-blue-50 transition"
                     >
                       <Plus className="h-4 w-4" />
-                      إضافة حقل جديد
+                      {t("إضافة حقل جديد")}
                     </button>
                   ) : (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">التسمية (عربي) *</label>
+                        <label className="block text-xs text-gray-600 mb-1">{t("التسمية (عربي) *")}</label>
                         <input
                           type="text"
-                          placeholder="مثال: رقم الطلب"
+                          placeholder={t("مثال: رقم الطلب")}
                           value={newField.label || ""}
                           onChange={(e) => setNewField({ ...newField, label: e.target.value })}
-                          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
+                          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-start focus:outline-none focus:border-blue-400"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">المفتاح (إنجليزي) *</label>
+                        <label className="block text-xs text-gray-600 mb-1">{t("المفتاح (إنجليزي) *")}</label>
                         <input
                           type="text"
-                          placeholder="مثال: request_no"
+                          placeholder={t("مثال: request_no")}
                           value={newField.name || ""}
                           onChange={(e) => setNewField({ ...newField, name: e.target.value.replace(/\s/g, "_") })}
                           className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">النوع *</label>
+                        <label className="block text-xs text-gray-600 mb-1">{t("النوع *")}</label>
                         <select
                           value={newField.type || ""}
                           onChange={(e) => setNewField({ ...newField, type: e.target.value as FormField["type"] })}
                           className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                         >
-                          <option value="">-- اختر --</option>
-                          {FIELD_TYPES.map((t) => (
-                            <option key={t.value} value={t.value}>{t.label}</option>
+                          <option value="">{t("-- اختر --")}</option>
+                          {FIELD_TYPES.map((fieldType) => (
+                            <option key={fieldType.value} value={fieldType.value}>{t(fieldType.label)}</option>
                           ))}
                         </select>
                       </div>
@@ -361,7 +364,7 @@ export default function HRRequestFormSettings() {
                             onChange={(e) => setNewField({ ...newField, required: e.target.checked })}
                             className="rounded"
                           />
-                          إلزامي
+                          {t("إلزامي")}
                         </label>
                       </div>
                       <div className="col-span-2 md:col-span-4 flex gap-2 justify-end">
@@ -369,13 +372,13 @@ export default function HRRequestFormSettings() {
                           onClick={() => { setShowAddField(false); setNewField({}); }}
                           className="px-3 py-1.5 text-sm rounded border border-gray-300 bg-white hover:bg-gray-50"
                         >
-                          إلغاء
+                          {t("إلغاء")}
                         </button>
                         <button
                           onClick={() => addField(activeSchemaId!)}
                           className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
                         >
-                          إضافة
+                          {t("إضافة")}
                         </button>
                       </div>
                     </div>

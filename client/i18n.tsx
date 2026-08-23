@@ -1505,6 +1505,18 @@ Object.assign(translations, {
   "متعاون": "Collaborator",
   "تعاون": "Collaboration",
   "متعاقد": "Contractor",
+  "إجمالي المرسلة": "Total sent",
+  "قيد المراجعة": "Under review",
+  "تمت الموافقة": "Approved",
+  "معلق": "Pending",
+  "موافق": "Approved",
+  "مرفوض": "Rejected",
+  "جهة الموافقة": "Approver",
+  "تاريخ الإرسال": "Sent date",
+  "لا توجد طلبات مرسلة": "No sent requests",
+  "حذف هذا الطلب؟": "Delete this request?",
+  "مدير الموارد البشرية": "Human resources manager",
+  "طلب": "Request",
 });
 
 const getInitialLocale = (): Locale => {

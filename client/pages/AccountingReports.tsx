@@ -16,6 +16,16 @@ const REPORTS: { kind: ReportKind; label: string }[] = [
   { kind: "position", label: "قائمة المركز المالي" },
 ];
 
+const REPORT_CATALOG = [
+  { title: "ميزان المراجعة", items: ["ميزان المراجعة", "ميزان المراجعة حسب المشروع", "دفتر الأستاذ العام", "دفتر الأستاذ المساعد"] },
+  { title: "سندات", items: ["سندات القبض", "سندات الصرف", "كشف حساب الصندوق", "كشف حساب البنك"] },
+  { title: "المبيعات", items: ["ملخص أرصدة العملاء", "كشف حساب عميل", "أعمار الديون", "قائمة التحصيلات النقدية"] },
+  { title: "مشتريات", items: ["ملخص أرصدة الموردين", "كشف حساب مورد", "أعمار الديون للموردين", "قائمة المدفوعات النقدية"] },
+  { title: "الرواتب", items: ["كشف حساب موظف", "كشف رواتب الموظفين", "تقرير البدلات والاستقطاعات", "تقرير مستحقات نهاية الخدمة"] },
+  { title: "الزكاة والضريبة", items: ["تقرير ضريبة القيمة المضافة", "تقرير الإقرارات الضريبية", "تقرير الزكاة"] },
+  { title: "إضافات", items: ["المصاريف المقدمة", "الأصول الثابتة", "الإهلاك المتراكم", "تكلفة المبيعات", "تقارير الإدارة (PDF)"] },
+] as const;
+
 function monthKeys(end: string) {
   const date = new Date(`${end}T00:00:00`);
   return Array.from({ length: date.getMonth() + 1 }, (_, index) => `${date.getFullYear()}-${String(index + 1).padStart(2, "0")}`);
@@ -62,6 +72,16 @@ export default function AccountingReports() {
       <section className="p-4">
         <h1 className="text-center text-sm font-bold text-slate-800">{t(activeLabel)}</h1><p className="mt-1 text-center text-[11px] text-slate-400">{t("حتى تاريخ")} {endDate}</p>
         {loading ? <State text={t("جاري التحميل...")} /> : error ? <State text={error} /> : <ReportTable report={report} headers={active === "position" ? [t("الرصيد")] : report.months.map((month) => month)} formatNumber={formatNumber} />}
+
+        <section className="mt-6 border-t border-slate-200 pt-5">
+          <h2 className="mb-3 text-sm font-bold text-slate-800">{t("باقي التقارير")}</h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {REPORT_CATALOG.map((section) => <div key={section.title} className="overflow-hidden rounded border border-slate-200 bg-white">
+              <h3 className="bg-slate-800 px-3 py-2 text-xs font-bold text-white">{t(section.title)}</h3>
+              <div className="divide-y divide-slate-100">{section.items.map((item) => <button key={item} className="flex w-full items-center justify-between px-3 py-2 text-start text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700"><span>{t(item)}</span><span className="text-slate-300">‹</span></button>)}</div>
+            </div>)}
+          </div>
+        </section>
       </section>
     </div>
   </main></Layout>;

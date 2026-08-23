@@ -10,6 +10,7 @@ import type { PermissionLevel, PermissionMap } from "@/lib/authSession";
 import AccessSelector from "@/components/permissions/AccessSelector";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 
 type Permission = { key: string; label: string };
 type PermissionGroup = { title: string; permissions: Permission[] };
@@ -171,6 +172,7 @@ const PERMISSION_TABS = Object.keys(PERMISSION_GROUPS);
 
 export default function HRPermissionsAddRole() {
   const navigate = useNavigate();
+  const { t, direction, formatNumber } = useI18n();
   const { roleId } = useParams();
   const isEditing = Boolean(roleId);
   const [activeTab, setActiveTab] = useState(PERMISSION_TABS[0]);
@@ -189,7 +191,7 @@ export default function HRPermissionsAddRole() {
       const { data, error } = await supabase.from("user_roles").select("*").eq("id", roleId).single();
       if (!active) return;
       if (error) {
-        toast.error(`تعذر تحميل الدور: ${error.message}`);
+        toast.error(`${t("تعذر تحميل الدور")}: ${error.message}`);
         navigate("/hr/permissions/roles");
       } else {
         setNameAr(String(data.name_ar ?? ""));
@@ -240,7 +242,7 @@ export default function HRPermissionsAddRole() {
 
   const handleSave = async () => {
     if (!nameAr.trim() || !nameEn.trim()) {
-      toast.error("يجب ملء اسم الدور بالعربية والإنجليزية");
+      toast.error(t("يجب ملء اسم الدور بالعربية والإنجليزية"));
       return;
     }
     setLoading(true);
@@ -257,38 +259,38 @@ export default function HRPermissionsAddRole() {
         ? await supabase.from("user_roles").update(payload).eq("id", roleId!).select("id").single()
         : await supabase.from("user_roles").insert(payload).select("id").single();
       if (result.error) throw result.error;
-      toast.success(isEditing ? "تم تحديث الدور والصلاحيات" : "تم إضافة الدور والصلاحيات");
+      toast.success(t(isEditing ? "تم تحديث الدور والصلاحيات" : "تم إضافة الدور والصلاحيات"));
       navigate("/hr/permissions/roles");
     } catch (error) {
-      toast.error(`تعذر حفظ الدور: ${error instanceof Error ? error.message : "خطأ غير معروف"}`);
+      toast.error(`${t("تعذر حفظ الدور")}: ${error instanceof Error ? error.message : t("خطأ غير معروف")}`);
     } finally {
       setLoading(false);
     }
   };
 
   if (loadingRole) {
-    return <Layout><div className="h-[60vh] flex items-center justify-center" dir="rtl"><Loader2 className="h-7 w-7 animate-spin text-[#004e89]" /><span className="mr-3">جاري تحميل الدور...</span></div></Layout>;
+    return <Layout><div className="h-[60vh] flex items-center justify-center" dir={direction}><Loader2 className="h-7 w-7 animate-spin text-[#004e89]" /><span className="mr-3">{t("جاري تحميل الدور...")}</span></div></Layout>;
   }
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-          <h2 className="text-xl font-bold text-[#004e89]">{isEditing ? "تعديل الدور والصلاحيات" : "إضافة دور جديد"}</h2>
+          <h2 className="text-xl font-bold text-[#004e89]">{t(isEditing ? "تعديل الدور والصلاحيات" : "إضافة دور جديد")}</h2>
           <div className="flex items-center gap-3">
-            <Button onClick={() => navigate("/hr/permissions/roles")} variant="outline" className="px-6"><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+            <Button onClick={() => navigate("/hr/permissions/roles")} variant="outline" className="px-6"><X className="h-4 w-4 ml-1" /> {t("إلغاء")}</Button>
             <Button onClick={handleSave} disabled={loading} className="bg-[#004e89] hover:bg-[#003865] px-8">
               {loading ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
-              {loading ? "جاري الحفظ..." : "حفظ"}
+              {loading ? t("جاري الحفظ...") : t("حفظ")}
             </Button>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-6 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2"><Label>الاسم بالعربية <span className="text-red-500">*</span></Label><Input value={nameAr} onChange={(event) => setNameAr(event.target.value)} placeholder="مثال: مدير الموارد البشرية" /></div>
-            <div className="space-y-2"><Label>الاسم بالإنجليزية <span className="text-red-500">*</span></Label><Input value={nameEn} onChange={(event) => setNameEn(event.target.value)} placeholder="e.g. HR Manager" /></div>
-            <div className="space-y-2"><Label>حالة الدور</Label><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"><option value="فعال">فعال</option><option value="غير فعال">غير فعال</option></select></div>
+            <div className="space-y-2"><Label>{t("الاسم بالعربية")} <span className="text-red-500">*</span></Label><Input value={nameAr} onChange={(event) => setNameAr(event.target.value)} placeholder={t("مثال: مدير الموارد البشرية")} /></div>
+            <div className="space-y-2"><Label>{t("الاسم بالإنجليزية")} <span className="text-red-500">*</span></Label><Input value={nameEn} onChange={(event) => setNameEn(event.target.value)} placeholder={t("e.g. HR Manager")} /></div>
+            <div className="space-y-2"><Label>{t("حالة الدور")}</Label><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"><option value="فعال">{t("فعال")}</option><option value="غير فعال">{t("غير فعال")}</option></select></div>
           </div>
 
           <div className="space-y-5">
@@ -303,21 +305,21 @@ export default function HRPermissionsAddRole() {
                     : cnTab(activeTab === tab)
                   }
                 >
-                  {tab === "الوصول للأقسام" && <span className="text-base">🏢</span>}
-                  {tab}
+                  {tab === "الوصول للأقسام" && <span className="text-base">{t("الأقسام")}</span>}
+                  {t(tab)}
                 </button>
               ))}
             </div>
 
             <div className="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-3">
-              <div><p className="font-semibold text-gray-800">صلاحيات {activeTab}</p><p className="text-xs text-gray-500">يتم حفظ جميع الخيارات المحددة مع الدور</p></div>
-              <div className="flex items-center gap-2"><Label htmlFor="selectAll" className="cursor-pointer">اختيار الكل</Label><Checkbox id="selectAll" checked={allActiveSelected} onCheckedChange={(value) => toggleCurrentTab(value === true)} /></div>
+              <div><p className="font-semibold text-gray-800">{t(`صلاحيات ${activeTab}`)}</p><p className="text-xs text-gray-500">{t("يتم حفظ جميع الخيارات المحددة مع الدور")}</p></div>
+              <div className="flex items-center gap-2"><Label htmlFor="selectAll" className="cursor-pointer">{t("اختيار الكل")}</Label><Checkbox id="selectAll" checked={allActiveSelected} onCheckedChange={(value) => toggleCurrentTab(value === true)} /></div>
             </div>
 
             {activeTab === "الوصول للأقسام" ? (
               <div className="space-y-3">
                 <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                  <strong>قراءة فقط:</strong> يسمح بعرض البيانات والبحث والطباعة دون الإضافة أو التعديل أو الحذف. <strong>إدارة كاملة:</strong> تسمح بجميع العمليات.
+                  <strong>{t("قراءة فقط")}:</strong> {t("يسمح بعرض البيانات والبحث والطباعة دون الإضافة أو التعديل أو الحذف")}. <strong>{t("إدارة كاملة")}:</strong> {t("تسمح بجميع العمليات")}.
                 </div>
                 {MODULE_TREE.map((module) => {
                   const expanded = expandedModules.has(module.key);
@@ -327,8 +329,8 @@ export default function HRPermissionsAddRole() {
                       <div className="flex flex-wrap items-center gap-3 bg-gradient-to-l from-emerald-50 to-white p-3">
                         <button type="button" onClick={() => toggleModule(module.key)} className="flex min-w-[220px] flex-1 items-center gap-3 text-right">
                           <ChevronDown className={`h-5 w-5 text-emerald-700 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                          <span className="font-bold text-gray-900">{module.label}</span>
-                          <span className="rounded-full bg-white px-2 py-0.5 text-xs text-gray-500">{module.children.length} قسم</span>
+                          <span className="font-bold text-gray-900">{t(module.label)}</span>
+                          <span className="rounded-full bg-white px-2 py-0.5 text-xs text-gray-500">{formatNumber(module.children.length)} {t("قسم")}</span>
                         </button>
                         <AccessSelector value={moduleLevel} onChange={(level) => setAccessLevel(module, module.key, level, true)} />
                       </div>
@@ -336,7 +338,7 @@ export default function HRPermissionsAddRole() {
                         <div className="grid grid-cols-1 gap-3 border-t border-emerald-100 bg-gray-50/60 p-4 lg:grid-cols-2">
                           {module.children.map((child) => (
                             <div key={child.key} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3">
-                              <span className="text-sm font-medium text-gray-800">{child.label}</span>
+                              <span className="text-sm font-medium text-gray-800">{t(child.label)}</span>
                               <AccessSelector value={levelOf(permissions[child.key] ?? permissions[module.key])} onChange={(level) => setAccessLevel(module, child.key, level)} />
                             </div>
                           ))}
@@ -348,11 +350,11 @@ export default function HRPermissionsAddRole() {
               </div>
             ) : PERMISSION_GROUPS[activeTab].map((group) => (
               <div key={group.title} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-3 border-b font-bold bg-gray-50 text-gray-800">{group.title}</div>
+                <div className="px-4 py-3 border-b font-bold bg-gray-50 text-gray-800">{t(group.title)}</div>
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-0">
                   {group.permissions.map((permission) => (
                     <div key={permission.key} className="flex items-center justify-between border-b border-gray-100 py-3 gap-4">
-                      <Label htmlFor={permission.key} className="text-sm cursor-pointer">{permission.label}</Label>
+                      <Label htmlFor={permission.key} className="text-sm cursor-pointer">{t(permission.label)}</Label>
                       <Checkbox id={permission.key} checked={levelOf(permissions[permission.key]) === "manage"} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
                     </div>
                   ))}

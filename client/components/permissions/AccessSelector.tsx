@@ -1,15 +1,18 @@
 import { Eye, Pencil, ShieldX } from "lucide-react";
 
+import { useI18n } from "@/i18n";
+
 export type AccessLevel = "none" | "read" | "manage";
 
 export default function AccessSelector({ value, onChange, compact = false }: { value: AccessLevel; onChange: (value: AccessLevel) => void; compact?: boolean }) {
+  const { t, direction } = useI18n();
   const options = [
-    { value: "none" as const, label: "بدون وصول", icon: ShieldX, active: "bg-gray-700 text-white border-gray-700" },
-    { value: "read" as const, label: "قراءة فقط", icon: Eye, active: "bg-blue-600 text-white border-blue-600" },
-    { value: "manage" as const, label: "إدارة كاملة", icon: Pencil, active: "bg-emerald-600 text-white border-emerald-600" },
+    { value: "none" as const, label: t("بدون وصول"), icon: ShieldX, active: "bg-gray-700 text-white border-gray-700" },
+    { value: "read" as const, label: t("قراءة فقط"), icon: Eye, active: "bg-blue-600 text-white border-blue-600" },
+    { value: "manage" as const, label: t("إدارة كاملة"), icon: Pencil, active: "bg-emerald-600 text-white border-emerald-600" },
   ];
   return (
-    <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" dir="rtl">
+    <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" dir={direction}>
       {options.map((option) => {
         const Icon = option.icon;
         return (

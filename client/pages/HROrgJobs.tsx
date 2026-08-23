@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Edit, Save, X, Printer, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 const DEFAULT_JOBS = [
   { name: "مدير عام", name_en: "General Manager", department: "", status: "فعال" },
@@ -21,6 +22,7 @@ const DEFAULT_JOBS = [
 type JobRow = { id: string; name: string; nameEn: string; department: string; status: string };
 
 export default function HROrgJobs() {
+  const { t, direction, locale, formatNumber } = useI18n();
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -58,30 +60,30 @@ export default function HROrgJobs() {
     if (seeded) return;
     try {
       await supabase.from("hr_jobs").insert(DEFAULT_JOBS);
-      toast({ title: "تم إضافة الوظائف الافتراضية" });
+      toast({ title: t("تم إضافة الوظائف الافتراضية") });
       loadData();
     } catch {
-      toast({ title: "خطأ", description: "تعذر إضافة الوظائف", variant: "destructive" });
+      toast({ title: t("خطأ"), description: t("تعذر إضافة الوظائف"), variant: "destructive" });
     }
   };
 
   useEffect(() => { loadData(); }, []);
 
   const handleDelete = async (job: JobRow) => {
-    if (!confirm(`حذف الوظيفة "${job.name}"؟`)) return;
+    if (!confirm(`${t("حذف الوظيفة")} "${job.name}"؟`)) return;
     await supabase.from("hr_jobs").delete().eq("id", job.id);
     setJobs((prev) => prev.filter((j) => j.id !== job.id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   const handleSave = async () => {
-    if (!formName.trim()) { toast({ title: "خطأ", description: "اسم الوظيفة مطلوب", variant: "destructive" }); return; }
+    if (!formName.trim()) { toast({ title: t("خطأ"), description: t("اسم الوظيفة مطلوب"), variant: "destructive" }); return; }
     if (editingId) {
       await supabase.from("hr_jobs").update({ name: formName, name_en: formNameEn, department: formDept, status: formStatus }).eq("id", editingId);
-      toast({ title: "تم التعديل" });
+      toast({ title: t("تم التعديل") });
     } else {
       await supabase.from("hr_jobs").insert([{ name: formName, name_en: formNameEn, department: formDept, status: formStatus }]);
-      toast({ title: "تمت الإضافة" });
+      toast({ title: t("تمت الإضافة") });
     }
     resetForm(); loadData();
   };
@@ -94,77 +96,77 @@ export default function HROrgJobs() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1200px] mx-auto space-y-5" dir="rtl">
+      <div className="p-6 max-w-[1200px] mx-auto space-y-5" dir={direction}>
         <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
           <div className="flex gap-2">
             <Button variant="outline" size="icon" className="text-blue-600 border-blue-600"><Printer className="h-4 w-4" /></Button>
             <Button variant="outline" size="icon" className="text-blue-600 border-blue-600"><FileText className="h-4 w-4" /></Button>
             <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1" onClick={() => { resetForm(); setShowForm(true); }}>
-              <Plus className="h-4 w-4" /> إضافة وظيفة
+              <Plus className="h-4 w-4" /> {t("إضافة وظيفة")}
             </Button>
             {jobs.length === 0 && !loading && (
-              <Button variant="outline" onClick={seedDefaults}>تعبئة الوظائف الافتراضية</Button>
+              <Button variant="outline" onClick={seedDefaults}>{t("تعبئة الوظائف الافتراضية")}</Button>
             )}
           </div>
-          <h1 className="font-bold text-xl text-[#004e89]">قائمة الوظائف</h1>
+          <h1 className="font-bold text-xl text-[#004e89]">{t("قائمة الوظائف")}</h1>
         </div>
 
         {showForm && (
           <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
-            <h3 className="font-bold text-lg">{editingId ? "تعديل وظيفة" : "إضافة وظيفة جديدة"}</h3>
+            <h3 className="font-bold text-lg">{editingId ? t("تعديل وظيفة") : t("إضافة وظيفة جديدة")}</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">اسم الوظيفة (عربي) *</label>
+                <label className="block text-sm font-medium mb-1">{t("اسم الوظيفة (عربي)")} *</label>
                 <input value={formName} onChange={(e) => setFormName(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Job Title (English)</label>
-                <input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} className={inputCls} placeholder="English name" />
+                <label className="block text-sm font-medium mb-1">{t("اسم الوظيفة بالإنجليزية")}</label>
+                <input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} className={inputCls} placeholder={t("English name")} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">الإدارة</label>
+                <label className="block text-sm font-medium mb-1">{t("الإدارة")}</label>
                 <input value={formDept} onChange={(e) => setFormDept(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">الحالة</label>
+                <label className="block text-sm font-medium mb-1">{t("الحالة")}</label>
                 <select value={formStatus} onChange={(e) => setFormStatus(e.target.value)} className={inputCls}>
-                  <option value="فعال">فعال</option>
-                  <option value="غير فعال">غير فعال</option>
+                  <option value="فعال">{t("فعال")}</option>
+                  <option value="غير فعال">{t("غير فعال")}</option>
                 </select>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1"><Save className="h-4 w-4" /> حفظ</Button>
-              <Button variant="outline" onClick={resetForm} className="gap-1"><X className="h-4 w-4" /> إلغاء</Button>
+              <Button onClick={handleSave} className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1"><Save className="h-4 w-4" /> {t("حفظ")}</Button>
+              <Button variant="outline" onClick={resetForm} className="gap-1"><X className="h-4 w-4" /> {t("إلغاء")}</Button>
             </div>
           </div>
         )}
 
         <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-          <table className="w-full text-sm text-right">
+          <table className="w-full text-sm text-start">
             <thead className="bg-[#004e89] text-white">
               <tr>
                 <th className="py-3 px-4 font-medium">#</th>
-                <th className="py-3 px-4 font-medium">اسم الوظيفة</th>
-                <th className="py-3 px-4 font-medium">الاسم بالإنجليزية</th>
-                <th className="py-3 px-4 font-medium">الإدارة</th>
-                <th className="py-3 px-4 font-medium text-center">الحالة</th>
-                <th className="py-3 px-4 font-medium text-center w-28">الإجراءات</th>
+                <th className="py-3 px-4 font-medium">{t("المسمى الوظيفي")}</th>
+                <th className="py-3 px-4 font-medium">{t("الاسم بالإنجليزية")}</th>
+                <th className="py-3 px-4 font-medium">{t("الإدارة")}</th>
+                <th className="py-3 px-4 font-medium text-center">{t("الحالة")}</th>
+                <th className="py-3 px-4 font-medium text-center w-28">{t("الإجراءات")}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
               ) : jobs.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-gray-400">لا توجد وظائف - استخدم زر "تعبئة الوظائف الافتراضية"</td></tr>
+                <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("لا توجد وظائف - استخدم زر \"تعبئة الوظائف الافتراضية\"")}</td></tr>
               ) : jobs.map((row, i) => (
                 <tr key={row.id} className="hover:bg-gray-50">
                   <td className="py-3 px-4">{i + 1}</td>
-                  <td className="py-3 px-4 font-medium">{row.name}</td>
+                  <td className="py-3 px-4 font-medium">{locale === "en" ? row.nameEn || row.name : row.name}</td>
                   <td className="py-3 px-4 text-gray-600">{row.nameEn}</td>
                   <td className="py-3 px-4">{row.department}</td>
                   <td className="py-3 px-4 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.status === "فعال" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"}`}>{row.status}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.status === "فعال" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"}`}>{t(row.status)}</span>
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex justify-center gap-2">
@@ -177,7 +179,7 @@ export default function HROrgJobs() {
             </tbody>
           </table>
         </div>
-        <p className="text-sm text-gray-500">إجمالي: {jobs.length} وظيفة</p>
+        <p className="text-sm text-gray-500">{t("إجمالي")}: {formatNumber(jobs.length)} {t("وظيفة")}</p>
       </div>
     </Layout>
   );

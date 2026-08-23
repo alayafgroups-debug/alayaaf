@@ -1284,6 +1284,20 @@ Object.assign(translations, {
   "إضافة شعبة جديدة": "Add new subunit",
   "اسم الشعبة": "Subunit name",
   "الوحدة": "Unit",
+  "تم إضافة الوظائف الافتراضية": "Default jobs added",
+  "تعذر إضافة الوظائف": "Unable to add default jobs",
+  "حذف الوظيفة": "Delete job",
+  "اسم الوظيفة مطلوب": "Job name is required",
+  "إضافة وظيفة": "Add job",
+  "تعبئة الوظائف الافتراضية": "Add default jobs",
+  "قائمة الوظائف": "Jobs",
+  "تعديل وظيفة": "Edit job",
+  "إضافة وظيفة جديدة": "Add new job",
+  "اسم الوظيفة (عربي)": "Job title (Arabic)",
+  "اسم الوظيفة بالإنجليزية": "Job title (English)",
+  "English name": "English name",
+  "لا توجد وظائف - استخدم زر \"تعبئة الوظائف الافتراضية\"": "No jobs found — use the Add default jobs button",
+  "وظيفة": "job",
 });
 
 const getInitialLocale = (): Locale => {

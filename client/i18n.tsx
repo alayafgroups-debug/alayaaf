@@ -1256,6 +1256,19 @@ Object.assign(translations, {
   "المدير": "Manager",
   "لا توجد إدارات": "No departments found",
   "إدارة": "department",
+  "حذف": "Delete",
+  "اسم القسم مطلوب": "Section name is required",
+  "قائمة الأقسام": "Sections",
+  "إضافة قسم": "Add section",
+  "تعديل القسم": "Edit section",
+  "إضافة قسم جديد": "Add new section",
+  "اسم القسم": "Section name",
+  "اختر الإدارة": "Select department",
+  "الوصف": "Description",
+  "جاري الحفظ...": "Saving...",
+  "بحث...": "Search...",
+  "سجل": "record",
+  "لا توجد بيانات": "No data found",
 });
 
 const getInitialLocale = (): Locale => {

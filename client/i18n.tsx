@@ -1257,6 +1257,7 @@ Object.assign(translations, {
   "لا توجد إدارات": "No departments found",
   "إدارة": "department",
   "حذف": "Delete",
+  "تعديل": "Edit",
   "اسم القسم مطلوب": "Section name is required",
   "قائمة الأقسام": "Sections",
   "إضافة قسم": "Add section",
@@ -1269,6 +1270,14 @@ Object.assign(translations, {
   "بحث...": "Search...",
   "سجل": "record",
   "لا توجد بيانات": "No data found",
+  "اسم الوحدة مطلوب": "Unit name is required",
+  "قائمة الوحدات": "Units",
+  "إضافة وحدة": "Add unit",
+  "إضافة وحدة جديدة": "Add new unit",
+  "اسم الوحدة": "Unit name",
+  "القسم": "Section",
+  "الموظف المسؤول": "Responsible employee",
+  "الموظف": "Employee",
 });
 
 const getInitialLocale = (): Locale => {

@@ -253,6 +253,11 @@ const App = () => (
           <Route path="/crm/vendors" element={<CRM />} />
           <Route path="/crm/reports" element={<CRM />} />
           <Route path="/expenses" element={<ExpenseManagement />} />
+          <Route path="/expenses/bank-accounts" element={<ExpenseManagement />} />
+          <Route path="/expenses/manual-journals" element={<ExpenseManagement />} />
+          <Route path="/expenses/reclassification" element={<ExpenseManagement />} />
+          <Route path="/expenses/fixed-assets" element={<ExpenseManagement />} />
+          <Route path="/expenses/settings" element={<ExpenseManagement />} />
           <Route path="/expenses/vouchers" element={<ExpenseManagement />} />
           <Route path="/expenses/petty-cash" element={<ExpenseManagement />} />
           <Route path="/expenses/reports" element={<AccountingReports />} />

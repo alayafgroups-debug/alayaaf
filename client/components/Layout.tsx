@@ -101,11 +101,16 @@ const navSubMenus: Record<
     { label: "التقارير", href: "/crm/reports" },
   ],
   "/expenses": [
+    { label: "الحسابات البنكية", href: "/expenses/bank-accounts" },
+    { label: "القيود اليدوية", href: "/expenses/manual-journals" },
+    { label: "إعادة التصنيف الجماعي", href: "/expenses/reclassification" },
     { label: "شجرة الحسابات", href: "/expenses" },
+    { label: "الأصول الثابتة", href: "/expenses/fixed-assets" },
     { label: "التقارير", href: "/expenses/reports" },
     { label: "مساحة عمل المحاسب", href: "/expenses/accountant" },
     { label: "حساب الضرائب", href: "/expenses/tax" },
     { label: "تقارير ضريبية", href: "/expenses/tax-reports" },
+    { label: "إعدادات المحاسبة", href: "/expenses/settings" },
   ],
   "/users": [
     { label: "المستخدمون", href: "/users" },

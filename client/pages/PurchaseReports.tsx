@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PageHeader, FilterInput } from "@/components/SalesPageUI";
+import PurchaseReportDetails from "@/components/purchases/PurchaseReportDetails";
 
 /* ── Types ── */
 type ReportItem = {
@@ -126,6 +127,20 @@ const sections: ReportSection[] = [
       { label: "تقييم أداء الموردين", desc: "جودة وسرعة التسليم", icon: <Star className="h-5 w-5 text-amber-500" />, badge: "مميز", badgeColor: "bg-amber-100 text-amber-700" },
       { label: "أفضل الموردين شراءً", desc: "ترتيب حسب الكميات", icon: <BarChart2 className="h-5 w-5 text-amber-500" /> },
       { label: "كشف حساب الموردين", desc: "رصيد وحركات كل مورد", icon: <BookOpen className="h-5 w-5 text-amber-500" /> },
+    ],
+  },
+  {
+    title: "تقارير تحليل المشتريات",
+    headerBg: "bg-slate-800",
+    headerText: "text-white",
+    icon: <BarChart2 className="h-5 w-5" />,
+    reports: [
+      { label: "ملخص أرصدة الموردين", desc: "الأرصدة المستحقة لكل مورد", icon: <BookOpen className="h-5 w-5 text-slate-700" /> },
+      { label: "كشف حساب مورد", desc: "حركات مورد محدد", icon: <FileText className="h-5 w-5 text-slate-700" /> },
+      { label: "تفاصيل حساب المورد", desc: "تفاصيل الفواتير والإشعارات", icon: <Receipt className="h-5 w-5 text-slate-700" /> },
+      { label: "المشتريات بحسب المنتج أو الخدمة", desc: "الكميات والقيم حسب البند", icon: <Package className="h-5 w-5 text-slate-700" /> },
+      { label: "المشتريات بحسب مورد", desc: "إجمالي المشتريات لكل مورد", icon: <Users className="h-5 w-5 text-slate-700" /> },
+      { label: "المشتريات بحسب العملة", desc: "إجمالي المشتريات حسب العملة", icon: <PieChart className="h-5 w-5 text-slate-700" /> },
     ],
   },
 ];
@@ -417,8 +432,8 @@ export default function PurchaseReports() {
 
       {/* Report modal */}
       {activeReport && (
-        <ReportModal
-          report={activeReport}
+        <PurchaseReportDetails
+          report={activeReport.label}
           onClose={() => setActiveReport(null)}
         />
       )}

@@ -36,7 +36,8 @@ export default function HROrgWorkLocations() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("hr_work_locations").select("*").order("name");
+      const { data, error } = await supabase.from("hr_work_locations").select("*").order("name");
+      if (error) throw error;
       if (data) setRows(data.map((r: any) => ({
         id: String(r.id), name: String(r.name ?? ""), nameEn: String(r.name_en ?? ""),
         address: String(r.address ?? ""), city: String(r.city ?? ""), status: String(r.status ?? "فعال"),
@@ -44,7 +45,14 @@ export default function HROrgWorkLocations() {
         longitude: r.longitude == null ? null : Number(r.longitude),
         isDefault: Boolean(r.is_company_default),
       })));
-    } catch { setRows([]); } finally { setLoading(false); }
+    } catch (error: any) {
+      setRows([]);
+      toast({
+        title: "تعذر تحميل مواقع العمل",
+        description: error?.message || "تحقق من صلاحيات قراءة مواقع العمل",
+        variant: "destructive",
+      });
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, []);

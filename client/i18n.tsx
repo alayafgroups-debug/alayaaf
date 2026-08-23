@@ -1247,6 +1247,15 @@ Object.assign(translations, {
   "لا توجد فروع": "No branches found",
   "إظهار": "Showing",
   "فرع": "branch",
+  "حذف الإدارة": "Delete department",
+  "اسم الإدارة مطلوب": "Department name is required",
+  "قائمة الإدارات": "Departments",
+  "تعديل الإدارة": "Edit department",
+  "إضافة إدارة جديدة": "Add new department",
+  "اسم الإدارة": "Department name",
+  "المدير": "Manager",
+  "لا توجد إدارات": "No departments found",
+  "إدارة": "department",
 });
 
 const getInitialLocale = (): Locale => {

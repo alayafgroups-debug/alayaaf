@@ -3,6 +3,7 @@ import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type PayrollSettings = {
   salaryBasis: string;
@@ -41,6 +42,7 @@ const DEFAULTS: PayrollSettings = {
 const SETTING_KEY = "payroll_settings";
 
 export default function HRPayrollSettings() {
+  const { t, direction } = useI18n();
   const [s, setS] = useState<PayrollSettings>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -75,16 +77,16 @@ export default function HRPayrollSettings() {
       .upsert([{ setting_key: SETTING_KEY, setting_value: s, updated_at: new Date().toISOString() }], { onConflict: "setting_key" });
     setSaving(false);
     if (error) {
-      toast({ title: "تعذر الحفظ", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر الحفظ"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "تم الحفظ", description: "تم حفظ إعدادات حساب الراتب في قاعدة البيانات" });
+    toast({ title: t("تم الحفظ"), description: t("تم حفظ إعدادات حساب الراتب في قاعدة البيانات") });
   };
 
   const Radio = ({ name, checked, onChange, label }: { name: string; checked: boolean; onChange: () => void; label: string }) => (
     <label className="flex items-center gap-2 cursor-pointer">
       <input type="radio" name={name} checked={checked} onChange={onChange} className="text-[#004e89] focus:ring-[#004e89] w-4 h-4" />
-      <span className="text-sm text-gray-700">{label}</span>
+      <span className="text-sm text-gray-700">{t(label)}</span>
     </label>
   );
 
@@ -98,55 +100,55 @@ export default function HRPayrollSettings() {
   if (loading) {
     return (
       <Layout>
-        <div className="p-6 text-center text-gray-400" dir="rtl">جاري تحميل الإعدادات...</div>
+        <div className="p-6 text-center text-gray-400" dir={direction}>{t("جاري تحميل الإعدادات...")}</div>
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1200px] mx-auto space-y-8" dir="rtl">
+      <div className="p-6 max-w-[1200px] mx-auto space-y-8" dir={direction}>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-gray-800">إعدادات حساب الراتب</h2>
+            <h2 className="text-lg font-bold text-gray-800">{t("إعدادات حساب الراتب")}</h2>
           </div>
 
           <div className="p-8 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-8">
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">حساب الراتب <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("حساب الراتب")} <span className="text-red-500">*</span></label>
                   <select value={s.salaryBasis} onChange={(e) => set("salaryBasis", e.target.value)} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
-                    <option>الأيام</option>
-                    <option>الساعات</option>
+                    <option value="الأيام">{t("الأيام")}</option>
+                    <option value="الساعات">{t("الساعات")}</option>
                   </select>
-                  <p className="text-xs text-gray-400">اختر طريقة حساب قيمة الراتب للحضور والغياب</p>
+                  <p className="text-xs text-gray-400">{t("اختر طريقة حساب قيمة الراتب للحضور والغياب")}</p>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700">عرض المتعاونين في كشف الراتب</label>
+                  <label className="text-sm font-medium text-gray-700">{t("عرض المتعاونين في كشف الراتب")}</label>
                   <YesNo name="cooperators" value={s.showCooperators} onChange={(v) => set("showCooperators", v)} />
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700">تفعيل إمكانية اصدار حساب الراتب مقدما</label>
+                  <label className="text-sm font-medium text-gray-700">{t("تفعيل إمكانية اصدار حساب الراتب مقدما")}</label>
                   <YesNo name="advance_payroll" value={s.advancePayroll} onChange={(v) => set("advancePayroll", v)} />
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">حدد تاريخ صرف الراتب <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("حدد تاريخ صرف الراتب")} <span className="text-red-500">*</span></label>
                   <select value={s.payDate} onChange={(e) => set("payDate", e.target.value)} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
-                    <option>يوم 25 من الشهر</option>
-                    <option>يوم 27 من الشهر</option>
-                    <option>يوم 30 من الشهر</option>
-                    <option>آخر يوم في الشهر</option>
+                    <option value="يوم 25 من الشهر">{t("يوم 25 من الشهر")}</option>
+                    <option value="يوم 27 من الشهر">{t("يوم 27 من الشهر")}</option>
+                    <option value="يوم 30 من الشهر">{t("يوم 30 من الشهر")}</option>
+                    <option value="آخر يوم في الشهر">{t("آخر يوم في الشهر")}</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-8">
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">طريقة احتساب قيمة أيام الغياب <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("طريقة احتساب قيمة أيام الغياب")} <span className="text-red-500">*</span></label>
                   <div className="space-y-3 mt-2">
                     <Radio name="absence_calc" checked={s.absenceCalc === "basic"} onChange={() => set("absenceCalc", "basic")} label="من الراتب الأساسي (الافتراضي)" />
                     <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances"} onChange={() => set("absenceCalc", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات" />
@@ -155,7 +157,7 @@ export default function HRPayrollSettings() {
                 </div>
 
                 <div className="space-y-3 pt-2">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">احتساب قيمة الساعة العادية للموظف <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("احتساب قيمة الساعة العادية للموظف")} <span className="text-red-500">*</span></label>
                   <div className="space-y-3 mt-2">
                     <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic"} onChange={() => set("normalHourCalc", "basic")} label="من الراتب الأساسي / 30 يوم / على عدد ساعات الدوام" />
                     <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic_allowances"} onChange={() => set("normalHourCalc", "basic_allowances")} label="من (الأساسي + البدلات) / 30 يوم / على عدد ساعات الدوام" />
@@ -167,7 +169,7 @@ export default function HRPayrollSettings() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-gray-100">
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">احتساب الساعة الإضافية حتى 100% <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("احتساب الساعة الإضافية حتى 100%")} <span className="text-red-500">*</span></label>
                 <div className="space-y-3 mt-2">
                   <Radio name="ot_basic" checked={s.otBasic === "basic"} onChange={() => set("otBasic", "basic")} label="من الراتب الأساسي (الافتراضي)" />
                   <Radio name="ot_basic" checked={s.otBasic === "basic_allowances"} onChange={() => set("otBasic", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات" />
@@ -176,7 +178,7 @@ export default function HRPayrollSettings() {
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">احتساب الساعة الإضافية فوق 100% <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("احتساب الساعة الإضافية فوق 100%")} <span className="text-red-500">*</span></label>
                 <div className="space-y-3 mt-2">
                   <Radio name="ot_extra" checked={s.otExtra === "basic"} onChange={() => set("otExtra", "basic")} label="من الراتب الأساسي (الافتراضي)" />
                   <Radio name="ot_extra" checked={s.otExtra === "basic_allowances"} onChange={() => set("otExtra", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات" />
@@ -187,53 +189,53 @@ export default function HRPayrollSettings() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-gray-100">
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">تفعيل التأمين على الساعات الإضافية</label>
+                <label className="text-sm font-medium text-gray-700">{t("تفعيل التأمين على الساعات الإضافية")}</label>
                 <select value={s.overtimeInsurance ? "نعم" : "لا"} onChange={(e) => set("overtimeInsurance", e.target.value === "نعم")} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
-                  <option>لا</option>
-                  <option>نعم</option>
+                  <option value="لا">{t("لا")}</option>
+                  <option value="نعم">{t("نعم")}</option>
                 </select>
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">استثناء السلف من الاقتطاعات</label>
+                <label className="text-sm font-medium text-gray-700">{t("استثناء السلف من الاقتطاعات")}</label>
                 <YesNo name="exclude_advances" value={s.excludeAdvances} onChange={(v) => set("excludeAdvances", v)} />
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">أعمدة الإجماليات في كشف الراتب</label>
+                <label className="text-sm font-medium text-gray-700">{t("أعمدة الإجماليات في كشف الراتب")}</label>
                 <select value={s.totalsColumns} onChange={(e) => set("totalsColumns", e.target.value)} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
-                  <option>الإثنين معاً</option>
-                  <option>الإجمالي فقط</option>
-                  <option>الصافي فقط</option>
+                  <option value="الإثنين معاً">{t("الإثنين معاً")}</option>
+                  <option value="الإجمالي فقط">{t("الإجمالي فقط")}</option>
+                  <option value="الصافي فقط">{t("الصافي فقط")}</option>
                 </select>
               </div>
             </div>
 
             <div className="pt-6 border-t border-gray-100">
-              <h3 className="text-[#004e89] font-bold text-base mb-6 border-r-4 border-[#004e89] pr-3">إعدادات طريقة احتساب الراتب</h3>
+              <h3 className="text-[#004e89] font-bold text-base mb-6 border-s-4 border-[#004e89] ps-3">{t("إعدادات طريقة احتساب الراتب")}</h3>
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">تفعيل نظام الراتب المكتسب حسب الحضور</label>
+                <label className="text-sm font-medium text-gray-700">{t("تفعيل نظام الراتب المكتسب حسب الحضور")}</label>
                 <YesNo name="earned_salary" value={s.earnedSalary} onChange={(v) => set("earnedSalary", v)} />
-                <p className="text-xs text-gray-400 mt-2">في نظام الراتب المكتسب يُحسب الراتب حسب أيام الحضور الفعلية مقابل أيام الدوام.</p>
+                <p className="text-xs text-gray-400 mt-2">{t("في نظام الراتب المكتسب يُحسب الراتب حسب أيام الحضور الفعلية مقابل أيام الدوام.")}</p>
               </div>
             </div>
 
             <div className="pt-6 border-t border-gray-100">
-              <h3 className="text-[#004e89] font-bold text-base mb-6 border-r-4 border-[#004e89] pr-3">إعدادات أيام الشهر</h3>
+              <h3 className="text-[#004e89] font-bold text-base mb-6 border-s-4 border-[#004e89] ps-3">{t("إعدادات أيام الشهر")}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">طريقة حساب أيام الشهر <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("طريقة حساب أيام الشهر")} <span className="text-red-500">*</span></label>
                   <select value={s.monthDaysMethod} onChange={(e) => set("monthDaysMethod", e.target.value)} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
-                    <option>30 يوم ثابت (افتراضي حسب نظام العمل السعودي)</option>
-                    <option>عدد أيام الشهر الفعلي</option>
+                    <option value="30 يوم ثابت (افتراضي حسب نظام العمل السعودي)">{t("30 يوم ثابت (افتراضي حسب نظام العمل السعودي)")}</option>
+                    <option value="عدد أيام الشهر الفعلي">{t("عدد أيام الشهر الفعلي")}</option>
                   </select>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">سياسة الأشهر ذات 31 يوم <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("سياسة الأشهر ذات 31 يوم")} <span className="text-red-500">*</span></label>
                   <select value={s.month31Policy} onChange={(e) => set("month31Policy", e.target.value)} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
-                    <option>لصالح الموظف (متساهل)</option>
-                    <option>لصالح الشركة</option>
+                    <option value="لصالح الموظف (متساهل)">{t("لصالح الموظف (متساهل)")}</option>
+                    <option value="لصالح الشركة">{t("لصالح الشركة")}</option>
                   </select>
                 </div>
               </div>
@@ -241,7 +243,7 @@ export default function HRPayrollSettings() {
 
             <div className="pt-6 border-t border-gray-100 flex justify-end">
               <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865] text-white px-8 h-10 rounded-md">
-                {saving ? "جاري الحفظ..." : "حفظ"}
+                {saving ? t("جاري الحفظ...") : t("حفظ")}
               </Button>
             </div>
           </div>

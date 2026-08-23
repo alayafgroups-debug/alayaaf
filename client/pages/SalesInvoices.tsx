@@ -2579,6 +2579,10 @@ function InvoiceForm({
                   <select
                     value={customerId}
                     onChange={(event) => {
+                      if (event.target.value === "__create_customer__") {
+                        setCreatingCustomer(true);
+                        return;
+                      }
                       const selected = customerOptions.find(
                         (option) => option.id === event.target.value,
                       );
@@ -2603,6 +2607,7 @@ function InvoiceForm({
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   >
                     <option value="">{t("اختر العميل")}</option>
+                    <option value="__create_customer__">{t("إنشاء عميل جديد +")}</option>
                     {customerOptions.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.name}

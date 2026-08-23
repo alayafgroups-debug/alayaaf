@@ -90,6 +90,7 @@ const navSubMenus: Record<
     { label: "أوامر التركيب", href: "/inventory/assembly" },
     { label: "المستودعات", href: "/inventory/warehouses" },
     { label: "إشعارات تسليم", href: "/inventory/delivery-notes" },
+    { label: "تقارير المخزون", href: "/inventory/reports" },
   ],
   "/residency": [
     { label: "إدارة الإقامة", href: "/residency" },

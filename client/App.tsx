@@ -20,6 +20,7 @@ import PurchaseInvoices from "./pages/PurchaseInvoices";
 import PurchaseCashExpenses from "./pages/PurchaseCashExpenses";
 import PurchaseDebitNotes from "./pages/PurchaseDebitNotes";
 import PurchaseReports from "./pages/PurchaseReports";
+import InventoryReports from "./pages/InventoryReports";
 import HR from "./pages/HR";
 import HRDashboard from "./pages/HRDashboard";
 import HREmployees from "./pages/HREmployees";
@@ -244,6 +245,7 @@ const App = () => (
           <Route path="/hr/reports" element={<HRReports />} />
           <Route path="/hr/reports/full-employee" element={<HREmployeeFullReport />} />
           <Route path="/hr/settings" element={<HRSettings />} />
+          <Route path="/inventory/reports" element={<InventoryReports />} />
           <Route path="/inventory/*" element={<PlaceholderModule title="المخزون" description="إدارة المنتجات والخدمات والمستودعات وعمليات المخزون." icon={Boxes} features={["المنتجات والخدمات", "عمليات جرد المخزون", "تسويات المخزون", "أوامر التصنيع", "أوامر التركيب", "المستودعات", "إشعارات تسليم"]} />} />
           <Route path="/residency/*" element={<PlaceholderModule title="الإقامة" description="إدارة بيانات الإقامة والمعاملات المرتبطة بها." icon={Building2} features={["إدارة الإقامة"]} />} />
           <Route path="/crm" element={<CRM />} />

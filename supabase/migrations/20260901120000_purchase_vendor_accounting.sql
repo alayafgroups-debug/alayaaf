@@ -374,6 +374,28 @@ create trigger require_posted_purchase_for_debit_note
 before insert on public.invoice_adjustment_notes
 for each row execute function public.require_posted_purchase_for_debit_note();
 
+alter table public.purchase_invoices enable row level security;
+drop policy if exists purchase_invoices_authenticated_select on public.purchase_invoices;
+create policy purchase_invoices_authenticated_select
+on public.purchase_invoices for select to authenticated
+using (auth.uid() is not null);
+drop policy if exists purchase_invoices_authenticated_update on public.purchase_invoices;
+create policy purchase_invoices_authenticated_update
+on public.purchase_invoices for update to authenticated
+using (auth.uid() is not null)
+with check (auth.uid() is not null);
+drop policy if exists purchase_invoices_authenticated_delete on public.purchase_invoices;
+create policy purchase_invoices_authenticated_delete
+on public.purchase_invoices for delete to authenticated
+using (auth.uid() is not null);
+
+-- Clients may edit draft descriptive fields, but payment and accounting columns are
+-- writable only by the SECURITY DEFINER posting/payment functions above.
+revoke insert, update on public.purchase_invoices from anon, authenticated;
+grant select, delete on public.purchase_invoices to authenticated;
+grant update (vendor_id, vendor, date, due_date, po_number, reference_no, notes,
+  cost_center, cost_center_name, items) on public.purchase_invoices to authenticated;
+
 alter table public.purchase_payments enable row level security;
 create policy purchase_payments_select_authorized
 on public.purchase_payments for select to authenticated

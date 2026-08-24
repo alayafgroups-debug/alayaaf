@@ -109,7 +109,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     setError("");
     const [invoiceResult, noteResult, vendorResult, paymentResult] = await Promise.all([
       supabase.from("purchase_invoices").select("*").order("date", { ascending: true }),
-      supabase.from("invoice_adjustment_notes").select("id, note_number, issue_date, counterparty, total").eq("note_type", "purchase_debit").order("issue_date", { ascending: true }),
+      supabase.from("invoice_adjustment_notes").select("id, note_number, issue_date, counterparty, total, original_invoice_id").eq("note_type", "purchase_debit").order("issue_date", { ascending: true }),
       supabase.from("vendors").select("id, name, currency, opening_balance"),
       supabase.from("purchase_payments").select("id, invoice_id, vendor_id, amount, payment_date").order("payment_date", { ascending: true }),
     ]);
@@ -131,10 +131,13 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     loadedVendors.forEach((vendor) => {
       if (loadedVendors.filter((candidate) => candidate.name === vendor.name).length === 1) vendorIdByUniqueName.set(vendor.name, vendor.id);
     });
-    setInvoices((invoiceResult.data ?? []).map((row) => mapInvoice(row as Record<string, unknown>)));
+    const loadedInvoices = (invoiceResult.data ?? []).map((row) => mapInvoice(row as Record<string, unknown>));
+    const invoiceById = new Map(loadedInvoices.map((invoice) => [invoice.id, invoice]));
+    setInvoices(loadedInvoices);
     setNotes((noteResult.data ?? []).map((row) => {
       const vendor = String(row.counterparty ?? "");
-      return { id: String(row.id), number: String(row.note_number ?? row.id), date: String(row.issue_date ?? ""), vendor, vendorId: vendorIdByUniqueName.get(vendor) ?? "", total: number(row.total) };
+      const originalInvoice = invoiceById.get(String(row.original_invoice_id ?? ""));
+      return { id: String(row.id), number: String(row.note_number ?? row.id), date: String(row.issue_date ?? ""), vendor, vendorId: originalInvoice?.vendorId || vendorIdByUniqueName.get(vendor) || "", total: number(row.total) };
     }));
     setVendors(loadedVendors);
     setPayments((paymentResult.data ?? []).map((row) => ({ id: String(row.id), invoiceId: String(row.invoice_id), vendorId: String(row.vendor_id), amount: number(row.amount), date: String(row.payment_date ?? "") })));

@@ -1515,9 +1515,6 @@ function InvoiceEdit({
         notes: form.notes || null,
         cost_center: form.costCenter,
         cost_center_name: form.costCenterName || null,
-        status: form.status,
-        total: totalStr,
-        remaining: remainingStr,
         items: items.map((item) => ({
           id: item.id,
           description: item.description,

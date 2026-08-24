@@ -13,6 +13,7 @@ type DebitNoteItem = {
   account: string;
   quantity: number;
   unitPrice: number;
+  taxPercent: number;
 };
 
 type ExpenseAccount = {
@@ -58,6 +59,7 @@ const emptyItem = (): DebitNoteItem => ({
   account: "511",
   quantity: 1,
   unitPrice: 0,
+  taxPercent: 15,
 });
 
 const buildNumber = (num: number) => `DN-${String(num).padStart(6, "0")}`;

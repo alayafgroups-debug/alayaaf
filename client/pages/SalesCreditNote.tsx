@@ -135,6 +135,7 @@ type CreditNoteItem = {
   account: string;
   quantity: number;
   unitPrice: number;
+  taxPercent: number;
 };
 
 type SavedCreditNote = {
@@ -193,6 +194,7 @@ const emptyItem = (): CreditNoteItem => ({
   account: "411",
   quantity: 1,
   unitPrice: 0,
+  taxPercent: 15,
 });
 
 const buildNoteNumber = (sequence: number) =>

@@ -167,10 +167,10 @@ begin
       raise exception 'VAT_EXPORT_MUST_BE_ZERO_RATED';
     end if;
 
-    v_rate := case
-      when p_document_table = 'invoice_adjustment_notes' and abs(v_document_tax) > 0 then 15
-      else round(coalesce(nullif(v_item->>'taxPercent', '')::numeric, 0), 4)
-    end;
+    v_rate := round(coalesce(
+      nullif(v_item->>'taxPercent', '')::numeric,
+      case when p_document_table = 'invoice_adjustment_notes' and abs(v_document_tax) > 0 then 15 else 0 end
+    ), 4);
     if v_tax_category = 'standard' and v_rate <> 15 then
       raise exception 'VAT_STANDARD_RATE_MUST_BE_15: line %', v_index;
     end if;
@@ -208,6 +208,40 @@ begin
   return v_count;
 end;
 $$;
+
+create or replace function public.protect_posted_adjustment_note()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if old.accounting_status = 'posted' then
+    if tg_op = 'DELETE' then
+      raise exception 'POSTED_ADJUSTMENT_NOTE_IMMUTABLE: %', old.id;
+    end if;
+    if new.items is distinct from old.items
+       or new.subtotal is distinct from old.subtotal
+       or new.tax is distinct from old.tax
+       or new.total is distinct from old.total
+       or new.note_type is distinct from old.note_type
+       or new.issue_date is distinct from old.issue_date
+       or new.status is distinct from old.status
+       or new.original_invoice_id is distinct from old.original_invoice_id then
+      raise exception 'POSTED_ADJUSTMENT_NOTE_IMMUTABLE: %', old.id;
+    end if;
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_posted_adjustment_note on public.invoice_adjustment_notes;
+create trigger protect_posted_adjustment_note
+before update or delete on public.invoice_adjustment_notes
+for each row execute function public.protect_posted_adjustment_note();
 
 create or replace function public.get_vat_report_summary(p_date_from date, p_date_to date)
 returns table (

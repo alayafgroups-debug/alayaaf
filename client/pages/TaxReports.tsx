@@ -1,100 +1,132 @@
-import { Download, Printer, RefreshCw } from "lucide-react";
+import { Download, Printer, RefreshCw, ShieldCheck, Tags, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
 
-type InvoiceItem = { quantity: number; unitPrice: number; discount: number; taxPercent: number };
-type TaxTotal = { base: number; tax: number };
-type TaxData = { salesStandard: TaxTotal; salesZero: TaxTotal; purchaseStandard: TaxTotal; purchaseZero: TaxTotal };
-type Row = Record<string, string | number>;
+type Item = { description: string; quantity: number; unitPrice: number; discount: number; taxPercent: number };
+type SourceDocument = { table: string; id: string; number: string; date: string; counterparty: string; items: Item[]; eligible: boolean };
+type Classification = { document_table: string; document_id: string; line_index: number };
+type SummaryGroup = { document_side: string; tax_category: string; supply_type: string; document_count: number; taxable_amount: number; tax_amount: number };
+type DetailLine = { id: string; document_table: string; document_id: string; document_date: string; document_side: string; line_description: string; tax_category: string; supply_type: string; tax_rate: number; taxable_amount: number; tax_amount: number };
+type DraftClass = { lineIndex: number; taxCategory: string; supplyType: string };
+type ReportRow = Record<string, string | number>;
 
-const empty: TaxTotal = { base: 0, tax: 0 };
-const value = (input: unknown) => Number(input ?? 0) || 0;
-
-function invoiceItems(items: unknown): InvoiceItem[] {
-  return Array.isArray(items) ? items.map((item) => {
-    const row = item as Record<string, unknown>;
-    return { quantity: value(row.quantity), unitPrice: value(row.unitPrice), discount: value(row.discount), taxPercent: value(row.taxPercent) };
-  }) : [];
-}
-
-function addItem(target: TaxTotal, item: InvoiceItem, multiplier = 1) {
-  const base = Math.max(0, item.quantity * item.unitPrice - item.discount);
-  target.base += base * multiplier;
-  target.tax += base * item.taxPercent / 100 * multiplier;
-}
+const number = (value: unknown) => Number(value ?? 0) || 0;
+const mapItems = (items: unknown): Item[] => Array.isArray(items) ? items.map((item) => { const row = item as Record<string, unknown>; return { description: String(row.description ?? ""), quantity: number(row.quantity), unitPrice: number(row.unitPrice), discount: number(row.discount), taxPercent: number(row.taxPercent) }; }) : [];
+const categoryNames: Record<string, string> = { standard: "النسبة الأساسية 15%", zero_rated: "نسبة صفر", exempt: "معفى", out_of_scope: "خارج النطاق" };
+const supplyNames: Record<string, string> = { domestic: "محلي", export: "تصدير", import: "استيراد", reverse_charge: "احتساب عكسي" };
 
 export default function TaxReports() {
   const { t, direction, formatNumber } = useI18n();
   const today = new Date().toISOString().slice(0, 10);
   const [dateFrom, setDateFrom] = useState(() => `${today.slice(0, 4)}-01-01`);
   const [dateTo, setDateTo] = useState(today);
-  const [mode, setMode] = useState<"summary" | "details">("summary");
-  const [data, setData] = useState<TaxData>({ salesStandard: { ...empty }, salesZero: { ...empty }, purchaseStandard: { ...empty }, purchaseZero: { ...empty } });
+  const [mode, setMode] = useState<"summary" | "details" | "classification">("summary");
+  const [groups, setGroups] = useState<SummaryGroup[]>([]);
+  const [details, setDetails] = useState<DetailLine[]>([]);
+  const [documents, setDocuments] = useState<SourceDocument[]>([]);
+  const [classifications, setClassifications] = useState<Classification[]>([]);
+  const [selectedDocument, setSelectedDocument] = useState<SourceDocument | null>(null);
+  const [draft, setDraft] = useState<DraftClass[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const invalidRange = dateFrom > dateTo;
+  const money = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const load = async () => {
+    if (invalidRange) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
     setLoading(true); setError("");
-    const [salesResult, purchasesResult, notesResult] = await Promise.all([
-      supabase.from("sales_invoices").select("id, date, items").gte("date", dateFrom).lte("date", dateTo),
-      supabase.from("purchase_invoices").select("id, date, items").gte("date", dateFrom).lte("date", dateTo),
-      supabase.from("invoice_adjustment_notes").select("note_type, issue_date, subtotal, tax").eq("status", "posted").gte("issue_date", dateFrom).lte("issue_date", dateTo),
+    const [summaryResult, detailResult, salesResult, purchaseResult, notesResult, classResult] = await Promise.all([
+      supabase.rpc("get_vat_report_summary", { p_date_from: dateFrom, p_date_to: dateTo }),
+      supabase.from("accounting_vat_report_lines").select("*").eq("report_eligible", true).gte("document_date", dateFrom).lte("document_date", dateTo).order("document_date"),
+      supabase.from("sales_invoices").select("id, date, customer, items, accounting_status").gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("purchase_invoices").select("id, date, vendor, items").gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("invoice_adjustment_notes").select("id, note_number, issue_date, counterparty, items, status, accounting_status").eq("status", "posted").gte("issue_date", dateFrom).lte("issue_date", dateTo),
+      supabase.from("accounting_vat_line_classifications").select("document_table, document_id, line_index").gte("document_date", dateFrom).lte("document_date", dateTo),
     ]);
-    const requestError = salesResult.error ?? purchasesResult.error ?? notesResult.error;
-    if (requestError) { setError(requestError.message); setLoading(false); return; }
-
-    const next: TaxData = { salesStandard: { ...empty }, salesZero: { ...empty }, purchaseStandard: { ...empty }, purchaseZero: { ...empty } };
-    (salesResult.data ?? []).forEach((invoice) => invoiceItems(invoice.items).forEach((item) => addItem(item.taxPercent === 15 ? next.salesStandard : next.salesZero, item)));
-    (purchasesResult.data ?? []).forEach((invoice) => invoiceItems(invoice.items).forEach((item) => addItem(item.taxPercent === 15 ? next.purchaseStandard : next.purchaseZero, item)));
-    (notesResult.data ?? []).forEach((note) => {
-      const base = value(note.subtotal); const tax = value(note.tax);
-      if (note.note_type === "sales_credit") { next.salesStandard.base -= base; next.salesStandard.tax -= tax; }
-      if (note.note_type === "sales_debit") { next.salesStandard.base += base; next.salesStandard.tax += tax; }
-      if (note.note_type === "purchase_debit") { next.purchaseStandard.base -= base; next.purchaseStandard.tax -= tax; }
-    });
-    setData(next); setLoading(false);
+    const firstError = summaryResult.error ?? detailResult.error ?? salesResult.error ?? purchaseResult.error ?? notesResult.error ?? classResult.error;
+    if (firstError) { setError(firstError.message); setLoading(false); return; }
+    const sourceDocuments: SourceDocument[] = [
+      ...(salesResult.data ?? []).map((row) => ({ table: "sales_invoices", id: String(row.id), number: String(row.id), date: String(row.date), counterparty: String(row.customer ?? ""), items: mapItems(row.items), eligible: row.accounting_status === "posted" })),
+      ...(purchaseResult.data ?? []).map((row) => ({ table: "purchase_invoices", id: String(row.id), number: String(row.id), date: String(row.date), counterparty: String(row.vendor ?? ""), items: mapItems(row.items), eligible: false })),
+      ...(notesResult.data ?? []).map((row) => ({ table: "invoice_adjustment_notes", id: String(row.id), number: String(row.note_number), date: String(row.issue_date), counterparty: String(row.counterparty ?? ""), items: mapItems(row.items), eligible: row.accounting_status === "posted" })),
+    ];
+    setGroups((summaryResult.data ?? []) as SummaryGroup[]);
+    setDetails((detailResult.data ?? []) as DetailLine[]);
+    setDocuments(sourceDocuments.filter((document) => document.items.length > 0).sort((first, second) => first.date.localeCompare(second.date)));
+    setClassifications((classResult.data ?? []) as Classification[]);
+    setLoading(false);
   };
 
   useEffect(() => { void load(); }, [dateFrom, dateTo]);
 
-  const report = useMemo(() => {
-    const money = (amount: number) => formatNumber(amount, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const salesBase = data.salesStandard.base + data.salesZero.base;
-    const salesTax = data.salesStandard.tax + data.salesZero.tax;
-    const purchaseBase = data.purchaseStandard.base + data.purchaseZero.base;
-    const purchaseTax = data.purchaseStandard.tax + data.purchaseZero.tax;
-    const summaryRows: Row[] = [
-      { section: t("ضريبة القيمة المضافة على الإيرادات"), code: "", name: "", base: "", tax: "", adjustment: "" },
-      { section: "", code: "1", name: t("المبيعات الخاضعة للنسبة الأساسية (15%)"), base: money(data.salesStandard.base), tax: money(data.salesStandard.tax), adjustment: money(0) },
-      { section: "", code: "2", name: t("المبيعات الخاضعة لنسبة صفر أو غير المصنفة"), base: money(data.salesZero.base), tax: money(data.salesZero.tax), adjustment: money(0) },
-      { section: "", code: "3", name: t("إجمالي المبيعات"), base: money(salesBase), tax: money(salesTax), adjustment: money(0) },
-      { section: t("ضريبة القيمة المضافة على المشتريات"), code: "", name: "", base: "", tax: "", adjustment: "" },
-      { section: "", code: "7", name: t("المشتريات الخاضعة للنسبة الأساسية (15%)"), base: money(data.purchaseStandard.base), tax: money(data.purchaseStandard.tax), adjustment: money(0) },
-      { section: "", code: "8", name: t("المشتريات بنسبة صفر أو غير المصنفة"), base: money(data.purchaseZero.base), tax: money(data.purchaseZero.tax), adjustment: money(0) },
-      { section: "", code: "12", name: t("إجمالي المشتريات"), base: money(purchaseBase), tax: money(purchaseTax), adjustment: money(0) },
-      { section: "", code: "13", name: t("صافي ضريبة القيمة المضافة المستحقة عن الفترة"), base: money(salesBase - purchaseBase), tax: money(salesTax - purchaseTax), adjustment: money(0) },
-    ];
-    const detailRows: Row[] = [
-      { type: t("مبيعات"), name: t("ضريبة القيمة المضافة على الإيرادات (15%)"), base: money(data.salesStandard.base), tax: money(data.salesStandard.tax) },
-      { type: t("مبيعات"), name: t("مبيعات بنسبة صفر أو غير مصنفة"), base: money(data.salesZero.base), tax: money(data.salesZero.tax) },
-      { type: t("مشتريات"), name: t("ضريبة القيمة المضافة على المشتريات (15%)"), base: money(data.purchaseStandard.base), tax: money(data.purchaseStandard.tax) },
-      { type: t("مشتريات"), name: t("مشتريات بنسبة صفر أو غير مصنفة"), base: money(data.purchaseZero.base), tax: money(data.purchaseZero.tax) },
-    ];
-    const columns: ReportColumn[] = mode === "summary"
-      ? [{ key: "code", label: t("رقم الخانة") }, { key: "name", label: t("البند") }, { key: "base", label: t("المبلغ الخاضع للضريبة SAR") }, { key: "tax", label: t("مبلغ الضريبة SAR") }, { key: "adjustment", label: t("تعديلات") }]
-      : [{ key: "type", label: t("نوع الضريبة") }, { key: "name", label: t("اسم الضريبة") }, { key: "base", label: t("المبلغ الخاضع للضريبة SAR") }, { key: "tax", label: t("مبلغ الضريبة SAR") }];
-    return { columns, rows: mode === "summary" ? summaryRows : detailRows, summary: [{ label: t("صافي الضريبة المستحقة"), value: money(salesTax - purchaseTax) }] };
-  }, [data, formatNumber, mode, t]);
+  const classifiedCount = useMemo(() => {
+    const result = new Map<string, number>();
+    classifications.forEach((item) => { const key = `${item.document_table}:${item.document_id}`; result.set(key, (result.get(key) ?? 0) + 1); });
+    return result;
+  }, [classifications]);
+  const unclassified = documents.filter((document) => (classifiedCount.get(`${document.table}:${document.id}`) ?? 0) !== document.items.length);
+  const sumGroup = (side: string, category: string, supplies?: string[]) => groups.filter((group) => group.document_side === side && group.tax_category === category && (!supplies || supplies.includes(group.supply_type))).reduce((sum, group) => ({ base: sum.base + number(group.taxable_amount), tax: sum.tax + number(group.tax_amount), count: sum.count + number(group.document_count) }), { base: 0, tax: 0, count: 0 });
 
-  const title = mode === "summary" ? t("ضريبة القيمة المضافة") : t("الضرائب");
-  const exportOptions = { title, subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: title, summary: report.summary, landscape: true };
+  const summaryRows = useMemo<ReportRow[]>(() => {
+    const salesStandard = sumGroup("sales", "standard", ["domestic"]);
+    const salesZero = sumGroup("sales", "zero_rated", ["domestic"]);
+    const salesExport = sumGroup("sales", "zero_rated", ["export"]);
+    const salesExempt = sumGroup("sales", "exempt");
+    const purchaseStandard = sumGroup("purchases", "standard", ["domestic"]);
+    const purchaseImport = sumGroup("purchases", "standard", ["import"]);
+    const purchaseReverse = sumGroup("purchases", "standard", ["reverse_charge"]);
+    const purchaseExempt = sumGroup("purchases", "exempt");
+    const salesBase = salesStandard.base + salesZero.base + salesExport.base + salesExempt.base;
+    const salesTax = groups.filter((group) => group.document_side === "sales").reduce((sum, group) => sum + number(group.tax_amount), 0);
+    const purchaseBase = purchaseStandard.base + purchaseImport.base + purchaseReverse.base + purchaseExempt.base;
+    const purchaseTax = groups.filter((group) => group.document_side === "purchases").reduce((sum, group) => sum + number(group.tax_amount), 0);
+    return [
+      { code: 1, name: t("المبيعات المحلية الخاضعة للنسبة الأساسية"), base: money(salesStandard.base), tax: money(salesStandard.tax) },
+      { code: 2, name: t("المبيعات المحلية الخاضعة لنسبة صفر"), base: money(salesZero.base), tax: money(salesZero.tax) },
+      { code: 3, name: t("الصادرات الخاضعة لنسبة صفر"), base: money(salesExport.base), tax: money(salesExport.tax) },
+      { code: 4, name: t("المبيعات المعفاة"), base: money(salesExempt.base), tax: money(salesExempt.tax) },
+      { code: 6, name: t("إجمالي المبيعات"), base: money(salesBase), tax: money(salesTax) },
+      { code: 7, name: t("المشتريات المحلية الخاضعة للنسبة الأساسية"), base: money(purchaseStandard.base), tax: money(purchaseStandard.tax) },
+      { code: 8, name: t("الاستيرادات الخاضعة للضريبة عند الجمارك"), base: money(purchaseImport.base), tax: money(purchaseImport.tax) },
+      { code: 9, name: t("المشتريات الخاضعة للاحتساب العكسي"), base: money(purchaseReverse.base), tax: money(purchaseReverse.tax) },
+      { code: 10, name: t("المشتريات المعفاة"), base: money(purchaseExempt.base), tax: money(purchaseExempt.tax) },
+      { code: 12, name: t("إجمالي المشتريات"), base: money(purchaseBase), tax: money(purchaseTax) },
+      { code: 13, name: t("صافي ضريبة القيمة المضافة المستحقة"), base: "—", tax: money(salesTax - purchaseTax) },
+    ];
+  }, [groups, formatNumber, t]);
+
+  const columns: ReportColumn[] = mode === "details"
+    ? [{ key: "date", label: t("التاريخ") }, { key: "document", label: t("المستند") }, { key: "description", label: t("الوصف") }, { key: "side", label: t("النوع") }, { key: "category", label: t("الفئة الضريبية") }, { key: "supply", label: t("نوع التوريد") }, { key: "base", label: t("المبلغ الخاضع") }, { key: "tax", label: t("الضريبة") }]
+    : [{ key: "code", label: t("رقم الخانة") }, { key: "name", label: t("البند") }, { key: "base", label: t("المبلغ الخاضع للضريبة SAR") }, { key: "tax", label: t("مبلغ الضريبة SAR") }];
+  const detailRows: ReportRow[] = details.map((line) => ({ date: line.document_date, document: line.document_id, description: line.line_description || "—", side: t(line.document_side === "sales" ? "مبيعات" : "مشتريات"), category: t(categoryNames[line.tax_category] ?? line.tax_category), supply: t(supplyNames[line.supply_type] ?? line.supply_type), base: money(number(line.taxable_amount)), tax: money(number(line.tax_amount)) }));
+  const exportRows = mode === "details" ? detailRows : summaryRows;
+  const reportTitle = mode === "details" ? t("تفاصيل ضريبة القيمة المضافة") : t("ملخص ضريبة القيمة المضافة");
+  const exportOptions = { title: reportTitle, subtitle: `${dateFrom} — ${dateTo}`, columns, rows: exportRows, fileName: reportTitle, landscape: true };
+
+  const openClassification = (document: SourceDocument) => {
+    setSelectedDocument(document);
+    setDraft(document.items.map((_, lineIndex) => ({ lineIndex, taxCategory: "", supplyType: "" })));
+    setError("");
+  };
+  const saveClassification = async () => {
+    if (!selectedDocument || draft.some((item) => !item.taxCategory || !item.supplyType)) { setError(t("يجب اختيار الفئة الضريبية ونوع التوريد لكل بند")); return; }
+    setSaving(true); setError("");
+    const { error: saveError } = await supabase.rpc("save_vat_document_classification", { p_document_table: selectedDocument.table, p_document_id: selectedDocument.id, p_lines: draft });
+    setSaving(false);
+    if (saveError) { setError(saveError.message); return; }
+    setSelectedDocument(null); await load();
+  };
 
   return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4"><div className="mx-auto max-w-[1500px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
-    <header className="border-t-2 border-red-700 px-4 py-2"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] text-slate-400">{t("التقارير")}</p><h1 className="text-sm font-bold text-slate-800">{title}</h1></div><div className="flex gap-1"><button onClick={() => void load()} className="rounded border border-slate-200 p-1.5" title={t("تحديث")}><RefreshCw className="h-3.5 w-3.5" /></button><button onClick={() => printReport(exportOptions)} className="rounded border border-slate-200 p-1.5" title={t("طباعة")}><Printer className="h-3.5 w-3.5" /></button><button onClick={() => exportReportExcel(exportOptions)} className="rounded border border-slate-200 p-1.5" title={t("تصدير Excel")}><Download className="h-3.5 w-3.5" /></button></div></div></header>
-    <div className="flex flex-wrap items-center justify-between gap-3 border-y border-slate-100 bg-white px-4 py-2"><div className="flex rounded bg-slate-100 p-1"><button onClick={() => setMode("summary")} className={`rounded px-3 py-1.5 text-xs ${mode === "summary" ? "bg-white font-bold shadow-sm" : "text-slate-500"}`}>{t("ملخص")}</button><button onClick={() => setMode("details")} className={`rounded px-3 py-1.5 text-xs ${mode === "details" ? "bg-white font-bold shadow-sm" : "text-slate-500"}`}>{t("تفاصيل")}</button></div><div className="flex flex-wrap gap-2"><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded border border-slate-200 px-2 py-1.5 text-xs" /><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded border border-slate-200 px-2 py-1.5 text-xs" /><span className="rounded bg-slate-50 px-2 py-1.5 text-xs text-slate-500">SAR</span></div></div>
-    <section className="p-4">{loading ? <p className="py-20 text-center text-sm text-slate-500">{t("جاري التحميل...")}</p> : error ? <p className="py-20 text-center text-sm text-red-600">{error}</p> : <><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-slate-100 text-slate-700"><tr>{report.columns.map((column) => <th key={column.key} className="border-b px-3 py-2 text-center">{column.label}</th>)}</tr></thead><tbody>{report.rows.map((row, index) => row.section ? <tr key={index} className="bg-slate-50"><td colSpan={report.columns.length} className="px-3 py-2 font-bold text-slate-700">{row.section}</td></tr> : <tr key={index} className={`border-b border-slate-100 ${row.code === "3" || row.code === "12" || row.code === "13" ? "font-bold" : ""}`}>{report.columns.map((column) => <td key={column.key} className="px-3 py-2 text-center">{row[column.key] || "—"}</td>)}</tr>)}</tbody></table></div><div className="mt-3 border-t border-slate-100 pt-3 text-end text-xs font-bold text-slate-700">{report.summary[0].label}: <span className="text-indigo-700">{report.summary[0].value} SAR</span></div><p className="mt-4 text-[11px] leading-5 text-slate-400">{t("تعتمد هذه النتائج على الفواتير والإشعارات المرحلة في الفترة المحددة. تصنيف التصدير والاستيراد والإعفاء يتطلب حفظ فئة ضريبية واضحة في المستند قبل استخدام التقرير كإقرار رسمي.")}</p></>}</section>
-  </div></main></Layout>;
+    <header className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-red-700 px-4 py-3"><div><p className="text-[11px] text-slate-400">{t("التقارير")}</p><h1 className="text-base font-bold">{t("تقارير ضريبة القيمة المضافة")}</h1></div><div className="flex gap-1"><button onClick={() => void load()} className="rounded border p-2"><RefreshCw className="h-4 w-4" /></button>{mode !== "classification" && <><button onClick={() => printReport(exportOptions)} className="rounded border p-2"><Printer className="h-4 w-4" /></button><button onClick={() => exportReportExcel(exportOptions)} className="rounded border p-2"><Download className="h-4 w-4" /></button></>}</div></header>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-y bg-slate-50 px-4 py-3"><div className="flex rounded bg-slate-200/60 p-1"><button onClick={() => setMode("summary")} className={`rounded px-3 py-1.5 text-xs ${mode === "summary" ? "bg-white font-bold shadow" : ""}`}>{t("ملخص")}</button><button onClick={() => setMode("details")} className={`rounded px-3 py-1.5 text-xs ${mode === "details" ? "bg-white font-bold shadow" : ""}`}>{t("تفاصيل")}</button><button onClick={() => setMode("classification")} className={`rounded px-3 py-1.5 text-xs ${mode === "classification" ? "bg-white font-bold shadow" : ""}`}><Tags className="me-1 inline h-3 w-3" />{t("التصنيف")} ({unclassified.length})</button></div><div className="flex gap-2"><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded border px-2 py-1.5 text-xs" /><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded border px-2 py-1.5 text-xs" /></div></div>
+    {error && <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>}
+    <section className="p-4">{loading ? <p className="py-20 text-center text-sm text-slate-500">{t("جاري التحميل...")}</p> : mode === "classification" ? <div><p className="mb-3 text-xs text-slate-500">{t("لن تُدرج المستندات غير المصنفة في التقرير الرسمي، ولا يتم استنتاج الإعفاء أو التصدير من نسبة الصفر.")}</p><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-slate-100"><tr><th className="px-3 py-2">{t("التاريخ")}</th><th className="px-3 py-2">{t("المستند")}</th><th className="px-3 py-2">{t("جهة التعامل")}</th><th className="px-3 py-2">{t("عدد البنود")}</th><th className="px-3 py-2">{t("حالة الترحيل")}</th><th /></tr></thead><tbody>{unclassified.length ? unclassified.map((document) => <tr key={`${document.table}:${document.id}`} className="border-b"><td className="px-3 py-2 text-center">{document.date}</td><td className="px-3 py-2 text-center">{document.number}</td><td className="px-3 py-2">{document.counterparty || "—"}</td><td className="px-3 py-2 text-center">{document.items.length}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 ${document.eligible ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{t(document.eligible ? "مرحّل وقابل للإدراج" : "غير مرحّل — غير مدرج")}</span></td><td className="px-3 py-2 text-center"><button onClick={() => openClassification(document)} className="rounded bg-blue-700 px-3 py-1.5 text-white">{t("تصنيف البنود")}</button></td></tr>) : <tr><td colSpan={6} className="py-12 text-center text-slate-400">{t("تم تصنيف جميع المستندات في الفترة")}</td></tr>}</tbody></table></div></div> : <><div className="mb-3 flex items-center gap-2 rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><ShieldCheck className="h-4 w-4" />{t("يعرض التقرير المستندات المصنفة والمرحلة فقط")}</div><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-slate-100"><tr>{columns.map((column) => <th key={column.key} className="px-3 py-2 text-center">{column.label}</th>)}</tr></thead><tbody>{exportRows.length ? exportRows.map((row, index) => <tr key={index} className="border-b">{columns.map((column) => <td key={column.key} className="px-3 py-2 text-center">{row[column.key] ?? "—"}</td>)}</tr>) : <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("لا توجد بيانات ضريبية مصنفة ومرحلة للفترة")}</td></tr>}</tbody></table></div></>}</section>
+  </div>
+  {selectedDocument && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={() => setSelectedDocument(null)}><section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><header className="flex items-center justify-between border-b px-5 py-4"><div><h2 className="font-bold">{t("تصنيف بنود الضريبة")}</h2><p className="text-xs text-slate-500">{selectedDocument.number}</p></div><button onClick={() => setSelectedDocument(null)}><X className="h-5 w-5" /></button></header><div className="overflow-x-auto p-5"><table className="min-w-full text-xs"><thead className="bg-slate-100"><tr><th className="px-3 py-2">{t("البند")}</th><th className="px-3 py-2">{t("نسبة الضريبة")}</th><th className="px-3 py-2">{t("الفئة الضريبية")}</th><th className="px-3 py-2">{t("نوع التوريد")}</th></tr></thead><tbody>{selectedDocument.items.map((item, index) => <tr key={index} className="border-b"><td className="px-3 py-2">{item.description || `#${index + 1}`}</td><td className="px-3 py-2 text-center">{item.taxPercent}%</td><td className="px-3 py-2"><select value={draft[index]?.taxCategory ?? ""} onChange={(event) => setDraft((current) => current.map((value, row) => row === index ? { ...value, taxCategory: event.target.value } : value))} className="w-full rounded border p-2"><option value="">{t("تحديد")}</option>{item.taxPercent === 15 && <option value="standard">{t("النسبة الأساسية 15%")}</option>}{item.taxPercent === 0 && <><option value="zero_rated">{t("نسبة صفر")}</option><option value="exempt">{t("معفى")}</option><option value="out_of_scope">{t("خارج النطاق")}</option></>}</select></td><td className="px-3 py-2"><select value={draft[index]?.supplyType ?? ""} onChange={(event) => setDraft((current) => current.map((value, row) => row === index ? { ...value, supplyType: event.target.value } : value))} className="w-full rounded border p-2"><option value="">{t("تحديد")}</option><option value="domestic">{t("محلي")}</option>{selectedDocument.table === "sales_invoices" && <option value="export">{t("تصدير")}</option>}{selectedDocument.table !== "sales_invoices" && <><option value="import">{t("استيراد")}</option><option value="reverse_charge">{t("احتساب عكسي")}</option></>}</select></td></tr>)}</tbody></table></div><footer className="flex justify-end gap-2 border-t px-5 py-4"><button onClick={() => setSelectedDocument(null)} className="rounded border px-4 py-2 text-sm">{t("إلغاء")}</button><button disabled={saving} onClick={() => void saveClassification()} className="rounded bg-blue-700 px-4 py-2 text-sm text-white disabled:opacity-50">{saving ? t("جاري الحفظ...") : t("حفظ التصنيف")}</button></footer></section></div>}
+  </main></Layout>;
 }

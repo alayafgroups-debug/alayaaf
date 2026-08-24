@@ -114,13 +114,9 @@ as $$
         or case when p_manage then
           coalesce(role.permissions ->> 'accounting.accounts', '') in ('true', 'manage')
           or coalesce(role.permissions ->> 'module.accounting', '') in ('true', 'manage')
-          or coalesce(employee.permissions ->> 'accounting.accounts', '') in ('true', 'manage')
-          or coalesce(employee.permissions ->> 'module.accounting', '') in ('true', 'manage')
         else
           coalesce(role.permissions ->> 'accounting.accounts', '') in ('true', 'read', 'manage')
           or coalesce(role.permissions ->> 'module.accounting', '') in ('true', 'read', 'manage')
-          or coalesce(employee.permissions ->> 'accounting.accounts', '') in ('true', 'read', 'manage')
-          or coalesce(employee.permissions ->> 'module.accounting', '') in ('true', 'read', 'manage')
         end
       )
   );

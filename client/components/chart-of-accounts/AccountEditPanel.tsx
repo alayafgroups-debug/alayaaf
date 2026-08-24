@@ -176,17 +176,14 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
             </button>
             {usageOpen && (
               <div className="px-4 pb-4 space-y-3">
-                <label className="flex items-center gap-2 text-sm text-foreground justify-end cursor-pointer">
-                  {t("السماح بتسجيل المعاملات على هذا الحساب")}
-                  <input
-                    type="checkbox"
-                    checked={!isGroup}
-                    disabled
-                    className="rounded border-border"
-                  />
-                </label>
+                <div className="flex items-center justify-between gap-2 text-sm text-foreground">
+                  <span>{t("حالة الترحيل")}</span>
+                  <span className={`rounded px-2 py-1 text-xs font-semibold ${isGroup ? "bg-slate-100 text-slate-600" : "bg-emerald-50 text-emerald-700"}`}>
+                    {t(isGroup ? "حساب تجميعي — لا يقبل قيودًا مباشرة" : "حساب طرفي — يقبل القيود")}
+                  </span>
+                </div>
                 <p className="text-xs text-muted-foreground text-start">
-                  {t("سيتم السماح في هذه الحالة بتحديد هذا الحساب عند إنشاء القيود المحاسبية أو إصدار الفواتير")}
+                  {t("تُحدد الحالة تلقائيًا حسب وجود حسابات فرعية، ولا يمكن تغييرها يدويًا.")}
                 </p>
 
                 <label className="flex items-center gap-2 text-sm text-foreground justify-end cursor-pointer">

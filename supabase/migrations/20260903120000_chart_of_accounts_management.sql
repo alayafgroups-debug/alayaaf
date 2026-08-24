@@ -84,6 +84,26 @@ begin
     v_level := v_parent.level + 1;
   end if;
 
+  if not v_is_new
+     and (
+       v_parent_code is distinct from nullif(v_existing.parent_code, '')
+       or coalesce(p_account->>'cashFlowType', v_existing.cash_flow_type) is distinct from v_existing.cash_flow_type
+       or coalesce(p_account->>'accountType', v_existing.account_type) is distinct from v_existing.account_type
+     )
+     and (
+       exists (select 1 from public.accounting_journal_lines where account_code = v_code)
+       or exists (select 1 from public.accounting_bank_accounts where account_code = v_code)
+       or exists (
+         select 1 from public.accounting_posting_rules
+         where v_code in (
+           receivable_account_code, revenue_account_code, output_vat_account_code,
+           payable_account_code, purchase_account_code, input_vat_account_code
+         )
+       )
+     ) then
+    raise exception 'REFERENCED_ACCOUNT_CLASSIFICATION_IMMUTABLE';
+  end if;
+
   if v_is_new then
     insert into public.accounting_accounts (
       code, company_name, name_ar, name_en, parent_code, cash_flow_type,
@@ -192,9 +212,9 @@ revoke insert, update, delete on public.accounting_accounts from anon, authentic
 grant select on public.accounting_accounts to authenticated;
 revoke insert, update, delete on public.accounting_posting_rules from anon, authenticated;
 grant select on public.accounting_posting_rules to authenticated;
-revoke all on function public.save_accounting_account(jsonb) from public;
-revoke all on function public.delete_accounting_account(text) from public;
-revoke all on function public.save_sales_accounting_posting_rule(text, text, text) from public;
+revoke all on function public.save_accounting_account(jsonb) from public, anon;
+revoke all on function public.delete_accounting_account(text) from public, anon;
+revoke all on function public.save_sales_accounting_posting_rule(text, text, text) from public, anon;
 grant execute on function public.save_accounting_account(jsonb) to authenticated;
 grant execute on function public.delete_accounting_account(text) to authenticated;
 grant execute on function public.save_sales_accounting_posting_rule(text, text, text) to authenticated;

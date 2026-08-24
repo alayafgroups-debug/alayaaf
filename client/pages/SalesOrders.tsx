@@ -1168,7 +1168,7 @@ function OrderForm({
             </div>
           </div>
           <div className="p-4 overflow-x-auto">
-            <table className="w-full text-sm text-start mb-4">
+            <table dir="ltr" className="w-full text-sm mb-4 [&_th]:[direction:rtl] [&_td]:[direction:rtl] [&_th]:text-right [&_td]:text-right">
               <thead>
                 <tr className="text-slate-600 border-b border-slate-200">
                   <th className="pb-2 font-medium w-16 text-center"></th>

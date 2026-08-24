@@ -676,7 +676,7 @@ function OrderEdit({
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table dir={direction} className="w-full text-sm text-right">
+                  <table dir="ltr" className="w-full text-sm [&_th]:[direction:rtl] [&_td]:[direction:rtl] [&_th]:text-right [&_td]:text-right">
                     <thead className="bg-slate-100 border border-slate-300">
                       <tr>
                         <th className="px-3 py-2 border border-slate-300"></th>
@@ -968,7 +968,7 @@ function OrderForm({
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table dir={direction} className="w-full text-sm text-right">
+                  <table dir="ltr" className="w-full text-sm [&_th]:[direction:rtl] [&_td]:[direction:rtl] [&_th]:text-right [&_td]:text-right">
                     <thead className="bg-slate-100 border border-slate-300">
                       <tr>
                         <th className="px-3 py-2 border border-slate-300"></th>

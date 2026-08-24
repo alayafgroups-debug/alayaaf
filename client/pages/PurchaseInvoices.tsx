@@ -918,7 +918,7 @@ function ItemsTable({
             {t('لا يوجد بنود — اضغط "إضافة بند"')}
           </div>
         ) : (
-          <table className="w-full text-sm text-right mb-4">
+          <table dir="ltr" className="w-full text-sm mb-4 [&_th]:[direction:rtl] [&_td]:[direction:rtl] [&_th]:text-right [&_td]:text-right">
             <thead>
               <tr className="text-slate-600 border-b border-slate-200">
                 <th className="pb-2 font-medium w-10 text-center"></th>

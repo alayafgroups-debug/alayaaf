@@ -17,6 +17,7 @@ type PurchaseInvoice = {
   date: string;
   dueDate: string;
   vendor: string;
+  vendorId: string;
   total: number;
   paid: number;
   remaining: number;
@@ -29,10 +30,12 @@ type DebitNote = {
   number: string;
   date: string;
   vendor: string;
+  vendorId: string;
   total: number;
 };
 
-type Vendor = { name: string; currency: string; openingBalance: number };
+type Vendor = { id: string; name: string; currency: string; openingBalance: number };
+type PurchasePayment = { id: string; invoiceId: string; vendorId: string; amount: number; date: string };
 type ReportRow = Record<string, string | number>;
 
 const REPORT_TYPES = {
@@ -51,14 +54,14 @@ function number(value: unknown) {
 }
 
 function mapInvoice(row: Record<string, unknown>): PurchaseInvoice {
-  const adjustedTotal = row.adjusted_total == null ? null : number(row.adjusted_total);
   const adjustedRemaining = row.adjusted_remaining == null ? null : number(row.adjusted_remaining);
   return {
     id: String(row.id ?? ""),
     date: String(row.date ?? ""),
     dueDate: String(row.due_date ?? ""),
     vendor: String(row.vendor ?? ""),
-    total: adjustedTotal ?? number(row.total),
+    vendorId: String(row.vendor_id ?? ""),
+    total: number(row.total),
     paid: number(row.paid),
     remaining: adjustedRemaining ?? number(row.remaining),
     status: String(row.status ?? ""),
@@ -97,57 +100,62 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
   const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
   const [notes, setNotes] = useState<DebitNote[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [payments, setPayments] = useState<PurchasePayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = async () => {
     setLoading(true);
     setError("");
-    const [invoiceResult, noteResult, vendorResult] = await Promise.all([
+    const [invoiceResult, noteResult, vendorResult, paymentResult] = await Promise.all([
       supabase.from("purchase_invoices").select("*").order("date", { ascending: true }),
       supabase.from("invoice_adjustment_notes").select("id, note_number, issue_date, counterparty, total").eq("note_type", "purchase_debit").order("issue_date", { ascending: true }),
-      supabase.from("vendors").select("name, currency, opening_balance"),
+      supabase.from("vendors").select("id, name, currency, opening_balance"),
+      supabase.from("purchase_payments").select("id, invoice_id, vendor_id, amount, payment_date").order("payment_date", { ascending: true }),
     ]);
 
-    const firstError = invoiceResult.error ?? noteResult.error ?? vendorResult.error;
+    const firstError = invoiceResult.error ?? noteResult.error ?? vendorResult.error ?? paymentResult.error;
     if (firstError) {
       setError(firstError.message);
       setLoading(false);
       return;
     }
 
-    setInvoices((invoiceResult.data ?? []).map((row) => mapInvoice(row as Record<string, unknown>)));
-    setNotes((noteResult.data ?? []).map((row) => ({
+    const loadedVendors = (vendorResult.data ?? []).map((row) => ({
       id: String(row.id),
-      number: String(row.note_number ?? row.id),
-      date: String(row.issue_date ?? ""),
-      vendor: String(row.counterparty ?? ""),
-      total: number(row.total),
-    })));
-    setVendors((vendorResult.data ?? []).map((row) => ({
       name: String(row.name ?? ""),
       currency: String(row.currency ?? "SAR") || "SAR",
       openingBalance: number(row.opening_balance),
-    })));
+    }));
+    const vendorIdByUniqueName = new Map<string, string>();
+    loadedVendors.forEach((vendor) => {
+      if (loadedVendors.filter((candidate) => candidate.name === vendor.name).length === 1) vendorIdByUniqueName.set(vendor.name, vendor.id);
+    });
+    setInvoices((invoiceResult.data ?? []).map((row) => mapInvoice(row as Record<string, unknown>)));
+    setNotes((noteResult.data ?? []).map((row) => {
+      const vendor = String(row.counterparty ?? "");
+      return { id: String(row.id), number: String(row.note_number ?? row.id), date: String(row.issue_date ?? ""), vendor, vendorId: vendorIdByUniqueName.get(vendor) ?? "", total: number(row.total) };
+    }));
+    setVendors(loadedVendors);
+    setPayments((paymentResult.data ?? []).map((row) => ({ id: String(row.id), invoiceId: String(row.invoice_id), vendorId: String(row.vendor_id), amount: number(row.amount), date: String(row.payment_date ?? "") })));
     setLoading(false);
   };
 
   useEffect(() => { void load(); }, []);
 
-  const vendorOptions = useMemo(() => [...new Set([
-    ...vendors.map((vendor) => vendor.name),
-    ...invoices.map((invoice) => invoice.vendor),
-    ...notes.map((note) => note.vendor),
-  ].filter(Boolean))].sort(), [vendors, invoices, notes]);
+  const vendorOptions = useMemo(() => vendors.slice().sort((first, second) => first.name.localeCompare(second.name)), [vendors]);
 
   const { columns, rows, summary } = useMemo(() => {
-    const invoiceRows = invoices.filter((invoice) => inPeriod(invoice.date, dateFrom, dateTo) && (!selectedVendor || invoice.vendor === selectedVendor));
-    const noteRows = notes.filter((note) => inPeriod(note.date, dateFrom, dateTo) && (!selectedVendor || note.vendor === selectedVendor));
-    const currencyByVendor = new Map(vendors.map((vendor) => [vendor.name, vendor.currency]));
-    const openingByVendor = new Map(vendors.map((vendor) => [vendor.name, vendor.openingBalance]));
+    const invoiceRows = invoices.filter((invoice) => inPeriod(invoice.date, dateFrom, dateTo) && (!selectedVendor || invoice.vendorId === selectedVendor));
+    const noteRows = notes.filter((note) => inPeriod(note.date, dateFrom, dateTo) && (!selectedVendor || note.vendorId === selectedVendor));
+    const paymentRows = payments.filter((payment) => inPeriod(payment.date, dateFrom, dateTo) && (!selectedVendor || payment.vendorId === selectedVendor));
+    const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
+    const currencyByVendor = new Map(vendors.map((vendor) => [vendor.id, vendor.currency]));
+    const openingByVendor = new Map(vendors.map((vendor) => [vendor.id, vendor.openingBalance]));
+    const vendorName = (vendorId: string, fallback = "") => vendorById.get(vendorId)?.name || fallback || t("مورد غير مربوط");
     const money = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const totalInvoices = invoiceRows.reduce((sum, invoice) => sum + invoice.total, 0);
-    const totalRemaining = invoiceRows.reduce((sum, invoice) => sum + invoice.remaining, 0);
+    const totalPayments = paymentRows.reduce((sum, payment) => sum + payment.amount, 0);
 
     if (type === "product") {
       const grouped = new Map<string, { quantity: number; subtotal: number; tax: number; total: number; vendors: Set<string> }>();
@@ -160,7 +168,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
         current.subtotal += subtotal;
         current.tax += tax;
         current.total += subtotal + tax;
-        if (invoice.vendor) current.vendors.add(invoice.vendor);
+        if (invoice.vendorId) current.vendors.add(invoice.vendorId);
         grouped.set(key, current);
       }));
       return {
@@ -175,19 +183,24 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     }
 
     if (type === "vendor" || type === "summary") {
-      const grouped = new Map<string, { invoices: number; purchases: number; paid: number; remaining: number; notes: number }>();
+      const grouped = new Map<string, { name: string; invoices: number; purchases: number; paid: number; notes: number }>();
       invoiceRows.forEach((invoice) => {
-        const current = grouped.get(invoice.vendor) ?? { invoices: 0, purchases: 0, paid: 0, remaining: 0, notes: 0 };
+        const key = invoice.vendorId || `legacy-invoice:${invoice.id}`;
+        const current = grouped.get(key) ?? { name: vendorName(invoice.vendorId, invoice.vendor), invoices: 0, purchases: 0, paid: 0, notes: 0 };
         current.invoices += 1;
         current.purchases += invoice.total;
-        current.paid += invoice.paid;
-        current.remaining += invoice.remaining;
-        grouped.set(invoice.vendor, current);
+        grouped.set(key, current);
+      });
+      paymentRows.forEach((payment) => {
+        const current = grouped.get(payment.vendorId) ?? { name: vendorName(payment.vendorId), invoices: 0, purchases: 0, paid: 0, notes: 0 };
+        current.paid += payment.amount;
+        grouped.set(payment.vendorId, current);
       });
       noteRows.forEach((note) => {
-        const current = grouped.get(note.vendor) ?? { invoices: 0, purchases: 0, paid: 0, remaining: 0, notes: 0 };
+        const key = note.vendorId || `legacy-note:${note.id}`;
+        const current = grouped.get(key) ?? { name: vendorName(note.vendorId, note.vendor), invoices: 0, purchases: 0, paid: 0, notes: 0 };
         current.notes += note.total;
-        grouped.set(note.vendor, current);
+        grouped.set(key, current);
       });
       return {
         columns: [
@@ -195,37 +208,42 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
           { key: "purchases", label: t("إجمالي المشتريات") }, { key: "paid", label: t("المدفوع") },
           { key: "notes", label: t("إشعارات مدينة") }, { key: "balance", label: t("الرصيد المستحق") },
         ],
-        rows: [...grouped.entries()].map(([vendor, value]) => ({
-          vendor, currency: currencyByVendor.get(vendor) ?? "SAR", invoices: value.invoices,
+        rows: [...grouped.entries()].map(([vendorId, value]) => ({
+          vendor: value.name, currency: currencyByVendor.get(vendorId) ?? "SAR", invoices: value.invoices,
           purchases: money(value.purchases), paid: money(value.paid), notes: money(value.notes),
-          balance: money(Math.max(0, value.remaining - value.notes + (openingByVendor.get(vendor) ?? 0))),
+          balance: money((openingByVendor.get(vendorId) ?? 0) + value.purchases - value.notes - value.paid),
         })),
-        summary: [{ label: t("إجمالي الرصيد المستحق"), value: money(totalRemaining - noteRows.reduce((sum, note) => sum + note.total, 0)) }],
+        summary: [{ label: t("إجمالي الرصيد المستحق"), value: money(totalInvoices - noteRows.reduce((sum, note) => sum + note.total, 0) - totalPayments) }],
       };
     }
 
     if (type === "currency") {
       const grouped = new Map<string, { invoices: number; purchases: number; paid: number; remaining: number }>();
       invoiceRows.forEach((invoice) => {
-        const currency = currencyByVendor.get(invoice.vendor) ?? "SAR";
+        const currency = currencyByVendor.get(invoice.vendorId) ?? "SAR";
         const current = grouped.get(currency) ?? { invoices: 0, purchases: 0, paid: 0, remaining: 0 };
         current.invoices += 1;
         current.purchases += invoice.total;
-        current.paid += invoice.paid;
-        current.remaining += invoice.remaining;
+        grouped.set(currency, current);
+      });
+      paymentRows.forEach((payment) => {
+        const currency = currencyByVendor.get(payment.vendorId) ?? "SAR";
+        const current = grouped.get(currency) ?? { invoices: 0, purchases: 0, paid: 0, remaining: 0 };
+        current.paid += payment.amount;
         grouped.set(currency, current);
       });
       return {
         columns: [{ key: "currency", label: t("العملة") }, { key: "invoices", label: t("عدد الفواتير") }, { key: "purchases", label: t("إجمالي المشتريات") }, { key: "paid", label: t("المدفوع") }, { key: "remaining", label: t("الرصيد المستحق") }],
-        rows: [...grouped.entries()].map(([currency, value]) => ({ currency, invoices: value.invoices, purchases: money(value.purchases), paid: money(value.paid), remaining: money(value.remaining) })),
+        rows: [...grouped.entries()].map(([currency, value]) => ({ currency, invoices: value.invoices, purchases: money(value.purchases), paid: money(value.paid), remaining: money(value.purchases - value.paid) })),
         summary: [{ label: t("إجمالي المشتريات"), value: money(totalInvoices) }],
       };
     }
 
     const movements = [
-      ...invoiceRows.map((invoice) => ({ date: invoice.date, reference: invoice.id, vendor: invoice.vendor, movement: t("فاتورة مشتريات"), debit: 0, credit: invoice.total, balanceEffect: invoice.total })),
-      ...noteRows.map((note) => ({ date: note.date, reference: note.number, vendor: note.vendor, movement: t("إشعار مدين"), debit: note.total, credit: 0, balanceEffect: -note.total })),
-    ].sort((a, b) => a.date.localeCompare(b.date));
+      ...invoiceRows.map((invoice) => ({ date: invoice.date, reference: invoice.id, vendor: vendorName(invoice.vendorId, invoice.vendor), movement: t("فاتورة مشتريات"), debit: 0, credit: invoice.total, balanceEffect: invoice.total })),
+      ...noteRows.map((note) => ({ date: note.date, reference: note.number, vendor: vendorName(note.vendorId, note.vendor), movement: t("إشعار مدين"), debit: note.total, credit: 0, balanceEffect: -note.total })),
+      ...paymentRows.map((payment) => ({ date: payment.date, reference: payment.id, vendor: vendorName(payment.vendorId), movement: t("سداد مورد"), debit: payment.amount, credit: 0, balanceEffect: -payment.amount })),
+    ].sort((a, b) => a.date.localeCompare(b.date) || a.reference.localeCompare(b.reference));
     let running = selectedVendor ? (openingByVendor.get(selectedVendor) ?? 0) : 0;
     const movementRows = movements.map((movement) => {
       running += movement.balanceEffect;
@@ -236,7 +254,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
       rows: movementRows,
       summary: [{ label: t("الرصيد الختامي"), value: money(running) }],
     };
-  }, [dateFrom, dateTo, formatNumber, invoices, notes, selectedVendor, t, type, vendors]);
+  }, [dateFrom, dateTo, formatNumber, invoices, notes, payments, selectedVendor, t, type, vendors]);
 
   const title = type ? report : t("تقرير المشتريات");
   const exportOptions = { title, subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: columns as ReportColumn[], rows, fileName: title, summary, landscape: true };
@@ -251,7 +269,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
         </div>
       </header>
       <div className="flex flex-wrap items-end justify-between gap-3 border-y border-slate-100 bg-slate-50 px-4 py-3">
-        <div className="flex flex-wrap gap-2"><label className="text-xs text-slate-500">{t("من تاريخ")}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 block rounded border border-slate-200 bg-white px-2 py-1.5 text-xs" /></label><label className="text-xs text-slate-500">{t("إلى تاريخ")}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 block rounded border border-slate-200 bg-white px-2 py-1.5 text-xs" /></label><label className="text-xs text-slate-500">{t("المورد")}<select value={selectedVendor} onChange={(event) => setSelectedVendor(event.target.value)} className="mt-1 block rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"><option value="">{t("كل الموردين")}</option>{vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}</select></label></div>
+        <div className="flex flex-wrap gap-2"><label className="text-xs text-slate-500">{t("من تاريخ")}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 block rounded border border-slate-200 bg-white px-2 py-1.5 text-xs" /></label><label className="text-xs text-slate-500">{t("إلى تاريخ")}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 block rounded border border-slate-200 bg-white px-2 py-1.5 text-xs" /></label><label className="text-xs text-slate-500">{t("المورد")}<select value={selectedVendor} onChange={(event) => setSelectedVendor(event.target.value)} className="mt-1 block rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"><option value="">{t("كل الموردين")}</option>{vendorOptions.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}</select></label></div>
         <span className="text-xs font-medium text-slate-500">SAR</span>
       </div>
       <div className="p-4">

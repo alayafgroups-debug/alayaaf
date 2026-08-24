@@ -108,7 +108,11 @@ begin
     into v_items, v_document_date, v_document_side, v_document_type, v_report_eligible, v_document_tax
     from public.sales_invoices where id::text = p_document_id;
   elsif p_document_table = 'purchase_invoices' then
-    raise exception 'PURCHASE_ACCOUNTING_POSTING_REQUIRED';
+    select items, date::date, 'purchases', 'purchase_invoice',
+      accounting_status = 'posted' and accounting_journal_entry_id is not null,
+      coalesce(total_tax, 0)
+    into v_items, v_document_date, v_document_side, v_document_type, v_report_eligible, v_document_tax
+    from public.purchase_invoices where id::text = p_document_id;
   elsif p_document_table = 'invoice_adjustment_notes' then
     select items, issue_date, case when note_type in ('sales_credit', 'sales_debit') then 'sales' else 'purchases' end,
       note_type, accounting_status = 'posted', coalesce(tax, 0)

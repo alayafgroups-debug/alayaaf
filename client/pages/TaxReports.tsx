@@ -39,17 +39,19 @@ export default function TaxReports() {
   const load = async () => {
     if (invalidRange) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
     setLoading(true); setError("");
-    const [summaryResult, detailResult, salesResult, notesResult, classResult] = await Promise.all([
+    const [summaryResult, detailResult, salesResult, purchaseResult, notesResult, classResult] = await Promise.all([
       supabase.rpc("get_vat_report_summary", { p_date_from: dateFrom, p_date_to: dateTo }),
       supabase.from("accounting_vat_report_lines").select("*").eq("report_eligible", true).gte("document_date", dateFrom).lte("document_date", dateTo).order("document_date"),
       supabase.from("sales_invoices").select("id, date, customer, items, accounting_status").gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("purchase_invoices").select("id, date, vendor, items, accounting_status, accounting_journal_entry_id").eq("accounting_status", "posted").gte("date", dateFrom).lte("date", dateTo),
       supabase.from("invoice_adjustment_notes").select("id, note_number, note_type, issue_date, counterparty, items, tax, status, accounting_status").eq("status", "posted").gte("issue_date", dateFrom).lte("issue_date", dateTo),
       supabase.from("accounting_vat_line_classifications").select("document_table, document_id, line_index").gte("document_date", dateFrom).lte("document_date", dateTo),
     ]);
-    const firstError = summaryResult.error ?? detailResult.error ?? salesResult.error ?? notesResult.error ?? classResult.error;
+    const firstError = summaryResult.error ?? detailResult.error ?? salesResult.error ?? purchaseResult.error ?? notesResult.error ?? classResult.error;
     if (firstError) { setError(firstError.message); setLoading(false); return; }
     const sourceDocuments: SourceDocument[] = [
       ...(salesResult.data ?? []).map((row) => ({ table: "sales_invoices", id: String(row.id), number: String(row.id), date: String(row.date), counterparty: String(row.customer ?? ""), side: "sales" as const, items: mapItems(row.items), eligible: row.accounting_status === "posted" })),
+      ...(purchaseResult.data ?? []).map((row) => ({ table: "purchase_invoices", id: String(row.id), number: String(row.id), date: String(row.date), counterparty: String(row.vendor ?? ""), side: "purchases" as const, items: mapItems(row.items), eligible: row.accounting_status === "posted" && Boolean(row.accounting_journal_entry_id) })),
       ...(notesResult.data ?? []).map((row) => ({ table: "invoice_adjustment_notes", id: String(row.id), number: String(row.note_number), date: String(row.issue_date), counterparty: String(row.counterparty ?? ""), side: (row.note_type === "purchase_debit" ? "purchases" : "sales") as "sales" | "purchases", items: mapItems(row.items).map((item) => ({ ...item, taxPercent: item.taxPercent || (number(row.tax) > 0 ? 15 : 0) })), eligible: row.accounting_status === "posted" })),
     ];
     setGroups((summaryResult.data ?? []) as SummaryGroup[]);
@@ -93,7 +95,7 @@ export default function TaxReports() {
   const detailRows: ReportRow[] = details.map((line) => ({ date: line.document_date, document: line.document_id, description: line.line_description || "—", side: t(line.document_side === "sales" ? "مبيعات" : "مشتريات"), category: t(categoryNames[line.tax_category] ?? line.tax_category), supply: t(supplyNames[line.supply_type] ?? line.supply_type), base: money(number(line.taxable_amount)), tax: money(number(line.tax_amount)) }));
   const exportRows = mode === "details" ? detailRows : summaryRows;
   const reportTitle = mode === "details" ? t("تفاصيل ضريبة القيمة المضافة") : t("ملخص ضريبة القيمة المضافة");
-  const exportDisclaimer = `${dateFrom} — ${dateTo} | تقرير داخلي غير مكتمل: فواتير المشتريات غير مدرجة حتى اكتمال ترحيلها المحاسبي، والمستندات غير المصنفة (${unclassified.length}) غير محتسبة. لا يستخدم كإقرار ضريبي رسمي.`;
+  const exportDisclaimer = `${dateFrom} — ${dateTo} | تقرير داخلي: لا تُدرج إلا فواتير المشتريات المرحلة محاسبيًا، والمستندات غير المصنفة (${unclassified.length}) غير محتسبة. لا يستخدم كإقرار ضريبي رسمي.`;
   const exportOptions = { title: reportTitle, subtitle: exportDisclaimer, columns, rows: exportRows, fileName: reportTitle, landscape: true };
 
   const openClassification = (document: SourceDocument) => {

@@ -311,8 +311,13 @@ begin
   if not found or v_invoice.accounting_status <> 'posted' or v_invoice.accounting_journal_entry_id is null then raise exception 'POSTED_PURCHASE_INVOICE_REQUIRED'; end if;
   if p_amount is null or round(p_amount, 2) <= 0 then raise exception 'PURCHASE_PAYMENT_AMOUNT_INVALID'; end if;
   if p_payment_date is null then raise exception 'PURCHASE_PAYMENT_DATE_REQUIRED'; end if;
+  if nullif(trim(p_payment_method), '') is null
+     or trim(p_payment_method) not in ('نقدي', 'شيك', 'تحويل بنكي', 'بطاقة ائتمانية') then
+    raise exception 'PURCHASE_PAYMENT_METHOD_INVALID';
+  end if;
 
   select payable_account_code into v_payable_code from public.accounting_posting_rules where rule_code = 'sales_default' and active;
+  if not found or v_payable_code is null then raise exception 'PURCHASE_POSTING_RULE_NOT_FOUND'; end if;
   v_cash_code := case trim(p_payment_method) when 'نقدي' then '1111' when 'شيك' then '1112' else '1113' end;
   perform public.account_name_for_posting(v_payable_code);
   perform public.account_name_for_posting(v_cash_code);

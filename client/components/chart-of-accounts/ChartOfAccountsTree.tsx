@@ -1,15 +1,12 @@
 import { Search, ChevronDown, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import type { AccountNode } from "./accountData";
-import { defaultAccounts, CATEGORY_COLORS } from "./accountData";
+import { CATEGORY_COLORS } from "./accountData";
 import AccountActionsMenu from "./AccountActionsMenu";
 import AccountEditPanel from "./AccountEditPanel";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
-import { COMPANY_PROFILE } from "@/lib/companyProfile";
-
-const COMPANY_NAME = COMPANY_PROFILE.companyNameAr;
 
 const getAccountDisplayName = (account: AccountNode, locale: "ar" | "en") =>
   locale === "en" ? account.nameEn || account.nameAr : account.nameAr;
@@ -26,27 +23,9 @@ const DEFAULT_SALES_RULE: SalesPostingRule = {
   outputVatAccountCode: "219",
 };
 
-const toDatabaseAccount = (account: AccountNode) => ({
-  code: account.code,
-  company_name: COMPANY_NAME,
-  name_ar: account.nameAr,
-  name_en: account.nameEn,
-  parent_code: account.parentCode || null,
-  cash_flow_type: account.cashFlowType,
-  account_type: account.accountType,
-  level: account.level,
-  enable_payments: account.enablePayments,
-  show_expense_claims: account.showExpenseClaims,
-  is_main_category: Boolean(account.isMainCategory),
-  category_color: account.categoryColor ?? null,
-  currency_badge: account.currencyBadge ?? null,
-  is_system: Boolean(account.isSystem),
-  updated_at: new Date().toISOString(),
-});
-
 export default function ChartOfAccountsTree() {
   const { t, locale, direction } = useI18n();
-  const [accounts, setAccounts] = useState<AccountNode[]>(defaultAccounts);
+  const [accounts, setAccounts] = useState<AccountNode[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingAccount, setEditingAccount] = useState<AccountNode | null>(null);
   const [collapsedCodes, setCollapsedCodes] = useState<Set<string>>(new Set());
@@ -56,14 +35,9 @@ export default function ChartOfAccountsTree() {
 
   useEffect(() => {
     const loadAccounts = async () => {
-      await supabase
-        .from("accounting_accounts")
-        .upsert(defaultAccounts.map(toDatabaseAccount), { onConflict: "code", ignoreDuplicates: true });
-
       const { data, error } = await supabase
         .from("accounting_accounts")
         .select("*")
-        .eq("company_name", COMPANY_NAME)
         .order("code");
 
       if (error) {
@@ -107,14 +81,10 @@ export default function ChartOfAccountsTree() {
   }, []);
 
   const saveSalesPostingRule = async () => {
-    const { error } = await supabase.from("accounting_posting_rules").upsert({
-      rule_code: "sales_default",
-      company_name: COMPANY_NAME,
-      receivable_account_code: salesPostingRule.receivableAccountCode,
-      revenue_account_code: salesPostingRule.revenueAccountCode,
-      output_vat_account_code: salesPostingRule.outputVatAccountCode,
-      active: true,
-      updated_at: new Date().toISOString(),
+    const { error } = await supabase.rpc("save_sales_accounting_posting_rule", {
+      p_receivable_account_code: salesPostingRule.receivableAccountCode,
+      p_revenue_account_code: salesPostingRule.revenueAccountCode,
+      p_output_vat_account_code: salesPostingRule.outputVatAccountCode,
     });
 
     if (error) {
@@ -176,18 +146,32 @@ export default function ChartOfAccountsTree() {
   };
 
   const handleSaveAccount = async (updated: AccountNode) => {
-    const { error } = await supabase
-      .from("accounting_accounts")
-      .upsert(toDatabaseAccount(updated), { onConflict: "code" });
+    if (!updated.nameAr.trim()) {
+      toast({ title: t("اسم الحساب مطلوب"), variant: "destructive" });
+      return;
+    }
+    const { data, error } = await supabase.rpc("save_accounting_account", {
+      p_account: updated,
+    });
 
-    if (error) {
-      toast({ title: t("تعذر حفظ الحساب"), description: error.message, variant: "destructive" });
+    if (error || !data) {
+      toast({ title: t("تعذر حفظ الحساب"), description: error?.message ?? t("حاول مرة أخرى"), variant: "destructive" });
       return;
     }
 
-    setAccounts((prev) =>
-      prev.map((a) => (a.code === updated.code ? updated : a))
-    );
+    const row = data as Record<string, unknown>;
+    const saved: AccountNode = {
+      code: String(row.code), nameAr: String(row.name_ar), nameEn: String(row.name_en ?? ""),
+      cashFlowType: String(row.cash_flow_type ?? ""), enablePayments: Boolean(row.enable_payments),
+      showExpenseClaims: Boolean(row.show_expense_claims), accountType: String(row.account_type ?? ""),
+      level: Number(row.level), isMainCategory: Boolean(row.is_main_category),
+      categoryColor: row.category_color ? String(row.category_color) : undefined,
+      currencyBadge: row.currency_badge ? String(row.currency_badge) : undefined,
+      isSystem: Boolean(row.is_system), parentCode: String(row.parent_code ?? ""),
+    };
+    setAccounts((prev) => prev.some((account) => account.code === saved.code)
+      ? prev.map((account) => account.code === saved.code ? saved : account)
+      : [...prev, saved].sort((first, second) => first.code.localeCompare(second.code, undefined, { numeric: true })));
     setEditingAccount(null);
     toast({ title: t("تم الحفظ"), description: t("تم تحديث بيانات الحساب وربطه بقاعدة البيانات") });
   };
@@ -215,7 +199,7 @@ export default function ChartOfAccountsTree() {
       return;
     }
 
-    const { error } = await supabase.from("accounting_accounts").delete().eq("code", code);
+    const { error } = await supabase.rpc("delete_accounting_account", { p_code: code });
     if (error) {
       toast({ title: t("تعذر حذف الحساب"), description: error.message, variant: "destructive" });
       return;
@@ -255,19 +239,6 @@ export default function ChartOfAccountsTree() {
       parentCode: parentCode,
     };
 
-    const parentIndex = accounts.findIndex((a) => a.code === parentCode);
-    let insertIndex = parentIndex + 1;
-    while (
-      insertIndex < accounts.length &&
-      accounts[insertIndex].level > parent.level
-    ) {
-      insertIndex++;
-    }
-
-    const newAccounts = [...accounts];
-    newAccounts.splice(insertIndex, 0, newAccount);
-    setAccounts(newAccounts);
-
     // Expand parent
     setCollapsedCodes((prev) => {
       const next = new Set(prev);
@@ -277,8 +248,8 @@ export default function ChartOfAccountsTree() {
 
     setEditingAccount(newAccount);
     toast({
-      title: t("تمت الإضافة"),
-      description: `${t("تم إضافة")} ${isBank ? t("حساب بنكي") : t("حساب")} ${t("فرعي جديد")}`,
+      title: t("حساب جديد"),
+      description: t("أكمل البيانات ثم اضغط حفظ لإضافة الحساب إلى الشجرة"),
     });
   };
 

@@ -1,7 +1,7 @@
 import { X, Lock, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { AccountNode } from "./accountData";
-import { CASH_FLOW_TYPES } from "./accountData";
+import { ACCOUNT_TYPES, CASH_FLOW_TYPES } from "./accountData";
 import { useI18n } from "@/i18n";
 
 type Props = {
@@ -17,15 +17,14 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
   const [usageOpen, setUsageOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(false);
 
-  const [allowTransactions, setAllowTransactions] = useState(true);
   const [allowPayments, setAllowPayments] = useState(account.enablePayments);
   const [allowExpenseClaims, setAllowExpenseClaims] = useState(account.showExpenseClaims);
 
-  const parentOptions = allAccounts.filter(
-    (a) => a.code !== form.code && a.level < form.level
-  );
-
-  const mainCategories = allAccounts.filter((a) => a.level === 0);
+  const descendantCodes = new Set<string>();
+  const collectDescendants = (code: string) => allAccounts.filter((item) => item.parentCode === code).forEach((child) => { descendantCodes.add(child.code); collectDescendants(child.code); });
+  collectDescendants(form.code);
+  const parentOptions = allAccounts.filter((item) => item.code !== form.code && !descendantCodes.has(item.code));
+  const isGroup = allAccounts.some((item) => item.parentCode === form.code);
   const accountDisplayName = (item: AccountNode) =>
     locale === "ar" ? item.nameAr : item.nameEn;
 
@@ -65,18 +64,14 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
               <label className="text-sm font-semibold text-foreground">{t("نوع الحساب والتصنيف")}</label>
             </div>
             <select
-              value={form.parentCode ? allAccounts.find(a => a.code === form.parentCode && a.level === 0)?.code || form.code.charAt(0) : form.code}
-              onChange={(e) => setForm({ ...form })}
+              value={form.accountType}
+              onChange={(e) => setForm({ ...form, accountType: e.target.value })}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-start"
               dir={direction}
             >
-              {mainCategories.map((cat) => (
-                <option key={cat.code} value={cat.code}>
-                  {cat.code} - {accountDisplayName(cat)}
-                </option>
-              ))}
+              {ACCOUNT_TYPES.map((accountType) => <option key={accountType} value={accountType}>{t(accountType)}</option>)}
             </select>
-            <p className="mt-1 text-xs text-muted-foreground text-start">{t("الأب")}</p>
+            <p className="mt-1 text-xs text-muted-foreground text-start">{t("التصنيف المحاسبي للحساب")}</p>
           </div>
 
           {/* Parent Account */}
@@ -88,7 +83,8 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
             <select
               value={form.parentCode}
               onChange={(e) => setForm({ ...form, parentCode: e.target.value })}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-start"
+              disabled={Boolean(account.isSystem)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-start disabled:bg-slate-100 disabled:text-slate-500"
               dir={direction}
             >
               <option value="">{t("بدون حساب أب")}</option>
@@ -184,8 +180,8 @@ export default function AccountEditPanel({ account, allAccounts, onClose, onSave
                   {t("السماح بتسجيل المعاملات على هذا الحساب")}
                   <input
                     type="checkbox"
-                    checked={allowTransactions}
-                    onChange={(e) => setAllowTransactions(e.target.checked)}
+                    checked={!isGroup}
+                    disabled
                     className="rounded border-border"
                   />
                 </label>

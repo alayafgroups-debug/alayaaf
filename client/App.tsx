@@ -104,6 +104,7 @@ import HRPermissionsRoles from "./pages/HRPermissionsRoles";
 import HRPermissionsAddRole from "./pages/HRPermissionsAddRole";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
+import ChartOfAccounts from "./pages/ChartOfAccounts";
 import Tax from "./pages/Tax";
 import BankAccounts from "./pages/BankAccounts";
 import TaxReports from "./pages/TaxReports";
@@ -253,7 +254,7 @@ const App = () => (
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />
           <Route path="/crm/reports" element={<CRM />} />
-          <Route path="/expenses" element={<ExpenseManagement />} />
+          <Route path="/expenses" element={<ChartOfAccounts />} />
           <Route path="/expenses/bank-accounts" element={<BankAccounts />} />
           <Route path="/expenses/manual-journals" element={<ExpenseManagement />} />
           <Route path="/expenses/reclassification" element={<ExpenseManagement />} />

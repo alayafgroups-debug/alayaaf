@@ -21,6 +21,7 @@ create table if not exists public.accounting_bank_statement_imports (
   id uuid primary key default gen_random_uuid(),
   bank_account_id uuid not null references public.accounting_bank_accounts(id) on delete restrict,
   file_name text not null,
+  file_hash text not null,
   statement_from date not null,
   statement_to date not null,
   opening_balance numeric(18,2),
@@ -28,6 +29,7 @@ create table if not exists public.accounting_bank_statement_imports (
   status text not null default 'imported' check (status in ('imported', 'partially_reconciled', 'reconciled')),
   imported_by uuid default auth.uid() references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
+  unique (bank_account_id, file_hash),
   check (statement_from <= statement_to)
 );
 
@@ -50,7 +52,7 @@ create table if not exists public.accounting_bank_statement_lines (
   matched_by uuid references auth.users(id) on delete set null,
   match_note text,
   created_at timestamptz not null default now(),
-  unique (bank_account_id, row_hash),
+  unique (import_id, row_hash),
   check ((debit > 0 and credit = 0) or (credit > 0 and debit = 0)),
   check (
     (reconciliation_status = 'matched' and matched_journal_entry_id is not null and matched_at is not null)
@@ -94,6 +96,36 @@ select 'المصروفات النثرية', '1114', 'SAR'
 where exists (select 1 from public.accounting_accounts where code = '1114')
 on conflict (account_code) do nothing;
 
+create or replace function public.accounting_bank_access_allowed(p_manage boolean default false)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select auth.role() = 'service_role' or exists (
+    select 1
+    from public.employees employee
+    left join public.user_roles role
+      on role.name_ar = employee.employee_role and role.status = 'فعال'
+    where lower(employee.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      and (
+        employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+        or case when p_manage then
+          coalesce(role.permissions ->> 'accounting.accounts', '') in ('true', 'manage')
+          or coalesce(role.permissions ->> 'module.accounting', '') in ('true', 'manage')
+          or coalesce(employee.permissions ->> 'accounting.accounts', '') in ('true', 'manage')
+          or coalesce(employee.permissions ->> 'module.accounting', '') in ('true', 'manage')
+        else
+          coalesce(role.permissions ->> 'accounting.accounts', '') in ('true', 'read', 'manage')
+          or coalesce(role.permissions ->> 'module.accounting', '') in ('true', 'read', 'manage')
+          or coalesce(employee.permissions ->> 'accounting.accounts', '') in ('true', 'read', 'manage')
+          or coalesce(employee.permissions ->> 'module.accounting', '') in ('true', 'read', 'manage')
+        end
+      )
+  );
+$$;
+
 create or replace function public.import_accounting_bank_statement(
   p_bank_account_id uuid,
   p_file_name text,
@@ -119,9 +151,11 @@ declare
   v_reference text;
   v_description text;
   v_hash text;
+  v_file_hash text;
+  v_position integer := 0;
 begin
-  if auth.uid() is null then
-    raise exception 'AUTHENTICATION_REQUIRED';
+  if not public.accounting_bank_access_allowed(true) then
+    raise exception 'ACCOUNTING_MANAGE_PERMISSION_REQUIRED';
   end if;
   if p_statement_from is null or p_statement_to is null or p_statement_from > p_statement_to then
     raise exception 'BANK_STATEMENT_DATE_RANGE_INVALID';
@@ -133,16 +167,22 @@ begin
     raise exception 'BANK_ACCOUNT_NOT_FOUND_OR_INACTIVE';
   end if;
 
+  v_file_hash := encode(digest(concat_ws('|', p_bank_account_id::text,
+    p_statement_from::text, p_statement_to::text,
+    coalesce(p_opening_balance::text, ''), coalesce(p_closing_balance::text, ''),
+    p_lines::text), 'sha256'), 'hex');
+
   insert into public.accounting_bank_statement_imports(
-    bank_account_id, file_name, statement_from, statement_to,
+    bank_account_id, file_name, file_hash, statement_from, statement_to,
     opening_balance, closing_balance
   ) values (
-    p_bank_account_id, nullif(trim(p_file_name), ''), p_statement_from,
-    p_statement_to, p_opening_balance, p_closing_balance
+    p_bank_account_id, nullif(trim(p_file_name), ''), v_file_hash,
+    p_statement_from, p_statement_to, p_opening_balance, p_closing_balance
   ) returning id into v_import_id;
 
   for v_line in select value from jsonb_array_elements(p_lines)
   loop
+    v_position := v_position + 1;
     v_date := (v_line->>'date')::date;
     v_value_date := nullif(v_line->>'valueDate', '')::date;
     v_debit := round(coalesce(nullif(v_line->>'debit', '')::numeric, 0), 2);
@@ -154,12 +194,13 @@ begin
     if v_date < p_statement_from or v_date > p_statement_to then
       raise exception 'BANK_LINE_DATE_OUTSIDE_STATEMENT: %', v_date;
     end if;
-    if not ((v_debit > 0 and v_credit = 0) or (v_credit > 0 and v_debit = 0)) then
+    if not ((v_debit >= 0.01 and v_credit = 0) or (v_credit >= 0.01 and v_debit = 0)) then
       raise exception 'BANK_LINE_DEBIT_CREDIT_INVALID: %', v_date;
     end if;
 
-    v_hash := encode(digest(concat_ws('|', v_date::text, coalesce(v_reference, ''),
-      v_description, v_debit::text, v_credit::text, coalesce(v_balance::text, '')), 'sha256'), 'hex');
+    v_hash := encode(digest(concat_ws('|', v_position::text, v_date::text,
+      coalesce(v_reference, ''), v_description, v_debit::text, v_credit::text,
+      coalesce(v_balance::text, '')), 'sha256'), 'hex');
 
     insert into public.accounting_bank_statement_lines(
       import_id, bank_account_id, transaction_date, value_date, reference,
@@ -172,6 +213,30 @@ begin
 
   return v_import_id;
 end;
+$$;
+
+create or replace function public.get_accounting_bank_ledger_balances()
+returns table (
+  bank_account_id uuid,
+  account_code text,
+  ledger_balance numeric
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select bank.id, bank.account_code,
+    round(coalesce(sum(line.debit - line.credit) filter (where entry.id is not null), 0), 2)
+  from public.accounting_bank_accounts bank
+  left join public.accounting_journal_lines line
+    on line.account_code = bank.account_code
+  left join public.accounting_journal_entries entry
+    on entry.id = line.journal_entry_id and entry.status = 'posted'
+  where bank.active
+    and public.accounting_bank_access_allowed(false)
+  group by bank.id, bank.account_code
+  order by bank.account_code;
 $$;
 
 create or replace function public.get_bank_reconciliation_candidates(p_line_id uuid)
@@ -227,15 +292,17 @@ set search_path = public
 as $$
 declare
   v_account_code text;
+  v_import_id uuid;
   v_amount numeric(18,2);
+  v_transaction_date date;
   v_ledger_amount numeric(18,2);
 begin
-  if auth.uid() is null then
-    raise exception 'AUTHENTICATION_REQUIRED';
+  if not public.accounting_bank_access_allowed(true) then
+    raise exception 'ACCOUNTING_MANAGE_PERMISSION_REQUIRED';
   end if;
 
-  select account.account_code, line.amount
-  into v_account_code, v_amount
+  select account.account_code, line.import_id, line.amount, line.transaction_date
+  into v_account_code, v_import_id, v_amount, v_transaction_date
   from public.accounting_bank_statement_lines line
   join public.accounting_bank_accounts account on account.id = line.bank_account_id
   where line.id = p_line_id and line.reconciliation_status = 'unmatched'
@@ -245,13 +312,23 @@ begin
     raise exception 'BANK_LINE_NOT_AVAILABLE';
   end if;
 
-  select round(coalesce(sum(journal_line.debit - journal_line.credit), 0), 2)
+  perform 1 from public.accounting_bank_statement_imports
+  where id = v_import_id
+  for update;
+
+  select round(sum(journal_line.debit - journal_line.credit), 2)
   into v_ledger_amount
   from public.accounting_journal_entries entry
   join public.accounting_journal_lines journal_line on journal_line.journal_entry_id = entry.id
   where entry.id = p_journal_entry_id
     and entry.status = 'posted'
-    and journal_line.account_code = v_account_code;
+    and entry.entry_date between v_transaction_date - 7 and v_transaction_date + 7
+    and journal_line.account_code = v_account_code
+  group by entry.id;
+
+  if not found then
+    raise exception 'BANK_MATCH_CANDIDATE_NOT_FOUND';
+  end if;
 
   if abs(v_ledger_amount - v_amount) > 0.01 then
     raise exception 'BANK_MATCH_AMOUNT_MISMATCH: bank=%, ledger=%', v_amount, v_ledger_amount;
@@ -278,19 +355,38 @@ $$;
 
 create or replace function public.unmatch_bank_statement_line(p_line_id uuid)
 returns void
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_import_id uuid;
+begin
+  if not public.accounting_bank_access_allowed(true) then
+    raise exception 'ACCOUNTING_MANAGE_PERMISSION_REQUIRED';
+  end if;
+
+  select import_id into v_import_id
+  from public.accounting_bank_statement_lines
+  where id = p_line_id and reconciliation_status = 'matched'
+  for update;
+
+  if not found then
+    raise exception 'BANK_LINE_NOT_MATCHED';
+  end if;
+
+  perform 1 from public.accounting_bank_statement_imports
+  where id = v_import_id
+  for update;
+
   update public.accounting_bank_statement_lines
   set reconciliation_status = 'unmatched',
       matched_journal_entry_id = null,
       matched_at = null,
       matched_by = null,
       match_note = null
-  where id = p_line_id
-    and reconciliation_status = 'matched'
-    and auth.uid() is not null;
+  where id = p_line_id;
+end;
 $$;
 
 create or replace function public.refresh_bank_statement_import_status(p_import_id uuid)
@@ -303,6 +399,10 @@ declare
   v_total integer;
   v_matched integer;
 begin
+  perform 1 from public.accounting_bank_statement_imports
+  where id = p_import_id
+  for update;
+
   select count(*), count(*) filter (where reconciliation_status in ('matched', 'excluded'))
   into v_total, v_matched
   from public.accounting_bank_statement_lines
@@ -341,26 +441,34 @@ alter table public.accounting_bank_accounts enable row level security;
 alter table public.accounting_bank_statement_imports enable row level security;
 alter table public.accounting_bank_statement_lines enable row level security;
 
-create policy accounting_bank_accounts_authenticated
+create policy accounting_bank_accounts_select_authorized
+on public.accounting_bank_accounts for select to authenticated
+using (public.accounting_bank_access_allowed(false));
+create policy accounting_bank_accounts_manage_authorized
 on public.accounting_bank_accounts for all to authenticated
-using (true) with check (true);
-create policy accounting_bank_statement_imports_authenticated
-on public.accounting_bank_statement_imports for all to authenticated
-using (true) with check (true);
-create policy accounting_bank_statement_lines_authenticated
-on public.accounting_bank_statement_lines for all to authenticated
-using (true) with check (true);
+using (public.accounting_bank_access_allowed(true))
+with check (public.accounting_bank_access_allowed(true));
+create policy accounting_bank_statement_imports_select_authorized
+on public.accounting_bank_statement_imports for select to authenticated
+using (public.accounting_bank_access_allowed(false));
+create policy accounting_bank_statement_lines_select_authorized
+on public.accounting_bank_statement_lines for select to authenticated
+using (public.accounting_bank_access_allowed(false));
 
 grant select, insert, update on public.accounting_bank_accounts to authenticated;
 grant select on public.accounting_bank_statement_imports to authenticated;
 grant select on public.accounting_bank_statement_lines to authenticated;
+revoke all on function public.accounting_bank_access_allowed(boolean) from public;
 revoke all on function public.import_accounting_bank_statement(uuid, text, date, date, numeric, numeric, jsonb) from public;
+revoke all on function public.get_accounting_bank_ledger_balances() from public;
 revoke all on function public.get_bank_reconciliation_candidates(uuid) from public;
 revoke all on function public.match_bank_statement_line(uuid, uuid, text) from public;
 revoke all on function public.unmatch_bank_statement_line(uuid) from public;
 revoke all on function public.refresh_bank_statement_import_status(uuid) from public;
 
+grant execute on function public.accounting_bank_access_allowed(boolean) to authenticated;
 grant execute on function public.import_accounting_bank_statement(uuid, text, date, date, numeric, numeric, jsonb) to authenticated;
+grant execute on function public.get_accounting_bank_ledger_balances() to authenticated;
 grant execute on function public.get_bank_reconciliation_candidates(uuid) to authenticated;
 grant execute on function public.match_bank_statement_line(uuid, uuid, text) to authenticated;
 grant execute on function public.unmatch_bank_statement_line(uuid) to authenticated;

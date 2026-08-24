@@ -401,6 +401,12 @@ revoke all on function public.post_invoice_adjustment_note(text, text, text, tex
 grant execute on function public.post_invoice_adjustment_note(text, text, text, text, text, date, numeric, numeric, numeric, jsonb) to authenticated;
 revoke all on function public.require_accounting_access_for_adjustment_note() from public;
 
+-- Adjustment financial/status fields are posted only by the guarded definer RPC.
+-- The existing sales-credit UI may still save the non-financial reason field.
+revoke insert, update, delete on public.invoice_adjustment_notes from anon, authenticated;
+grant select on public.invoice_adjustment_notes to authenticated;
+grant update (reason) on public.invoice_adjustment_notes to authenticated;
+
 alter table public.purchase_invoices enable row level security;
 drop policy if exists purchase_invoices_authenticated_select on public.purchase_invoices;
 create policy purchase_invoices_authenticated_select

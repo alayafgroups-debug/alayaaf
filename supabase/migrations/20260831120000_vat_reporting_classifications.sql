@@ -227,7 +227,10 @@ begin
        or new.note_type is distinct from old.note_type
        or new.issue_date is distinct from old.issue_date
        or new.status is distinct from old.status
-       or new.original_invoice_id is distinct from old.original_invoice_id then
+       or new.original_invoice_id is distinct from old.original_invoice_id
+       or new.accounting_status is distinct from old.accounting_status
+       or new.accounting_journal_entry_id is distinct from old.accounting_journal_entry_id
+       or new.accounting_posted_at is distinct from old.accounting_posted_at then
       raise exception 'POSTED_ADJUSTMENT_NOTE_IMMUTABLE: %', old.id;
     end if;
   end if;

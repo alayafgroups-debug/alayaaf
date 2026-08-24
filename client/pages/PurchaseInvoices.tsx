@@ -39,17 +39,22 @@ type InvoiceItem = {
   id: number;
   description: string;
   unit: string;
+  accountCode: string;
   quantity: number;
   unitPrice: number;
   discount: number;
   taxPercent: number;
 };
 
+type PurchaseExpenseAccount = { code: string; name_ar: string; parent_code: string | null };
+type VendorOption = { id: string; name: string; vendor_number: string | null };
+
 type PurchaseInvoice = {
   id: string;
   date: string;
   dueDate: string;
   vendor: string;
+  vendorId: string;
   poNumber: string;
   referenceNo: string;
   notes: string;
@@ -60,6 +65,8 @@ type PurchaseInvoice = {
   total: string;
   paid: string;
   remaining: string;
+  accountingStatus: string;
+  accountingJournalEntryId: string;
   items: InvoiceItem[];
 };
 
@@ -80,6 +87,7 @@ function mapRow(row: Record<string, unknown>): PurchaseInvoice {
     date: (row.date as string) ?? "",
     dueDate: (row.due_date as string) ?? "",
     vendor: (row.vendor as string) ?? "",
+    vendorId: String(row.vendor_id ?? ""),
     poNumber: (row.po_number as string) ?? "",
     referenceNo: (row.reference_no as string) ?? "",
     notes: (row.notes as string) ?? "",
@@ -96,11 +104,14 @@ function mapRow(row: Record<string, unknown>): PurchaseInvoice {
       row.adjusted_remaining != null
         ? Number(row.adjusted_remaining).toFixed(2)
         : ((row.remaining as string) ?? "0.00"),
+    accountingStatus: String(row.accounting_status ?? "unposted"),
+    accountingJournalEntryId: String(row.accounting_journal_entry_id ?? ""),
     items: Array.isArray(row.items)
       ? (row.items as Record<string, unknown>[]).map((it) => ({
           id: Number(it.id) || 0,
           description: String(it.description ?? ""),
           unit: String(it.unit ?? ""),
+          accountCode: String(it.accountCode ?? it.unit ?? "511"),
           quantity: Number(it.quantity) || 0,
           unitPrice: Number(it.unitPrice) || 0,
           discount: Number(it.discount) || 0,
@@ -178,7 +189,8 @@ export default function PurchaseInvoices() {
               id: 1,
               description: "-",
               unit: "",
-              quantity: 1,
+            accountCode: "511",
+            quantity: 1,
               unitPrice: parseCurrency(invoice.total),
               discount: 0,
               taxPercent: 0,
@@ -590,6 +602,7 @@ function InvoiceDetails({
             id: 1,
             description: "-",
             unit: "",
+            accountCode: "511",
             quantity: 1,
             unitPrice: parseCurrency(invoice.total),
             discount: 0,
@@ -872,6 +885,15 @@ function ItemsTable({
   accentClass?: string;
 }) {
   const { t, direction, formatNumber } = useI18n();
+  const [expenseAccounts, setExpenseAccounts] = useState<PurchaseExpenseAccount[]>([]);
+  useEffect(() => {
+    const loadAccounts = async () => {
+      const { data } = await supabase.from("accounting_accounts").select("code, name_ar, parent_code").like("code", "5%").order("code");
+      const rows = (data ?? []) as PurchaseExpenseAccount[];
+      setExpenseAccounts(rows.filter((account) => !rows.some((candidate) => candidate.parent_code === account.code)));
+    };
+    void loadAccounts();
+  }, []);
   const formatAmount = (value: number) =>
     formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const totals = items.reduce(
@@ -999,15 +1021,10 @@ function ItemsTable({
                       />
                     </td>
                     <td className="pt-3 px-1 align-top">
-                      <input
-                        type="text"
-                        value={item.unit}
-                        onChange={(e) =>
-                          onUpdate(item.id, { unit: e.target.value })
-                        }
-                        placeholder={t("مطلوب")}
-                        className={inputClass}
-                      />
+                      <select value={item.accountCode} onChange={(e) => onUpdate(item.id, { accountCode: e.target.value })} className={inputClass}>
+                        <option value="">{t("اختر حساب المصروف")}</option>
+                        {expenseAccounts.map((account) => <option key={account.code} value={account.code}>{account.code} - {account.name_ar}</option>)}
+                      </select>
                     </td>
                     <td className="pt-3 pl-1 align-top min-w-[260px]">
                       <input
@@ -1070,6 +1087,7 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
 
   const [form, setForm] = useState({
     vendor: initial?.vendor ?? "",
+    vendorId: initial?.vendorId ?? "",
     date: initial?.date ?? today,
     dueDate: initial?.dueDate ?? due,
     poNumber: initial?.poNumber ?? "",
@@ -1088,6 +1106,7 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
             id: 1,
             description: "",
             unit: "",
+            accountCode: "511",
             quantity: 1,
             unitPrice: 0,
             discount: 0,
@@ -1106,6 +1125,7 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
         id: Date.now(),
         description: "",
         unit: "",
+        accountCode: "511",
         quantity: 1,
         unitPrice: 0,
         discount: 0,
@@ -1153,6 +1173,14 @@ function FormFields({
   onCreateVendor?: () => void;
 }) {
   const { t, direction } = useI18n();
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+  useEffect(() => {
+    const loadVendors = async () => {
+      const { data } = await supabase.from("vendors").select("id, name, vendor_number").eq("status", "نشط").order("name");
+      setVendorOptions((data ?? []) as VendorOption[]);
+    };
+    void loadVendors();
+  }, []);
   const inputClass = `w-full h-10 px-3 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none`;
 
   return (
@@ -1173,7 +1201,7 @@ function FormFields({
       <label className="text-sm font-medium text-slate-700">
         {t("المورد")}*
       </label>
-      <div><input value={form.vendor} onChange={(e) => setField("vendor", e.target.value)} placeholder={t("مطلوب")} className={inputClass} />{onCreateVendor && <button type="button" onClick={onCreateVendor} className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء مورد جديد +")}</button>}</div>
+      <div><select value={form.vendorId} onChange={(event) => { const vendor = vendorOptions.find((option) => option.id === event.target.value); setField("vendorId", vendor?.id ?? ""); setField("vendor", vendor?.name ?? ""); }} className={inputClass}><option value="">{t("اختر المورد")}</option>{vendorOptions.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.vendor_number ? `${vendor.vendor_number} - ` : ""}{vendor.name}</option>)}</select>{onCreateVendor && <button type="button" onClick={onCreateVendor} className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء مورد جديد +")}</button>}</div>
 
       <label className="text-sm font-medium text-slate-700">
         {t("العملة")}*
@@ -1402,7 +1430,7 @@ function InvoiceForm({
           onCreateVendor={() => setCreatingVendor(true)}
         />
       </div>
-      {creatingVendor && <PartyRegistrationDialog kind="vendor" onClose={() => setCreatingVendor(false)} onCreated={(party) => { setField("vendor", party.name); setCreatingVendor(false); }} />}
+      {creatingVendor && <PartyRegistrationDialog kind="vendor" onClose={() => setCreatingVendor(false)} onCreated={(party) => { setField("vendorId", party.id); setField("vendor", party.name); setCreatingVendor(false); }} />}
 
       <ItemsTable
         items={items}

@@ -251,7 +251,7 @@ $$;
 -- Historical posted/reversed entries remain fully immutable.
 drop trigger if exists protect_posted_journal_line on public.accounting_journal_lines;
 create trigger protect_posted_journal_line
-before update or delete
+before insert or update or delete
 on public.accounting_journal_lines
 for each row
 execute function public.protect_posted_journal_line();

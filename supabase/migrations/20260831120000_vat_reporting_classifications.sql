@@ -86,6 +86,8 @@ declare
   v_document_side text;
   v_document_type text;
   v_report_eligible boolean := false;
+  v_document_tax numeric(18,2) := 0;
+  v_classified_tax numeric(18,2) := 0;
   v_sign integer := 1;
   v_input jsonb;
   v_item jsonb;
@@ -102,17 +104,15 @@ begin
   end if;
 
   if p_document_table = 'sales_invoices' then
-    select items, date::date, 'sales', 'sales_invoice', accounting_status = 'posted'
-    into v_items, v_document_date, v_document_side, v_document_type, v_report_eligible
+    select items, date::date, 'sales', 'sales_invoice', accounting_status = 'posted', coalesce(total_tax, 0)
+    into v_items, v_document_date, v_document_side, v_document_type, v_report_eligible, v_document_tax
     from public.sales_invoices where id::text = p_document_id;
   elsif p_document_table = 'purchase_invoices' then
-    select items, date::date, 'purchases', 'purchase_invoice', false
-    into v_items, v_document_date, v_document_side, v_document_type, v_report_eligible
-    from public.purchase_invoices where id::text = p_document_id;
+    raise exception 'PURCHASE_ACCOUNTING_POSTING_REQUIRED';
   elsif p_document_table = 'invoice_adjustment_notes' then
     select items, issue_date, case when note_type in ('sales_credit', 'sales_debit') then 'sales' else 'purchases' end,
-      note_type, accounting_status = 'posted'
-    into v_items, v_document_date, v_document_side, v_document_type, v_report_eligible
+      note_type, accounting_status = 'posted', coalesce(tax, 0)
+    into v_items, v_document_date, v_document_side, v_document_type, v_report_eligible, v_document_tax
     from public.invoice_adjustment_notes where id::text = p_document_id and status = 'posted';
   else
     raise exception 'VAT_DOCUMENT_TABLE_INVALID';
@@ -120,6 +120,9 @@ begin
 
   if not found then
     raise exception 'VAT_DOCUMENT_NOT_FOUND';
+  end if;
+  if not v_report_eligible then
+    raise exception 'VAT_DOCUMENT_MUST_BE_POSTED_AND_IMMUTABLE';
   end if;
   if jsonb_typeof(v_items) <> 'array' or jsonb_array_length(v_items) = 0 then
     raise exception 'VAT_DOCUMENT_ITEMS_REQUIRED';
@@ -157,8 +160,17 @@ begin
     if v_document_side = 'purchases' and v_supply_type = 'export' then
       raise exception 'VAT_PURCHASE_SUPPLY_TYPE_INVALID';
     end if;
+    if v_document_side = 'sales' and v_tax_category = 'standard' and v_supply_type <> 'domestic' then
+      raise exception 'VAT_STANDARD_SALES_MUST_BE_DOMESTIC';
+    end if;
+    if v_supply_type = 'export' and v_tax_category <> 'zero_rated' then
+      raise exception 'VAT_EXPORT_MUST_BE_ZERO_RATED';
+    end if;
 
-    v_rate := round(coalesce(nullif(v_item->>'taxPercent', '')::numeric, 0), 4);
+    v_rate := case
+      when p_document_table = 'invoice_adjustment_notes' and abs(v_document_tax) > 0 then 15
+      else round(coalesce(nullif(v_item->>'taxPercent', '')::numeric, 0), 4)
+    end;
     if v_tax_category = 'standard' and v_rate <> 15 then
       raise exception 'VAT_STANDARD_RATE_MUST_BE_15: line %', v_index;
     end if;
@@ -173,6 +185,7 @@ begin
       0
     ), 2) * v_sign;
     v_tax := round(abs(v_base) * v_rate / 100, 2) * v_sign;
+    v_classified_tax := v_classified_tax + v_tax;
 
     insert into public.accounting_vat_line_classifications(
       document_table, document_id, document_date, document_side, line_index,
@@ -185,6 +198,12 @@ begin
     );
     v_count := v_count + 1;
   end loop;
+
+  if p_document_table = 'invoice_adjustment_notes'
+     and abs(abs(v_classified_tax) - abs(v_document_tax)) > 0.02 then
+    raise exception 'VAT_ADJUSTMENT_TAX_MISMATCH: classified=%, document=%',
+      v_classified_tax, v_document_tax;
+  end if;
 
   return v_count;
 end;

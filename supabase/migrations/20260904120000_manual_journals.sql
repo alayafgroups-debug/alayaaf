@@ -1,6 +1,27 @@
 -- Draft, edit, post, and delete manual journals through validated RPCs.
 -- No sales invoice or ZATCA XML, signing, QR, clearance, or reporting flow is modified.
 
+create or replace function public.accounting_manual_journal_manage_allowed()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select auth.role() = 'service_role' or exists (
+    select 1
+    from public.employees employee
+    left join public.user_roles role on role.name_ar = employee.employee_role and role.status = 'فعال'
+    where lower(employee.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      and (
+        employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
+        or coalesce(role.permissions ->> 'accounting.manual_journals', '') in ('true', 'manage')
+        or coalesce(role.permissions ->> 'accounting.accounts', '') in ('true', 'manage')
+        or coalesce(role.permissions ->> 'module.accounting', '') in ('true', 'manage')
+      )
+  );
+$$;
+
 create or replace function public.save_manual_journal(p_entry_id uuid, p_journal jsonb)
 returns uuid
 language plpgsql
@@ -19,7 +40,7 @@ declare
   v_debit numeric(14,2);
   v_credit numeric(14,2);
 begin
-  if not public.accounting_access_allowed(true) then raise exception 'ACCOUNTING_MANAGE_PERMISSION_REQUIRED'; end if;
+  if not public.accounting_manual_journal_manage_allowed() then raise exception 'MANUAL_JOURNAL_MANAGE_PERMISSION_REQUIRED'; end if;
   begin v_date := (p_journal->>'date')::date; exception when others then raise exception 'MANUAL_JOURNAL_DATE_INVALID'; end;
   if v_description is null or v_description = '' then raise exception 'MANUAL_JOURNAL_DESCRIPTION_REQUIRED'; end if;
   if jsonb_typeof(v_lines) <> 'array' or jsonb_array_length(v_lines) < 2 then raise exception 'MANUAL_JOURNAL_REQUIRES_TWO_LINES'; end if;
@@ -49,6 +70,9 @@ begin
     exception when others then
       raise exception 'MANUAL_JOURNAL_LINE_AMOUNT_INVALID';
     end;
+    if v_debit::text in ('NaN', 'Infinity', '-Infinity') or v_credit::text in ('NaN', 'Infinity', '-Infinity') then
+      raise exception 'MANUAL_JOURNAL_LINE_AMOUNT_NON_FINITE';
+    end if;
     if v_debit < 0 or v_credit < 0 or ((v_debit > 0)::integer + (v_credit > 0)::integer) <> 1 then
       raise exception 'MANUAL_JOURNAL_LINE_REQUIRES_ONE_SIDE';
     end if;
@@ -75,7 +99,7 @@ declare
   v_credit numeric(14,2);
   v_line record;
 begin
-  if not public.accounting_access_allowed(true) then raise exception 'ACCOUNTING_MANAGE_PERMISSION_REQUIRED'; end if;
+  if not public.accounting_manual_journal_manage_allowed() then raise exception 'MANUAL_JOURNAL_MANAGE_PERMISSION_REQUIRED'; end if;
   select * into v_entry from public.accounting_journal_entries where id = p_entry_id for update;
   if not found then raise exception 'MANUAL_JOURNAL_NOT_FOUND'; end if;
   if v_entry.reference_type <> 'manual_journal' or v_entry.source_document_table <> 'manual_journals' then raise exception 'NOT_A_MANUAL_JOURNAL'; end if;
@@ -85,7 +109,7 @@ begin
   into v_count, v_debit, v_credit
   from public.accounting_journal_lines where journal_entry_id = p_entry_id;
   if v_count < 2 then raise exception 'POSTED_JOURNAL_REQUIRES_TWO_LINES'; end if;
-  if v_debit <= 0 or abs(v_debit - v_credit) > 0.01 then
+  if v_debit <= 0 or v_debit <> v_credit then
     raise exception 'POSTED_JOURNAL_NOT_BALANCED: debit=%, credit=%', v_debit, v_credit;
   end if;
   for v_line in select account_code from public.accounting_journal_lines where journal_entry_id = p_entry_id
@@ -107,7 +131,7 @@ as $$
 declare
   v_entry public.accounting_journal_entries%rowtype;
 begin
-  if not public.accounting_access_allowed(true) then raise exception 'ACCOUNTING_MANAGE_PERMISSION_REQUIRED'; end if;
+  if not public.accounting_manual_journal_manage_allowed() then raise exception 'MANUAL_JOURNAL_MANAGE_PERMISSION_REQUIRED'; end if;
   select * into v_entry from public.accounting_journal_entries where id = p_entry_id for update;
   if not found then raise exception 'MANUAL_JOURNAL_NOT_FOUND'; end if;
   if v_entry.reference_type <> 'manual_journal' or v_entry.source_document_table <> 'manual_journals' then raise exception 'NOT_A_MANUAL_JOURNAL'; end if;
@@ -117,6 +141,7 @@ begin
 end;
 $$;
 
+revoke all on function public.accounting_manual_journal_manage_allowed() from public, anon, authenticated;
 revoke all on function public.save_manual_journal(uuid, jsonb) from public, anon;
 revoke all on function public.post_manual_journal(uuid) from public, anon;
 revoke all on function public.delete_manual_journal(uuid) from public, anon;

@@ -153,6 +153,11 @@ export default function PurchaseInvoices() {
   const refresh = () => setRefreshKey((k) => k + 1);
 
   const handleDelete = async (id: string) => {
+    const invoice = invoices.find((item) => item.id === id);
+    if (invoice?.accountingStatus === "posted") {
+      toast({ title: t("لا يمكن حذف فاتورة مشتريات مرحلة محاسبيًا") });
+      return;
+    }
     if (!confirm(t("هل تريد حذف هذه الفاتورة؟"))) return;
     const { error } = await supabase
       .from("purchase_invoices")
@@ -355,7 +360,7 @@ export default function PurchaseInvoices() {
           <InvoiceDetails
             invoice={selected}
             onBack={() => setView("list")}
-            onEdit={() => setView("edit")}
+            onEdit={() => { if (selected.accountingStatus !== "posted") setView("edit"); }}
             onPrintPdf={handlePrintPdf}
           />
         )}
@@ -497,24 +502,24 @@ function InvoicesList({
                       color="blue"
                       onClick={() => onView(inv)}
                     />
-                    <ActionBtn
+                    {inv.accountingStatus !== "posted" && <ActionBtn
                       icon={Edit}
                       label={t("تعديل")}
                       color="emerald"
                       onClick={() => onEdit(inv)}
-                    />
-                    <ActionBtn
+                    />}
+                    {inv.accountingStatus === "posted" && parseCurrency(inv.remaining) > 0.01 && <ActionBtn
                       icon={CreditCard}
                       label={t("تسديد")}
                       color="indigo"
                       onClick={() => onPayment(inv)}
-                    />
-                    <ActionBtn
+                    />}
+                    {inv.accountingStatus !== "posted" && <ActionBtn
                       icon={Trash2}
                       label={t("حذف")}
                       color="red"
                       onClick={() => onDelete(inv.id)}
-                    />
+                    />}
                     <button
                       title={t("طباعة PDF")}
                       onClick={() => onPrintPdf(inv)}
@@ -650,12 +655,12 @@ function InvoiceDetails({
           >
             <Printer className="h-4 w-4" /> {t("طباعة PDF")}
           </button>
-          <button
+          {invoice.accountingStatus !== "posted" && <button
             onClick={onEdit}
             className="px-4 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 flex items-center gap-2"
           >
             <Edit className="h-4 w-4" /> {t("تعديل")}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -1201,7 +1206,7 @@ function FormFields({
       <label className="text-sm font-medium text-slate-700">
         {t("المورد")}*
       </label>
-      <div><select value={form.vendorId} onChange={(event) => { const vendor = vendorOptions.find((option) => option.id === event.target.value); setField("vendorId", vendor?.id ?? ""); setField("vendor", vendor?.name ?? ""); }} className={inputClass}><option value="">{t("اختر المورد")}</option>{vendorOptions.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.vendor_number ? `${vendor.vendor_number} - ` : ""}{vendor.name}</option>)}</select>{onCreateVendor && <button type="button" onClick={onCreateVendor} className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء مورد جديد +")}</button>}</div>
+      <div><select value={form.vendorId} onChange={(event) => { const vendor = vendorOptions.find((option) => option.id === event.target.value); setField("vendorId", vendor?.id ?? ""); setField("vendor", vendor?.name ?? ""); }} className={inputClass}><option value="">{t("اختر المورد")}</option>{form.vendorId && !vendorOptions.some((vendor) => vendor.id === form.vendorId) && <option value={form.vendorId}>{form.vendor}</option>}{vendorOptions.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.vendor_number ? `${vendor.vendor_number} - ` : ""}{vendor.name}</option>)}</select>{onCreateVendor && <button type="button" onClick={onCreateVendor} className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء مورد جديد +")}</button>}</div>
 
       <label className="text-sm font-medium text-slate-700">
         {t("العملة")}*
@@ -1313,8 +1318,12 @@ function InvoiceForm({
       setError(t("يرجى إدخال تاريخ الفاتورة"));
       return;
     }
-    if (!form.vendor.trim()) {
+    if (!form.vendorId || !form.vendor.trim()) {
       setError(t("يرجى اختيار المورد قبل حفظ الفاتورة"));
+      return;
+    }
+    if (items.length === 0 || items.some((item) => !item.description.trim() || !item.accountCode || item.quantity <= 0 || item.unitPrice < 0 || item.discount < 0 || item.discount > item.quantity * item.unitPrice)) {
+      setError(t("يرجى إكمال بنود الفاتورة والتأكد من الحساب والكميات والأسعار والخصومات"));
       return;
     }
 
@@ -1324,48 +1333,43 @@ function InvoiceForm({
 
     try {
       const totalStr = totals.total.toFixed(2);
-      const basePayload = {
-        vendor: form.vendor,
-        date: form.date,
-        due_date: form.dueDate || null,
-        po_number: form.poNumber || null,
-        reference_no: form.referenceNo || null,
-        notes: form.notes || null,
-        cost_center: form.costCenter,
-        cost_center_name: form.costCenterName || null,
-        status: form.status,
-        total: totalStr,
-        paid: "0.00",
-        remaining: totalStr,
-        items: items.map((item) => ({
-          id: item.id,
-          description: item.description,
-          unit: item.unit,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discount: item.discount,
-          taxPercent: item.taxPercent,
-        })),
-      };
-
       let savedId = invoiceNumber || `PIN-${Date.now()}`;
-      let insertError: { code?: string; message?: string } | null = null;
+      let postError: { code?: string; message?: string } | null = null;
       for (let attempt = 0; attempt < 5; attempt += 1) {
-        const result = await supabase
-          .from("purchase_invoices")
-          .insert([{ ...basePayload, id: savedId }]);
-        insertError = result.error;
-        if (!insertError || insertError.code !== "23505") break;
-
+        const result = await supabase.rpc("create_and_post_purchase_invoice", {
+          p_invoice: {
+            id: savedId,
+            vendorId: form.vendorId,
+            date: form.date,
+            dueDate: form.dueDate,
+            poNumber: form.poNumber,
+            referenceNo: form.referenceNo,
+            notes: form.notes,
+            costCenter: form.costCenter,
+            costCenterName: form.costCenterName,
+            items: items.map((item) => ({
+              id: item.id,
+              description: item.description,
+              unit: item.unit,
+              accountCode: item.accountCode,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discount: item.discount,
+              taxPercent: item.taxPercent,
+            })),
+          },
+        });
+        postError = result.error;
+        if (!postError || postError.code !== "23505") break;
         const nextNumber = Number(savedId.replace(/\D/g, "")) + 1 || Date.now();
         savedId = `PIN-${String(nextNumber).padStart(6, "0")}`;
       }
 
-      if (insertError) {
+      if (postError) {
         setError(
-          insertError.code === "23505"
+          postError.code === "23505"
             ? t("رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى.")
-            : `${t("حدث خطأ أثناء الحفظ")}: ${insertError.message ?? t("حاول مرة أخرى")}`,
+            : `${t("تعذّر حفظ وترحيل الفاتورة")}: ${postError.message ?? t("حاول مرة أخرى")}`,
         );
         return;
       }
@@ -1373,10 +1377,13 @@ function InvoiceForm({
       onSaved({
         id: savedId,
         ...form,
+        status: "مفتوحة",
         total: totalStr,
         paid: "0.00",
         remaining: totalStr,
-        statusColor: statusColors[form.status] ?? "bg-slate-500 text-white",
+        statusColor: statusColors["مفتوحة"],
+        accountingStatus: "posted",
+        accountingJournalEntryId: "",
         items,
       });
     } catch (saveError) {
@@ -1481,6 +1488,14 @@ function InvoiceEdit({
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
+    if (invoice.accountingStatus === "posted") {
+      setError(t("لا يمكن تعديل فاتورة مشتريات مرحلة محاسبيًا"));
+      return;
+    }
+    if (!form.vendorId || items.length === 0 || items.some((item) => !item.description.trim() || !item.accountCode || item.quantity <= 0 || item.unitPrice < 0 || item.discount < 0 || item.discount > item.quantity * item.unitPrice)) {
+      setError(t("يرجى اختيار المورد وإكمال بنود الفاتورة بصورة صحيحة"));
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -1492,6 +1507,7 @@ function InvoiceEdit({
       .from("purchase_invoices")
       .update({
         vendor: form.vendor,
+        vendor_id: form.vendorId,
         date: form.date,
         due_date: form.dueDate || null,
         po_number: form.poNumber || null,
@@ -1506,6 +1522,7 @@ function InvoiceEdit({
           id: item.id,
           description: item.description,
           unit: item.unit,
+          accountCode: item.accountCode,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           discount: item.discount,
@@ -1637,41 +1654,47 @@ function InvoicePayment({
   const [amount, setAmount] = useState(remainingValue.toFixed(2));
   const [paymentMethod, setPaymentMethod] = useState("تحويل بنكي");
   const [paymentRef, setPaymentRef] = useState("");
-  const [status, setStatus] = useState(invoice.status);
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    const payAmount = Number(amount);
+    if (!Number.isFinite(payAmount) || payAmount <= 0 || payAmount > remainingValue + 0.01) {
+      toast({ title: t("مبلغ السداد غير صحيح"), description: t("يجب أن يكون المبلغ موجبًا ولا يتجاوز المتبقي") });
+      return;
+    }
+    if (!paymentDate) {
+      toast({ title: t("يرجى إدخال تاريخ السداد") });
+      return;
+    }
+
     setSaving(true);
-    const payAmount = Math.min(
-      Math.max(Number(amount) || 0, 0),
-      remainingValue,
-    );
-    const nextPaid = (paidValue + payAmount).toFixed(2);
-    const nextRemaining = Math.max(
-      totalValue - paidValue - payAmount,
-      0,
-    ).toFixed(2);
-
-    const { error } = await supabase
-      .from("purchase_invoices")
-      .update({ paid: nextPaid, remaining: nextRemaining, status })
-      .eq("id", invoice.id);
-
+    const { error } = await supabase.rpc("record_purchase_payment", {
+      p_invoice_id: invoice.id,
+      p_amount: payAmount,
+      p_payment_method: paymentMethod,
+      p_reference: paymentRef || null,
+      p_payment_date: paymentDate,
+    });
     setSaving(false);
+
     if (!error) {
+      const nextPaid = (paidValue + payAmount).toFixed(2);
+      const nextRemaining = Math.max(totalValue - paidValue - payAmount, 0).toFixed(2);
+      const nextStatus = Number(nextRemaining) <= 0.01 ? "مدفوعة بالكامل" : "مدفوعة جزئياً";
       onUpdated({
         ...invoice,
         paid: nextPaid,
         remaining: nextRemaining,
-        status,
-        statusColor: statusColors[status] ?? "bg-slate-500 text-white",
+        status: nextStatus,
+        statusColor: statusColors[nextStatus] ?? "bg-slate-500 text-white",
       });
       toast({
-        title: t("تم تسجيل الدفعة"),
+        title: t("تم تسجيل الدفعة والقيد المحاسبي"),
         description: `${t("المبلغ")}: ${formatAmount(payAmount)} ${t("ريال")}`,
       });
     } else {
-      toast({ title: t("تعذّر الحفظ"), description: error.message });
+      toast({ title: t("تعذّر تسجيل السداد"), description: error.message });
     }
   };
 
@@ -1766,7 +1789,7 @@ function InvoicePayment({
               >
                 <option value="تحويل بنكي">{t("تحويل بنكي")}</option>
                 <option value="شيك">{t("شيك")}</option>
-                <option value="نقداً">{t("نقداً")}</option>
+                <option value="نقدي">{t("نقداً")}</option>
                 <option value="بطاقة ائتمانية">{t("بطاقة ائتمانية")}</option>
               </select>
             </div>
@@ -1783,17 +1806,14 @@ function InvoicePayment({
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700 text-right block">
-                {t("حالة الفاتورة")}
+                {t("تاريخ السداد")} <span className="text-red-500">*</span>
               </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none appearance-none bg-white"
-              >
-                <option value="مفتوحة">{t("مفتوحة")}</option>
-                <option value="مدفوعة جزئياً">{t("مدفوعة جزئياً")}</option>
-                <option value="مدفوعة بالكامل">{t("مدفوعة بالكامل")}</option>
-              </select>
+              <input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+              />
             </div>
           </div>
         </div>

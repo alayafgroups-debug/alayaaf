@@ -374,6 +374,33 @@ create trigger require_posted_purchase_for_debit_note
 before insert on public.invoice_adjustment_notes
 for each row execute function public.require_posted_purchase_for_debit_note();
 
+create or replace function public.require_accounting_access_for_adjustment_note()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.accounting_access_allowed(true) then
+    raise exception 'ACCOUNTING_MANAGE_PERMISSION_REQUIRED';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists require_accounting_access_for_adjustment_note on public.invoice_adjustment_notes;
+create trigger require_accounting_access_for_adjustment_note
+before insert on public.invoice_adjustment_notes
+for each row execute function public.require_accounting_access_for_adjustment_note();
+
+-- The existing adjustment RPC must update protected purchase balance columns.
+-- Its insert is guarded by the accounting-permission trigger above.
+alter function public.post_invoice_adjustment_note(text, text, text, text, text, date, numeric, numeric, numeric, jsonb)
+  security definer;
+revoke all on function public.post_invoice_adjustment_note(text, text, text, text, text, date, numeric, numeric, numeric, jsonb) from public;
+grant execute on function public.post_invoice_adjustment_note(text, text, text, text, text, date, numeric, numeric, numeric, jsonb) to authenticated;
+revoke all on function public.require_accounting_access_for_adjustment_note() from public;
+
 alter table public.purchase_invoices enable row level security;
 drop policy if exists purchase_invoices_authenticated_select on public.purchase_invoices;
 create policy purchase_invoices_authenticated_select

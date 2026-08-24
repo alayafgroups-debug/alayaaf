@@ -109,7 +109,7 @@ begin
   from public.accounting_journal_entries
   where id = p_entry_id;
 
-  if not found or v_status <> 'posted' then
+  if not found or v_status not in ('posted', 'reversed') then
     return;
   end if;
 
@@ -140,11 +140,16 @@ declare
 begin
   if tg_table_name = 'accounting_journal_entries' then
     v_entry_id := case when tg_op = 'DELETE' then old.id else new.id end;
+    perform public.assert_posted_journal_entry_balanced(v_entry_id);
+  elsif tg_op = 'UPDATE' then
+    perform public.assert_posted_journal_entry_balanced(old.journal_entry_id);
+    if new.journal_entry_id <> old.journal_entry_id then
+      perform public.assert_posted_journal_entry_balanced(new.journal_entry_id);
+    end if;
   else
     v_entry_id := case when tg_op = 'DELETE' then old.journal_entry_id else new.journal_entry_id end;
+    perform public.assert_posted_journal_entry_balanced(v_entry_id);
   end if;
-
-  perform public.assert_posted_journal_entry_balanced(v_entry_id);
 
   if tg_op = 'DELETE' then
     return old;
@@ -183,6 +188,10 @@ begin
     end if;
     raise exception 'POSTED_JOURNAL_ENTRY_IMMUTABLE: %', old.id;
   end if;
+
+  if old.status = 'reversed' then
+    raise exception 'REVERSED_JOURNAL_ENTRY_IMMUTABLE: %', old.id;
+  end if;
   return new;
 end;
 $$;
@@ -201,13 +210,33 @@ security invoker
 set search_path = public
 as $$
 declare
-  v_entry_id uuid := case when tg_op = 'DELETE' then old.journal_entry_id else new.journal_entry_id end;
+  v_old_status text;
+  v_new_status text;
+  v_new_entry_created_at timestamptz;
 begin
-  if exists (
-    select 1 from public.accounting_journal_entries
-    where id = v_entry_id and status = 'posted'
-  ) then
-    raise exception 'POSTED_JOURNAL_LINE_IMMUTABLE: %', v_entry_id;
+  if tg_op in ('UPDATE', 'DELETE') then
+    select status into v_old_status
+    from public.accounting_journal_entries
+    where id = old.journal_entry_id;
+
+    if v_old_status in ('posted', 'reversed') then
+      raise exception 'FINAL_JOURNAL_LINE_IMMUTABLE: %', old.journal_entry_id;
+    end if;
+  end if;
+
+  if tg_op in ('INSERT', 'UPDATE') then
+    select status, created_at into v_new_status, v_new_entry_created_at
+    from public.accounting_journal_entries
+    where id = new.journal_entry_id;
+
+    if v_new_status = 'reversed' then
+      raise exception 'REVERSED_JOURNAL_LINE_IMMUTABLE: %', new.journal_entry_id;
+    end if;
+
+    if v_new_status = 'posted'
+       and v_new_entry_created_at <> transaction_timestamp() then
+      raise exception 'POSTED_JOURNAL_LINE_IMMUTABLE: %', new.journal_entry_id;
+    end if;
   end if;
 
   if tg_op = 'DELETE' then
@@ -217,8 +246,9 @@ begin
 end;
 $$;
 
--- Inserts remain allowed because existing posting functions create the posted header
--- before adding its balanced lines in the same transaction. Updates/deletes are blocked.
+-- Existing posting functions create a posted header before its lines. Inserts are
+-- therefore allowed only when that header was created in the current transaction.
+-- Historical posted/reversed entries remain fully immutable.
 drop trigger if exists protect_posted_journal_line on public.accounting_journal_lines;
 create trigger protect_posted_journal_line
 before update or delete

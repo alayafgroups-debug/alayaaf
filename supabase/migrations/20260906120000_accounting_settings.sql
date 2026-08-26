@@ -32,8 +32,7 @@ as $$
       and (
         employee.employee_role in ('مدير النظام', 'مدير عام', 'المدير العام')
         or coalesce(role.permissions ->> 'accounting.settings', '') in ('true', 'manage')
-        or coalesce(role.permissions ->> 'accounting.accounts', '') in ('true', 'manage')
-        or coalesce(role.permissions ->> 'module.accounting', '') in ('true', 'manage')
+        or coalesce(role.permissions ->> 'module.accounting', '') = 'manage'
       )
   );
 $$;
@@ -69,6 +68,12 @@ begin
   perform public.account_name_for_posting(v_payable);
   perform public.account_name_for_posting(v_purchase);
   perform public.account_name_for_posting(v_input_vat);
+  if v_receivable not like '1%' then raise exception 'RECEIVABLE_ACCOUNT_CLASS_INVALID'; end if;
+  if v_revenue not like '4%' then raise exception 'REVENUE_ACCOUNT_CLASS_INVALID'; end if;
+  if v_output_vat not like '2%' then raise exception 'OUTPUT_VAT_ACCOUNT_CLASS_INVALID'; end if;
+  if v_payable not like '2%' then raise exception 'PAYABLE_ACCOUNT_CLASS_INVALID'; end if;
+  if v_purchase not like '5%' then raise exception 'PURCHASE_ACCOUNT_CLASS_INVALID'; end if;
+  if v_input_vat not like '2%' then raise exception 'INPUT_VAT_ACCOUNT_CLASS_INVALID'; end if;
 
   update public.accounting_posting_rules
   set receivable_account_code = v_receivable,
@@ -132,6 +137,7 @@ declare
 begin
   if not public.accounting_settings_manage_allowed() then raise exception 'ACCOUNTING_SETTINGS_PERMISSION_REQUIRED'; end if;
   if p_status not in ('open', 'closed') then raise exception 'FISCAL_PERIOD_STATUS_INVALID'; end if;
+  perform pg_advisory_xact_lock(hashtext('accounting_fiscal_periods'));
   select * into v_period from public.accounting_fiscal_periods where id = p_id for update;
   if not found then raise exception 'FISCAL_PERIOD_NOT_FOUND'; end if;
   if p_status = 'closed' and exists (
@@ -158,6 +164,7 @@ declare
   v_period public.accounting_fiscal_periods%rowtype;
 begin
   if not public.accounting_settings_manage_allowed() then raise exception 'ACCOUNTING_SETTINGS_PERMISSION_REQUIRED'; end if;
+  perform pg_advisory_xact_lock(hashtext('accounting_fiscal_periods'));
   select * into v_period from public.accounting_fiscal_periods where id = p_id for update;
   if not found then raise exception 'FISCAL_PERIOD_NOT_FOUND'; end if;
   if v_period.status = 'closed' then raise exception 'CLOSED_FISCAL_PERIOD_IMMUTABLE'; end if;
@@ -176,7 +183,8 @@ security invoker
 set search_path = public
 as $$
 begin
-  if new.status = 'posted' and exists (
+  perform pg_advisory_xact_lock(hashtext('accounting_fiscal_periods'));
+  if exists (
     select 1 from public.accounting_fiscal_periods period
     where period.status = 'closed' and new.entry_date between period.date_from and period.date_to
   ) then raise exception 'ACCOUNTING_FISCAL_PERIOD_CLOSED: %', new.entry_date; end if;
@@ -189,13 +197,20 @@ create trigger enforce_accounting_closed_period
 before insert or update of status, entry_date on public.accounting_journal_entries
 for each row execute function public.enforce_accounting_closed_period();
 
+revoke all on public.accounting_journal_entries from anon;
+revoke all on public.accounting_journal_lines from anon;
+revoke insert, update, delete, truncate on public.accounting_journal_entries from authenticated;
+revoke insert, update, delete, truncate on public.accounting_journal_lines from authenticated;
+grant select on public.accounting_journal_entries to authenticated;
+grant select on public.accounting_journal_lines to authenticated;
+
 revoke all on function public.accounting_settings_manage_allowed() from public, anon;
 revoke all on function public.save_accounting_posting_defaults(jsonb) from public, anon;
 revoke all on function public.save_accounting_fiscal_period(uuid, text, date, date) from public, anon;
 revoke all on function public.set_accounting_fiscal_period_status(uuid, text) from public, anon;
 revoke all on function public.delete_accounting_fiscal_period(uuid) from public, anon;
-grant execute on function public.accounting_settings_manage_allowed() to authenticated;
-grant execute on function public.save_accounting_posting_defaults(jsonb) to authenticated;
-grant execute on function public.save_accounting_fiscal_period(uuid, text, date, date) to authenticated;
-grant execute on function public.set_accounting_fiscal_period_status(uuid, text) to authenticated;
-grant execute on function public.delete_accounting_fiscal_period(uuid) to authenticated;
+grant execute on function public.accounting_settings_manage_allowed() to authenticated, service_role;
+grant execute on function public.save_accounting_posting_defaults(jsonb) to authenticated, service_role;
+grant execute on function public.save_accounting_fiscal_period(uuid, text, date, date) to authenticated, service_role;
+grant execute on function public.set_accounting_fiscal_period_status(uuid, text) to authenticated, service_role;
+grant execute on function public.delete_accounting_fiscal_period(uuid) to authenticated, service_role;

@@ -88,25 +88,18 @@ export default function BulkReclassification() {
       return;
     }
     setSearching(true); setError(""); setSelectedIds(new Set());
-    const { data, error: searchError } = await supabase
-      .from("accounting_journal_lines")
-      .select("id, journal_entry_id, debit, credit, counterparty, accounting_journal_entries!inner(entry_date, reference_type, description, status)")
-      .eq("account_code", sourceCode)
-      .eq("accounting_journal_entries.status", "posted")
-      .gte("accounting_journal_entries.entry_date", dateFrom)
-      .lte("accounting_journal_entries.entry_date", dateTo)
-      .order("created_at", { ascending: true })
-      .limit(500);
+    const { data, error: searchError } = await supabase.rpc("list_bulk_reclassification_candidates", {
+      p_source_account_code: sourceCode,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+    });
     setSearching(false);
     if (searchError) { setError(searchError.message); return; }
-    setCandidates((data ?? []).map((row: any) => {
-      const entry = Array.isArray(row.accounting_journal_entries) ? row.accounting_journal_entries[0] : row.accounting_journal_entries;
-      return {
-        id: String(row.id), journalId: String(row.journal_entry_id), date: String(entry.entry_date),
-        referenceType: String(entry.reference_type), description: String(entry.description),
-        debit: amount(row.debit), credit: amount(row.credit), counterparty: String(row.counterparty ?? ""),
-      };
-    }));
+    setCandidates((data ?? []).map((row: any) => ({
+      id: String(row.id), journalId: String(row.journal_entry_id), date: String(row.entry_date),
+      referenceType: String(row.reference_type), description: String(row.description),
+      debit: amount(row.debit), credit: amount(row.credit), counterparty: String(row.counterparty ?? ""),
+    })));
   };
 
   const toggle = (id: string) => setSelectedIds((current) => {

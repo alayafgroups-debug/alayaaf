@@ -26,24 +26,6 @@ create table if not exists public.accounting_reclassification_items (
 create index if not exists accounting_reclassifications_created_at_idx
   on public.accounting_reclassifications(created_at desc);
 
-alter table public.accounting_reclassifications enable row level security;
-alter table public.accounting_reclassification_items enable row level security;
-
-drop policy if exists accounting_reclassifications_authenticated_select on public.accounting_reclassifications;
-create policy accounting_reclassifications_authenticated_select
-on public.accounting_reclassifications for select to authenticated
-using (auth.uid() is not null);
-
-drop policy if exists accounting_reclassification_items_authenticated_select on public.accounting_reclassification_items;
-create policy accounting_reclassification_items_authenticated_select
-on public.accounting_reclassification_items for select to authenticated
-using (auth.uid() is not null);
-
-revoke insert, update, delete, truncate on public.accounting_reclassifications from anon, authenticated;
-revoke insert, update, delete, truncate on public.accounting_reclassification_items from anon, authenticated;
-grant select on public.accounting_reclassifications to authenticated;
-grant select on public.accounting_reclassification_items to authenticated;
-
 create or replace function public.accounting_reclassification_manage_allowed()
 returns boolean
 language sql
@@ -63,6 +45,70 @@ as $$
         or coalesce(role.permissions ->> 'module.accounting', '') in ('true', 'manage')
       )
   );
+$$;
+
+alter table public.accounting_reclassifications enable row level security;
+alter table public.accounting_reclassification_items enable row level security;
+
+drop policy if exists accounting_reclassifications_authenticated_select on public.accounting_reclassifications;
+create policy accounting_reclassifications_authenticated_select
+on public.accounting_reclassifications for select to authenticated
+using (public.accounting_reclassification_manage_allowed());
+
+drop policy if exists accounting_reclassification_items_authenticated_select on public.accounting_reclassification_items;
+create policy accounting_reclassification_items_authenticated_select
+on public.accounting_reclassification_items for select to authenticated
+using (public.accounting_reclassification_manage_allowed());
+
+revoke insert, update, delete, truncate on public.accounting_reclassifications from anon, authenticated;
+revoke insert, update, delete, truncate on public.accounting_reclassification_items from anon, authenticated;
+grant select on public.accounting_reclassifications to authenticated;
+grant select on public.accounting_reclassification_items to authenticated;
+
+create or replace function public.list_bulk_reclassification_candidates(
+  p_source_account_code text,
+  p_date_from date,
+  p_date_to date
+)
+returns table (
+  id uuid,
+  journal_entry_id uuid,
+  entry_date date,
+  reference_type text,
+  description text,
+  debit numeric(14,2),
+  credit numeric(14,2),
+  counterparty text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.accounting_reclassification_manage_allowed() then
+    raise exception 'RECLASSIFICATION_MANAGE_PERMISSION_REQUIRED';
+  end if;
+  if nullif(trim(p_source_account_code), '') is null then raise exception 'RECLASSIFICATION_SOURCE_REQUIRED'; end if;
+  if p_date_from is null or p_date_to is null or p_date_from > p_date_to then raise exception 'RECLASSIFICATION_DATE_RANGE_INVALID'; end if;
+
+  perform public.account_name_for_posting(trim(p_source_account_code));
+
+  return query
+  select line.id, line.journal_entry_id, entry.entry_date, entry.reference_type,
+         entry.description, line.debit, line.credit, line.counterparty
+  from public.accounting_journal_lines line
+  join public.accounting_journal_entries entry on entry.id = line.journal_entry_id
+  where line.account_code = trim(p_source_account_code)
+    and entry.status = 'posted'
+    and entry.entry_date between p_date_from and p_date_to
+    and not exists (
+      select 1 from public.accounting_reclassification_items item
+      where item.source_journal_line_id = line.id
+    )
+  order by entry.entry_date, entry.created_at, entry.id, line.created_at, line.id
+  limit 500;
+end;
 $$;
 
 create or replace function public.create_bulk_reclassification(
@@ -169,6 +215,9 @@ begin
 end;
 $$;
 
-revoke all on function public.accounting_reclassification_manage_allowed() from public, anon, authenticated;
+revoke all on function public.accounting_reclassification_manage_allowed() from public, anon;
+revoke all on function public.list_bulk_reclassification_candidates(text, date, date) from public, anon;
 revoke all on function public.create_bulk_reclassification(uuid[], text, date, text) from public, anon;
+grant execute on function public.accounting_reclassification_manage_allowed() to authenticated;
+grant execute on function public.list_bulk_reclassification_candidates(text, date, date) to authenticated;
 grant execute on function public.create_bulk_reclassification(uuid[], text, date, text) to authenticated;

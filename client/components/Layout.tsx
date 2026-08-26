@@ -84,6 +84,7 @@ const navSubMenus: Record<
   ],
   "/inventory": [
     { label: "المنتجات والخدمات", href: "/inventory/products" },
+    { label: "سندات استلام المخزون", href: "/inventory/receipts" },
     { label: "عمليات جرد المخزون", href: "/inventory/counts" },
     { label: "تسويات المخزون", href: "/inventory/adjustments" },
     { label: "أوامر التصنيع", href: "/inventory/manufacturing" },

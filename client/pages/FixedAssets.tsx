@@ -62,7 +62,7 @@ export default function FixedAssets() {
   };
 
   useEffect(() => { void load(); }, []);
-  const totals = useMemo(() => assets.filter((asset) => asset.status !== "draft").reduce((sum, asset) => ({ cost: sum.cost + asset.cost, accumulated: sum.accumulated + asset.accumulated }), { cost: 0, accumulated: 0 }), [assets]);
+  const totals = useMemo(() => assets.filter((asset) => asset.status === "active").reduce((sum, asset) => ({ cost: sum.cost + asset.cost, accumulated: sum.accumulated + asset.accumulated }), { cost: 0, accumulated: 0 }), [assets]);
   const accountOptions = (prefixes: string[]) => accounts.filter((account) => prefixes.some((prefix) => account.code.startsWith(prefix)));
 
   const resetForm = () => { setEditingId(undefined); setName(""); setCategory(""); setAcquisitionDate(today()); setInServiceDate(today()); setCost(""); setResidualValue("0"); setLifeMonths("60"); setAssetAccount(""); setAccumulatedAccount(""); setExpenseAccount(""); };

@@ -201,6 +201,10 @@ begin
   if v_asset.status <> 'draft' then raise exception 'ONLY_DRAFT_FIXED_ASSET_CAPITALIZABLE'; end if;
   v_asset_name := public.account_name_for_posting(v_asset.asset_account_code);
   v_credit_name := public.account_name_for_posting(trim(p_credit_account_code));
+  if trim(p_credit_account_code) not like '1%' and trim(p_credit_account_code) not like '2%' then
+    raise exception 'FIXED_ASSET_CREDIT_ACCOUNT_CLASS_INVALID';
+  end if;
+  if trim(p_credit_account_code) = v_asset.asset_account_code then raise exception 'FIXED_ASSET_CAPITALIZATION_ACCOUNTS_MUST_DIFFER'; end if;
 
   insert into public.accounting_journal_entries (
     id, entry_date, reference_type, source_document_table, source_document_id, description, status
@@ -229,6 +233,7 @@ declare
   v_entry_id uuid := gen_random_uuid();
   v_expected_period date;
   v_accumulated numeric(14,2);
+  v_posted_count integer;
   v_depreciable numeric(14,2);
   v_monthly numeric(14,2);
   v_amount numeric(14,2);
@@ -241,16 +246,19 @@ begin
   if v_asset.status <> 'active' then raise exception 'ONLY_ACTIVE_FIXED_ASSET_DEPRECIABLE'; end if;
   if p_period_end is null or p_period_end <> (date_trunc('month', p_period_end)::date + interval '1 month - 1 day')::date then raise exception 'DEPRECIATION_PERIOD_MUST_BE_MONTH_END'; end if;
   if p_period_end > current_date then raise exception 'FUTURE_DEPRECIATION_NOT_ALLOWED'; end if;
-  select coalesce(sum(amount), 0), max(period_end) into v_accumulated, v_expected_period
+  select coalesce(sum(amount), 0), max(period_end), count(*)
+  into v_accumulated, v_expected_period, v_posted_count
   from public.fixed_asset_depreciation where asset_id = p_id;
   v_expected_period := case when v_expected_period is null
     then (date_trunc('month', v_asset.in_service_date)::date + interval '1 month - 1 day')::date
     else (date_trunc('month', v_expected_period + 1)::date + interval '1 month - 1 day')::date end;
   if p_period_end <> v_expected_period then raise exception 'DEPRECIATION_PERIOD_OUT_OF_SEQUENCE: expected %', v_expected_period; end if;
   v_depreciable := v_asset.cost - v_asset.residual_value;
-  if v_accumulated >= v_depreciable then raise exception 'FIXED_ASSET_FULLY_DEPRECIATED'; end if;
+  if v_accumulated >= v_depreciable or v_posted_count >= v_asset.useful_life_months then raise exception 'FIXED_ASSET_FULLY_DEPRECIATED'; end if;
   v_monthly := round(v_depreciable / v_asset.useful_life_months, 2);
-  v_amount := least(v_monthly, v_depreciable - v_accumulated);
+  v_amount := case when v_posted_count + 1 = v_asset.useful_life_months
+    then v_depreciable - v_accumulated
+    else least(v_monthly, v_depreciable - v_accumulated) end;
   if v_amount <= 0 then raise exception 'DEPRECIATION_AMOUNT_INVALID'; end if;
   v_expense_name := public.account_name_for_posting(v_asset.depreciation_expense_account_code);
   v_accumulated_name := public.account_name_for_posting(v_asset.accumulated_depreciation_account_code);
@@ -291,6 +299,7 @@ declare
   v_carrying numeric(14,2);
   v_proceeds numeric(14,2);
   v_gain_loss numeric(14,2);
+  v_last_depreciation_date date;
   v_asset_name text;
   v_accumulated_name text;
   v_proceeds_name text;
@@ -303,13 +312,23 @@ begin
   if p_disposal_date is null or p_disposal_date < v_asset.in_service_date or p_disposal_date > current_date then raise exception 'FIXED_ASSET_DISPOSAL_DATE_INVALID'; end if;
   begin v_proceeds := round(coalesce(p_proceeds, 0), 2); exception when others then raise exception 'FIXED_ASSET_PROCEEDS_INVALID'; end;
   if v_proceeds::text in ('NaN','Infinity','-Infinity') or v_proceeds < 0 then raise exception 'FIXED_ASSET_PROCEEDS_INVALID'; end if;
-  select coalesce(sum(amount), 0) into v_accumulated from public.fixed_asset_depreciation where asset_id = p_id;
+  select coalesce(sum(amount), 0), max(period_end) into v_accumulated, v_last_depreciation_date
+  from public.fixed_asset_depreciation where asset_id = p_id;
+  if v_last_depreciation_date is not null and p_disposal_date < v_last_depreciation_date then
+    raise exception 'DISPOSAL_DATE_BEFORE_LAST_DEPRECIATION';
+  end if;
   v_carrying := greatest(v_asset.cost - v_accumulated, 0);
   v_gain_loss := v_proceeds - v_carrying;
   v_asset_name := public.account_name_for_posting(v_asset.asset_account_code);
   v_accumulated_name := public.account_name_for_posting(v_asset.accumulated_depreciation_account_code);
   v_gain_loss_name := public.account_name_for_posting(trim(p_gain_loss_account_code));
-  if v_proceeds > 0 then v_proceeds_name := public.account_name_for_posting(trim(p_proceeds_account_code)); end if;
+  if trim(p_gain_loss_account_code) not like '4%' and trim(p_gain_loss_account_code) not like '5%' then
+    raise exception 'FIXED_ASSET_GAIN_LOSS_ACCOUNT_CLASS_INVALID';
+  end if;
+  if v_proceeds > 0 then
+    v_proceeds_name := public.account_name_for_posting(trim(p_proceeds_account_code));
+    if trim(p_proceeds_account_code) not like '1%' then raise exception 'FIXED_ASSET_PROCEEDS_ACCOUNT_CLASS_INVALID'; end if;
+  end if;
 
   insert into public.accounting_journal_entries (
     id, entry_date, reference_type, source_document_table, source_document_id, description, status

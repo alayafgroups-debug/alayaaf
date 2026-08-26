@@ -144,7 +144,8 @@ begin
   if nullif(trim(p_description), '') is null then raise exception 'RECLASSIFICATION_DESCRIPTION_REQUIRED'; end if;
   if nullif(trim(p_destination_account_code), '') is null then raise exception 'RECLASSIFICATION_DESTINATION_REQUIRED'; end if;
 
-  if (select count(*) from unnest(p_source_line_ids) line_id) <> (select count(distinct line_id) from unnest(p_source_line_ids) line_id) then
+  if (select count(*) from unnest(p_source_line_ids) as selected(line_id)) <>
+     (select count(distinct line_id) from unnest(p_source_line_ids) as selected(line_id)) then
     raise exception 'RECLASSIFICATION_DUPLICATE_LINE_IDS';
   end if;
 
@@ -195,7 +196,8 @@ begin
   );
 
   insert into public.accounting_reclassification_items (reclassification_id, source_journal_line_id)
-  select v_reclassification_id, line_id from unnest(p_source_line_ids) line_id;
+  select v_reclassification_id, line_id
+  from unnest(p_source_line_ids) as selected(line_id);
 
   if v_total_debit > 0 then
     insert into public.accounting_journal_lines (journal_entry_id, account_code, account_name, debit, credit, counterparty)

@@ -107,6 +107,7 @@ import ExpenseManagement from "./pages/ExpenseManagement";
 import ChartOfAccounts from "./pages/ChartOfAccounts";
 import ManualJournals from "./pages/ManualJournals";
 import BulkReclassification from "./pages/BulkReclassification";
+import AccountingSettings from "./pages/AccountingSettings";
 import Tax from "./pages/Tax";
 import BankAccounts from "./pages/BankAccounts";
 import TaxReports from "./pages/TaxReports";
@@ -261,7 +262,7 @@ const App = () => (
           <Route path="/expenses/manual-journals" element={<ManualJournals />} />
           <Route path="/expenses/reclassification" element={<BulkReclassification />} />
           <Route path="/expenses/fixed-assets" element={<ExpenseManagement />} />
-          <Route path="/expenses/settings" element={<ExpenseManagement />} />
+          <Route path="/expenses/settings" element={<AccountingSettings />} />
           <Route path="/expenses/vouchers" element={<ExpenseManagement />} />
           <Route path="/expenses/petty-cash" element={<ExpenseManagement />} />
           <Route path="/expenses/reports" element={<AccountingReports />} />

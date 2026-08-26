@@ -118,6 +118,7 @@ export function permissionForMainSubPath(path: string): string[] {
     ["/expenses/tax", "accounting.tax", "module.accounting"],
     ["/expenses/reclassification", "accounting.reclassification", "module.accounting"],
     ["/expenses/manual-journals", "accounting.manual_journals", "module.accounting"],
+    ["/expenses/settings", "accounting.settings", "module.accounting"],
     ["/expenses", "accounting.accounts", "module.accounting"],
     ["/users/roles", "users.roles", "module.users"],
     ["/users/audit", "users.audit", "module.users"],

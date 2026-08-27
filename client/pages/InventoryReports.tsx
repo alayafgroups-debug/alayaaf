@@ -33,6 +33,8 @@ const REPORTS: Array<{ id: ReportId; label: string; description: string }> = [
 
 const INBOUND_TYPES = new Set(["receipt", "transfer_in", "adjustment_in", "opening"]);
 const amount = (value: unknown) => Number(value ?? 0) || 0;
+const movementValue = (movement: Pick<Movement, "quantity" | "unitCost">) =>
+  Math.round(movement.quantity * movement.unitCost * 100) / 100;
 const isEmpty = (value: unknown) => value === null || value === undefined || value === "";
 
 export default function InventoryReports() {
@@ -56,7 +58,7 @@ export default function InventoryReports() {
   const [assemblyOrders, setAssemblyOrders] = useState<ProductionOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const invalidRange = dateFrom > dateTo;
+  const invalidRange = view !== "reconciliation" && dateFrom > dateTo;
 
   const load = async () => {
     if (invalidRange) {
@@ -131,7 +133,7 @@ export default function InventoryReports() {
       const current = openingByKey.get(key) ?? { quantity: 0, value: 0 };
       const sign = INBOUND_TYPES.has(movement.type) ? 1 : -1;
       current.quantity += sign * movement.quantity;
-      current.value += sign * movement.quantity * movement.unitCost;
+      current.value += sign * movementValue(movement);
       openingByKey.set(key, current);
     });
 
@@ -142,7 +144,7 @@ export default function InventoryReports() {
         const current = grouped.get(key) ?? { productId: movement.productId, warehouseId: movement.warehouseId, quantity: 0, value: 0 };
         const sign = INBOUND_TYPES.has(movement.type) ? 1 : -1;
         current.quantity += sign * movement.quantity;
-        current.value += sign * movement.quantity * movement.unitCost;
+        current.value += sign * movementValue(movement);
         grouped.set(key, current);
       });
       const balances = [...grouped.values()].filter((item) => Math.abs(item.quantity) > 0.0001 || Math.abs(item.value) > 0.005).sort((a, b) => productName(a.productId).localeCompare(productName(b.productId)) || warehouseName(a.warehouseId).localeCompare(warehouseName(b.warehouseId)));
@@ -160,7 +162,7 @@ export default function InventoryReports() {
         const inbound = INBOUND_TYPES.has(movement.type);
         const balance = (runningByKey.get(key) ?? 0) + (inbound ? movement.quantity : -movement.quantity);
         runningByKey.set(key, balance);
-        return { date: movement.date, number: movement.number, type: movementTypeLabel(movement.type), item: productName(movement.productId), warehouse: warehouseName(movement.warehouseId), inbound: inbound ? quantity(movement.quantity) : "—", outbound: inbound ? "—" : quantity(movement.quantity), unitCost: money(movement.unitCost), value: money(movement.quantity * movement.unitCost), balance: quantity(balance) };
+        return { date: movement.date, number: movement.number, type: movementTypeLabel(movement.type), item: productName(movement.productId), warehouse: warehouseName(movement.warehouseId), inbound: inbound ? quantity(movement.quantity) : "—", outbound: inbound ? "—" : quantity(movement.quantity), unitCost: money(movement.unitCost), value: money(movementValue(movement)), balance: quantity(balance) };
       });
       return {
         columns: [{ key: "date", label: t("التاريخ") }, { key: "number", label: t("رقم الحركة") }, { key: "type", label: t("نوع الحركة") }, { key: "item", label: t("الصنف") }, { key: "warehouse", label: t("المستودع") }, { key: "inbound", label: t("وارد") }, { key: "outbound", label: t("صادر") }, { key: "unitCost", label: t("تكلفة الوحدة SAR") }, { key: "value", label: t("القيمة SAR") }, { key: "balance", label: t("الرصيد") }],
@@ -192,8 +194,8 @@ export default function InventoryReports() {
       const issueMovements = periodMovements.filter((movement) => movement.type === "issue");
       return {
         columns: [{ key: "date", label: t("التاريخ") }, { key: "number", label: t("رقم الحركة") }, { key: "item", label: t("الصنف") }, { key: "warehouse", label: t("المستودع") }, { key: "quantity", label: t("الكمية") }, { key: "unitCost", label: t("متوسط التكلفة SAR") }, { key: "cost", label: t("تكلفة الصرف SAR") }, { key: "journal", label: t("القيد المحاسبي") }],
-        rows: issueMovements.map((item) => ({ date: item.date, number: item.number, item: productName(item.productId), warehouse: warehouseName(item.warehouseId), quantity: quantity(item.quantity), unitCost: money(item.unitCost), cost: money(item.quantity * item.unitCost), journal: item.journalEntryId || t("غير مطلوب") })),
-        summary: [{ label: t("إجمالي تكلفة الصرف"), value: money(issueMovements.reduce((sum, item) => sum + item.quantity * item.unitCost, 0)) }, { label: t("عدد الحركات"), value: issueMovements.length }],
+        rows: issueMovements.map((item) => ({ date: item.date, number: item.number, item: productName(item.productId), warehouse: warehouseName(item.warehouseId), quantity: quantity(item.quantity), unitCost: money(item.unitCost), cost: money(movementValue(item)), journal: item.journalEntryId || t("غير مطلوب") })),
+        summary: [{ label: t("إجمالي تكلفة الصرف"), value: money(issueMovements.reduce((sum, item) => sum + movementValue(item), 0)) }, { label: t("عدد الحركات"), value: issueMovements.length }],
       };
     }
 
@@ -201,8 +203,8 @@ export default function InventoryReports() {
       const transferMovements = periodMovements.filter((movement) => movement.type === "transfer_out");
       return {
         columns: [{ key: "date", label: t("التاريخ") }, { key: "number", label: t("رقم التحويل") }, { key: "item", label: t("الصنف") }, { key: "source", label: t("المستودع المصدر") }, { key: "destination", label: t("المستودع الوجهة") }, { key: "quantity", label: t("الكمية") }, { key: "unitCost", label: t("تكلفة الوحدة SAR") }, { key: "value", label: t("القيمة المحولة SAR") }],
-        rows: transferMovements.map((item) => { const transfer = transferById.get(item.sourceId); return { date: item.date, number: transfer?.number ?? item.number, item: productName(item.productId), source: warehouseName(transfer?.sourceWarehouseId ?? item.warehouseId), destination: warehouseName(transfer?.destinationWarehouseId ?? ""), quantity: quantity(item.quantity), unitCost: money(item.unitCost), value: money(item.quantity * item.unitCost) }; }),
-        summary: [{ label: t("إجمالي قيمة التحويلات"), value: money(transferMovements.reduce((sum, item) => sum + item.quantity * item.unitCost, 0)) }, { label: t("عدد أسطر التحويل"), value: transferMovements.length }],
+        rows: transferMovements.map((item) => { const transfer = transferById.get(item.sourceId); return { date: item.date, number: transfer?.number ?? item.number, item: productName(item.productId), source: warehouseName(transfer?.sourceWarehouseId ?? item.warehouseId), destination: warehouseName(transfer?.destinationWarehouseId ?? ""), quantity: quantity(item.quantity), unitCost: money(item.unitCost), value: money(movementValue(item)) }; }),
+        summary: [{ label: t("إجمالي قيمة التحويلات"), value: money(transferMovements.reduce((sum, item) => sum + movementValue(item), 0)) }, { label: t("عدد أسطر التحويل"), value: transferMovements.length }],
       };
     }
 
@@ -237,7 +239,7 @@ export default function InventoryReports() {
     movements.forEach((movement) => {
       const account = productById.get(movement.productId)?.inventoryAccount || "__unconfigured__";
       const sign = INBOUND_TYPES.has(movement.type) ? 1 : -1;
-      inventoryByAccount.set(account, (inventoryByAccount.get(account) ?? 0) + sign * movement.quantity * movement.unitCost);
+      inventoryByAccount.set(account, (inventoryByAccount.get(account) ?? 0) + sign * movementValue(movement));
     });
     const accountingByAccount = new Map<string, number>();
     journalLines.forEach((line) => accountingByAccount.set(line.account, (accountingByAccount.get(line.account) ?? 0) + line.debit - line.credit));
@@ -257,12 +259,12 @@ export default function InventoryReports() {
     };
   }, [adjustmentById, adjustmentLines, assemblyOrders, countById, countLines, dateFrom, dateTo, journalLines, manufacturingOrders, movements, productById, productFilter, products, transferById, warehouseById, warehouseFilter, locale, formatNumber, t, view]);
 
-  const exportOptions = { title: t(currentReport.label), subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: currentReport.label, summary: report.summary, landscape: true };
+  const exportOptions = { title: t(currentReport.label), subtitle: view === "reconciliation" ? `${t("حتى تاريخ")} ${dateTo}` : `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: currentReport.label, summary: report.summary, landscape: true };
 
   return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4"><div className="mx-auto max-w-[1600px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
     <header className="border-t-2 border-red-700 px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] text-slate-400">{t("المخزون")} / {t("التقارير")}</p><h1 className="text-base font-bold text-slate-800">{t(currentReport.label)}</h1></div><div className="flex gap-1"><button onClick={() => void load()} className="rounded border border-slate-200 p-2" title={t("تحديث")}><RefreshCw className="h-4 w-4" /></button><button onClick={() => printReport(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("طباعة")}><Printer className="h-4 w-4" /></button><button onClick={() => exportReportExcel(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("تصدير Excel")}><Download className="h-4 w-4" /></button></div></div></header>
     <div className="grid grid-cols-2 border-b border-slate-100 md:grid-cols-4 xl:grid-cols-10">{REPORTS.map((item) => <button key={item.id} onClick={() => setView(item.id)} className={`border-s border-b border-slate-100 px-3 py-3 text-xs font-semibold ${view === item.id ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{t(item.label)}</button>)}</div>
-    <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3"><div className="flex flex-wrap gap-2"><label className="text-xs text-slate-500">{t("من تاريخ")}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("إلى تاريخ")}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("الصنف")}<select value={productFilter} onChange={(event) => setProductFilter(event.target.value)} disabled={view === "reconciliation"} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-40"><option value="">{t("كل الأصناف")}</option>{products.map((product) => <option key={product.id} value={product.id}>{productName(product.id)}</option>)}</select></label><label className="text-xs text-slate-500">{t("المستودع")}<select value={warehouseFilter} onChange={(event) => setWarehouseFilter(event.target.value)} disabled={view === "reconciliation"} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-40"><option value="">{t("كل المستودعات")}</option>{warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseName(warehouse.id)}</option>)}</select></label></div><span className="rounded bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">{t("بيانات فعلية من دفتر المخزون")}</span></div>
+    <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3"><div className="flex flex-wrap gap-2"><label className="text-xs text-slate-500">{t("من تاريخ")}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} disabled={view === "reconciliation"} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs disabled:opacity-40 ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("إلى تاريخ")}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("الصنف")}<select value={productFilter} onChange={(event) => setProductFilter(event.target.value)} disabled={view === "reconciliation"} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-40"><option value="">{t("كل الأصناف")}</option>{products.map((product) => <option key={product.id} value={product.id}>{productName(product.id)}</option>)}</select></label><label className="text-xs text-slate-500">{t("المستودع")}<select value={warehouseFilter} onChange={(event) => setWarehouseFilter(event.target.value)} disabled={view === "reconciliation"} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-40"><option value="">{t("كل المستودعات")}</option>{warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseName(warehouse.id)}</option>)}</select></label></div><span className="rounded bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">{t("بيانات فعلية من دفتر المخزون")}</span></div>
     <section className="p-4"><p className="mb-3 text-xs text-slate-500">{t(currentReport.description)}</p>{invalidRange ? <p className="py-16 text-center text-sm text-red-600">{t("تاريخ البداية يجب أن يسبق تاريخ النهاية")}</p> : loading ? <p className="py-16 text-center text-sm text-slate-500">{t("جاري التحميل...")}</p> : error ? <p className="py-16 text-center text-sm text-red-600">{error}</p> : <><div className="overflow-x-auto"><table className="min-w-full text-[11px]"><thead className="bg-slate-100 text-slate-700"><tr>{report.columns.map((column) => <th key={column.key} className="border-b px-3 py-2 text-center">{column.label}</th>)}</tr></thead><tbody>{report.rows.length ? report.rows.map((row, index) => <tr key={`${index}-${row.number ?? row.item ?? "row"}`} className="border-b border-slate-100 hover:bg-slate-50">{report.columns.map((column) => <td key={column.key} className="whitespace-nowrap px-3 py-2 text-center">{isEmpty(row[column.key]) ? "—" : row[column.key]}</td>)}</tr>) : <tr><td colSpan={report.columns.length} className="py-16 text-center text-sm text-slate-400">{t("لا توجد بيانات في الفترة المحددة")}</td></tr>}</tbody></table></div>{report.summary.length > 0 && <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{report.summary.map((item) => <div key={item.label} className="rounded border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[10px] text-slate-500">{item.label}</p><p className="mt-1 text-sm font-bold text-slate-800">{item.value}</p></div>)}</div>}</>}
     </section>
   </div></main></Layout>;

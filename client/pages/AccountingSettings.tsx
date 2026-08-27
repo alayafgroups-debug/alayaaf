@@ -9,12 +9,14 @@ type Account = { code: string; name_ar: string; parent_code: string | null };
 type Defaults = {
   receivableAccountCode: string; revenueAccountCode: string; outputVatAccountCode: string;
   payableAccountCode: string; purchaseAccountCode: string; inputVatAccountCode: string;
+  inventoryShortageAccountCode: string; inventorySurplusAccountCode: string;
 };
 type FiscalPeriod = { id: string; name: string; dateFrom: string; dateTo: string; status: "open" | "closed"; closedAt: string };
 
 const initialDefaults: Defaults = {
   receivableAccountCode: "", revenueAccountCode: "", outputVatAccountCode: "",
   payableAccountCode: "", purchaseAccountCode: "", inputVatAccountCode: "",
+  inventoryShortageAccountCode: "", inventorySurplusAccountCode: "",
 };
 
 export default function AccountingSettings() {
@@ -34,7 +36,7 @@ export default function AccountingSettings() {
     setLoading(true); setError("");
     const [accountResult, ruleResult, periodResult] = await Promise.all([
       supabase.from("accounting_accounts").select("code, name_ar, parent_code").order("code"),
-      supabase.from("accounting_posting_rules").select("receivable_account_code, revenue_account_code, output_vat_account_code, payable_account_code, purchase_account_code, input_vat_account_code").eq("rule_code", "sales_default").eq("active", true).maybeSingle(),
+      supabase.from("accounting_posting_rules").select("receivable_account_code, revenue_account_code, output_vat_account_code, payable_account_code, purchase_account_code, input_vat_account_code, inventory_shortage_account_code, inventory_surplus_account_code").eq("rule_code", "sales_default").eq("active", true).maybeSingle(),
       supabase.from("accounting_fiscal_periods").select("id, name, date_from, date_to, status, closed_at").order("date_from", { ascending: false }),
     ]);
     const firstError = accountResult.error ?? ruleResult.error ?? periodResult.error;
@@ -45,6 +47,7 @@ export default function AccountingSettings() {
       receivableAccountCode: String(ruleResult.data.receivable_account_code), revenueAccountCode: String(ruleResult.data.revenue_account_code),
       outputVatAccountCode: String(ruleResult.data.output_vat_account_code), payableAccountCode: String(ruleResult.data.payable_account_code),
       purchaseAccountCode: String(ruleResult.data.purchase_account_code), inputVatAccountCode: String(ruleResult.data.input_vat_account_code),
+      inventoryShortageAccountCode: String(ruleResult.data.inventory_shortage_account_code ?? ""), inventorySurplusAccountCode: String(ruleResult.data.inventory_surplus_account_code ?? ""),
     });
     setPeriods((periodResult.data ?? []).map((period) => ({
       id: String(period.id), name: String(period.name), dateFrom: String(period.date_from), dateTo: String(period.date_to),
@@ -119,8 +122,8 @@ export default function AccountingSettings() {
         {error && <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">{t("حسابات الترحيل الافتراضية")}</h2><p className="text-xs text-slate-500">{t("تستخدمها قيود المبيعات والمشتريات والضريبة. الحسابات التجميعية غير متاحة.")}</p></div><div className="rounded bg-slate-100 px-3 py-2 text-xs font-semibold">{t("العملة الأساسية")}: SAR — {t("ريال سعودي")}</div></div>
-          {loading ? <div className="py-10 text-center">{t("جاري التحميل...")}</div> : <><div className="grid gap-4 md:grid-cols-3"><AccountSelect label="ذمم العملاء" field="receivableAccountCode" prefix="1" /><AccountSelect label="إيرادات المبيعات" field="revenueAccountCode" prefix="4" /><AccountSelect label="ضريبة المخرجات" field="outputVatAccountCode" prefix="2" /><AccountSelect label="ذمم الموردين" field="payableAccountCode" prefix="2" /><AccountSelect label="المشتريات والمصروفات" field="purchaseAccountCode" prefix="5" /><AccountSelect label="ضريبة المدخلات" field="inputVatAccountCode" prefix="2" /></div><div className="mt-4 flex justify-end"><button onClick={() => void saveDefaults()} disabled={busy} className="inline-flex items-center gap-2 rounded bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{t("حفظ إعدادات الترحيل")}</button></div></>}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">{t("حسابات الترحيل الافتراضية")}</h2><p className="text-xs text-slate-500">{t("تستخدمها قيود المبيعات والمشتريات والضريبة وتسويات المخزون. الحسابات التجميعية غير متاحة.")}</p></div><div className="rounded bg-slate-100 px-3 py-2 text-xs font-semibold">{t("العملة الأساسية")}: SAR — {t("ريال سعودي")}</div></div>
+          {loading ? <div className="py-10 text-center">{t("جاري التحميل...")}</div> : <><div className="grid gap-4 md:grid-cols-3"><AccountSelect label="ذمم العملاء" field="receivableAccountCode" prefix="1" /><AccountSelect label="إيرادات المبيعات" field="revenueAccountCode" prefix="4" /><AccountSelect label="ضريبة المخرجات" field="outputVatAccountCode" prefix="2" /><AccountSelect label="ذمم الموردين" field="payableAccountCode" prefix="2" /><AccountSelect label="المشتريات والمصروفات" field="purchaseAccountCode" prefix="5" /><AccountSelect label="ضريبة المدخلات" field="inputVatAccountCode" prefix="2" /><AccountSelect label="مصروف عجز المخزون" field="inventoryShortageAccountCode" prefix="5" /><AccountSelect label="إيراد فائض المخزون" field="inventorySurplusAccountCode" prefix="4" /></div><div className="mt-4 flex justify-end"><button onClick={() => void saveDefaults()} disabled={busy} className="inline-flex items-center gap-2 rounded bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{t("حفظ إعدادات الترحيل")}</button></div></>}
         </section>
 
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

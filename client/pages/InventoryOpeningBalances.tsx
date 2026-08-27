@@ -51,7 +51,7 @@ export default function InventoryOpeningBalances() {
       supabase.from("inventory_opening_balance_lines").select("id, opening_balance_id, product_id, warehouse_id, quantity, unit_cost").order("created_at"),
       supabase.from("inventory_products").select("id, sku, name_ar, unit").eq("item_type", "product").eq("active", true).order("sku"),
       supabase.from("inventory_warehouses").select("id, code, name_ar").eq("active", true).order("code"),
-      supabase.from("accounting_accounts").select("code, name_ar").like("code", "3%").eq("is_main_category", false).order("code"),
+      supabase.from("accounting_accounts").select("code, name_ar, parent_code").like("code", "3%").order("code"),
     ]);
     const firstError = documentResult.error ?? lineResult.error ?? productResult.error ?? warehouseResult.error ?? accountResult.error;
     if (firstError) {
@@ -61,7 +61,9 @@ export default function InventoryOpeningBalances() {
     }
     setProducts((productResult.data ?? []).map((row) => ({ id: String(row.id), sku: String(row.sku), name: String(row.name_ar), unit: String(row.unit) })));
     setWarehouses((warehouseResult.data ?? []).map((row) => ({ id: String(row.id), code: String(row.code), name: String(row.name_ar) })));
-    setAccounts((accountResult.data ?? []).map((row) => ({ code: String(row.code), name: String(row.name_ar) })));
+    const accountRows = accountResult.data ?? [];
+    const parentAccountCodes = new Set(accountRows.map((row) => String(row.parent_code ?? "")).filter(Boolean));
+    setAccounts(accountRows.filter((row) => !parentAccountCodes.has(String(row.code))).map((row) => ({ code: String(row.code), name: String(row.name_ar) })));
     setDocuments((documentResult.data ?? []).map((row) => ({
       id: String(row.id),
       number: String(row.opening_number),

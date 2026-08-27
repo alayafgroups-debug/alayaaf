@@ -5,8 +5,8 @@ import { useI18n } from "@/i18n";
 import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
 import { supabase } from "@/lib/supabaseClient";
 
-type ReportId = "balances" | "movements" | "monthly" | "issues" | "transfers" | "counts" | "adjustments";
-type Product = { id: string; sku: string; name_ar: string; name_en: string | null; unit: string };
+type ReportId = "balances" | "movements" | "monthly" | "issues" | "transfers" | "counts" | "adjustments" | "reconciliation";
+type Product = { id: string; sku: string; name_ar: string; name_en: string | null; unit: string; inventoryAccount: string };
 type Warehouse = { id: string; code: string; name_ar: string };
 type Movement = { id: string; number: string; date: string; createdAt: string; type: string; productId: string; warehouseId: string; quantity: number; unitCost: number; sourceId: string; journalEntryId: string };
 type Transfer = { id: string; number: string; date: string; sourceWarehouseId: string; destinationWarehouseId: string; status: string };
@@ -14,6 +14,7 @@ type Count = { id: string; number: string; date: string; warehouseId: string; st
 type CountLine = { id: string; countId: string; productId: string; systemQuantity: number; countedQuantity: number | null; varianceQuantity: number; varianceValue: number };
 type Adjustment = { id: string; number: string; date: string; warehouseId: string; status: string; accountingStatus: string; journalEntryId: string };
 type AdjustmentLine = { id: string; adjustmentId: string; productId: string; type: string; quantity: number; unitCost: number; amount: number };
+type JournalLine = { account: string; debit: number; credit: number };
 type ReportResult = { columns: ReportColumn[]; rows: Record<string, string | number>[]; summary: Array<{ label: string; value: string | number }> };
 
 const REPORTS: Array<{ id: ReportId; label: string; description: string }> = [
@@ -24,6 +25,7 @@ const REPORTS: Array<{ id: ReportId; label: string; description: string }> = [
   { id: "transfers", label: "التحويلات بين المستودعات", description: "الكميات والقيم المحولة بين المستودعات خلال الفترة" },
   { id: "counts", label: "نتائج الجرد", description: "الكميات الدفترية والفعلية وفروقات عمليات الجرد" },
   { id: "adjustments", label: "تسويات المخزون", description: "تسويات العجز والفائض وحالة القيد المحاسبي" },
+  { id: "reconciliation", label: "مطابقة المخزون والمحاسبة", description: "مقارنة قيمة دفتر المخزون برصيد حسابات أصل المخزون في الأستاذ العام حتى التاريخ المحدد" },
 ];
 
 const INBOUND_TYPES = new Set(["receipt", "transfer_in", "adjustment_in", "opening"]);
@@ -46,6 +48,7 @@ export default function InventoryReports() {
   const [countLines, setCountLines] = useState<CountLine[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [adjustmentLines, setAdjustmentLines] = useState<AdjustmentLine[]>([]);
+  const [journalLines, setJournalLines] = useState<JournalLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const invalidRange = dateFrom > dateTo;
@@ -58,8 +61,8 @@ export default function InventoryReports() {
     }
     setLoading(true);
     setError("");
-    const [productsResult, warehousesResult, movementsResult, transfersResult, countsResult, countLinesResult, adjustmentsResult, adjustmentLinesResult] = await Promise.all([
-      supabase.from("inventory_products").select("id, sku, name_ar, name_en, unit").eq("track_inventory", true).order("sku"),
+    const [productsResult, warehousesResult, movementsResult, transfersResult, countsResult, countLinesResult, adjustmentsResult, adjustmentLinesResult, entriesResult] = await Promise.all([
+      supabase.from("inventory_products").select("id, sku, name_ar, name_en, unit, inventory_account_code").eq("track_inventory", true).order("sku"),
       supabase.from("inventory_warehouses").select("id, code, name_ar").order("code"),
       supabase.from("inventory_stock_movements").select("id, movement_number, movement_date, created_at, movement_type, product_id, warehouse_id, quantity, unit_cost, source_id, journal_entry_id").lte("movement_date", dateTo).order("movement_date").order("created_at").order("id"),
       supabase.from("inventory_transfers").select("id, transfer_number, transfer_date, source_warehouse_id, destination_warehouse_id, status").lte("transfer_date", dateTo).order("transfer_date"),
@@ -67,14 +70,24 @@ export default function InventoryReports() {
       supabase.from("inventory_count_lines").select("id, count_id, product_id, system_quantity, counted_quantity, variance_quantity, variance_value"),
       supabase.from("inventory_adjustments").select("id, adjustment_number, adjustment_date, warehouse_id, status, accounting_status, accounting_journal_entry_id").lte("adjustment_date", dateTo).order("adjustment_date"),
       supabase.from("inventory_adjustment_lines").select("id, adjustment_id, product_id, movement_type, quantity, unit_cost, amount"),
+      supabase.from("accounting_journal_entries").select("id").eq("status", "posted").lte("entry_date", dateTo),
     ]);
-    const loadError = productsResult.error ?? warehousesResult.error ?? movementsResult.error ?? transfersResult.error ?? countsResult.error ?? countLinesResult.error ?? adjustmentsResult.error ?? adjustmentLinesResult.error;
+    const loadError = productsResult.error ?? warehousesResult.error ?? movementsResult.error ?? transfersResult.error ?? countsResult.error ?? countLinesResult.error ?? adjustmentsResult.error ?? adjustmentLinesResult.error ?? entriesResult.error;
     if (loadError) {
       setError(loadError.message);
       setLoading(false);
       return;
     }
-    setProducts((productsResult.data ?? []).map((item) => ({ id: String(item.id), sku: String(item.sku), name_ar: String(item.name_ar), name_en: item.name_en ? String(item.name_en) : null, unit: String(item.unit ?? "") })));
+    const entryIds = (entriesResult.data ?? []).map((entry) => String(entry.id));
+    const linesResult = entryIds.length
+      ? await supabase.from("accounting_journal_lines").select("account_code, debit, credit").in("journal_entry_id", entryIds)
+      : { data: [], error: null };
+    if (linesResult.error) {
+      setError(linesResult.error.message);
+      setLoading(false);
+      return;
+    }
+    setProducts((productsResult.data ?? []).map((item) => ({ id: String(item.id), sku: String(item.sku), name_ar: String(item.name_ar), name_en: item.name_en ? String(item.name_en) : null, unit: String(item.unit ?? ""), inventoryAccount: String(item.inventory_account_code ?? "") })));
     setWarehouses((warehousesResult.data ?? []).map((item) => ({ id: String(item.id), code: String(item.code), name_ar: String(item.name_ar) })));
     setMovements((movementsResult.data ?? []).map((item) => ({ id: String(item.id), number: String(item.movement_number), date: String(item.movement_date), createdAt: String(item.created_at ?? ""), type: String(item.movement_type), productId: String(item.product_id), warehouseId: String(item.warehouse_id), quantity: amount(item.quantity), unitCost: amount(item.unit_cost), sourceId: String(item.source_id ?? ""), journalEntryId: String(item.journal_entry_id ?? "") })));
     setTransfers((transfersResult.data ?? []).map((item) => ({ id: String(item.id), number: String(item.transfer_number), date: String(item.transfer_date), sourceWarehouseId: String(item.source_warehouse_id), destinationWarehouseId: String(item.destination_warehouse_id), status: String(item.status) })));
@@ -82,6 +95,7 @@ export default function InventoryReports() {
     setCountLines((countLinesResult.data ?? []).map((item) => ({ id: String(item.id), countId: String(item.count_id), productId: String(item.product_id), systemQuantity: amount(item.system_quantity), countedQuantity: item.counted_quantity === null ? null : amount(item.counted_quantity), varianceQuantity: amount(item.variance_quantity), varianceValue: amount(item.variance_value) })));
     setAdjustments((adjustmentsResult.data ?? []).map((item) => ({ id: String(item.id), number: String(item.adjustment_number), date: String(item.adjustment_date), warehouseId: String(item.warehouse_id), status: String(item.status), accountingStatus: String(item.accounting_status), journalEntryId: String(item.accounting_journal_entry_id ?? "") })));
     setAdjustmentLines((adjustmentLinesResult.data ?? []).map((item) => ({ id: String(item.id), adjustmentId: String(item.adjustment_id), productId: String(item.product_id), type: String(item.movement_type), quantity: amount(item.quantity), unitCost: amount(item.unit_cost), amount: amount(item.amount) })));
+    setJournalLines((linesResult.data ?? []).map((line) => ({ account: String(line.account_code), debit: amount(line.debit), credit: amount(line.credit) })));
     setLoading(false);
   };
 
@@ -189,20 +203,45 @@ export default function InventoryReports() {
       return { columns: [{ key: "date", label: t("التاريخ") }, { key: "number", label: t("رقم الجرد") }, { key: "item", label: t("الصنف") }, { key: "warehouse", label: t("المستودع") }, { key: "status", label: t("الحالة") }, { key: "system", label: t("الكمية الدفترية") }, { key: "counted", label: t("الكمية الفعلية") }, { key: "variance", label: t("فرق الكمية") }, { key: "value", label: t("قيمة الفرق SAR") }], rows, summary: [{ label: t("صافي قيمة الفروقات"), value: money(countRows.reduce((sum, { line }) => sum + line.varianceValue, 0)) }, { label: t("عدد الأسطر"), value: rows.length }] };
     }
 
-    const rawAdjustmentRows = adjustmentLines.flatMap((line) => { const adjustment = adjustmentById.get(line.adjustmentId); if (!adjustment || adjustment.date < dateFrom || adjustment.date > dateTo || !matches(line.productId, adjustment.warehouseId)) return []; return [{ adjustment, line }]; });
+    if (view === "adjustments") {
+      const rawAdjustmentRows = adjustmentLines.flatMap((line) => { const adjustment = adjustmentById.get(line.adjustmentId); if (!adjustment || adjustment.date < dateFrom || adjustment.date > dateTo || !matches(line.productId, adjustment.warehouseId)) return []; return [{ adjustment, line }]; });
+      return {
+        columns: [{ key: "date", label: t("التاريخ") }, { key: "number", label: t("رقم التسوية") }, { key: "item", label: t("الصنف") }, { key: "warehouse", label: t("المستودع") }, { key: "type", label: t("نوع التسوية") }, { key: "quantity", label: t("الكمية") }, { key: "unitCost", label: t("تكلفة الوحدة SAR") }, { key: "amount", label: t("القيمة SAR") }, { key: "accounting", label: t("حالة المحاسبة") }],
+        rows: rawAdjustmentRows.map(({ adjustment, line }) => ({ date: adjustment.date, number: adjustment.number, item: productName(line.productId), warehouse: warehouseName(adjustment.warehouseId), type: line.type === "adjustment_in" ? t("فائض") : t("عجز"), quantity: quantity(line.quantity), unitCost: money(line.unitCost), amount: money(line.amount), accounting: t(adjustment.accountingStatus) })),
+        summary: [{ label: t("إجمالي العجز"), value: money(rawAdjustmentRows.filter(({ line }) => line.type === "adjustment_out").reduce((sum, { line }) => sum + line.amount, 0)) }, { label: t("إجمالي الفائض"), value: money(rawAdjustmentRows.filter(({ line }) => line.type === "adjustment_in").reduce((sum, { line }) => sum + line.amount, 0)) }, { label: t("عدد الأسطر"), value: rawAdjustmentRows.length }],
+      };
+    }
+
+    const inventoryByAccount = new Map<string, number>();
+    movements.forEach((movement) => {
+      const account = productById.get(movement.productId)?.inventoryAccount || "__unconfigured__";
+      const sign = INBOUND_TYPES.has(movement.type) ? 1 : -1;
+      inventoryByAccount.set(account, (inventoryByAccount.get(account) ?? 0) + sign * movement.quantity * movement.unitCost);
+    });
+    const accountingByAccount = new Map<string, number>();
+    journalLines.forEach((line) => accountingByAccount.set(line.account, (accountingByAccount.get(line.account) ?? 0) + line.debit - line.credit));
+    const inventoryAccounts = new Set(products.map((product) => product.inventoryAccount || "__unconfigured__"));
+    const reconciliation = [...inventoryAccounts].map((account) => {
+      const inventoryValue = inventoryByAccount.get(account) ?? 0;
+      const accountingValue = account === "__unconfigured__" ? 0 : accountingByAccount.get(account) ?? 0;
+      const difference = inventoryValue - accountingValue;
+      return { account, inventoryValue, accountingValue, difference };
+    }).filter((item) => Math.abs(item.inventoryValue) > 0.005 || Math.abs(item.accountingValue) > 0.005 || item.account === "__unconfigured__").sort((a, b) => a.account.localeCompare(b.account));
+    const totalInventory = reconciliation.reduce((sum, item) => sum + item.inventoryValue, 0);
+    const totalAccounting = reconciliation.reduce((sum, item) => sum + item.accountingValue, 0);
     return {
-      columns: [{ key: "date", label: t("التاريخ") }, { key: "number", label: t("رقم التسوية") }, { key: "item", label: t("الصنف") }, { key: "warehouse", label: t("المستودع") }, { key: "type", label: t("نوع التسوية") }, { key: "quantity", label: t("الكمية") }, { key: "unitCost", label: t("تكلفة الوحدة SAR") }, { key: "amount", label: t("القيمة SAR") }, { key: "accounting", label: t("حالة المحاسبة") }],
-      rows: rawAdjustmentRows.map(({ adjustment, line }) => ({ date: adjustment.date, number: adjustment.number, item: productName(line.productId), warehouse: warehouseName(adjustment.warehouseId), type: line.type === "adjustment_in" ? t("فائض") : t("عجز"), quantity: quantity(line.quantity), unitCost: money(line.unitCost), amount: money(line.amount), accounting: t(adjustment.accountingStatus) })),
-      summary: [{ label: t("إجمالي العجز"), value: money(rawAdjustmentRows.filter(({ line }) => line.type === "adjustment_out").reduce((sum, { line }) => sum + line.amount, 0)) }, { label: t("إجمالي الفائض"), value: money(rawAdjustmentRows.filter(({ line }) => line.type === "adjustment_in").reduce((sum, { line }) => sum + line.amount, 0)) }, { label: t("عدد الأسطر"), value: rawAdjustmentRows.length }],
+      columns: [{ key: "account", label: t("حساب أصل المخزون") }, { key: "inventory", label: t("قيمة دفتر المخزون SAR") }, { key: "accounting", label: t("رصيد الأستاذ العام SAR") }, { key: "difference", label: t("الفرق SAR") }, { key: "status", label: t("حالة المطابقة") }],
+      rows: reconciliation.map((item) => ({ account: item.account === "__unconfigured__" ? t("منتجات دون حساب مخزون") : item.account, inventory: money(item.inventoryValue), accounting: money(item.accountingValue), difference: money(item.difference), status: Math.abs(item.difference) <= 0.01 ? t("متطابق") : t("يوجد فرق") })),
+      summary: [{ label: t("إجمالي دفتر المخزون"), value: money(totalInventory) }, { label: t("إجمالي الأستاذ العام"), value: money(totalAccounting) }, { label: t("صافي الفرق"), value: money(totalInventory - totalAccounting) }, { label: t("حسابات غير متطابقة"), value: reconciliation.filter((item) => Math.abs(item.difference) > 0.01).length }],
     };
-  }, [adjustmentById, adjustmentLines, countById, countLines, dateFrom, dateTo, movements, productById, productFilter, transferById, warehouseById, warehouseFilter, locale, formatNumber, t, view]);
+  }, [adjustmentById, adjustmentLines, countById, countLines, dateFrom, dateTo, journalLines, movements, productById, productFilter, products, transferById, warehouseById, warehouseFilter, locale, formatNumber, t, view]);
 
   const exportOptions = { title: t(currentReport.label), subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: currentReport.label, summary: report.summary, landscape: true };
 
   return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4"><div className="mx-auto max-w-[1600px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
     <header className="border-t-2 border-red-700 px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] text-slate-400">{t("المخزون")} / {t("التقارير")}</p><h1 className="text-base font-bold text-slate-800">{t(currentReport.label)}</h1></div><div className="flex gap-1"><button onClick={() => void load()} className="rounded border border-slate-200 p-2" title={t("تحديث")}><RefreshCw className="h-4 w-4" /></button><button onClick={() => printReport(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("طباعة")}><Printer className="h-4 w-4" /></button><button onClick={() => exportReportExcel(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("تصدير Excel")}><Download className="h-4 w-4" /></button></div></div></header>
-    <div className="grid grid-cols-2 border-b border-slate-100 md:grid-cols-4 xl:grid-cols-7">{REPORTS.map((item) => <button key={item.id} onClick={() => setView(item.id)} className={`border-s border-b border-slate-100 px-3 py-3 text-xs font-semibold ${view === item.id ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{t(item.label)}</button>)}</div>
-    <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3"><div className="flex flex-wrap gap-2"><label className="text-xs text-slate-500">{t("من تاريخ")}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("إلى تاريخ")}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("الصنف")}<select value={productFilter} onChange={(event) => setProductFilter(event.target.value)} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"><option value="">{t("كل الأصناف")}</option>{products.map((product) => <option key={product.id} value={product.id}>{productName(product.id)}</option>)}</select></label><label className="text-xs text-slate-500">{t("المستودع")}<select value={warehouseFilter} onChange={(event) => setWarehouseFilter(event.target.value)} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"><option value="">{t("كل المستودعات")}</option>{warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseName(warehouse.id)}</option>)}</select></label></div><span className="rounded bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">{t("بيانات فعلية من دفتر المخزون")}</span></div>
+    <div className="grid grid-cols-2 border-b border-slate-100 md:grid-cols-4 xl:grid-cols-8">{REPORTS.map((item) => <button key={item.id} onClick={() => setView(item.id)} className={`border-s border-b border-slate-100 px-3 py-3 text-xs font-semibold ${view === item.id ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{t(item.label)}</button>)}</div>
+    <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3"><div className="flex flex-wrap gap-2"><label className="text-xs text-slate-500">{t("من تاريخ")}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("إلى تاريخ")}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={`mt-1 block rounded border bg-white px-2 py-1.5 text-xs ${invalidRange ? "border-red-400" : "border-slate-200"}`} /></label><label className="text-xs text-slate-500">{t("الصنف")}<select value={productFilter} onChange={(event) => setProductFilter(event.target.value)} disabled={view === "reconciliation"} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-40"><option value="">{t("كل الأصناف")}</option>{products.map((product) => <option key={product.id} value={product.id}>{productName(product.id)}</option>)}</select></label><label className="text-xs text-slate-500">{t("المستودع")}<select value={warehouseFilter} onChange={(event) => setWarehouseFilter(event.target.value)} disabled={view === "reconciliation"} className="mt-1 block max-w-64 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-40"><option value="">{t("كل المستودعات")}</option>{warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseName(warehouse.id)}</option>)}</select></label></div><span className="rounded bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">{t("بيانات فعلية من دفتر المخزون")}</span></div>
     <section className="p-4"><p className="mb-3 text-xs text-slate-500">{t(currentReport.description)}</p>{invalidRange ? <p className="py-16 text-center text-sm text-red-600">{t("تاريخ البداية يجب أن يسبق تاريخ النهاية")}</p> : loading ? <p className="py-16 text-center text-sm text-slate-500">{t("جاري التحميل...")}</p> : error ? <p className="py-16 text-center text-sm text-red-600">{error}</p> : <><div className="overflow-x-auto"><table className="min-w-full text-[11px]"><thead className="bg-slate-100 text-slate-700"><tr>{report.columns.map((column) => <th key={column.key} className="border-b px-3 py-2 text-center">{column.label}</th>)}</tr></thead><tbody>{report.rows.length ? report.rows.map((row, index) => <tr key={`${index}-${row.number ?? row.item ?? "row"}`} className="border-b border-slate-100 hover:bg-slate-50">{report.columns.map((column) => <td key={column.key} className="whitespace-nowrap px-3 py-2 text-center">{isEmpty(row[column.key]) ? "—" : row[column.key]}</td>)}</tr>) : <tr><td colSpan={report.columns.length} className="py-16 text-center text-sm text-slate-400">{t("لا توجد بيانات في الفترة المحددة")}</td></tr>}</tbody></table></div>{report.summary.length > 0 && <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{report.summary.map((item) => <div key={item.label} className="rounded border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[10px] text-slate-500">{item.label}</p><p className="mt-1 text-sm font-bold text-slate-800">{item.value}</p></div>)}</div>}</>}
     </section>
   </div></main></Layout>;

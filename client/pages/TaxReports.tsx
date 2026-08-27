@@ -11,6 +11,7 @@ type Classification = { document_table: string; document_id: string; line_index:
 type SummaryGroup = { document_side: string; tax_category: string; supply_type: string; document_count: number; taxable_amount: number; tax_amount: number };
 type DetailLine = { id: string; document_table: string; document_id: string; document_date: string; document_side: string; line_description: string; tax_category: string; supply_type: string; tax_rate: number; taxable_amount: number; tax_amount: number };
 type DraftClass = { lineIndex: number; taxCategory: string; supplyType: string };
+type ReconciliationRow = { document_table: string; document_id: string; document_number: string; document_date: string; document_side: string; document_type: string; document_tax: number; classified_tax: number; journal_tax: number; item_count: number; classification_count: number; reconciliation_status: string };
 type ReportRow = Record<string, string | number>;
 
 const number = (value: unknown) => Number(value ?? 0) || 0;
@@ -23,11 +24,12 @@ export default function TaxReports() {
   const today = new Date().toISOString().slice(0, 10);
   const [dateFrom, setDateFrom] = useState(() => `${today.slice(0, 4)}-01-01`);
   const [dateTo, setDateTo] = useState(today);
-  const [mode, setMode] = useState<"summary" | "details" | "classification">("summary");
+  const [mode, setMode] = useState<"summary" | "details" | "reconciliation" | "classification">("summary");
   const [groups, setGroups] = useState<SummaryGroup[]>([]);
   const [details, setDetails] = useState<DetailLine[]>([]);
   const [documents, setDocuments] = useState<SourceDocument[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
+  const [reconciliation, setReconciliation] = useState<ReconciliationRow[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<SourceDocument | null>(null);
   const [draft, setDraft] = useState<DraftClass[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,15 +41,16 @@ export default function TaxReports() {
   const load = async () => {
     if (invalidRange) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
     setLoading(true); setError("");
-    const [summaryResult, detailResult, salesResult, purchaseResult, notesResult, classResult] = await Promise.all([
+    const [summaryResult, detailResult, salesResult, purchaseResult, notesResult, classResult, reconciliationResult] = await Promise.all([
       supabase.rpc("get_vat_report_summary", { p_date_from: dateFrom, p_date_to: dateTo }),
       supabase.from("accounting_vat_report_lines").select("*").eq("report_eligible", true).gte("document_date", dateFrom).lte("document_date", dateTo).order("document_date"),
       supabase.from("sales_invoices").select("id, date, customer, items, accounting_status").gte("date", dateFrom).lte("date", dateTo),
       supabase.from("purchase_invoices").select("id, date, vendor, items, accounting_status, accounting_journal_entry_id").eq("accounting_status", "posted").gte("date", dateFrom).lte("date", dateTo),
       supabase.from("invoice_adjustment_notes").select("id, note_number, note_type, issue_date, counterparty, items, tax, status, accounting_status").eq("status", "posted").gte("issue_date", dateFrom).lte("issue_date", dateTo),
       supabase.from("accounting_vat_line_classifications").select("document_table, document_id, line_index").gte("document_date", dateFrom).lte("document_date", dateTo),
+      supabase.rpc("get_vat_accounting_reconciliation", { p_date_from: dateFrom, p_date_to: dateTo }),
     ]);
-    const firstError = summaryResult.error ?? detailResult.error ?? salesResult.error ?? purchaseResult.error ?? notesResult.error ?? classResult.error;
+    const firstError = summaryResult.error ?? detailResult.error ?? salesResult.error ?? purchaseResult.error ?? notesResult.error ?? classResult.error ?? reconciliationResult.error;
     if (firstError) { setError(firstError.message); setLoading(false); return; }
     const sourceDocuments: SourceDocument[] = [
       ...(salesResult.data ?? []).map((row) => ({ table: "sales_invoices", id: String(row.id), number: String(row.id), date: String(row.date), counterparty: String(row.customer ?? ""), side: "sales" as const, items: mapItems(row.items), eligible: row.accounting_status === "posted" })),
@@ -58,6 +61,7 @@ export default function TaxReports() {
     setDetails((detailResult.data ?? []) as DetailLine[]);
     setDocuments(sourceDocuments.filter((document) => document.items.length > 0).sort((first, second) => first.date.localeCompare(second.date)));
     setClassifications((classResult.data ?? []) as Classification[]);
+    setReconciliation((reconciliationResult.data ?? []) as ReconciliationRow[]);
     setLoading(false);
   };
 
@@ -89,12 +93,16 @@ export default function TaxReports() {
     ];
   }, [groups, formatNumber, t]);
 
+  const statusNames: Record<string, string> = { matched: "متطابق", missing_journal: "قيد محاسبي مفقود", missing_classification: "تصنيف ضريبي مفقود", partial_classification: "تصنيف غير مكتمل", document_tax_mismatch: "التصنيف لا يطابق المستند", journal_tax_mismatch: "القيد لا يطابق المستند" };
   const columns: ReportColumn[] = mode === "details"
     ? [{ key: "date", label: t("التاريخ") }, { key: "document", label: t("المستند") }, { key: "description", label: t("الوصف") }, { key: "side", label: t("النوع") }, { key: "category", label: t("الفئة الضريبية") }, { key: "supply", label: t("نوع التوريد") }, { key: "base", label: t("المبلغ الخاضع") }, { key: "tax", label: t("الضريبة") }]
-    : [{ key: "side", label: t("النوع") }, { key: "category", label: t("الفئة الضريبية") }, { key: "supply", label: t("نوع التوريد") }, { key: "documents", label: t("عدد المستندات") }, { key: "base", label: t("المبلغ الخاضع للضريبة SAR") }, { key: "tax", label: t("مبلغ الضريبة SAR") }];
+    : mode === "reconciliation"
+      ? [{ key: "date", label: t("التاريخ") }, { key: "document", label: t("المستند") }, { key: "side", label: t("النوع") }, { key: "documentTax", label: t("ضريبة المستند SAR") }, { key: "classifiedTax", label: t("ضريبة التقرير SAR") }, { key: "journalTax", label: t("ضريبة القيد SAR") }, { key: "lines", label: t("البنود المصنفة") }, { key: "status", label: t("حالة المطابقة") }]
+      : [{ key: "side", label: t("النوع") }, { key: "category", label: t("الفئة الضريبية") }, { key: "supply", label: t("نوع التوريد") }, { key: "documents", label: t("عدد المستندات") }, { key: "base", label: t("المبلغ الخاضع للضريبة SAR") }, { key: "tax", label: t("مبلغ الضريبة SAR") }];
   const detailRows: ReportRow[] = details.map((line) => ({ date: line.document_date, document: line.document_id, description: line.line_description || "—", side: t(line.document_side === "sales" ? "مبيعات" : "مشتريات"), category: t(categoryNames[line.tax_category] ?? line.tax_category), supply: t(supplyNames[line.supply_type] ?? line.supply_type), base: money(number(line.taxable_amount)), tax: money(number(line.tax_amount)) }));
-  const exportRows = mode === "details" ? detailRows : summaryRows;
-  const reportTitle = mode === "details" ? t("تفاصيل ضريبة القيمة المضافة") : t("ملخص ضريبة القيمة المضافة");
+  const reconciliationRows: ReportRow[] = reconciliation.map((row) => ({ date: row.document_date, document: row.document_number, side: t(row.document_side === "sales" ? "مبيعات" : "مشتريات"), documentTax: money(number(row.document_tax)), classifiedTax: money(number(row.classified_tax)), journalTax: money(number(row.journal_tax)), lines: `${number(row.classification_count)} / ${number(row.item_count)}`, status: t(statusNames[row.reconciliation_status] ?? row.reconciliation_status) }));
+  const exportRows = mode === "details" ? detailRows : mode === "reconciliation" ? reconciliationRows : summaryRows;
+  const reportTitle = mode === "details" ? t("تفاصيل ضريبة القيمة المضافة") : mode === "reconciliation" ? t("مطابقة الضريبة والمحاسبة") : t("ملخص ضريبة القيمة المضافة");
   const exportDisclaimer = `${dateFrom} — ${dateTo} | تقرير داخلي: لا تُدرج إلا فواتير المشتريات المرحلة محاسبيًا، والمستندات غير المصنفة (${unclassified.length}) غير محتسبة. لا يستخدم كإقرار ضريبي رسمي.`;
   const exportOptions = { title: reportTitle, subtitle: exportDisclaimer, columns, rows: exportRows, fileName: reportTitle, landscape: true };
 
@@ -114,7 +122,7 @@ export default function TaxReports() {
 
   return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4"><div className="mx-auto max-w-[1500px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
     <header className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-red-700 px-4 py-3"><div><p className="text-[11px] text-slate-400">{t("التقارير")}</p><h1 className="text-base font-bold">{t("تقارير ضريبة القيمة المضافة")}</h1></div><div className="flex gap-1"><button onClick={() => void load()} className="rounded border p-2"><RefreshCw className="h-4 w-4" /></button>{mode !== "classification" && <><button onClick={() => printReport(exportOptions)} className="rounded border p-2"><Printer className="h-4 w-4" /></button><button onClick={() => exportReportExcel(exportOptions)} className="rounded border p-2"><Download className="h-4 w-4" /></button></>}</div></header>
-    <div className="flex flex-wrap items-center justify-between gap-3 border-y bg-slate-50 px-4 py-3"><div className="flex rounded bg-slate-200/60 p-1"><button onClick={() => setMode("summary")} className={`rounded px-3 py-1.5 text-xs ${mode === "summary" ? "bg-white font-bold shadow" : ""}`}>{t("ملخص")}</button><button onClick={() => setMode("details")} className={`rounded px-3 py-1.5 text-xs ${mode === "details" ? "bg-white font-bold shadow" : ""}`}>{t("تفاصيل")}</button><button onClick={() => setMode("classification")} className={`rounded px-3 py-1.5 text-xs ${mode === "classification" ? "bg-white font-bold shadow" : ""}`}><Tags className="me-1 inline h-3 w-3" />{t("التصنيف")} ({unclassified.length})</button></div><div className="flex gap-2"><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded border px-2 py-1.5 text-xs" /><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded border px-2 py-1.5 text-xs" /></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-y bg-slate-50 px-4 py-3"><div className="flex rounded bg-slate-200/60 p-1"><button onClick={() => setMode("summary")} className={`rounded px-3 py-1.5 text-xs ${mode === "summary" ? "bg-white font-bold shadow" : ""}`}>{t("ملخص")}</button><button onClick={() => setMode("details")} className={`rounded px-3 py-1.5 text-xs ${mode === "details" ? "bg-white font-bold shadow" : ""}`}>{t("تفاصيل")}</button><button onClick={() => setMode("reconciliation")} className={`rounded px-3 py-1.5 text-xs ${mode === "reconciliation" ? "bg-white font-bold shadow" : ""}`}><ShieldCheck className="me-1 inline h-3 w-3" />{t("المطابقة")} ({reconciliation.filter((row) => row.reconciliation_status !== "matched").length})</button><button onClick={() => setMode("classification")} className={`rounded px-3 py-1.5 text-xs ${mode === "classification" ? "bg-white font-bold shadow" : ""}`}><Tags className="me-1 inline h-3 w-3" />{t("التصنيف")} ({unclassified.length})</button></div><div className="flex gap-2"><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded border px-2 py-1.5 text-xs" /><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded border px-2 py-1.5 text-xs" /></div></div>
     {error && <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>}
     <section className="p-4">{loading ? <p className="py-20 text-center text-sm text-slate-500">{t("جاري التحميل...")}</p> : mode === "classification" ? <div><p className="mb-3 text-xs text-slate-500">{t("لن تُدرج المستندات غير المصنفة في التقرير الرسمي، ولا يتم استنتاج الإعفاء أو التصدير من نسبة الصفر.")}</p><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-slate-100"><tr><th className="px-3 py-2">{t("التاريخ")}</th><th className="px-3 py-2">{t("المستند")}</th><th className="px-3 py-2">{t("جهة التعامل")}</th><th className="px-3 py-2">{t("عدد البنود")}</th><th className="px-3 py-2">{t("حالة الترحيل")}</th><th /></tr></thead><tbody>{unclassified.length ? unclassified.map((document) => <tr key={`${document.table}:${document.id}`} className="border-b"><td className="px-3 py-2 text-center">{document.date}</td><td className="px-3 py-2 text-center">{document.number}</td><td className="px-3 py-2">{document.counterparty || "—"}</td><td className="px-3 py-2 text-center">{document.items.length}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 ${document.eligible ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{t(document.eligible ? "مرحّل وقابل للإدراج" : "غير مرحّل — غير مدرج")}</span></td><td className="px-3 py-2 text-center"><button onClick={() => openClassification(document)} className="rounded bg-blue-700 px-3 py-1.5 text-white">{t("تصنيف البنود")}</button></td></tr>) : <tr><td colSpan={6} className="py-12 text-center text-slate-400">{t("تم تصنيف جميع المستندات في الفترة")}</td></tr>}</tbody></table></div></div> : <><div className="mb-3 flex items-center gap-2 rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><ShieldCheck className="h-4 w-4" />{t("يعرض التقرير المستندات المصنفة والمرحلة فقط")}</div><div className="mb-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("فواتير المشتريات غير مدرجة حتى اكتمال مرحلة ترحيل المشتريات المحاسبي؛ لا يتم احتساب ضريبة مدخلات غير مرحلة.")}</div><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-slate-100"><tr>{columns.map((column) => <th key={column.key} className="px-3 py-2 text-center">{column.label}</th>)}</tr></thead><tbody>{exportRows.length ? exportRows.map((row, index) => <tr key={index} className="border-b">{columns.map((column) => <td key={column.key} className="px-3 py-2 text-center">{row[column.key] ?? "—"}</td>)}</tr>) : <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("لا توجد بيانات ضريبية مصنفة ومرحلة للفترة")}</td></tr>}</tbody></table></div></>}</section>
   </div>

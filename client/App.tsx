@@ -28,6 +28,7 @@ import InventoryIssues from "./pages/InventoryIssues";
 import InventoryTransfers from "./pages/InventoryTransfers";
 import InventoryCounts from "./pages/InventoryCounts";
 import InventoryAdjustments from "./pages/InventoryAdjustments";
+import InventoryManufacturing from "./pages/InventoryManufacturing";
 import HR from "./pages/HR";
 import HRDashboard from "./pages/HRDashboard";
 import HREmployees from "./pages/HREmployees";
@@ -266,6 +267,7 @@ const App = () => (
           <Route path="/inventory/transfers" element={<InventoryTransfers />} />
           <Route path="/inventory/counts" element={<InventoryCounts />} />
           <Route path="/inventory/adjustments" element={<InventoryAdjustments />} />
+          <Route path="/inventory/manufacturing" element={<InventoryManufacturing />} />
           <Route path="/inventory/warehouses" element={<InventoryWarehouses />} />
           <Route path="/inventory/reports" element={<InventoryReports />} />
           <Route path="/inventory/*" element={<PlaceholderModule title="المخزون" description="إدارة المنتجات والخدمات والمستودعات وعمليات المخزون." icon={Boxes} features={["عمليات جرد المخزون", "تسويات المخزون", "أوامر التصنيع", "أوامر التركيب", "إشعارات تسليم"]} />} />

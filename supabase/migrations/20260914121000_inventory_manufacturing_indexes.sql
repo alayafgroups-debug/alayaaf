@@ -1,0 +1,9 @@
+create index if not exists inventory_manufacturing_orders_bom_idx
+on public.inventory_manufacturing_orders(bom_id);
+
+create index if not exists inventory_manufacturing_orders_finished_product_idx
+on public.inventory_manufacturing_orders(finished_product_id);
+
+create index if not exists inventory_manufacturing_orders_journal_idx
+on public.inventory_manufacturing_orders(accounting_journal_entry_id)
+where accounting_journal_entry_id is not null;

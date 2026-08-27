@@ -31,12 +31,9 @@ export function readUserSession(): UserSession | null {
   }
 }
 
-/**
- * Check a permission key against a LIVE permissions map (fetched from DB).
- * Returns true when the map is empty (no restrictions configured yet).
- */
+/** Check a permission key against a live permissions map fetched from DB. */
 export function checkPerm(liveMap: PermissionMap, ...keys: string[]): boolean {
-  if (Object.keys(liveMap).length === 0) return true;
+  if (liveMap["*"] === true || liveMap["*"] === "read" || liveMap["*"] === "manage") return true;
   for (const key of keys) {
     if (!Object.prototype.hasOwnProperty.call(liveMap, key)) continue;
     const value = liveMap[key];
@@ -49,7 +46,7 @@ export function canManagePerm(
   liveMap: PermissionMap,
   ...keys: string[]
 ): boolean {
-  if (Object.keys(liveMap).length === 0) return true;
+  if (liveMap["*"] === true || liveMap["*"] === "manage") return true;
   for (const key of keys) {
     if (!Object.prototype.hasOwnProperty.call(liveMap, key)) continue;
     const value = liveMap[key];
@@ -79,7 +76,8 @@ export function hasFullAccess(session: UserSession | null): boolean {
   if (!session) return false;
   const perms = session.permissions;
   const keys = Object.keys(perms);
-  if (keys.length === 0) return true;
+  if (perms["*"] === true || perms["*"] === "manage") return true;
+  if (keys.length === 0) return false;
   return keys.every((k) => perms[k] === true || perms[k] === "manage");
 }
 
@@ -92,7 +90,8 @@ export function permissionForMainPath(path: string): string | null {
   if (path.startsWith("/crm")) return "module.crm";
   if (path.startsWith("/expenses")) return "module.accounting";
   if (path.startsWith("/inventory")) return "module.inventory";
-  if (path.startsWith("/users")) return "module.users";
+  if (path.startsWith("/users") || path.startsWith("/admin")) return "module.users";
+  if (path.startsWith("/fleet")) return "module.fleet";
   if (path.startsWith("/ai")) return "module.ai";
   if (path.startsWith("/zatca")) return "module.settings";
   if (path.startsWith("/settings")) return "module.settings";
@@ -109,7 +108,7 @@ export function permissionForMainSubPath(path: string): string[] {
     ["/purchases/invoices", "purchases.invoices", "module.purchases"],
     ["/purchases/cash-expenses", "purchases.cash_expenses", "module.purchases"],
     ["/purchases/debit-notes", "purchases.debit_notes", "module.purchases"],
-    ["/purchases/credit-notes", "purchases.debit_notes", "module.purchases"],
+    ["/purchases/credit-notes", "purchases.credit_notes", "module.purchases"],
     ["/purchases/orders", "purchases.orders", "module.purchases"],
     ["/purchases/reports", "purchases.reports", "module.purchases"],
     ["/inventory/products", "inventory.items", "module.inventory"],
@@ -127,6 +126,7 @@ export function permissionForMainSubPath(path: string): string[] {
     ["/crm/customers", "crm.customers", "module.crm"],
     ["/crm/vendors", "crm.vendors", "module.crm"],
     ["/crm/reports", "crm.reports", "module.crm"],
+    ["/expenses/reports", "accounting.reports", "module.accounting"],
     ["/expenses/tax-reports", "accounting.tax_reports", "module.accounting"],
     ["/expenses/tax", "accounting.tax", "module.accounting"],
     ["/expenses/reclassification", "accounting.reclassification", "module.accounting"],
@@ -134,6 +134,8 @@ export function permissionForMainSubPath(path: string): string[] {
     ["/expenses/settings", "accounting.settings", "module.accounting"],
     ["/expenses/fixed-assets", "accounting.fixed_assets", "module.accounting"],
     ["/expenses", "accounting.accounts", "module.accounting"],
+    ["/admin/register-employee", "users.employee_registration", "module.users"],
+    ["/fleet", "module.fleet", "module.fleet"],
     ["/users/roles", "users.roles", "module.users"],
     ["/users/audit", "users.audit", "module.users"],
     ["/users", "users.list", "module.users"],

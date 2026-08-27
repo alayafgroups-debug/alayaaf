@@ -25,7 +25,8 @@ const MODULE_TREE: ModuleNode[] = [
   ] },
   { key: "module.purchases", label: "المشتريات", children: [
     { key: "purchases.invoices", label: "فواتير المشتريات" }, { key: "purchases.cash_expenses", label: "المصروفات النقدية" },
-    { key: "purchases.debit_notes", label: "الإشعارات المدينة" }, { key: "purchases.orders", label: "أوامر الشراء" },
+    { key: "purchases.debit_notes", label: "الإشعارات المدينة" }, { key: "purchases.credit_notes", label: "الإشعارات الدائنة" },
+    { key: "purchases.payments", label: "مدفوعات الموردين" }, { key: "purchases.orders", label: "أوامر الشراء" },
     { key: "purchases.reports", label: "تقارير المشتريات الشاملة" }, { key: "purchases.returns", label: "مرتجعات المشتريات" },
   ] },
   { key: "module.hr", label: "الموارد البشرية", children: [
@@ -42,8 +43,11 @@ const MODULE_TREE: ModuleNode[] = [
     { key: "crm.customers", label: "العملاء" }, { key: "crm.vendors", label: "الموردون" }, { key: "crm.reports", label: "تقارير العملاء والموردين" },
   ] },
   { key: "module.accounting", label: "المحاسبة والمالية", children: [
-    { key: "accounting.accounts", label: "شجرة الحسابات" }, { key: "accounting.tax", label: "حساب الضرائب" },
-    { key: "accounting.tax_reports", label: "التقارير الضريبية" }, { key: "accounting.expenses", label: "المصروفات" },
+    { key: "accounting.accounts", label: "شجرة الحسابات" }, { key: "accounting.reports", label: "التقارير المحاسبية" },
+    { key: "accounting.manual_journals", label: "القيود اليدوية" }, { key: "accounting.settings", label: "إعدادات المحاسبة" },
+    { key: "accounting.fixed_assets", label: "الأصول الثابتة" }, { key: "accounting.reclassification", label: "إعادة التصنيف" },
+    { key: "accounting.tax", label: "حساب الضرائب" }, { key: "accounting.tax_reports", label: "التقارير الضريبية" },
+    { key: "accounting.expenses", label: "المصروفات" },
   ] },
   { key: "module.inventory", label: "المستودعات والمخازن", children: [
     { key: "inventory.items", label: "الأصناف" }, { key: "inventory.warehouses", label: "المستودعات" },
@@ -81,7 +85,8 @@ const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
         { key: "module.users", label: "المستخدمين والصلاحيات" },
         { key: "module.ai", label: "الذكاء الاصطناعي" },
         { key: "module.settings", label: "الإعدادات" },
-        { key: "module.expenses", label: "المصروفات" },
+    { key: "module.fleet", label: "الأسطول والسيارات" },
+    { key: "module.expenses", label: "المصروفات" },
         { key: "module.inventory", label: "المستودعات والمخازن" },
       ],
     },
@@ -118,6 +123,9 @@ const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
         { key: "purchases.requests", label: "طلبات الشراء" },
         { key: "purchases.orders", label: "أوامر الشراء" },
         { key: "purchases.invoices", label: "فواتير الموردين" },
+        { key: "purchases.debit_notes", label: "الإشعارات المدينة" },
+        { key: "purchases.credit_notes", label: "الإشعارات الدائنة" },
+        { key: "purchases.payments", label: "مدفوعات الموردين" },
         { key: "purchases.receipts", label: "استلام البضاعة" },
         { key: "purchases.returns", label: "مرتجعات المشتريات" },
       ],

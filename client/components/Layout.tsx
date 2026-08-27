@@ -85,12 +85,12 @@ const navSubMenus: Record<
   "/inventory": [
     { label: "المنتجات والخدمات", href: "/inventory/products" },
     { label: "سندات استلام المخزون", href: "/inventory/receipts" },
+    { label: "سندات الصرف وإشعارات التسليم", href: "/inventory/issues" },
     { label: "عمليات جرد المخزون", href: "/inventory/counts" },
     { label: "تسويات المخزون", href: "/inventory/adjustments" },
     { label: "أوامر التصنيع", href: "/inventory/manufacturing" },
     { label: "أوامر التركيب", href: "/inventory/assembly" },
     { label: "المستودعات", href: "/inventory/warehouses" },
-    { label: "إشعارات تسليم", href: "/inventory/delivery-notes" },
     { label: "تقارير المخزون", href: "/inventory/reports" },
   ],
   "/fleet": [

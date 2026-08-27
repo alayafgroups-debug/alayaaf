@@ -172,6 +172,10 @@ const App = () => (
           <Route path="/purchases/invoices" element={<PurchaseInvoices />} />
           <Route path="/purchases/cash-expenses" element={<PurchaseCashExpenses />} />
           <Route path="/purchases/debit-notes" element={<PurchaseDebitNotes />} />
+          <Route
+            path="/purchases/credit-notes"
+            element={<PurchaseDebitNotes noteType="purchase_credit" />}
+          />
           <Route path="/purchases/reports" element={<PurchaseReports />} />
           <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
           <Route path="/hr/dashboard" element={<HRDashboard />} />

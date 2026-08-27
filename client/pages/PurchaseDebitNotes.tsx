@@ -50,7 +50,8 @@ type DebitNoteForm = Omit<
   "id" | "subtotal" | "tax" | "total" | "balanceBefore" | "balanceAfter"
 >;
 
-const STORAGE_KEY = "purchase-debit-notes";
+type PurchaseAdjustmentNoteType = "purchase_debit" | "purchase_credit";
+
 const START_NUMBER = 100;
 
 const emptyItem = (): DebitNoteItem => ({
@@ -62,12 +63,16 @@ const emptyItem = (): DebitNoteItem => ({
   taxPercent: 15,
 });
 
-const buildNumber = (num: number) => `DN-${String(num).padStart(6, "0")}`;
+const buildNumber = (num: number, noteType: PurchaseAdjustmentNoteType) =>
+  `${noteType === "purchase_credit" ? "PCN" : "DN"}-${String(num).padStart(6, "0")}`;
 const extractNumber = (noteNumber: string) =>
   Number(noteNumber.split("-")[1] || START_NUMBER);
 
-const createEmptyForm = (num: number): DebitNoteForm => ({
-  noteNumber: buildNumber(num),
+const createEmptyForm = (
+  num: number,
+  noteType: PurchaseAdjustmentNoteType,
+): DebitNoteForm => ({
+  noteNumber: buildNumber(num, noteType),
   originalInvoiceId: "",
   supplier: "",
   currency: "SAR",
@@ -77,8 +82,20 @@ const createEmptyForm = (num: number): DebitNoteForm => ({
   items: [emptyItem()],
 });
 
-export default function PurchaseDebitNotes() {
+export default function PurchaseDebitNotes({
+  noteType = "purchase_debit",
+}: {
+  noteType?: PurchaseAdjustmentNoteType;
+}) {
   const { t, direction, formatDate, formatNumber } = useI18n();
+  const isCredit = noteType === "purchase_credit";
+  const singularLabel = isCredit ? "إشعار دائن مشتريات" : "إشعار مدين";
+  const pluralLabel = isCredit
+    ? "الإشعارات الدائنة للمشتريات"
+    : "الإشعارات المدينة";
+  const createLabel = isCredit
+    ? "إنشاء إشعار دائن مشتريات جديد"
+    : "إنشاء إشعار مدين جديد";
   const formatAmount = (value: number) =>
     formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [mode, setMode] = useState<"list" | "create">("list");
@@ -88,7 +105,7 @@ export default function PurchaseDebitNotes() {
   const [defaultExpenseAccount, setDefaultExpenseAccount] = useState("511");
   const [nextNumber, setNextNumber] = useState(START_NUMBER);
   const [form, setForm] = useState<DebitNoteForm>(() =>
-    createEmptyForm(START_NUMBER),
+    createEmptyForm(START_NUMBER, noteType),
   );
 
   useEffect(() => {
@@ -100,7 +117,7 @@ export default function PurchaseDebitNotes() {
             .select(
               "id, note_number, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items",
             )
-            .eq("note_type", "purchase_debit")
+            .eq("note_type", noteType)
             .order("created_at", { ascending: false }),
           supabase
             .from("purchase_invoices")
@@ -142,7 +159,7 @@ export default function PurchaseDebitNotes() {
             START_NUMBER - 1,
           ) + 1;
         setNextNumber(sequence);
-        setForm(createEmptyForm(sequence));
+        setForm(createEmptyForm(sequence, noteType));
       }
 
       if (!invoicesResult.error) {
@@ -188,7 +205,7 @@ export default function PurchaseDebitNotes() {
       }
     };
     load();
-  }, []);
+  }, [noteType]);
 
   const subtotal = useMemo(
     () =>
@@ -230,7 +247,7 @@ export default function PurchaseDebitNotes() {
     }));
 
   const createNew = () => {
-    const nextForm = createEmptyForm(nextNumber);
+    const nextForm = createEmptyForm(nextNumber, noteType);
     nextForm.items = nextForm.items.map((item) => ({
       ...item,
       account: defaultExpenseAccount,
@@ -243,7 +260,11 @@ export default function PurchaseDebitNotes() {
     if (!form.originalInvoiceId) {
       toast({
         title: t("الفاتورة الأصلية مطلوبة"),
-        description: t("كل إشعار مدين يجب أن يرتبط بفاتورة مشتريات"),
+        description: t(
+          isCredit
+            ? "كل إشعار دائن للمشتريات يجب أن يرتبط بفاتورة مشتريات"
+            : "كل إشعار مدين يجب أن يرتبط بفاتورة مشتريات",
+        ),
       });
       return;
     }
@@ -275,7 +296,7 @@ export default function PurchaseDebitNotes() {
     );
     const { data, error } = await supabase.rpc("post_invoice_adjustment_note", {
       p_note_number: form.noteNumber,
-      p_note_type: "purchase_debit",
+      p_note_type: noteType,
       p_original_invoice_id: form.originalInvoiceId,
       p_counterparty: form.supplier,
       p_currency: form.currency,
@@ -318,7 +339,7 @@ export default function PurchaseDebitNotes() {
 
     const sequence = extractNumber(form.noteNumber) + 1;
     setNextNumber(sequence);
-    const nextForm = createEmptyForm(sequence);
+    const nextForm = createEmptyForm(sequence, noteType);
     nextForm.items = nextForm.items.map((item) => ({
       ...item,
       account: defaultExpenseAccount,
@@ -326,7 +347,7 @@ export default function PurchaseDebitNotes() {
     setForm(nextForm);
     setMode("list");
     toast({
-      title: t("تم ترحيل إشعار مدين"),
+      title: t(isCredit ? "تم ترحيل إشعار دائن مشتريات" : "تم ترحيل إشعار مدين"),
       description: `${t("تم ربط")} ${payload.noteNumber} ${t("بالفاتورة")} ${payload.originalInvoiceId} ${t("وتسجيل القيد المحاسبي")}`,
     });
   };
@@ -337,12 +358,10 @@ export default function PurchaseDebitNotes() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-foreground">
-              {t("إشعار مدين")}
+              {t(singularLabel)}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {mode === "list"
-                ? t("عرض الإشعارات المدينة")
-                : t("إنشاء إشعار مدين جديد")}
+              {mode === "list" ? t(`عرض ${pluralLabel}`) : t(createLabel)}
             </p>
           </div>
 
@@ -353,7 +372,7 @@ export default function PurchaseDebitNotes() {
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
               >
                 <Plus className="h-4 w-4" />
-                {t("إنشاء إشعار مدين جديد")}
+                {t(createLabel)}
               </button>
             ) : (
               <>
@@ -364,14 +383,14 @@ export default function PurchaseDebitNotes() {
                   <ArrowRight
                     className={`h-4 w-4 ${direction === "ltr" ? "rotate-180" : ""}`}
                   />
-                  {t("الرجوع لإشعارات المدين")}
+                  {t(`الرجوع إلى ${pluralLabel}`)}
                 </button>
                 <button
                   onClick={handleSave}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
                 >
                   <Save className="h-4 w-4" />
-                  {t("حفظ إشعار المدين")}
+                  {t(isCredit ? "حفظ إشعار دائن المشتريات" : "حفظ إشعار المدين")}
                 </button>
               </>
             )}
@@ -381,7 +400,7 @@ export default function PurchaseDebitNotes() {
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
-              {t("عدد الإشعارات المدينة")}:{" "}
+              {t(`عدد ${pluralLabel}`)}:{" "}
               <span className="font-semibold text-foreground">
                 {formatNumber(rows.length)}
               </span>

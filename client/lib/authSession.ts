@@ -115,6 +115,7 @@ export function permissionForMainSubPath(path: string): string[] {
     ["/inventory/receipts", "inventory.movements", "module.inventory"],
     ["/inventory/issues", "inventory.movements", "module.inventory"],
     ["/inventory/delivery-notes", "inventory.movements", "module.inventory"],
+    ["/inventory/transfers", "inventory.movements", "module.inventory"],
     ["/inventory/warehouses", "inventory.warehouses", "module.inventory"],
     ["/inventory/reports", "inventory.reports", "module.inventory"],
     ["/crm/customers", "crm.customers", "module.crm"],

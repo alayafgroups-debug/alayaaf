@@ -91,6 +91,7 @@ const navSubMenus: Record<
     { label: "تسويات المخزون", href: "/inventory/adjustments" },
     { label: "أوامر التصنيع", href: "/inventory/manufacturing" },
     { label: "أوامر التركيب", href: "/inventory/assembly" },
+    { label: "الأرصدة الافتتاحية", href: "/inventory/opening-balances" },
     { label: "المستودعات", href: "/inventory/warehouses" },
     { label: "تقارير المخزون", href: "/inventory/reports" },
   ],

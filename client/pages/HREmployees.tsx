@@ -23,6 +23,7 @@ import type { EmpFormData } from "./EmployeeForm";
 import { useI18n } from "@/i18n";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
+import XlsxPopulate from "xlsx-populate";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const STATUSES = ["فعال", "غير فعال", "إجازة", "منتهي"];
@@ -114,6 +115,100 @@ export default function HREmployees() {
   const pageData = filtered.slice(pageStart, pageStart + pageSize);
   const visibleColumnCount = 8 + Object.values(visibleColumns).filter(Boolean).length;
   const allPageSelected = pageData.length > 0 && pageData.every((employee) => selectedIds.has(employee.id));
+
+  const exportPreservedEnglishTemplate = async () => {
+    if (!filtered.length) {
+      toast({ title: t("لا توجد بيانات للتصدير") });
+      return;
+    }
+
+    const templateUrl = "https://cdn.builder.io/o/assets%2Fce04605038104603b965d31c7c18e8db%2F436f094c89454327970ffe9bb11fdd3f?alt=media&token=06421ef6-2a54-4a30-8920-d579eea7d4ce&apiKey=ce04605038104603b965d31c7c18e8db";
+    const dayName = new Date().toLocaleDateString("en-US", { weekday: "long" });
+    const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);
+    const englishValue = (value: string | null | undefined, fallback = "-") => {
+      const clean = String(value ?? "").trim();
+      return clean && !containsArabic(clean) ? clean : fallback;
+    };
+    const statusInEnglish: Record<string, string> = {
+      "فعال": "Active", "نشط": "Active", active: "Active",
+      "غير فعال": "Inactive", "غير نشط": "Inactive",
+      "إجازة": "On Leave", "منتهي": "Terminated",
+    };
+
+    try {
+      const response = await fetch(templateUrl);
+      if (!response.ok) throw new Error("Unable to download the Excel template");
+      const workbook = await XlsxPopulate.fromDataAsync(await response.arrayBuffer());
+      const worksheet = workbook.sheet(0);
+      const values = worksheet.usedRange().value();
+      const headerIndex = values.findIndex((row) => row.some((value) => {
+        const label = String(value ?? "").toLowerCase();
+        return label.includes("employee") && (label.includes("id") || label.includes("name"));
+      }));
+      if (headerIndex < 0) throw new Error("The employee header row was not found in the template");
+
+      const headers = values[headerIndex].map((value) => String(value ?? "").trim());
+      const dataColumnIndex = headers.findIndex((header) => header.toLowerCase() === "data");
+      if (dataColumnIndex >= 0) {
+        worksheet.column(dataColumnIndex + 1).hidden(true);
+        headers.splice(dataColumnIndex, 1);
+      }
+      const visibleColumnNumbers = values[headerIndex]
+        .map((_, index) => index)
+        .filter((index) => index !== dataColumnIndex);
+      const templateDataRow = Math.min(headerIndex + 2, values.length);
+      const templateStyles = visibleColumnNumbers.map((columnIndex) => worksheet.cell(templateDataRow, columnIndex + 1).style());
+
+      const valueForHeader = (employee: EmpFormData, header: string, index: number): string | number => {
+        const key = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (["no", "number", "srno", "serial", "sno"].includes(key)) return index + 1;
+        if (key.includes("employeeid") || key.includes("employeeno") || key === "id") return employee.empId || employee.accountTitle || "-";
+        if (key.includes("arabicname")) return "-";
+        if (key.includes("name")) return englishValue(employee.firstName, englishValue(employee.name, employee.empId || "-"));
+        if (key.includes("status")) return statusInEnglish[employee.status] || englishValue(employee.status, "Not specified");
+        if (key.includes("branch")) return englishValue(employee.branch, "Not specified");
+        if (key.includes("directorate")) return englishValue(employee.directorate, "Not specified");
+        if (key.includes("department") || key.includes("section")) return englishValue(employee.department, "Not specified");
+        if (key.includes("jobtitle") || key.includes("designation") || key.includes("position")) return englishValue(employee.jobTitle, "Not specified");
+        if (key.includes("nationality")) return englishValue(employee.nationality, "Not specified");
+        if (key.includes("nationalid") || key.includes("identity")) return employee.nationalId || "-";
+        if (key.includes("hiredate") || key.includes("joiningdate")) return employee.hireDate || "-";
+        if (key.includes("mobile") || key.includes("phone")) return employee.phone || "-";
+        if (key.includes("email")) return englishValue(employee.email);
+        return "-";
+      };
+
+      const dataStartRow = headerIndex + 2;
+      const rowsToClear = Math.max(values.length - headerIndex - 1, filtered.length);
+      for (let offset = 0; offset < rowsToClear; offset += 1) {
+        visibleColumnNumbers.forEach((columnIndex) => worksheet.cell(dataStartRow + offset, columnIndex + 1).value(null));
+      }
+      filtered.forEach((employee, employeeIndex) => {
+        visibleColumnNumbers.forEach((columnIndex, visibleIndex) => {
+          const cell = worksheet.cell(dataStartRow + employeeIndex, columnIndex + 1);
+          cell.value(valueForHeader(employee, headers[visibleIndex], employeeIndex));
+          if (templateStyles[visibleIndex]) cell.style(templateStyles[visibleIndex]);
+        });
+      });
+
+      values.slice(0, headerIndex).forEach((row, rowIndex) => row.forEach((value, columnIndex) => {
+        const text = String(value ?? "");
+        if (text.toLowerCase().includes("employee") && text.toLowerCase().includes("list")) {
+          worksheet.cell(rowIndex + 1, columnIndex + 1).value(`EMPLOYEE LIST — ${dayName.toUpperCase()}`);
+        }
+      }));
+
+      const output = await workbook.outputAsync();
+      const url = URL.createObjectURL(output);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Employee_List_${dayName}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      toast({ title: "Excel export failed", description: exportError instanceof Error ? exportError.message : "Unable to generate the employee report", variant: "destructive" });
+    }
+  };
 
   const exportExactEnglishTemplate = async () => {
     if (!filtered.length) {
@@ -469,7 +564,7 @@ export default function HREmployees() {
               {t("قائمة الموظفين")} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <div className="flex items-center gap-1">
-              <button onClick={() => void exportExactEnglishTemplate()} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
+              <button onClick={() => void exportPreservedEnglishTemplate()} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
               <button title={t("طباعة")} className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
               <button onClick={() => setRefreshKey((k) => k + 1)} title={t("تحديث")} className="p-1.5 rounded hover:bg-white/20 transition"><RefreshCw className="h-4 w-4" /></button>
               <div className="relative">

@@ -110,6 +110,7 @@ const invoiceTranslations: Record<string, string> = {
   "حدث خطأ غير متوقع": "An unexpected error occurred",
   "العودة للقائمة": "Back to list",
   "تفاصيل الفاتورة الضريبية": "Tax invoice details",
+  "تفاصيل الفاتورة الضريبية المبسطة": "Simplified tax invoice details",
   "8529 الشيخ محمد بن جبير، الشوقية، مكة المكرمة":
     "8529 Sheikh Muhammad Ibn Jabeer, Ash Shawqiyah, Mecca",
   "24351 المملكة العربية السعودية": "24351, Kingdom of Saudi Arabia",
@@ -218,8 +219,6 @@ const invoiceTranslations: Record<string, string> = {
   "الرقم الضريبي": "VAT number",
   "اختر العميل": "Select customer",
   "نوع الفاتورة": "Invoice type",
-  "مبسطة B2C — Reporting": "Simplified B2C — Reporting",
-  "معيارية B2B — Clearance": "Standard B2B — Clearance",
   "الرقم الضريبي للعميل": "Customer VAT number",
   "مطلوب لفاتورة B2B": "Required for B2B invoice",
   "اختياري لـ B2C": "Optional for B2C",
@@ -680,7 +679,7 @@ export default function SalesInvoices() {
                 </div>
               </div>
 
-              <div class="title">${escapeHtml(t("فاتورة ضريبية"))}</div>
+              <div class="title">${escapeHtml(t(invoice.invoiceType === "standard" ? "فاتورة ضريبية" : "فاتورة ضريبية مبسطة"))}</div>
 
               <div class="meta">
                 <div class="meta-grid">
@@ -1134,7 +1133,7 @@ function InvoiceDetails({
         </button>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-extrabold text-foreground">
-            {t("تفاصيل الفاتورة الضريبية")}
+            {t(invoice.invoiceType === "standard" ? "تفاصيل الفاتورة الضريبية" : "تفاصيل الفاتورة الضريبية المبسطة")}
           </h1>
           <FileText className="h-5 w-5 text-blue-600" />
         </div>
@@ -1184,9 +1183,9 @@ function InvoiceDetails({
 
             <div className="text-center border-t border-b border-slate-200 py-4">
               <h3 className="text-2xl font-bold text-slate-800">
-                {t("فاتورة ضريبية")}
+                {t(invoice.invoiceType === "standard" ? "فاتورة ضريبية" : "فاتورة ضريبية مبسطة")}
               </h3>
-              <p className="text-sm text-slate-500">Tax Invoice</p>
+              <p className="text-sm text-slate-500">{invoice.invoiceType === "standard" ? "Tax Invoice" : "Simplified Tax Invoice"}</p>
               <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs font-semibold">
                 <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
                   {t("المحاسبة")}:{" "}
@@ -2603,10 +2602,10 @@ function InvoiceForm({
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-white"
                   >
                     <option value="simplified">
-                      {t("مبسطة B2C — Reporting")}
+                      {t("فاتورة ضريبية مبسطة")}
                     </option>
                     <option value="standard">
-                      {t("معيارية B2B — Clearance")}
+                      {t("فاتورة ضريبية")}
                     </option>
                   </select>
                 </div>

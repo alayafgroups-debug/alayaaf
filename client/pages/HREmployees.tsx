@@ -179,7 +179,7 @@ export default function HREmployees() {
         supabase.from("branches").select("id, name, name_en"),
         supabase.from("departments").select("id, name, name_en"),
         supabase.from("hr_jobs").select("name, name_en"),
-        supabase.from("org_sections").select("id, name"),
+        supabase.from("org_sections").select("id, name, name_en"),
       ]);
       if (!response.ok) throw new Error("Unable to download the Excel template");
 
@@ -197,7 +197,7 @@ export default function HREmployees() {
       ]));
       const sectionsById = new Map((sectionResult.data ?? []).map((row) => [
         String(row.id),
-        englishValue(String(row.name ?? ""), "Not specified"),
+        englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified")),
       ]));
 
       const workbook = await XlsxPopulate.fromDataAsync(await response.arrayBuffer());

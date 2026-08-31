@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 
-type Section = { id: string; name: string; department: string; departmentId: string; manager: string; description: string };
+type Section = { id: string; name: string; nameEn: string; department: string; departmentId: string; manager: string; description: string };
 
 export default function HROrgSections() {
   const { t, direction, formatNumber } = useI18n();
@@ -17,6 +17,7 @@ export default function HROrgSections() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
+  const [formNameEn, setFormNameEn] = useState("");
   const [formDept, setFormDept] = useState("");
   const [formDeptId, setFormDeptId] = useState("");
   const [formManager, setFormManager] = useState("");
@@ -29,7 +30,7 @@ export default function HROrgSections() {
     try {
       const { data } = await supabase.from("org_sections").select("*").order("id", { ascending: false });
       if (data) setItems(data.map((r: any) => ({
-        id: String(r.id), name: r.name ?? "", department: r.department ?? "",
+        id: String(r.id), name: r.name ?? "", nameEn: r.name_en ?? "", department: r.department ?? "",
         departmentId: r.department_id ? String(r.department_id) : "",
         manager: r.manager ?? "", description: r.description ?? "",
       })));
@@ -40,10 +41,10 @@ export default function HROrgSections() {
 
   useEffect(() => { loadData(); }, []);
 
-  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormDept(""); setFormDeptId(""); setFormManager(""); setFormDesc(""); };
+  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormNameEn(""); setFormDept(""); setFormDeptId(""); setFormManager(""); setFormDesc(""); };
 
   const startEdit = (item: Section) => {
-    setEditingId(item.id); setFormName(item.name); setFormDept(item.department);
+    setEditingId(item.id); setFormName(item.name); setFormNameEn(item.nameEn); setFormDept(item.department);
     setFormDeptId(item.departmentId);
     setFormManager(item.manager); setFormDesc(item.description); setShowForm(true);
   };
@@ -54,19 +55,23 @@ export default function HROrgSections() {
   };
 
   const handleSave = async () => {
-    if (!formName.trim()) { toast({ title: t("خطأ"), description: t("اسم القسم مطلوب"), variant: "destructive" }); return; }
+    if (!formName.trim() || !formNameEn.trim()) { toast({ title: t("خطأ"), description: t("اسم القسم بالعربية والإنجليزية مطلوب"), variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const payload = { name: formName, department: formDept, department_id: formDeptId || null, manager: formManager, description: formDesc };
+      const payload = { name: formName.trim(), name_en: formNameEn.trim(), department: formDept, department_id: formDeptId || null, manager: formManager, description: formDesc };
       if (editingId) {
-        await supabase.from("org_sections").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("org_sections").update(payload).eq("id", editingId);
+        if (error) throw error;
         toast({ title: t("تم التعديل") });
       } else {
-        await supabase.from("org_sections").insert([payload]);
+        const { error } = await supabase.from("org_sections").insert([payload]);
+        if (error) throw error;
         toast({ title: t("تمت الإضافة") });
       }
       resetForm(); loadData();
-    } catch { toast({ title: t("خطأ"), variant: "destructive" }); } finally { setSaving(false); }
+    } catch (error) {
+      toast({ title: t("خطأ"), description: error instanceof Error ? error.message : t("تعذر حفظ القسم"), variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: Section) => {
@@ -76,7 +81,7 @@ export default function HROrgSections() {
     toast({ title: t("تم الحذف") });
   };
 
-  const filtered = items.filter((i) => !search || i.name.includes(search) || i.department.includes(search));
+  const filtered = items.filter((i) => !search || i.name.includes(search) || i.nameEn.toLowerCase().includes(search.toLowerCase()) || i.department.includes(search));
 
   return (
     <Layout>
@@ -92,7 +97,8 @@ export default function HROrgSections() {
           <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
             <h3 className="font-bold text-lg">{editingId ? t("تعديل القسم") : t("إضافة قسم جديد")}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium mb-1">{t("اسم القسم")} *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("اسم القسم بالعربية")} *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("اسم القسم بالإنجليزية")} *</label><Input dir="ltr" value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} /></div>
               <div>
                 <label className="block text-sm font-medium mb-1">{t("الإدارة")}</label>
                 <select value={formDeptId} onChange={(e) => onDeptChange(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
@@ -123,7 +129,8 @@ export default function HROrgSections() {
               <thead className="bg-[#004e89] text-white">
                 <tr>
                   <th className="py-3 px-4 font-medium w-16">#</th>
-                  <th className="py-3 px-4 font-medium">{t("اسم القسم")}</th>
+                  <th className="py-3 px-4 font-medium">{t("اسم القسم بالعربية")}</th>
+                  <th className="py-3 px-4 font-medium">{t("اسم القسم بالإنجليزية")}</th>
                   <th className="py-3 px-4 font-medium">{t("الإدارة")}</th>
                   <th className="py-3 px-4 font-medium">{t("المدير")}</th>
                   <th className="py-3 px-4 font-medium">{t("الوصف")}</th>
@@ -132,13 +139,14 @@ export default function HROrgSections() {
               </thead>
               <tbody className="divide-y bg-white">
                 {loading ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((item, i) => (
                   <tr key={item.id} className="hover:bg-gray-50/50">
                     <td className="py-3 px-4">{i + 1}</td>
                     <td className="py-3 px-4 font-medium">{item.name}</td>
+                    <td className="py-3 px-4" dir="ltr">{item.nameEn}</td>
                     <td className="py-3 px-4">{item.department}</td>
                     <td className="py-3 px-4">{item.manager}</td>
                     <td className="py-3 px-4">{item.description}</td>

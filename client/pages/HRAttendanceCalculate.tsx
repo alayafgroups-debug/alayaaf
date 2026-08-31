@@ -98,6 +98,8 @@ export default function HRAttendanceCalculate() {
   const [workLocation, setWorkLocation] = useState(ALL);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [mode, setMode] = useState<ReportMode>("employees");
+  const [showUnrecordedDays, setShowUnrecordedDays] = useState(true);
+  const [showNotes, setShowNotes] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -212,14 +214,15 @@ export default function HRAttendanceCalculate() {
     return [...grouped.values()].map((item) => ({ ...item, attendanceRate: item.present + item.late + item.absent ? ((item.present + item.late) / (item.present + item.late + item.absent)) * 100 : 0 }));
   }, [filteredEmployees, t]);
 
+  const visibleDetailedRows = detailedRows.filter((row) => showUnrecordedDays || row.checkIn !== "—" || row.checkOut !== "—" || row.statusLabel === t("إجازة"));
   const allRows = mode === "employees" ? filteredEmployees : departmentSummaries;
   const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pagedRows = allRows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const columns: ReportColumn[] = mode === "employees"
-    ? [{ key: "name", label: t("اسم الموظف") }, { key: "empId", label: t("رقم الموظف") }, { key: "date", label: t("التاريخ") }, { key: "statusLabel", label: t("الحالة") }, { key: "checkIn", label: t("دخول") }, { key: "checkOut", label: t("خروج") }, { key: "worked", label: t("ساعات الحضور") }, { key: "required", label: t("الساعات المستحقة") }, { key: "late", label: t("ساعات التأخير") }, { key: "deficit", label: t("ساعات النقص") }, { key: "overtime", label: t("الساعات الإضافية") }, { key: "notes", label: t("ملاحظات") }]
+    ? [{ key: "name", label: t("اسم الموظف") }, { key: "empId", label: t("رقم الموظف") }, { key: "date", label: t("التاريخ") }, { key: "statusLabel", label: t("الحالة") }, { key: "checkIn", label: t("دخول") }, { key: "checkOut", label: t("خروج") }, { key: "worked", label: t("ساعات الحضور") }, { key: "required", label: t("الساعات المستحقة") }, { key: "late", label: t("ساعات التأخير") }, { key: "deficit", label: t("ساعات النقص") }, { key: "overtime", label: t("الساعات الإضافية") }, ...(showNotes ? [{ key: "notes", label: t("ملاحظات") }] : [])]
     : [{ key: "department", label: t("الإدارة") }, { key: "employees", label: t("عدد الموظفين") }, { key: "present", label: t("حاضر") }, { key: "absent", label: t("غائب") }, { key: "late", label: t("متأخر") }, { key: "leave", label: t("إجازة") }, { key: "attendanceRate", label: t("نسبة الحضور") }];
-  const reportRows = mode === "employees" ? detailedRows : departmentSummaries.map((row) => ({ ...row, attendanceRate: `${row.attendanceRate.toFixed(1)}%` }));
+  const reportRows = mode === "employees" ? visibleDetailedRows : departmentSummaries.map((row) => ({ ...row, attendanceRate: `${row.attendanceRate.toFixed(1)}%` }));
   const reportTitle = t(mode === "employees" ? "تقرير حساب دوام الموظفين" : "تقرير ملخص الأقسام");
   const reportOptions = { title: reportTitle, subtitle: `${dateFrom} — ${dateTo}`, columns, rows: reportRows, fileName: `${mode}-attendance-${dateFrom}-${dateTo}`, landscape: true, summary: [{ label: t("عدد السجلات"), value: reportRows.length }] };
   const departmentOptions = departments.filter((item) => branch === ALL || item.branchId === branch).map((item) => ({ value: item.id, label: item.name }));
@@ -315,7 +318,7 @@ export default function HRAttendanceCalculate() {
     {error && <div className="attendance-no-print rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {mode === "employees" && selectedEmployeesForDetail.length > 0 && <div id="attendance-print-area" className="space-y-4">
       {selectedEmployeesForDetail.map((employee) => {
-        const rows = detailedRows.filter((row) => row.id === employee.id);
+        const rows = visibleDetailedRows.filter((row) => row.id === employee.id);
         const totalWorked = rows.reduce((sum, row) => sum + (timeToSeconds(row.worked) ?? 0), 0);
         const totalRequired = rows.reduce((sum, row) => sum + (timeToSeconds(row.required) ?? 0), 0);
         const totalLate = rows.reduce((sum, row) => sum + (timeToSeconds(row.late) ?? 0), 0);
@@ -325,6 +328,17 @@ export default function HRAttendanceCalculate() {
         const absentDays = rows.filter((row) => row.statusLabel === t("غائب")).length;
         const leaveDays = rows.filter((row) => row.statusLabel === t("إجازة")).length;
         return <article key={employee.id} className="attendance-print-page overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="attendance-no-print flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3">
+            <div className="flex flex-wrap items-center gap-5 text-sm">
+              <label className="flex cursor-pointer items-center gap-2"><input type="checkbox" checked={showUnrecordedDays} onChange={(event) => setShowUnrecordedDays(event.target.checked)} className="h-4 w-4 accent-[#075f94]" />{t("إظهار الأيام بدون تسجيل")}</label>
+              <label className="flex cursor-pointer items-center gap-2"><input type="checkbox" checked={showNotes} onChange={(event) => setShowNotes(event.target.checked)} className="h-4 w-4 accent-[#075f94]" />{t("إظهار الملاحظات")}</label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => void loadData()}><RefreshCw className="ms-1 h-4 w-4" />{t("إعادة احتساب التقرير")}</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => exportReportExcel(reportOptions)} disabled={!reportRows.length}><Download className="ms-1 h-4 w-4" />{t("تحميل Excel")}</Button>
+              <Button type="button" size="sm" onClick={() => window.print()} disabled={!reportRows.length} className="bg-[#075f94] text-white hover:bg-[#064f7b]"><Printer className="ms-1 h-4 w-4" />{t("طباعة / حفظ PDF")}</Button>
+            </div>
+          </div>
           <div className="attendance-print-only border-b-2 border-[#075f94] px-6 py-4 text-center">
             <h1 className="text-2xl font-bold text-[#075f94]">{t("شركة إدارة العياف للمقاولات")}</h1>
             <p className="mt-1 text-sm font-semibold text-slate-600">{t("تقرير حساب الدوام التفصيلي")}</p>
@@ -340,7 +354,7 @@ export default function HRAttendanceCalculate() {
             {[{ label: t("الرقم الوظيفي"), value: employee.empId }, { label: t("الإدارة"), value: employee.department || "—" }, { label: t("القسم"), value: employee.section || "—" }, { label: t("الفرع"), value: employee.branch || "—" }, { label: t("مكان العمل"), value: employee.workLocation || "—" }, { label: t("جدول العمل"), value: employee.workSchedule || "—" }, { label: t("من تاريخ"), value: dateFrom }, { label: t("إلى تاريخ"), value: dateTo }].map((item) => <div key={item.label} className="bg-white px-4 py-3"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-slate-800">{item.value}</strong></div>)}
           </div>
           <div className="attendance-no-print flex flex-wrap gap-4 border-b px-5 py-3 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-sky-600">● {t("إجازة")}</span></div>
-          <div className="overflow-x-auto"><table className="attendance-detail-table min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("دخول")}</th><th className="px-3 py-3">{t("خروج")}</th><th className="px-3 py-3">{t("ساعات الحضور")}</th><th className="px-3 py-3">{t("الساعات المستحقة")}</th><th className="px-3 py-3">{t("ساعات التأخير")}</th><th className="px-3 py-3">{t("ساعات النقص")}</th><th className="px-3 py-3">{t("الساعات الإضافية")}</th><th className="px-3 py-3">{t("ملاحظات")}</th></tr></thead><tbody>{rows.map((row) => <tr key={row.rowId} className="border-b odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-3 py-2 text-center">{row.date}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 font-semibold ${row.statusLabel === t("حاضر") ? "bg-emerald-50 text-emerald-700" : row.statusLabel === t("متأخر") ? "bg-amber-50 text-amber-700" : row.statusLabel === t("إجازة") ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-700"}`}>{row.statusLabel}</span></td><td className="px-3 py-2 text-center text-emerald-700">{row.checkIn}</td><td className="px-3 py-2 text-center text-red-600">{row.checkOut}</td><td className="px-3 py-2 text-center font-semibold">{row.worked}</td><td className="px-3 py-2 text-center">{row.required}</td><td className="px-3 py-2 text-center text-amber-700">{row.late}</td><td className="px-3 py-2 text-center text-red-700">{row.deficit}</td><td className="px-3 py-2 text-center text-blue-700">{row.overtime}</td><td className="max-w-40 px-3 py-2">{row.notes || "—"}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="attendance-detail-table min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("دخول")}</th><th className="px-3 py-3">{t("خروج")}</th><th className="px-3 py-3">{t("ساعات الحضور")}</th><th className="px-3 py-3">{t("الساعات المستحقة")}</th><th className="px-3 py-3">{t("ساعات التأخير")}</th><th className="px-3 py-3">{t("ساعات النقص")}</th><th className="px-3 py-3">{t("الساعات الإضافية")}</th>{showNotes && <th className="px-3 py-3">{t("ملاحظات")}</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row.rowId} className="border-b odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-3 py-2 text-center">{row.date}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 font-semibold ${row.statusLabel === t("حاضر") ? "bg-emerald-50 text-emerald-700" : row.statusLabel === t("متأخر") ? "bg-amber-50 text-amber-700" : row.statusLabel === t("إجازة") ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-700"}`}>{row.statusLabel}</span></td><td className="px-3 py-2 text-center text-emerald-700">{row.checkIn}</td><td className="px-3 py-2 text-center text-red-600">{row.checkOut}</td><td className="px-3 py-2 text-center font-semibold">{row.worked}</td><td className="px-3 py-2 text-center">{row.required}</td><td className="px-3 py-2 text-center text-amber-700">{row.late}</td><td className="px-3 py-2 text-center text-red-700">{row.deficit}</td><td className="px-3 py-2 text-center text-blue-700">{row.overtime}</td>{showNotes && <td className="max-w-40 px-3 py-2">{row.notes || "—"}</td>}</tr>)}</tbody></table></div>
           <div className="grid gap-px bg-slate-200 sm:grid-cols-2 lg:grid-cols-5">{[{ label: t("إجمالي ساعات الحضور"), value: formatDuration(totalWorked) }, { label: t("إجمالي الساعات المستحقة"), value: formatDuration(totalRequired) }, { label: t("إجمالي ساعات التأخير"), value: formatDuration(totalLate) }, { label: t("إجمالي ساعات النقص"), value: formatDuration(totalDeficit) }, { label: t("إجمالي الساعات الإضافية"), value: formatDuration(totalOvertime) }, { label: t("أيام الحضور"), value: formatNumber(presentDays) }, { label: t("أيام الغياب"), value: formatNumber(absentDays) }, { label: t("أيام الإجازات"), value: formatNumber(leaveDays) }, { label: t("أيام الفترة"), value: formatNumber(rows.length) }, { label: t("نسبة الحضور"), value: `${formatNumber(employee.attendanceRate, { maximumFractionDigits: 1 })}%` }].map((item) => <div key={item.label} className="bg-white px-3 py-3 text-center"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-[#075f94]">{item.value}</strong></div>)}</div>
           <div className="attendance-print-only px-5 py-3 text-left text-[10px] text-slate-400">{t("تاريخ إصدار التقرير")}: {new Date().toLocaleDateString("ar-SA")}</div>
         </article>;

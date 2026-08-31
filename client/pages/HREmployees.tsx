@@ -114,7 +114,7 @@ export default function HREmployees() {
   const visibleColumnCount = 8 + Object.values(visibleColumns).filter(Boolean).length;
   const allPageSelected = pageData.length > 0 && pageData.every((employee) => selectedIds.has(employee.id));
 
-  const exportEmployeesExcel = () => {
+  const exportEmployeesExcel = async () => {
     if (!filtered.length) {
       toast({ title: t("لا توجد بيانات للتصدير") });
       return;
@@ -122,6 +122,7 @@ export default function HREmployees() {
 
     const reportDate = new Date();
     const dayName = reportDate.toLocaleDateString("en-US", { weekday: "long" });
+    const templateUrl = "https://cdn.builder.io/o/assets%2Fce04605038104603b965d31c7c18e8db%2Fa317a0e4cc5a46c7aee5892deb5ae568?alt=media&token=5d4d3e42-291d-42f8-b9a6-37c1c39cf412&apiKey=ce04605038104603b965d31c7c18e8db";
     const statusInEnglish: Record<string, string> = {
       "فعال": "Active",
       "نشط": "Active",
@@ -154,6 +155,82 @@ export default function HREmployees() {
       employee.email || "—",
     ]);
     const activeCount = filtered.filter((employee) => ["فعال", "نشط", "active"].includes(employee.status)).length;
+
+    try {
+      const response = await fetch(templateUrl);
+      if (!response.ok) throw new Error("Template download failed");
+      const template = XLSX.read(await response.arrayBuffer(), { type: "array", cellStyles: true });
+      const worksheet = template.Sheets[template.SheetNames[0]];
+      const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1:A1");
+      const rawRows = XLSX.utils.sheet_to_json<(string | number)[]>(worksheet, { header: 1, defval: "" });
+      const headerRow = rawRows.findIndex((row) => row.some((value) => {
+        const label = String(value).trim().toLowerCase();
+        return label.includes("employee") && (label.includes("id") || label.includes("name"));
+      }));
+      if (headerRow < 0) throw new Error("Template header was not found");
+
+      const templateHeaders = rawRows[headerRow].map((value) => String(value).trim());
+      const dataColumn = templateHeaders.findIndex((label) => label.toLowerCase() === "data");
+      if (dataColumn >= 0) {
+        for (let row = range.s.r; row <= range.e.r; row += 1) delete worksheet[XLSX.utils.encode_cell({ r: row, c: dataColumn })];
+        worksheet["!cols"]?.splice(dataColumn, 1);
+        worksheet["!merges"] = (worksheet["!merges"] || []).filter((merge) => !(merge.s.c <= dataColumn && merge.e.c >= dataColumn));
+        range.e.c = Math.max(range.s.c, range.e.c - 1);
+        templateHeaders.splice(dataColumn, 1);
+      }
+
+      const normalizeHeader = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const employeeValue = (employee: EmpFormData, header: string, index: number) => {
+        const key = normalizeHeader(header);
+        if (["no", "number", "srno", "serial", "sno"].includes(key)) return index + 1;
+        if (key.includes("employeeid") || key.includes("employeeno") || key === "id") return employee.empId || employee.accountTitle || "-";
+        if (key.includes("englishname")) return employee.firstName || employee.name || "-";
+        if (key.includes("arabicname")) return employee.name || "-";
+        if (key === "name" || key.includes("employeename")) return employee.firstName || employee.name || "-";
+        if (key.includes("status")) return statusInEnglish[employee.status] || employee.status || "Not specified";
+        if (key.includes("branch")) return employee.branch || "-";
+        if (key.includes("directorate")) return employee.directorate || "-";
+        if (key.includes("department") || key.includes("section")) return employee.department || "-";
+        if (key.includes("jobtitle") || key.includes("designation") || key.includes("position")) return employee.jobTitle || "-";
+        if (key.includes("nationality")) return employee.nationality || "-";
+        if (key.includes("nationalid") || key.includes("identity")) return employee.nationalId || "-";
+        if (key.includes("hiredate") || key.includes("joiningdate")) return employee.hireDate || "-";
+        if (key.includes("mobile") || key.includes("phone")) return employee.phone || "-";
+        if (key.includes("email")) return employee.email || "-";
+        return "-";
+      };
+
+      const styleSourceRow = Math.min(headerRow + 1, range.e.r);
+      const styleByColumn = templateHeaders.map((_, column) => worksheet[XLSX.utils.encode_cell({ r: styleSourceRow, c: column })]?.s);
+      for (let row = headerRow + 1; row <= range.e.r; row += 1) {
+        for (let column = range.s.c; column <= range.e.c; column += 1) delete worksheet[XLSX.utils.encode_cell({ r: row, c: column })];
+      }
+      filtered.forEach((employee, employeeIndex) => {
+        templateHeaders.forEach((header, column) => {
+          const address = XLSX.utils.encode_cell({ r: headerRow + 1 + employeeIndex, c: column });
+          const value = employeeValue(employee, header, employeeIndex);
+          worksheet[address] = { t: typeof value === "number" ? "n" : "s", v: value, s: styleByColumn[column] };
+        });
+      });
+      range.e.r = headerRow + filtered.length;
+      worksheet["!ref"] = XLSX.utils.encode_range(range);
+      worksheet["!autofilter"] = { ref: XLSX.utils.encode_range({ r: headerRow, c: range.s.c }, { r: range.e.r, c: range.e.c }) };
+      worksheet["!freeze"] = { xSplit: 0, ySplit: headerRow + 1 };
+      worksheet["!rtl"] = false;
+      template.Workbook = { ...(template.Workbook || {}), Views: [{ RTL: false }] };
+
+      rawRows.slice(0, headerRow).forEach((row, rowIndex) => row.forEach((value, columnIndex) => {
+        if (typeof value !== "string" || !value.toLowerCase().includes("employee") || !value.toLowerCase().includes("list")) return;
+        const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+        if (worksheet[address]) worksheet[address].v = `EMPLOYEE LIST — ${dayName.toUpperCase()}`;
+      }));
+
+      XLSX.writeFile(template, `Employee_List_${dayName}.xlsx`, { compression: true, cellStyles: true });
+      return;
+    } catch {
+      toast({ title: "The exact template could not be loaded", description: "A matching professional English report was generated instead." });
+    }
+
     const reportRows = [
       ["IDARAT AL AYAF FOR CONTRACTING"],
       [`EMPLOYEE LIST REPORT — ${dayName.toUpperCase()}`],

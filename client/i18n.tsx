@@ -1917,6 +1917,14 @@ Object.assign(translations, {
   "تعذر تنفيذ العملية": "Unable to complete the action",
   "أدخل عدد ساعات صحيح": "Enter a valid number of hours",
   "لا يوجد موظفون مرتبطون بالفلاتر المحددة": "No employees match the selected filters",
+  "دخول": "Check-in",
+  "خروج": "Check-out",
+  "ساعات الحضور": "Attendance hours",
+  "الساعات المستحقة": "Required hours",
+  "ساعات التأخير": "Late hours",
+  "ساعات الاستئذان": "Permission hours",
+  "ساعات النقص": "Deficit hours",
+  "متأخر": "Late",
 });
 
 const getInitialLocale = (): Locale => {

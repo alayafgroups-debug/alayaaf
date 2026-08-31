@@ -10,6 +10,7 @@ type RequestRow = {
   id: string; requestDate: string; empId: string; empName: string;
   moveType: string; requestType: string; status: string; lastUpdate: string;
   adminNote: string; signatureData: string; signedAt: string; source: "leave" | "request";
+  details: Record<string, unknown>;
 };
 
 const normalizeStatus = (raw: string) =>
@@ -44,6 +45,7 @@ export default function HRRequestsIncoming() {
         status: normalizeStatus(String(r.status ?? "").trim()),
         lastUpdate: r.updated_at ?? "",
         adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "leave",
+        details: {},
       }));
 
       const reqRows: RequestRow[] = (reqRes.data ?? []).map((r: any) => ({
@@ -53,6 +55,7 @@ export default function HRRequestsIncoming() {
         status: normalizeStatus(String(r.status ?? "").trim()),
         lastUpdate: r.updated_at ?? "",
         adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "request",
+        details: r.details && typeof r.details === "object" ? r.details as Record<string, unknown> : {},
       }));
 
       setItems([...leaveRows, ...reqRows].sort((a, b) => b.requestDate.localeCompare(a.requestDate)));
@@ -67,22 +70,38 @@ export default function HRRequestsIncoming() {
 
   const updateRequestStatus = async (item: RequestRow, status: "موافق" | "مرفوض") => {
     setUpdatingId(item.id);
-    const { error } = await supabase
-      .from(item.source === "leave" ? "leave_requests" : "hr_requests")
-      .update({
-        status,
-        admin_note: reviewNotes[item.id]?.trim() || item.adminNote || null,
-      })
-      .eq("id", item.id);
+    try {
+      if (item.source === "request" && item.details.workflow === "payroll_approval") {
+        const period = String(item.details.payroll_period ?? "");
+        const employeeIds = Array.isArray(item.details.active_employee_ids)
+          ? item.details.active_employee_ids.map(String)
+          : [];
+        if (!period || employeeIds.length === 0) throw new Error(t("بيانات طلب اعتماد الرواتب غير مكتملة"));
 
-    setUpdatingId(null);
-    if (error) {
-      toast({ title: t("تعذر تحديث الطلب"), description: error.message, variant: "destructive" });
-      return;
+        const { error: payrollError } = await supabase
+          .from("payroll")
+          .update({ status: status === "موافق" ? "معتمد" : "مرفوض" })
+          .eq("month", period)
+          .in("emp_id", employeeIds);
+        if (payrollError) throw payrollError;
+      }
+
+      const { error } = await supabase
+        .from(item.source === "leave" ? "leave_requests" : "hr_requests")
+        .update({
+          status,
+          admin_note: reviewNotes[item.id]?.trim() || item.adminNote || null,
+        })
+        .eq("id", item.id);
+      if (error) throw error;
+
+      toast({ title: t(status === "موافق" ? "تمت الموافقة على الطلب" : "تم رفض الطلب") });
+      await loadData();
+    } catch (error) {
+      toast({ title: t("تعذر تحديث الطلب"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
+    } finally {
+      setUpdatingId(null);
     }
-
-    toast({ title: t(status === "موافق" ? "تمت الموافقة على الطلب" : "تم رفض الطلب") });
-    loadData();
   };
 
   const filtered = items.filter((i) => !search || i.empName.includes(search) || i.empId.includes(search));

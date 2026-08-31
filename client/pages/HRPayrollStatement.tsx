@@ -457,6 +457,54 @@ export default function HRPayrollStatement() {
         if (error) throw error;
       }
 
+      const requestDetails = {
+        workflow: "payroll_approval",
+        payroll_period: period,
+        employee_ids: target.map((employee) => employee.empId),
+        active_employee_ids: activeIds,
+        stopped_employee_ids: stoppedIds,
+        employee_count: target.length,
+        active_employee_count: activeIds.length,
+        stopped_employee_count: stoppedIds.length,
+      };
+      const { data: existingRequest, error: requestLookupError } = await supabase
+        .from("hr_requests")
+        .select("id")
+        .eq("request_type", "اعتماد رواتب الموظفين")
+        .contains("details", { workflow: "payroll_approval", payroll_period: period })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (requestLookupError) throw requestLookupError;
+
+      if (existingRequest) {
+        const { error: requestError } = await supabase
+          .from("hr_requests")
+          .update({
+            emp_id: `PAYROLL-${period}`,
+            emp_name: "قسم الرواتب",
+            start_date: `${period}-01`,
+            end_date: `${period}-${String(new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
+            status: "معلق",
+            admin_note: null,
+            details: requestDetails,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingRequest.id);
+        if (requestError) throw requestError;
+      } else {
+        const { error: requestError } = await supabase.from("hr_requests").insert({
+          emp_id: `PAYROLL-${period}`,
+          emp_name: "قسم الرواتب",
+          request_type: "اعتماد رواتب الموظفين",
+          start_date: `${period}-01`,
+          end_date: `${period}-${String(new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
+          status: "معلق",
+          details: requestDetails,
+        });
+        if (requestError) throw requestError;
+      }
+
       toast({
         title: t("تم إرسال طلب الاعتماد"),
         description: `${t("تم تجهيز")} ${formatNumber(activeIds.length)} ${t("موظف")} ${t("وإيقاف راتب")} ${formatNumber(stoppedIds.length)} ${t("موظف")}`,

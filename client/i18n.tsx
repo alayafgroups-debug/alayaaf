@@ -1925,6 +1925,8 @@ Object.assign(translations, {
   "ساعات الاستئذان": "Permission hours",
   "ساعات النقص": "Deficit hours",
   "متأخر": "Late",
+  "اعتماد رواتب الموظفين": "Employee payroll approval",
+  "بيانات طلب اعتماد الرواتب غير مكتملة": "Payroll approval request data is incomplete",
 });
 
 const getInitialLocale = (): Locale => {

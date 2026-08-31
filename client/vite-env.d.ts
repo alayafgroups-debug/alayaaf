@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-declare module "xlsx-populate" {
+declare module "xlsx-populate/browser/xlsx-populate" {
   type Cell = {
     value(): unknown;
     value(value: unknown): Cell;

@@ -23,7 +23,7 @@ import type { EmpFormData } from "./EmployeeForm";
 import { useI18n } from "@/i18n";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
-import XlsxPopulate from "xlsx-populate";
+import XlsxPopulate from "xlsx-populate/browser/xlsx-populate";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const STATUSES = ["فعال", "غير فعال", "إجازة", "منتهي"];

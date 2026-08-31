@@ -1928,6 +1928,13 @@ Object.assign(translations, {
   "اعتماد رواتب الموظفين": "Employee payroll approval",
   "بيانات طلب اعتماد الرواتب غير مكتملة": "Payroll approval request data is incomplete",
   "غير مرتبط": "Not linked",
+  "المرسل (القسم أو الموظف)": "Sender (department or employee)",
+  "المرسل": "Sender",
+  "عرض التفاصيل": "View details",
+  "تعذر تحميل تفاصيل الطلب": "Unable to load request details",
+  "فترة الرواتب": "Payroll period",
+  "رواتب قيد الاعتماد": "Payrolls pending approval",
+  "رواتب موقوفة": "Stopped payrolls",
 });
 
 const getInitialLocale = (): Locale => {

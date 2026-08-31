@@ -10,6 +10,7 @@ import { useI18n } from "@/i18n";
 const ALL = "all";
 type ReportMode = "employees" | "departments";
 type StatusFilter = "all" | "present" | "absent" | "late" | "leave";
+type AttendanceAction = "punch" | "bulk" | "overtime" | "permission" | "clear-punches" | "delete-bulk";
 type DepartmentOption = { id: string; name: string; branchId: string };
 type SectionOption = { id: string; name: string; departmentId: string };
 type BranchOption = { id: string; name: string };
@@ -30,7 +31,9 @@ type Employee = {
   dailyHours: number;
 };
 type AttendanceRecord = { empId: string; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number; notes: string };
-type DailyAttendanceDetail = Employee & { rowId: string; date: string; statusLabel: string; checkIn: string; checkOut: string; worked: string; required: string; late: string; deficit: string; overtime: string; notes: string };
+type OvertimeRecord = { employeeId: string; date: string; hours: number };
+type PermissionRecord = { empId: string; date: string; hours: number };
+type DailyAttendanceDetail = Employee & { rowId: string; date: string; statusLabel: string; checkIn: string; checkOut: string; worked: string; required: string; late: string; permission: string; deficit: string; overtime: string; notes: string };
 type EmployeeSummary = Employee & { present: number; absent: number; late: number; leave: number; recorded: number; attendanceRate: number };
 type DepartmentSummary = { id: string; department: string; employees: number; present: number; absent: number; late: number; leave: number; attendanceRate: number };
 
@@ -82,6 +85,8 @@ export default function HRAttendanceCalculate() {
   const [dateTo, setDateTo] = useState(initialRange.to);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [overtimeRecords, setOvertimeRecords] = useState<OvertimeRecord[]>([]);
+  const [permissionRecords, setPermissionRecords] = useState<PermissionRecord[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [sections, setSections] = useState<SectionOption[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
@@ -100,6 +105,14 @@ export default function HRAttendanceCalculate() {
   const [mode, setMode] = useState<ReportMode>("employees");
   const [showUnrecordedDays, setShowUnrecordedDays] = useState(true);
   const [showNotes, setShowNotes] = useState(true);
+  const [attendanceAction, setAttendanceAction] = useState<AttendanceAction | null>(null);
+  const [actionDate, setActionDate] = useState(initialRange.from);
+  const [actionCheckIn, setActionCheckIn] = useState("08:00");
+  const [actionCheckOut, setActionCheckOut] = useState("17:00");
+  const [actionHours, setActionHours] = useState("1");
+  const [actionReason, setActionReason] = useState("");
+  const [actionSaving, setActionSaving] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -109,9 +122,11 @@ export default function HRAttendanceCalculate() {
   const loadData = async () => {
     if (!dateFrom || !dateTo || dateFrom > dateTo) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
     setLoading(true); setError("");
-    const [employeeResult, attendanceResult, departmentResult, sectionResult, branchResult, jobResult, scheduleResult, locationResult] = await Promise.all([
+    const [employeeResult, attendanceResult, overtimeResult, permissionResult, departmentResult, sectionResult, branchResult, jobResult, scheduleResult, locationResult] = await Promise.all([
       supabase.from("employees").select("id, emp_id, name, branch_id, branch, department_id, section_id, directorate, department, job_title, work_schedule, work_location, photo_url, daily_hours").in("status", ["نشط", "فعال", "active"]).order("name"),
       supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes, notes").gte("date", dateFrom).lte("date", dateTo).order("date"),
+      supabase.from("overtime_records").select("employee_id, date, hours").gte("date", dateFrom).lte("date", dateTo).in("status", ["معتمدة", "معتمد", "approved"]),
+      supabase.from("hr_requests").select("emp_id, start_date, details").eq("request_type", "استئذان").gte("start_date", dateFrom).lte("start_date", dateTo).in("status", ["معتمدة", "معتمد", "approved"]),
       supabase.from("departments").select("id, name, branch_id").eq("status", "فعال").order("name"),
       supabase.from("org_sections").select("id, name, department_id").eq("status", "فعال").order("name"),
       supabase.from("branches").select("id, name").eq("status", "فعال").order("name"),
@@ -119,7 +134,7 @@ export default function HRAttendanceCalculate() {
       supabase.from("attendance_schedules").select("id, name").eq("status", "فعال").order("name"),
       supabase.from("hr_work_locations").select("id, name").eq("status", "فعال").order("name"),
     ]);
-    const firstError = employeeResult.error ?? attendanceResult.error ?? departmentResult.error ?? sectionResult.error ?? branchResult.error ?? jobResult.error ?? scheduleResult.error ?? locationResult.error;
+    const firstError = employeeResult.error ?? attendanceResult.error ?? overtimeResult.error ?? permissionResult.error ?? departmentResult.error ?? sectionResult.error ?? branchResult.error ?? jobResult.error ?? scheduleResult.error ?? locationResult.error;
     if (firstError) { setError(firstError.message); setLoading(false); return; }
     const branchRows: BranchOption[] = (branchResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) }));
     const branchById = new Map(branchRows.map((item) => [item.id, item.name]));
@@ -137,6 +152,8 @@ export default function HRAttendanceCalculate() {
     setSections(sectionRows);
     setEmployees(loadedEmployees);
     setAttendance((attendanceResult.data ?? []).map((row) => ({ empId: String(row.emp_id ?? ""), date: String(row.date ?? ""), status: String(row.status ?? ""), checkIn: String(row.check_in ?? ""), checkOut: String(row.check_out ?? ""), lateMinutes: Number(row.late_minutes ?? 0), notes: String(row.notes ?? "") })));
+    setOvertimeRecords((overtimeResult.data ?? []).map((row) => ({ employeeId: String(row.employee_id ?? ""), date: String(row.date ?? ""), hours: Number(row.hours ?? 0) })));
+    setPermissionRecords((permissionResult.data ?? []).map((row) => { const details = row.details && typeof row.details === "object" ? row.details as Record<string, unknown> : {}; return { empId: String(row.emp_id ?? ""), date: String(row.start_date ?? ""), hours: Number(details.hours ?? 0) }; }));
     setBranches(branchRows);
     setJobTitles(unique([...(jobResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.jobTitle)]));
     setWorkSchedules(unique([...(scheduleResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.workSchedule)]));
@@ -174,6 +191,10 @@ export default function HRAttendanceCalculate() {
   });
   const detailedRows = useMemo<DailyAttendanceDetail[]>(() => {
     const recordsByEmployeeAndDate = new Map(attendance.map((record) => [`${record.empId}:${record.date}`, record]));
+    const overtimeByEmployeeAndDate = new Map<string, number>();
+    overtimeRecords.forEach((record) => { const key = `${record.employeeId}:${record.date}`; overtimeByEmployeeAndDate.set(key, (overtimeByEmployeeAndDate.get(key) ?? 0) + record.hours * 3600); });
+    const permissionByEmployeeAndDate = new Map<string, number>();
+    permissionRecords.forEach((record) => { const key = `${record.empId}:${record.date}`; permissionByEmployeeAndDate.set(key, (permissionByEmployeeAndDate.get(key) ?? 0) + record.hours * 3600); });
     const rows: DailyAttendanceDetail[] = [];
     employeeSummaries.filter((employee) => selectedEmployeeIds.includes(employee.id)).forEach((employee) => {
       const requiredSeconds = Math.max(0, employee.dailyHours) * 3600;
@@ -183,6 +204,8 @@ export default function HRAttendanceCalculate() {
         const date = currentDate.toISOString().slice(0, 10);
         const record = recordsByEmployeeAndDate.get(`${employee.empId}:${date}`);
         const workedSeconds = record ? durationBetween(record.checkIn, record.checkOut) : 0;
+        const manualOvertimeSeconds = overtimeByEmployeeAndDate.get(`${employee.id}:${date}`) ?? 0;
+        const permissionSeconds = permissionByEmployeeAndDate.get(`${employee.empId}:${date}`) ?? 0;
         const category = classifyStatus(record);
         rows.push({
           ...employee,
@@ -194,14 +217,15 @@ export default function HRAttendanceCalculate() {
           worked: formatDuration(workedSeconds),
           required: formatDuration(category === "leave" ? 0 : requiredSeconds),
           late: formatDuration((record?.lateMinutes ?? 0) * 60),
-          deficit: formatDuration(category === "leave" ? 0 : Math.max(requiredSeconds - workedSeconds, 0)),
-          overtime: formatDuration(Math.max(workedSeconds - requiredSeconds, 0)),
+          permission: formatDuration(permissionSeconds),
+          deficit: formatDuration(category === "leave" ? 0 : Math.max(requiredSeconds - workedSeconds - permissionSeconds, 0)),
+          overtime: formatDuration(Math.max(workedSeconds - requiredSeconds, 0) + manualOvertimeSeconds),
           notes: record?.notes || "",
         });
       }
     });
     return rows;
-  }, [attendance, dateFrom, dateTo, employeeSummaries, selectedEmployeeIds, t]);
+  }, [attendance, dateFrom, dateTo, employeeSummaries, overtimeRecords, permissionRecords, selectedEmployeeIds, t]);
 
   const departmentSummaries = useMemo<DepartmentSummary[]>(() => {
     const grouped = new Map<string, DepartmentSummary>();
@@ -220,7 +244,7 @@ export default function HRAttendanceCalculate() {
   const safePage = Math.min(page, totalPages);
   const pagedRows = allRows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const columns: ReportColumn[] = mode === "employees"
-    ? [{ key: "name", label: t("اسم الموظف") }, { key: "empId", label: t("رقم الموظف") }, { key: "date", label: t("التاريخ") }, { key: "statusLabel", label: t("الحالة") }, { key: "checkIn", label: t("دخول") }, { key: "checkOut", label: t("خروج") }, { key: "worked", label: t("ساعات الحضور") }, { key: "required", label: t("الساعات المستحقة") }, { key: "late", label: t("ساعات التأخير") }, { key: "deficit", label: t("ساعات النقص") }, { key: "overtime", label: t("الساعات الإضافية") }, ...(showNotes ? [{ key: "notes", label: t("ملاحظات") }] : [])]
+    ? [{ key: "name", label: t("اسم الموظف") }, { key: "empId", label: t("رقم الموظف") }, { key: "date", label: t("التاريخ") }, { key: "statusLabel", label: t("الحالة") }, { key: "checkIn", label: t("دخول") }, { key: "checkOut", label: t("خروج") }, { key: "worked", label: t("ساعات الحضور") }, { key: "required", label: t("الساعات المستحقة") }, { key: "late", label: t("ساعات التأخير") }, { key: "permission", label: t("ساعات الاستئذان") }, { key: "deficit", label: t("ساعات النقص") }, { key: "overtime", label: t("الساعات الإضافية") }, ...(showNotes ? [{ key: "notes", label: t("ملاحظات") }] : [])]
     : [{ key: "department", label: t("الإدارة") }, { key: "employees", label: t("عدد الموظفين") }, { key: "present", label: t("حاضر") }, { key: "absent", label: t("غائب") }, { key: "late", label: t("متأخر") }, { key: "leave", label: t("إجازة") }, { key: "attendanceRate", label: t("نسبة الحضور") }];
   const reportRows = mode === "employees" ? visibleDetailedRows : departmentSummaries.map((row) => ({ ...row, attendanceRate: `${row.attendanceRate.toFixed(1)}%` }));
   const reportTitle = t(mode === "employees" ? "تقرير حساب دوام الموظفين" : "تقرير ملخص الأقسام");
@@ -243,6 +267,49 @@ export default function HRAttendanceCalculate() {
     const selectableIds = selectableEmployees.map((employee) => employee.id);
     return allSelectableSelected ? current.filter((id) => !selectableIds.includes(id)) : [...new Set([...current, ...selectableIds])];
   });
+  const actionEmployees = employees.filter((employee) => selectedEmployeeIds.includes(employee.id));
+  const saveAttendanceAction = async () => {
+    if (!attendanceAction || actionEmployees.length === 0) return;
+    setActionSaving(true);
+    setActionMessage("");
+    try {
+      if (attendanceAction === "punch") {
+        const payload = actionEmployees.map((employee) => ({ emp_id: employee.empId, emp_name: employee.name, department: employee.department, date: actionDate, check_in: actionCheckIn || null, check_out: actionCheckOut || null, status: "حاضر", late_minutes: 0, notes: actionReason || "إضافة دخول وخروج من حساب الدوام", entry_source: "manager_manual", prepared_by: "الإدارة", updated_at: new Date().toISOString() }));
+        const { error: saveError } = await supabase.from("attendance").upsert(payload, { onConflict: "emp_id,date" });
+        if (saveError) throw saveError;
+      } else if (attendanceAction === "bulk") {
+        const payload = actionEmployees.flatMap((employee) => Array.from({ length: dayCount(dateFrom, dateTo) }, (_, offset) => {
+          const date = new Date(`${dateFrom}T00:00:00`); date.setDate(date.getDate() + offset);
+          return { emp_id: employee.empId, emp_name: employee.name, department: employee.department, date: date.toISOString().slice(0, 10), check_in: actionCheckIn || null, check_out: actionCheckOut || null, status: "حاضر", late_minutes: 0, notes: actionReason || "تحضير متعدد من حساب الدوام", entry_source: "manager_manual", prepared_by: "الإدارة", updated_at: new Date().toISOString() };
+        }));
+        const { error: saveError } = await supabase.from("attendance").upsert(payload, { onConflict: "emp_id,date" });
+        if (saveError) throw saveError;
+      } else if (attendanceAction === "overtime") {
+        const hours = Number(actionHours);
+        if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));
+        const { error: saveError } = await supabase.from("overtime_records").insert(actionEmployees.map((employee) => ({ employee_id: employee.id, emp_name: employee.name, date: actionDate, hours, rate: 1.5, amount: 0, status: "معتمدة" })));
+        if (saveError) throw saveError;
+      } else if (attendanceAction === "permission") {
+        const hours = Number(actionHours);
+        if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));
+        const { error: saveError } = await supabase.from("hr_requests").insert(actionEmployees.map((employee) => ({ emp_id: employee.empId, emp_name: employee.name, request_type: "استئذان", start_date: actionDate, end_date: actionDate, status: "معتمد", details: { hours, reason: actionReason, source: "attendance_calculation" } })));
+        if (saveError) throw saveError;
+      } else if (attendanceAction === "clear-punches") {
+        const { error: saveError } = await supabase.from("attendance").update({ check_in: null, check_out: null, status: "غائب", notes: actionReason || "حذف الدخول والخروج من حساب الدوام", updated_at: new Date().toISOString() }).in("emp_id", actionEmployees.map((employee) => employee.empId)).eq("date", actionDate);
+        if (saveError) throw saveError;
+      } else {
+        const { error: saveError } = await supabase.from("attendance").delete().in("emp_id", actionEmployees.map((employee) => employee.empId)).gte("date", dateFrom).lte("date", dateTo).eq("entry_source", "manager_manual");
+        if (saveError) throw saveError;
+      }
+      setActionMessage(t("تم تنفيذ العملية بنجاح"));
+      setAttendanceAction(null);
+      await loadData();
+    } catch (actionError) {
+      setActionMessage(actionError instanceof Error ? actionError.message : t("تعذر تنفيذ العملية"));
+    } finally {
+      setActionSaving(false);
+    }
+  };
   const selectedEmployeesForDetail = employeeSummaries.filter((employee) => selectedEmployeeIds.includes(employee.id));
   const printCurrentReport = () => mode === "employees" ? window.print() : printReport(reportOptions);
   const showDepartmentSummary = () => mode === "departments";
@@ -315,6 +382,28 @@ export default function HRAttendanceCalculate() {
       </div>
     </section>
     {selectedEmployeeIds.length === 0 && !loading && <div className="attendance-no-print rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("حدد موظفًا واحدًا على الأقل لعرض التقرير وطباعته")}</div>}
+    {mode === "employees" && selectedEmployeeIds.length > 0 && <section className="attendance-no-print rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={() => setAttendanceAction("punch")} className="bg-[#075f94] text-white hover:bg-[#064f7b]">{t("أضف دخول/خروج")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("bulk")}>{t("إضافة تحضير متعدد")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("overtime")}>{t("أضف ساعات إضافية")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("permission")}>{t("أضف ساعات استئذان")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("clear-punches")} className="border-red-200 text-red-700 hover:bg-red-50">{t("حذف دخول/خروج")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("delete-bulk")} className="border-red-200 text-red-700 hover:bg-red-50">{t("حذف تحضير متعدد")}</Button>
+      </div>
+      {attendanceAction && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/50 p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {attendanceAction !== "bulk" && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("التاريخ")}</span><Input type="date" min={dateFrom} max={dateTo} value={actionDate} onChange={(event) => setActionDate(event.target.value)} /></label>}
+          {(attendanceAction === "punch" || attendanceAction === "bulk") && <><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الدخول")}</span><Input type="time" value={actionCheckIn} onChange={(event) => setActionCheckIn(event.target.value)} /></label><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الخروج")}</span><Input type="time" value={actionCheckOut} onChange={(event) => setActionCheckOut(event.target.value)} /></label></>}
+          {(attendanceAction === "overtime" || attendanceAction === "permission") && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("عدد الساعات")}</span><Input type="number" min="0.25" step="0.25" value={actionHours} onChange={(event) => setActionHours(event.target.value)} /></label>}
+          {attendanceAction !== "delete-bulk" && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("السبب / الملاحظات")}</span><Input value={actionReason} onChange={(event) => setActionReason(event.target.value)} /></label>}
+        </div>
+        <p className="mt-3 text-xs text-slate-600">{attendanceAction === "bulk" || attendanceAction === "delete-bulk" ? `${t("سيتم التطبيق على الموظفين المحددين خلال الفترة")}: ${dateFrom} — ${dateTo}` : `${t("سيتم التطبيق على الموظفين المحددين")}: ${formatNumber(actionEmployees.length)}`}</p>
+        {(attendanceAction === "clear-punches" || attendanceAction === "delete-bulk") && <p className="mt-2 text-xs font-semibold text-red-700">{attendanceAction === "delete-bulk" ? t("سيتم حذف سجلات التحضير الإداري فقط ولن تُحذف بصمات الموظفين الجغرافية") : t("سيتم مسح وقت الدخول والخروج مع إبقاء سجل اليوم")}</p>}
+        <div className="mt-4 flex gap-2"><Button type="button" size="sm" onClick={() => void saveAttendanceAction()} disabled={actionSaving}>{actionSaving ? t("جاري الحفظ...") : t("تأكيد العملية")}</Button><Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction(null)} disabled={actionSaving}>{t("إلغاء")}</Button></div>
+      </div>}
+      {actionMessage && <p className="mt-3 text-sm text-slate-700">{actionMessage}</p>}
+    </section>}
     {error && <div className="attendance-no-print rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {mode === "employees" && selectedEmployeesForDetail.length > 0 && <div id="attendance-print-area" className="space-y-4">
       {selectedEmployeesForDetail.map((employee) => {
@@ -322,6 +411,7 @@ export default function HRAttendanceCalculate() {
         const totalWorked = rows.reduce((sum, row) => sum + (timeToSeconds(row.worked) ?? 0), 0);
         const totalRequired = rows.reduce((sum, row) => sum + (timeToSeconds(row.required) ?? 0), 0);
         const totalLate = rows.reduce((sum, row) => sum + (timeToSeconds(row.late) ?? 0), 0);
+        const totalPermission = rows.reduce((sum, row) => sum + (timeToSeconds(row.permission) ?? 0), 0);
         const totalDeficit = rows.reduce((sum, row) => sum + (timeToSeconds(row.deficit) ?? 0), 0);
         const totalOvertime = rows.reduce((sum, row) => sum + (timeToSeconds(row.overtime) ?? 0), 0);
         const presentDays = rows.filter((row) => row.statusLabel === t("حاضر") || row.statusLabel === t("متأخر")).length;
@@ -354,8 +444,8 @@ export default function HRAttendanceCalculate() {
             {[{ label: t("الرقم الوظيفي"), value: employee.empId }, { label: t("الإدارة"), value: employee.department || "—" }, { label: t("القسم"), value: employee.section || "—" }, { label: t("الفرع"), value: employee.branch || "—" }, { label: t("مكان العمل"), value: employee.workLocation || "—" }, { label: t("جدول العمل"), value: employee.workSchedule || "—" }, { label: t("من تاريخ"), value: dateFrom }, { label: t("إلى تاريخ"), value: dateTo }].map((item) => <div key={item.label} className="bg-white px-4 py-3"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-slate-800">{item.value}</strong></div>)}
           </div>
           <div className="attendance-no-print flex flex-wrap gap-4 border-b px-5 py-3 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-sky-600">● {t("إجازة")}</span></div>
-          <div className="overflow-x-auto"><table className="attendance-detail-table min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("دخول")}</th><th className="px-3 py-3">{t("خروج")}</th><th className="px-3 py-3">{t("ساعات الحضور")}</th><th className="px-3 py-3">{t("الساعات المستحقة")}</th><th className="px-3 py-3">{t("ساعات التأخير")}</th><th className="px-3 py-3">{t("ساعات النقص")}</th><th className="px-3 py-3">{t("الساعات الإضافية")}</th>{showNotes && <th className="px-3 py-3">{t("ملاحظات")}</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row.rowId} className="border-b odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-3 py-2 text-center">{row.date}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 font-semibold ${row.statusLabel === t("حاضر") ? "bg-emerald-50 text-emerald-700" : row.statusLabel === t("متأخر") ? "bg-amber-50 text-amber-700" : row.statusLabel === t("إجازة") ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-700"}`}>{row.statusLabel}</span></td><td className="px-3 py-2 text-center text-emerald-700">{row.checkIn}</td><td className="px-3 py-2 text-center text-red-600">{row.checkOut}</td><td className="px-3 py-2 text-center font-semibold">{row.worked}</td><td className="px-3 py-2 text-center">{row.required}</td><td className="px-3 py-2 text-center text-amber-700">{row.late}</td><td className="px-3 py-2 text-center text-red-700">{row.deficit}</td><td className="px-3 py-2 text-center text-blue-700">{row.overtime}</td>{showNotes && <td className="max-w-40 px-3 py-2">{row.notes || "—"}</td>}</tr>)}</tbody></table></div>
-          <div className="grid gap-px bg-slate-200 sm:grid-cols-2 lg:grid-cols-5">{[{ label: t("إجمالي ساعات الحضور"), value: formatDuration(totalWorked) }, { label: t("إجمالي الساعات المستحقة"), value: formatDuration(totalRequired) }, { label: t("إجمالي ساعات التأخير"), value: formatDuration(totalLate) }, { label: t("إجمالي ساعات النقص"), value: formatDuration(totalDeficit) }, { label: t("إجمالي الساعات الإضافية"), value: formatDuration(totalOvertime) }, { label: t("أيام الحضور"), value: formatNumber(presentDays) }, { label: t("أيام الغياب"), value: formatNumber(absentDays) }, { label: t("أيام الإجازات"), value: formatNumber(leaveDays) }, { label: t("أيام الفترة"), value: formatNumber(rows.length) }, { label: t("نسبة الحضور"), value: `${formatNumber(employee.attendanceRate, { maximumFractionDigits: 1 })}%` }].map((item) => <div key={item.label} className="bg-white px-3 py-3 text-center"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-[#075f94]">{item.value}</strong></div>)}</div>
+          <div className="overflow-x-auto"><table className="attendance-detail-table min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("دخول")}</th><th className="px-3 py-3">{t("خروج")}</th><th className="px-3 py-3">{t("ساعات الحضور")}</th><th className="px-3 py-3">{t("الساعات المستحقة")}</th><th className="px-3 py-3">{t("ساعات التأخير")}</th><th className="px-3 py-3">{t("ساعات الاستئذان")}</th><th className="px-3 py-3">{t("ساعات النقص")}</th><th className="px-3 py-3">{t("الساعات الإضافية")}</th>{showNotes && <th className="px-3 py-3">{t("ملاحظات")}</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row.rowId} className="border-b odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-3 py-2 text-center">{row.date}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 font-semibold ${row.statusLabel === t("حاضر") ? "bg-emerald-50 text-emerald-700" : row.statusLabel === t("متأخر") ? "bg-amber-50 text-amber-700" : row.statusLabel === t("إجازة") ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-700"}`}>{row.statusLabel}</span></td><td className="px-3 py-2 text-center text-emerald-700">{row.checkIn}</td><td className="px-3 py-2 text-center text-red-600">{row.checkOut}</td><td className="px-3 py-2 text-center font-semibold">{row.worked}</td><td className="px-3 py-2 text-center">{row.required}</td><td className="px-3 py-2 text-center text-amber-700">{row.late}</td><td className="px-3 py-2 text-center text-cyan-700">{row.permission}</td><td className="px-3 py-2 text-center text-red-700">{row.deficit}</td><td className="px-3 py-2 text-center text-blue-700">{row.overtime}</td>{showNotes && <td className="max-w-40 px-3 py-2">{row.notes || "—"}</td>}</tr>)}</tbody></table></div>
+          <div className="grid gap-px bg-slate-200 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{[{ label: t("إجمالي ساعات الحضور"), value: formatDuration(totalWorked) }, { label: t("إجمالي الساعات المستحقة"), value: formatDuration(totalRequired) }, { label: t("إجمالي ساعات التأخير"), value: formatDuration(totalLate) }, { label: t("إجمالي ساعات الاستئذان"), value: formatDuration(totalPermission) }, { label: t("إجمالي ساعات النقص"), value: formatDuration(totalDeficit) }, { label: t("إجمالي الساعات الإضافية"), value: formatDuration(totalOvertime) }, { label: t("أيام الحضور"), value: formatNumber(presentDays) }, { label: t("أيام الغياب"), value: formatNumber(absentDays) }, { label: t("أيام الإجازات"), value: formatNumber(leaveDays) }, { label: t("أيام الفترة"), value: formatNumber(rows.length) }, { label: t("نسبة الحضور"), value: `${formatNumber(employee.attendanceRate, { maximumFractionDigits: 1 })}%` }].map((item) => <div key={item.label} className="bg-white px-3 py-3 text-center"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-[#075f94]">{item.value}</strong></div>)}</div>
           <div className="attendance-print-only px-5 py-3 text-left text-[10px] text-slate-400">{t("تاريخ إصدار التقرير")}: {new Date().toLocaleDateString("ar-SA")}</div>
         </article>;
       })}

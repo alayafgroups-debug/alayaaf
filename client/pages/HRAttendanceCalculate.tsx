@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { exportReportExcel, type ReportColumn } from "@/lib/reportExport";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
+import AttendanceWorkspaceNav from "@/components/hr/AttendanceWorkspaceNav";
 
 const ALL = "all";
 type ReportMode = "employees" | "departments";
@@ -372,6 +373,7 @@ export default function HRAttendanceCalculate() {
   const showDepartmentSummary = () => false;
 
   return <Layout><main dir={direction} className="space-y-4">
+    <AttendanceWorkspaceNav />
     <style>{`
       .attendance-print-only { display: none; }
       @media print {

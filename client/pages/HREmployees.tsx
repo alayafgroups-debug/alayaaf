@@ -120,18 +120,29 @@ export default function HREmployees() {
       return;
     }
 
+    const reportDate = new Date();
+    const dayName = reportDate.toLocaleDateString("en-US", { weekday: "long" });
+    const statusInEnglish: Record<string, string> = {
+      "فعال": "Active",
+      "نشط": "Active",
+      "active": "Active",
+      "غير فعال": "Inactive",
+      "غير نشط": "Inactive",
+      "إجازة": "On Leave",
+      "منتهي": "Terminated",
+    };
     const headers = [
-      t("م"), t("الرقم الوظيفي"), t("الاسم العربي"), t("الاسم بالإنجليزية"),
-      t("الحالة"), t("الفرع"), t("الإدارة"), t("القسم"),
-      t("المسمى الوظيفي"), t("الجنسية"), t("رقم الهوية"),
-      t("تاريخ التعيين"), t("رقم الجوال"), t("البريد الإلكتروني"),
+      "No.", "Employee ID", "Arabic Name", "English Name",
+      "Status", "Branch", "Directorate", "Department",
+      "Job Title", "Nationality", "National ID",
+      "Hire Date", "Mobile Number", "Email Address",
     ];
     const rows = filtered.map((employee, index) => [
       index + 1,
       employee.empId || employee.accountTitle || "—",
       employee.name || "—",
       employee.firstName || "—",
-      employee.status || "—",
+      statusInEnglish[employee.status] || employee.status || "Not specified",
       employee.branch || "—",
       employee.directorate || "—",
       employee.department || "—",
@@ -144,9 +155,9 @@ export default function HREmployees() {
     ]);
     const activeCount = filtered.filter((employee) => ["فعال", "نشط", "active"].includes(employee.status)).length;
     const reportRows = [
-      [t("شركة إدارة العياف للمقاولات")],
-      [t("تقرير قائمة الموظفين")],
-      [`${t("تاريخ الإصدار")}: ${new Date().toLocaleDateString("ar-SA")}`, "", "", `${t("إجمالي الموظفين")}: ${filtered.length}`, "", "", `${t("الموظفون النشطون")}: ${activeCount}`],
+      ["IDARAT AL AYAF FOR CONTRACTING"],
+      [`EMPLOYEE LIST REPORT — ${dayName.toUpperCase()}`],
+      [`Report Date: ${reportDate.toLocaleDateString("en-GB")}`, "", "", `Total Employees: ${filtered.length}`, "", "", `Active Employees: ${activeCount}`],
       [],
       headers,
       ...rows,
@@ -155,7 +166,7 @@ export default function HREmployees() {
     const worksheet = XLSX.utils.aoa_to_sheet(reportRows);
     const lastColumn = headers.length - 1;
     const lastRow = reportRows.length - 1;
-    worksheet["!rtl"] = true;
+    worksheet["!rtl"] = false;
     worksheet["!merges"] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: lastColumn } },
       { s: { r: 1, c: 0 }, e: { r: 1, c: lastColumn } },
@@ -197,9 +208,9 @@ export default function HREmployees() {
     }
 
     const workbook = XLSX.utils.book_new();
-    workbook.Workbook = { Views: [{ RTL: true }] };
-    XLSX.utils.book_append_sheet(workbook, worksheet, t("الموظفون").slice(0, 31));
-    XLSX.writeFile(workbook, "Employee_List_Professional.xlsx", { compression: true, cellStyles: true });
+    workbook.Workbook = { Views: [{ RTL: false }] };
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+    XLSX.writeFile(workbook, `Employee_List_${dayName}.xlsx`, { compression: true, cellStyles: true });
   };
 
   const togglePageSelection = () => {

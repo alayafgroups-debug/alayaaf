@@ -1927,6 +1927,7 @@ Object.assign(translations, {
   "متأخر": "Late",
   "اعتماد رواتب الموظفين": "Employee payroll approval",
   "بيانات طلب اعتماد الرواتب غير مكتملة": "Payroll approval request data is incomplete",
+  "غير مرتبط": "Not linked",
 });
 
 const getInitialLocale = (): Locale => {

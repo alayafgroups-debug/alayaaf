@@ -31,17 +31,18 @@ export default function HRAttendanceMonthlyReport() {
   const loadDepartmentsAndSections = async () => {
     try {
       const [departmentResult, sectionResult] = await Promise.all([
-        supabase.from("departments").select("id, name").order("name"),
-        supabase.from("org_sections").select("id, name, department_id").order("name"),
+        supabase.from("departments").select("id, name, name_en").eq("status", "فعال").order("name"),
+        supabase.from("org_sections").select("id, name, name_en, department_id").eq("status", "فعال").order("name"),
       ]);
-      setDepartments((departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) })));
-      setSections((sectionResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name), departmentId: String(row.department_id ?? "") })));
+      const localizedName = (row: { name?: unknown; name_en?: unknown }) => locale === "en" && String(row.name_en ?? "").trim() ? String(row.name_en) : String(row.name ?? "");
+      setDepartments((departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row) })));
+      setSections((sectionResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row), departmentId: String(row.department_id ?? "") })));
     } catch (error) { console.error("Error loading departments:", error); }
   };
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: emps } = await supabase.from("employees").select("id, emp_id, name, department_id, section_id, directorate, department").in("status", ["نشط", "فعال"]);
+      const { data: emps } = await supabase.from("employees").select("id, emp_id, name, department_id, section_id").in("status", ["نشط", "فعال"]);
       if (!emps?.length) { setData([]); return; }
       const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
       const endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
@@ -56,14 +57,14 @@ export default function HRAttendanceMonthlyReport() {
         }
         const departmentId = String(employee.department_id ?? "");
         const sectionId = String(employee.section_id ?? "");
-        return { empId: employee.emp_id || "-", empName: employee.name || "-", departmentId, sectionId, department: departments.find((item) => item.id === departmentId)?.name || employee.directorate || "-", section: sections.find((item) => item.id === sectionId)?.name || employee.department || "-", attendance };
+        return { empId: employee.emp_id || "-", empName: employee.name || "-", departmentId, sectionId, department: departments.find((item) => item.id === departmentId)?.name || t("غير مرتبط"), section: sections.find((item) => item.id === sectionId)?.name || t("غير مرتبط"), attendance };
       });
       if (departmentFilter !== ALL) result = result.filter((row) => row.departmentId === departmentFilter);
       if (sectionFilter !== ALL) result = result.filter((row) => row.sectionId === sectionFilter);
       setData(result.sort((a, b) => a.empName.localeCompare(b.empName, localeCode)));
     } catch (error) { console.error("Error loading monthly report:", error); toast.error(t("خطأ في تحميل البيانات")); } finally { setLoading(false); }
   };
-  useEffect(() => { void loadDepartmentsAndSections(); }, []);
+  useEffect(() => { void loadDepartmentsAndSections(); }, [locale]);
   useEffect(() => { if (departments.length || sections.length) void loadData(); }, [year, month, departmentFilter, sectionFilter, departments, sections]);
 
   const countStatus = (statuses: string[]) => data.reduce((total, employee) => total + days.filter((day) => statuses.includes(employee.attendance[day]?.status)).length, 0);

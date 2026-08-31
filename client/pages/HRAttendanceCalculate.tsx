@@ -151,9 +151,9 @@ export default function HRAttendanceCalculate() {
     const scheduleByName = new Map((scheduleResult.data ?? []).map((row) => [String(row.name ?? ""), t(String(row.name ?? ""))]));
     const locationByName = new Map((locationResult.data ?? []).map((row) => [String(row.name ?? ""), localizedName(row)]));
     const loadedEmployees: Employee[] = (employeeResult.data ?? []).map((row) => ({
-      id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branchId: String(row.branch_id ?? ""), branch: branchById.get(String(row.branch_id ?? "")) || t(String(row.branch ?? "")),
-      departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || t(String(row.directorate ?? "")),
-      sectionId: String(row.section_id ?? ""), section: sectionById.get(String(row.section_id ?? "")) || t(String(row.department ?? "")),
+      id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branchId: String(row.branch_id ?? ""), branch: branchById.get(String(row.branch_id ?? "")) || t("غير مرتبط"),
+      departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || t("غير مرتبط"),
+      sectionId: String(row.section_id ?? ""), section: sectionById.get(String(row.section_id ?? "")) || t("غير مرتبط"),
       jobTitle: jobByName.get(String(row.job_title ?? "")) || t(String(row.job_title ?? "")), workSchedule: scheduleByName.get(String(row.work_schedule ?? "")) || t(String(row.work_schedule ?? "")), workLocation: locationByName.get(String(row.work_location ?? "")) || t(String(row.work_location ?? "")), photoUrl: String(row.photo_url ?? ""), dailyHours: Number(row.daily_hours ?? 8),
     }));
     setDepartments(departmentRows);

@@ -74,7 +74,7 @@ const defaultYear = String(current.getFullYear());
 const defaultMonth = String(current.getMonth() + 1).padStart(2, "0");
 
 export default function HRPayrollStatement() {
-  const { t, direction, formatNumber, formatDate } = useI18n();
+  const { t, locale, direction, formatNumber, formatDate } = useI18n();
   const [search, setSearch] = useState("");
   const [employees, setEmployees] = useState<EmpLite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,40 +105,46 @@ export default function HRPayrollStatement() {
     const load = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("employees")
-          .select("id, emp_id, name, job_title, department, branch, work_location, employment_type, status, nationality, base_salary")
-        .order("name");
-
-        if (error) {
-          toast({ title: t("تعذر تحميل الموظفين"), description: error.message });
+        const [employeeResult, departmentResult, branchResult, locationResult, jobResult] = await Promise.all([
+          supabase.from("employees").select("id, emp_id, name, job_title, department_id, branch_id, attendance_location_id, employment_type, status, nationality, base_salary").order("name"),
+          supabase.from("departments").select("id, name, name_en").eq("status", "فعال"),
+          supabase.from("branches").select("id, name, name_en").eq("status", "فعال"),
+          supabase.from("hr_work_locations").select("id, name, name_en").eq("status", "فعال"),
+          supabase.from("hr_jobs").select("name, name_en").eq("status", "فعال"),
+        ]);
+        const firstError = employeeResult.error ?? departmentResult.error ?? branchResult.error ?? locationResult.error ?? jobResult.error;
+        if (firstError) {
+          toast({ title: t("تعذر تحميل الموظفين"), description: firstError.message });
           return;
         }
 
-        if (data) {
-          setEmployees(
-            data.map((r) => ({
-              id: String(r.id ?? ""),
-              empId: String(r.emp_id ?? r.id ?? ""),
-              name: String(r.name ?? ""),
-              jobTitle: String(r.job_title ?? ""),
-              department: String(r.department ?? ""),
-              branch: String(r.branch ?? ""),
-              workLocation: String(r.work_location ?? r.branch ?? ""),
-              employeeType: String(r.employment_type ?? "أساسي"),
-              status: String(r.status ?? "نشط"),
-              nationality: String(r.nationality ?? ""),
-              baseSalary: Number(r.base_salary ?? 0),
-            }))
-          );
-        }
+        const localizedName = (row: { name?: unknown; name_en?: unknown }) => locale === "en" && String(row.name_en ?? "").trim() ? String(row.name_en) : String(row.name ?? "");
+        const departmentById = new Map((departmentResult.data ?? []).map((row) => [String(row.id), localizedName(row)]));
+        const branchById = new Map((branchResult.data ?? []).map((row) => [String(row.id), localizedName(row)]));
+        const locationById = new Map((locationResult.data ?? []).map((row) => [String(row.id), localizedName(row)]));
+        const jobByName = new Map((jobResult.data ?? []).map((row) => [String(row.name), localizedName(row)]));
+        setEmployees(
+          (employeeResult.data ?? []).map((r) => ({
+            id: String(r.id ?? ""),
+            empId: String(r.emp_id ?? r.id ?? ""),
+            name: String(r.name ?? ""),
+            jobTitle: jobByName.get(String(r.job_title ?? "")) || t("غير مرتبط"),
+            department: departmentById.get(String(r.department_id ?? "")) || t("غير مرتبط"),
+            branch: branchById.get(String(r.branch_id ?? "")) || t("غير مرتبط"),
+            workLocation: locationById.get(String(r.attendance_location_id ?? "")) || t("غير مرتبط"),
+            employeeType: String(r.employment_type ?? "أساسي"),
+            status: String(r.status ?? "نشط"),
+            nationality: String(r.nationality ?? ""),
+            baseSalary: Number(r.base_salary ?? 0),
+          }))
+        );
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, []);
+  }, [locale]);
 
   const options = useMemo(() => {
     const uniq = (list: string[]) => ["الكل", ...Array.from(new Set(list.filter(Boolean)))];

@@ -8,26 +8,36 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 
-type DeptRow = { id: string; name: string; nameEn: string; branch: string; manager: string; status: string };
+type DeptRow = { id: string; name: string; nameEn: string; branchId: string; branch: string; manager: string; status: string };
+type BranchOption = { id: string; name: string };
 
 export default function HROrgDepartments() {
   const { t, direction, formatNumber } = useI18n();
   const [departments, setDepartments] = useState<DeptRow[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
   const [formNameEn, setFormNameEn] = useState("");
-  const [formBranch, setFormBranch] = useState("");
+  const [formBranchId, setFormBranchId] = useState("");
   const [formManager, setFormManager] = useState("");
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("departments").select("*").order("created_at", { ascending: false });
-      if (data) setDepartments(data.map((r) => ({
-        id: String(r.id), name: String(r.name ?? ""), nameEn: String(r.name_en ?? ""),
-        branch: String(r.branch ?? ""), manager: String(r.manager ?? ""), status: String(r.status ?? "فعال"),
+      const [departmentResult, branchResult] = await Promise.all([
+        supabase.from("departments").select("id, name, name_en, branch_id, branch, manager, status, created_at").order("created_at", { ascending: false }),
+        supabase.from("branches").select("id, name").eq("status", "فعال").order("name"),
+      ]);
+      if (departmentResult.error) throw departmentResult.error;
+      if (branchResult.error) throw branchResult.error;
+      const branchRows = (branchResult.data ?? []).map((r) => ({ id: String(r.id), name: String(r.name ?? "") }));
+      const branchById = new Map(branchRows.map((branch) => [branch.id, branch.name]));
+      setBranches(branchRows);
+      setDepartments((departmentResult.data ?? []).map((r) => ({
+        id: String(r.id), name: String(r.name ?? ""), nameEn: String(r.name_en ?? ""), branchId: String(r.branch_id ?? ""),
+        branch: branchById.get(String(r.branch_id ?? "")) || String(r.branch ?? ""), manager: String(r.manager ?? ""), status: String(r.status ?? "فعال"),
       })));
     } catch { /* no-op */ } finally { setLoading(false); }
   };
@@ -43,11 +53,15 @@ export default function HROrgDepartments() {
 
   const handleSave = async () => {
     if (!formName.trim()) { toast({ title: t("خطأ"), description: t("اسم الإدارة مطلوب"), variant: "destructive" }); return; }
+    const selectedBranch = branches.find((branch) => branch.id === formBranchId);
+    const payload = { name: formName, name_en: formNameEn, branch_id: formBranchId || null, branch: selectedBranch?.name ?? "", manager: formManager };
     if (editingId) {
-      await supabase.from("departments").update({ name: formName, name_en: formNameEn, branch: formBranch, manager: formManager }).eq("id", editingId);
+      const { error } = await supabase.from("departments").update(payload).eq("id", editingId);
+      if (error) { toast({ title: t("خطأ"), description: error.message, variant: "destructive" }); return; }
       toast({ title: t("تم التعديل") });
     } else {
-      await supabase.from("departments").insert([{ name: formName, name_en: formNameEn, branch: formBranch, manager: formManager }]);
+      const { error } = await supabase.from("departments").insert([payload]);
+      if (error) { toast({ title: t("خطأ"), description: error.message, variant: "destructive" }); return; }
       toast({ title: t("تمت الإضافة") });
     }
     resetForm();
@@ -55,10 +69,10 @@ export default function HROrgDepartments() {
   };
 
   const startEdit = (dept: DeptRow) => {
-    setEditingId(dept.id); setFormName(dept.name); setFormNameEn(dept.nameEn); setFormBranch(dept.branch); setFormManager(dept.manager); setShowForm(true);
+    setEditingId(dept.id); setFormName(dept.name); setFormNameEn(dept.nameEn); setFormBranchId(dept.branchId); setFormManager(dept.manager); setShowForm(true);
   };
 
-  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormNameEn(""); setFormBranch(""); setFormManager(""); };
+  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormNameEn(""); setFormBranchId(""); setFormManager(""); };
 
   return (
     <Layout>
@@ -78,7 +92,7 @@ export default function HROrgDepartments() {
             <div className="grid grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium mb-1">{t("اسم الإدارة")} *</label><input value={formName} onChange={(e) => setFormName(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
               <div><label className="block text-sm font-medium mb-1">{t("الاسم بالإنجليزية")}</label><input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-              <div><label className="block text-sm font-medium mb-1">{t("الفرع")}</label><input value={formBranch} onChange={(e) => setFormBranch(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("الفرع")}</label><select value={formBranchId} onChange={(e) => setFormBranchId(e.target.value)} className="w-full px-3 py-2 border rounded-lg bg-white text-sm"><option value="">{t("غير محدد")}</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div>
               <div><label className="block text-sm font-medium mb-1">{t("المدير")}</label><input value={formManager} onChange={(e) => setFormManager(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
             </div>
             <div className="flex gap-2">

@@ -34,7 +34,8 @@ export type InsuranceItem = {
   notes: string;
 };
 
-export type DeptOpt = { id: string; name: string };
+export type DeptOpt = { id: string; name: string; branchId: string };
+export type BranchOpt = { id: string; name: string };
 export type SectionOpt = { id: string; name: string; departmentId: string; department: string };
 
 export type EmpFormData = {
@@ -62,6 +63,7 @@ export type EmpFormData = {
   // Step 2: Job
   division: string;
   jobTitle: string;
+  branchId: string;
   branch: string;
   employmentType: string;
   directorate: string;
@@ -137,6 +139,7 @@ export const emptyForm = (): EmpFormData => ({
   photoUrl: "",
   division: "",
   jobTitle: "",
+  branchId: "",
   branch: "",
   employmentType: "أساسي",
   directorate: "",
@@ -206,6 +209,7 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
   photoUrl: String(r.photo_url ?? ""),
   division: String(r.division ?? ""),
   jobTitle: String(r.job_title ?? ""),
+  branchId: String(r.branch_id ?? ""),
   branch: String(r.branch ?? ""),
   employmentType: String(r.employment_type ?? "أساسي"),
   directorate: String(r.directorate ?? ""),
@@ -268,7 +272,6 @@ const NATIONALITIES = [
 ];
 const DEFAULT_DEPARTMENTS = ["الإدارة العليا", "إدارة الموارد البشرية", "إدارة المالية", "إدارة التشغيل", "إدارة المبيعات"];
 const DEFAULT_SECTIONS = ["الموارد البشرية", "المحاسبة", "الصيانة والتشغيل", "المبيعات", "تقنية المعلومات"];
-const BRANCHES = ["فرع التشغيل والصيانة", "الفرع الرئيسي", "فرع المبيعات"];
 const GENDERS = ["ذكر", "أنثى"];
 const MARITAL_STATUSES = ["أعزب", "متزوج", "مطلق", "أرمل"];
 const DEFAULT_JOBS = ["مدير عام", "مدير موارد بشرية", "مدير مالي", "محاسب", "مهندس", "فني صيانة", "مسؤول مبيعات", "مسؤول مشتريات", "أخصائي موارد بشرية", "موظف إداري", "عامل نظافة"];
@@ -343,7 +346,7 @@ export default function EmployeeForm({
   const [showPassword, setShowPassword] = useState(false);
   const [orgDepartments, setOrgDepartments] = useState<DeptOpt[]>([]);
   const [orgSections, setOrgSections] = useState<SectionOpt[]>([]);
-  const [orgBranches, setOrgBranches] = useState<string[]>(BRANCHES);
+  const [orgBranches, setOrgBranches] = useState<BranchOpt[]>([]);
   const [orgWorkLocations, setOrgWorkLocations] = useState<string[]>(DEFAULT_WORK_LOCATIONS);
   const [orgWorkSchedules, setOrgWorkSchedules] = useState<string[]>(DEFAULT_WORK_SCHEDULES);
   const [employeeRoles, setEmployeeRoles] = useState<string[]>([]);
@@ -352,16 +355,16 @@ export default function EmployeeForm({
   useEffect(() => {
     (async () => {
       const [d, s, r, j, b, l, w] = await Promise.all([
-        supabase.from("departments").select("id, name").order("name"),
+        supabase.from("departments").select("id, name, branch_id").eq("status", "فعال").order("name"),
         supabase.from("org_sections").select("id, name, department_id, department").order("name"),
         supabase.from("user_roles").select("name_ar").eq("status", "فعال").order("name_ar"),
         supabase.from("hr_jobs").select("name").eq("status", "فعال").order("name"),
-        supabase.from("branches").select("name").eq("status", "فعال").order("name"),
+        supabase.from("branches").select("id, name").eq("status", "فعال").order("name"),
         supabase.from("hr_work_locations").select("name").eq("status", "فعال").order("name"),
         supabase.from("attendance_schedules").select("name").eq("status", "فعال").order("name"),
       ]);
       setOrgDepartments(
-        ((d.data as Record<string, unknown>[]) ?? []).map((x) => ({ id: String(x.id), name: String(x.name ?? "") })),
+        ((d.data as Record<string, unknown>[]) ?? []).map((x) => ({ id: String(x.id), name: String(x.name ?? ""), branchId: String(x.branch_id ?? "") })),
       );
       setOrgSections(
         ((s.data as Record<string, unknown>[]) ?? []).map((x) => ({
@@ -377,11 +380,14 @@ export default function EmployeeForm({
           .filter(Boolean),
       );
       const databaseJobs = ((j.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
-      const databaseBranches = ((b.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
+      const databaseBranches = ((b.data as Record<string, unknown>[]) ?? []).map((x) => ({ id: String(x.id), name: String(x.name ?? "") })).filter((x) => x.id && x.name);
       const databaseLocations = ((l.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
       const databaseSchedules = ((w.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
       setJobTitles(databaseJobs.length ? databaseJobs : DEFAULT_JOBS);
-      setOrgBranches(databaseBranches.length ? databaseBranches : BRANCHES);
+      setOrgBranches(databaseBranches);
+      setForm((current) => current.branchId || !current.branch
+        ? current
+        : { ...current, branchId: databaseBranches.find((branch) => branch.name.trim() === current.branch.trim())?.id ?? "" });
       setOrgWorkLocations(databaseLocations.length ? databaseLocations : DEFAULT_WORK_LOCATIONS);
       setOrgWorkSchedules(databaseSchedules.length ? databaseSchedules : DEFAULT_WORK_SCHEDULES);
     })();
@@ -444,6 +450,7 @@ export default function EmployeeForm({
         photo_url: form.photoUrl,
         division: form.division,
         job_title: form.jobTitle,
+        branch_id: form.branchId || null,
         branch: form.branch,
         employment_type: form.employmentType,
         directorate: form.directorate,
@@ -738,11 +745,25 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
 }
 
 // ─── Step 2: Job Data ────────────────────────────────────────────────────────
-function Step2Job({ form, set, departments, sections, jobs, branches, workLocations, workSchedules }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[]; jobs: string[]; branches: string[]; workLocations: string[]; workSchedules: string[] }) {
+function Step2Job({ form, set, departments, sections, jobs, branches, workLocations, workSchedules }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[]; jobs: string[]; branches: BranchOpt[]; workLocations: string[]; workSchedules: string[] }) {
   const { t } = useI18n();
+  const availableDepartments = form.branchId
+    ? departments.filter((department) => department.branchId === form.branchId)
+    : departments;
   const availableSections = form.departmentId
     ? sections.filter((s) => s.departmentId === form.departmentId)
     : sections;
+
+  const onBranchChange = (branchId: string) => {
+    set("branchId", branchId);
+    set("branch", branches.find((branch) => branch.id === branchId)?.name ?? "");
+    if (form.departmentId && departments.find((department) => department.id === form.departmentId)?.branchId !== branchId) {
+      set("departmentId", "");
+      set("directorate", "");
+      set("sectionId", "");
+      set("department", "");
+    }
+  };
 
   const onDirectorateChange = (deptId: string) => {
     set("departmentId", deptId);
@@ -767,7 +788,13 @@ function Step2Job({ form, set, departments, sections, jobs, branches, workLocati
       {/* Row 2: Branch / Employment Type */}
       <div className="grid grid-cols-2 gap-4">
         <FSelect label="النوع *" value={form.employmentType} onChange={(v) => set("employmentType", v)} options={["أساسي", "كل الفروع", "جزئي", "عقد"]} placeholder="--" />
-        <FSelect label="الفرع *" value={form.branch} onChange={(v) => set("branch", v)} options={branches} placeholder="--" />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الفرع")} *</label>
+          <select value={form.branchId} onChange={(e) => onBranchChange(e.target.value)} className={inputCls}>
+            <option value="">{branches.length ? "--" : t("أضف الفروع من الهيكل التنظيمي")}</option>
+            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Status Row */}
@@ -782,7 +809,7 @@ function Step2Job({ form, set, departments, sections, jobs, branches, workLocati
           <label className="block text-sm font-medium text-gray-700 mb-1">{t("الإدارة")} *</label>
           <select value={form.departmentId} onChange={(e) => onDirectorateChange(e.target.value)} className={inputCls}>
             <option value="">{departments.length ? "--" : t("أضف الإدارات من الهيكل التنظيمي")}</option>
-            {departments.map((d) => (
+            {availableDepartments.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>

@@ -1873,6 +1873,8 @@ Object.assign(translations, {
   "حالة الدوام": "Attendance status",
   "نوع التقرير": "Report type",
   "تقرير حساب دوام الموظفين": "Employee attendance calculation report",
+  "الحضور والغياب للموظفين": "Employee attendance and absence",
+  "كل الإدارات": "All administrations",
   "تقرير ملخص الأقسام": "Department summary report",
   "نسبة الحضور": "Attendance rate",
   "من السجلات": "records",

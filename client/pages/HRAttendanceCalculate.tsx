@@ -1,163 +1,180 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, RefreshCw, Download, Printer } from "lucide-react";
+import { Download, Printer, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/lib/supabaseClient";
-import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
+import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
 import { useI18n } from "@/i18n";
 
-type AttendanceDay = { day: number; status: "present" | "absent" | "future" };
-type EmpRow = { id: string; empId: string; name: string; attendance: AttendanceDay[] };
+const ALL = "all";
+type ReportMode = "employees" | "departments";
+type StatusFilter = "all" | "present" | "absent" | "late" | "leave";
+type Option = { id: string; name: string; branch?: string };
+type Employee = {
+  id: string;
+  empId: string;
+  name: string;
+  branch: string;
+  departmentId: string;
+  department: string;
+  jobTitle: string;
+  workSchedule: string;
+  workLocation: string;
+};
+type AttendanceRecord = { empId: string; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number };
+type EmployeeSummary = Employee & { present: number; absent: number; late: number; leave: number; recorded: number; attendanceRate: number };
+type DepartmentSummary = { id: string; department: string; employees: number; present: number; absent: number; late: number; leave: number; attendanceRate: number };
+
+const monthRange = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const lastDay = String(new Date(year, now.getMonth() + 1, 0).getDate()).padStart(2, "0");
+  return { from: `${year}-${month}-01`, to: `${year}-${month}-${lastDay}` };
+};
+const unique = (values: string[]) => [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
+const dayCount = (from: string, to: string) => Math.max(1, Math.floor((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86400000) + 1);
+const classifyStatus = (record: AttendanceRecord | undefined): Exclude<StatusFilter, "all"> => {
+  if (!record) return "absent";
+  const status = record.status.toLowerCase();
+  if (record.lateMinutes > 0 || status.includes("متأخر") || status.includes("late")) return "late";
+  if (status.includes("إجاز") || status.includes("مأمورية") || status.includes("leave")) return "leave";
+  if (status.includes("حاضر") || status.includes("present") || status.includes("عن بعد")) return "present";
+  return "absent";
+};
+
+function FilterSelect({ label, value, onChange, options, allLabel }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; allLabel: string }) {
+  return <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"><option value={ALL}>{allLabel}</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
+}
 
 export default function HRAttendanceCalculate() {
   const { t, direction, formatNumber } = useI18n();
-  const [data, setData] = useState<EmpRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialRange = monthRange();
+  const [dateFrom, setDateFrom] = useState(initialRange.from);
+  const [dateTo, setDateTo] = useState(initialRange.to);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [departments, setDepartments] = useState<Option[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [jobTitles, setJobTitles] = useState<string[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<string[]>([]);
+  const [workLocations, setWorkLocations] = useState<string[]>([]);
+  const [branch, setBranch] = useState(ALL);
+  const [departmentId, setDepartmentId] = useState(ALL);
+  const [employeeId, setEmployeeId] = useState(ALL);
+  const [jobTitle, setJobTitle] = useState(ALL);
+  const [workSchedule, setWorkSchedule] = useState(ALL);
+  const [workLocation, setWorkLocation] = useState(ALL);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [mode, setMode] = useState<ReportMode>("employees");
   const [search, setSearch] = useState("");
-  const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const loadData = async () => {
-    setLoading(true);
-    try {
-      const { data: emps, error: employeesError } = await supabase
-        .from("employees")
-        .select("id, emp_id, name")
-        .in("status", ["نشط", "فعال", "active"])
-        .order("name");
-      if (employeesError) throw employeesError;
-      if (!emps) { setLoading(false); return; }
-
-      const [year, mon] = month.split("-").map(Number);
-      const daysInMonth = new Date(year, mon, 0).getDate();
-
-      const startDate = `${year}-${String(mon).padStart(2, "0")}-01`;
-      const endDate = `${year}-${String(mon).padStart(2, "0")}-${daysInMonth}`;
-
-      const { data: attRecords, error: attendanceError } = await supabase.from("attendance").select("emp_id, date, status")
-        .gte("date", startDate).lte("date", endDate);
-      if (attendanceError) throw attendanceError;
-
-      const attMap: Record<string, Record<number, string>> = {};
-      (attRecords ?? []).forEach((r: any) => {
-        const key = String(r.emp_id ?? "");
-        if (!key) return;
-        if (!attMap[key]) attMap[key] = {};
-        const d = Number(String(r.date).slice(8, 10));
-        if (Number.isFinite(d)) attMap[key][d] = r.status;
-      });
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      setData(emps.map((e: any) => {
-        const empKey = String(e.emp_id ?? e.id ?? "");
-        const empAtt = attMap[empKey] ?? {};
-        const attendance: AttendanceDay[] = Array.from({ length: daysInMonth }, (_, i) => {
-          const day = i + 1;
-          const date = new Date(year, mon - 1, day);
-          date.setHours(0, 0, 0, 0);
-
-          const st = empAtt[day];
-          if (st === "حاضر" || st === "present") return { day, status: "present" as const };
-          if (st === "غائب" || st === "absent") return { day, status: "absent" as const };
-
-          if (date > today) return { day, status: "future" as const };
-          return { day, status: "absent" as const };
-        });
-        return { id: e.id, empId: e.emp_id ?? e.id, name: e.name ?? "", attendance };
-      }));
-    } catch (error) {
-      console.error("Error loading attendance calculation:", error);
-      setData([]);
-    } finally { setLoading(false); }
+    if (!dateFrom || !dateTo || dateFrom > dateTo) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
+    setLoading(true); setError("");
+    const [employeeResult, attendanceResult, departmentResult, branchResult, jobResult, scheduleResult, locationResult] = await Promise.all([
+      supabase.from("employees").select("id, emp_id, name, branch, department_id, directorate, department, job_title, work_schedule, work_location").in("status", ["نشط", "فعال", "active"]).order("name"),
+      supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes").gte("date", dateFrom).lte("date", dateTo).order("date"),
+      supabase.from("departments").select("id, name, branch").order("name"),
+      supabase.from("branches").select("id, name").order("name"),
+      supabase.from("hr_jobs").select("id, name").eq("status", "فعال").order("name"),
+      supabase.from("attendance_schedules").select("id, name").eq("status", "فعال").order("name"),
+      supabase.from("hr_work_locations").select("id, name").eq("status", "فعال").order("name"),
+    ]);
+    const firstError = employeeResult.error ?? attendanceResult.error ?? departmentResult.error ?? branchResult.error ?? jobResult.error ?? scheduleResult.error ?? locationResult.error;
+    if (firstError) { setError(firstError.message); setLoading(false); return; }
+    const departmentRows: Option[] = (departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name), branch: String(row.branch ?? "") }));
+    const departmentById = new Map(departmentRows.map((item) => [item.id, item.name]));
+    const loadedEmployees: Employee[] = (employeeResult.data ?? []).map((row) => ({
+      id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branch: String(row.branch ?? ""),
+      departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || String(row.directorate ?? row.department ?? ""),
+      jobTitle: String(row.job_title ?? ""), workSchedule: String(row.work_schedule ?? ""), workLocation: String(row.work_location ?? ""),
+    }));
+    setDepartments(departmentRows);
+    setEmployees(loadedEmployees);
+    setAttendance((attendanceResult.data ?? []).map((row) => ({ empId: String(row.emp_id ?? ""), date: String(row.date ?? ""), status: String(row.status ?? ""), checkIn: String(row.check_in ?? ""), checkOut: String(row.check_out ?? ""), lateMinutes: Number(row.late_minutes ?? 0) })));
+    setBranches(unique([...(branchResult.data ?? []).map((row) => String(row.name ?? "")), ...departmentRows.map((item) => item.branch ?? ""), ...loadedEmployees.map((item) => item.branch)]));
+    setJobTitles(unique([...(jobResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.jobTitle)]));
+    setWorkSchedules(unique([...(scheduleResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.workSchedule)]));
+    setWorkLocations(unique([...(locationResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.workLocation)]));
+    setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, [month]);
+  useEffect(() => { void loadData(); }, [dateFrom, dateTo]);
+  useEffect(() => { setPage(1); }, [branch, departmentId, employeeId, jobTitle, workSchedule, workLocation, statusFilter, mode, search, pageSize]);
 
-  const days = data.length > 0 ? data[0].attendance.map((a) => a.day) : Array.from({ length: 31 }, (_, i) => i + 1);
-  const filtered = data.filter((e) => !search || e.name.includes(search));
-  const reportColumns: ReportColumn[] = [
-    { key: "empId", label: t("رقم الموظف"), width: 15 },
-    { key: "name", label: t("اسم الموظف"), width: 26 },
-    ...days.map((day) => ({ key: `day${day}`, label: String(day), width: 8 })),
-    { key: "present", label: t("حضور"), width: 10 },
-    { key: "absent", label: t("غياب"), width: 10 },
-  ];
-  const reportRows = filtered.map((employee) => ({
-    empId: employee.empId,
-    name: employee.name,
-    ...Object.fromEntries(employee.attendance.map((item) => [`day${item.day}`, item.status === "present" ? t("حاضر") : item.status === "absent" ? t("غائب") : t("قادم")])),
-    present: employee.attendance.filter((item) => item.status === "present").length,
-    absent: employee.attendance.filter((item) => item.status === "absent").length,
-  }));
-  const printAttendance = () => printReport({ title: t("حساب الدوام"), subtitle: `${t("سجل الدوام الشهري للفترة")} ${month}`, columns: reportColumns, rows: reportRows, fileName: `attendance-${month}`, landscape: true, summary: [{ label: t("عدد الموظفين"), value: reportRows.length }] });
-  const exportAttendance = () => exportReportExcel({ title: t("حساب الدوام"), subtitle: `${t("سجل الدوام الشهري للفترة")} ${month}`, columns: reportColumns, rows: reportRows, fileName: `attendance-${month}` });
+  const employeeSummaries = useMemo<EmployeeSummary[]>(() => {
+    const totalDays = dayCount(dateFrom, dateTo);
+    const recordsByEmployee = new Map<string, Map<string, AttendanceRecord>>();
+    attendance.forEach((record) => { if (!recordsByEmployee.has(record.empId)) recordsByEmployee.set(record.empId, new Map()); recordsByEmployee.get(record.empId)?.set(record.date, record); });
+    return employees.map((employee) => {
+      const records = recordsByEmployee.get(employee.empId) ?? new Map();
+      const counts = { present: 0, absent: 0, late: 0, leave: 0 };
+      for (let offset = 0; offset < totalDays; offset += 1) {
+        const date = new Date(`${dateFrom}T00:00:00`); date.setDate(date.getDate() + offset);
+        const key = date.toISOString().slice(0, 10);
+        if (date > new Date()) continue;
+        counts[classifyStatus(records.get(key))] += 1;
+      }
+      const worked = counts.present + counts.late;
+      const expected = worked + counts.absent;
+      return { ...employee, ...counts, recorded: records.size, attendanceRate: expected ? (worked / expected) * 100 : 0 };
+    });
+  }, [attendance, dateFrom, dateTo, employees]);
 
-  return (
-    <Layout>
-      <div className="space-y-6 w-full" dir={direction}>
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1>
-          <div className="flex items-center gap-3">
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44 text-right" />
-            <Button variant="outline" size="icon" onClick={loadData} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" onClick={printAttendance} disabled={reportRows.length === 0} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" onClick={exportAttendance} disabled={reportRows.length === 0} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button>
-          </div>
-        </div>
+  const filteredEmployees = employeeSummaries.filter((employee) => {
+    const departmentMatches = departmentId === ALL || employee.departmentId === departmentId || (!employee.departmentId && employee.department === departments.find((item) => item.id === departmentId)?.name);
+    const keyword = search.trim().toLowerCase();
+    return (branch === ALL || employee.branch === branch) && departmentMatches && (employeeId === ALL || employee.id === employeeId) && (jobTitle === ALL || employee.jobTitle === jobTitle) && (workSchedule === ALL || employee.workSchedule === workSchedule) && (workLocation === ALL || employee.workLocation === workLocation) && (statusFilter === "all" || employee[statusFilter] > 0) && (!keyword || [employee.name, employee.empId, employee.department, employee.jobTitle, employee.branch].some((value) => value.toLowerCase().includes(keyword)));
+  });
+  const departmentSummaries = useMemo<DepartmentSummary[]>(() => {
+    const grouped = new Map<string, DepartmentSummary>();
+    filteredEmployees.forEach((employee) => {
+      const key = employee.departmentId || employee.department || "unassigned";
+      const current = grouped.get(key) ?? { id: key, department: employee.department || t("غير محدد"), employees: 0, present: 0, absent: 0, late: 0, leave: 0, attendanceRate: 0 };
+      current.employees += 1; current.present += employee.present; current.absent += employee.absent; current.late += employee.late; current.leave += employee.leave;
+      grouped.set(key, current);
+    });
+    return [...grouped.values()].map((item) => ({ ...item, attendanceRate: item.present + item.late + item.absent ? ((item.present + item.late) / (item.present + item.late + item.absent)) * 100 : 0 }));
+  }, [filteredEmployees, t]);
 
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div className="p-4 border-b flex justify-between items-center">
-            <div className="relative w-72">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input placeholder={t("بحث...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
-            </div>
-            <span className="text-sm text-gray-500">{formatNumber(filtered.length)} {t("موظف")}</span>
-          </div>
+  const allRows = mode === "employees" ? filteredEmployees : departmentSummaries;
+  const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = allRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const columns: ReportColumn[] = mode === "employees"
+    ? [{ key: "empId", label: t("رقم الموظف") }, { key: "name", label: t("اسم الموظف") }, { key: "department", label: t("القسم") }, { key: "jobTitle", label: t("المسمى الوظيفي") }, { key: "branch", label: t("الفرع") }, { key: "workSchedule", label: t("جدول العمل") }, { key: "workLocation", label: t("مكان العمل") }, { key: "present", label: t("حاضر") }, { key: "absent", label: t("غائب") }, { key: "late", label: t("متأخر") }, { key: "leave", label: t("إجازة") }, { key: "attendanceRate", label: t("نسبة الحضور") }]
+    : [{ key: "department", label: t("القسم") }, { key: "employees", label: t("عدد الموظفين") }, { key: "present", label: t("حاضر") }, { key: "absent", label: t("غائب") }, { key: "late", label: t("متأخر") }, { key: "leave", label: t("إجازة") }, { key: "attendanceRate", label: t("نسبة الحضور") }];
+  const reportRows = allRows.map((row) => mode === "employees" ? { ...(row as EmployeeSummary), attendanceRate: `${(row as EmployeeSummary).attendanceRate.toFixed(1)}%` } : { ...(row as DepartmentSummary), attendanceRate: `${(row as DepartmentSummary).attendanceRate.toFixed(1)}%` });
+  const reportTitle = t(mode === "employees" ? "تقرير حساب دوام الموظفين" : "تقرير ملخص الأقسام");
+  const reportOptions = { title: reportTitle, subtitle: `${dateFrom} — ${dateTo}`, columns, rows: reportRows, fileName: `${mode}-attendance-${dateFrom}-${dateTo}`, landscape: true, summary: [{ label: t("عدد السجلات"), value: reportRows.length }] };
+  const departmentOptions = departments.filter((item) => branch === ALL || !item.branch || item.branch.trim() === branch.trim()).map((item) => ({ value: item.id, label: item.name }));
+  const selectableEmployees = employees.filter((employee) => (branch === ALL || employee.branch === branch) && (departmentId === ALL || employee.departmentId === departmentId));
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-center">
-              <thead className="bg-blue-700 text-white font-bold">
-                <tr>
-                  <th className="py-2 px-3 text-right whitespace-nowrap min-w-[180px] sticky right-0 bg-blue-700 z-10">{t("الموظف")}</th>
-                  {days.map((day) => (
-                    <th key={day} className="py-2 px-0.5 min-w-[32px] font-bold">{day}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
-                ) : filtered.length === 0 ? (
-                  <tr><td colSpan={days.length + 1} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</td></tr>
-                ) : filtered.map((emp, idx) => (
-                  <tr key={emp.id} className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-blue-50`}>
-                    <td className="py-1.5 px-3 text-right sticky right-0 bg-inherit z-10 flex items-center justify-end gap-2 border-l border-gray-200">
-                      <span className="font-medium text-gray-800 text-xs">{emp.name}</span>
-                      <Avatar className="h-6 w-6 flex-shrink-0">
-                        <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${emp.name}&backgroundColor=004e89`} />
-                        <AvatarFallback className="text-xs">{emp.name[0]}</AvatarFallback>
-                      </Avatar>
-                    </td>
-                    {emp.attendance.map((record) => (
-                      <td key={record.day} className="py-1.5 px-0.5 border-gray-200 border-b text-lg font-bold bg-white">
-                        {record.status === "present" && <div className="flex justify-center text-green-600">✓</div>}
-                        {record.status === "absent" && <div className="flex justify-center text-red-500">✕</div>}
-                        {record.status === "future" && <div className="flex justify-center text-gray-400">○</div>}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </Layout>
-  );
+  return <Layout><main dir={direction} className="space-y-4">
+    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1><p className="mt-1 text-sm text-slate-500">{t("تقرير حضور الموظفين المرتبط بالفروع والأقسام المحفوظة")}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => void loadData()} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => printReport(reportOptions)} disabled={!reportRows.length} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => exportReportExcel(reportOptions)} disabled={!reportRows.length} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button></div></header>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("من تاريخ")}</span><Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+      <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("إلى تاريخ")}</span><Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
+      <FilterSelect label={t("الفرع")} value={branch} onChange={(value) => { setBranch(value); setDepartmentId(ALL); setEmployeeId(ALL); }} options={branches.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
+      <FilterSelect label={t("القسم")} value={departmentId} onChange={(value) => { setDepartmentId(value); setEmployeeId(ALL); }} options={departmentOptions} allLabel={t("الكل")} />
+      <FilterSelect label={t("الموظف")} value={employeeId} onChange={setEmployeeId} options={selectableEmployees.map((employee) => ({ value: employee.id, label: `${employee.name} — ${employee.empId}` }))} allLabel={t("الكل")} />
+      <FilterSelect label={t("المسمى الوظيفي")} value={jobTitle} onChange={setJobTitle} options={jobTitles.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
+      <FilterSelect label={t("جدول العمل")} value={workSchedule} onChange={setWorkSchedule} options={workSchedules.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
+      <FilterSelect label={t("مكان العمل")} value={workLocation} onChange={setWorkLocation} options={workLocations.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
+      <FilterSelect label={t("حالة الدوام")} value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={[{ value: "present", label: t("حاضر") }, { value: "absent", label: t("غائب") }, { value: "late", label: t("متأخر") }, { value: "leave", label: t("إجازة") }]} allLabel={t("الكل")} />
+      <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("نوع التقرير")}</span><select value={mode} onChange={(event) => setMode(event.target.value as ReportMode)} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"><option value="employees">{t("تقرير حساب دوام الموظفين")}</option><option value="departments">{t("تقرير ملخص الأقسام")}</option></select></label>
+    </div></section>
+    {error && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div className="flex flex-wrap gap-4 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-sky-600">● {t("إجازة")}</span></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-500">{t("عرض")}<select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded border px-2 py-1"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><div className="relative w-64"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث...")} className="pr-9" /></div></div></div>
+      <div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr>{columns.map((column) => <th key={column.key} className="whitespace-nowrap px-3 py-3 text-center font-semibold">{column.label}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : !pagedRows.length ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("لا توجد بيانات")}</td></tr> : mode === "employees" ? (pagedRows as EmployeeSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 text-center">{row.empId}</td><td className="px-3 py-3 font-semibold">{row.name}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{row.jobTitle || "—"}</td><td className="px-3 py-3">{row.branch || "—"}</td><td className="px-3 py-3">{row.workSchedule || "—"}</td><td className="px-3 py-3">{row.workLocation || "—"}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>) : (pagedRows as DepartmentSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 font-semibold">{row.department}</td><td className="px-3 py-3 text-center">{formatNumber(row.employees)}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>)}</tbody></table></div>
+      <footer className="flex items-center justify-between border-t px-4 py-3 text-xs text-slate-500"><span>{formatNumber(allRows.length)} {t("من السجلات")}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("السابق")}</Button><span>{formatNumber(safePage)} / {formatNumber(totalPages)}</span><Button variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>{t("التالي")}</Button></div></footer>
+    </section>
+  </main></Layout>;
 }

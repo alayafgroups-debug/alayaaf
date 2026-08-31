@@ -47,14 +47,12 @@ const REQUEST_TYPES = [
   { id: "empty7",         label: "",                     icon: "" },
 ];
 
-// ─── Approval Chain Dialog ────────────────────────────────────────────────────
-const DEPARTMENTS = ["إدارة الموارد البشرية", "الإدارة العليا", "التسويق", "المبيعات", "المحاسبة"];
-
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HRRequestsSend() {
   const { t, direction } = useI18n();
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
   const [delegateDept, setDelegateDept] = useState("");
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [leaveFormOpen, setLeaveFormOpen] = useState(false);
   const [dynamicFormOpen, setDynamicFormOpen] = useState(false);
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
@@ -68,18 +66,18 @@ export default function HRRequestsSend() {
   useEffect(() => {
     const loadAdminUser = async () => {
       try {
-        const { data } = await supabase
-          .from("employees")
-          .select("emp_id, name, department, direct_manager")
-          .order("id")
-          .limit(1)
-          .single();
-
+        const [employeeResult, departmentResult] = await Promise.all([
+          supabase.from("employees").select("emp_id, name, department_id, directorate, department, direct_manager").order("id").limit(1).single(),
+          supabase.from("departments").select("id, name").order("name"),
+        ]);
+        const departmentRows = (departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) }));
+        setDepartments(departmentRows);
+        const data = employeeResult.data;
         if (data) {
           setEmployeeInfo({
             empId: data.emp_id || "",
             name: data.name || "",
-            department: data.department || "",
+            department: departmentRows.find((item) => item.id === String(data.department_id ?? ""))?.name || data.directorate || data.department || "",
             directManager: data.direct_manager || ""
           });
         }
@@ -195,22 +193,22 @@ export default function HRRequestsSend() {
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
               <h3 className="text-sm font-semibold text-gray-800">{t("إرسال طلب عوضاً عن موظف")}</h3>
 
-              {DEPARTMENTS.map((dept, i) => (
+              {departments.map((department) => (
                 <div
-                  key={dept}
+                  key={department.id}
                   className={cn(
                     "flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition",
-                    delegateDept === dept
+                    delegateDept === department.id
                       ? "border-blue-400 bg-blue-50"
                       : "border-gray-200 hover:bg-gray-50"
                   )}
-                  onClick={() => setDelegateDept(delegateDept === dept ? "" : dept)}
+                  onClick={() => setDelegateDept(delegateDept === department.id ? "" : department.id)}
                 >
-                  <span className="text-sm text-gray-700">{t(dept)}</span>
+                  <span className="text-sm text-gray-700">{department.name}</span>
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 text-gray-400 transition-transform",
-                      delegateDept === dept && "rotate-180"
+                      delegateDept === department.id && "rotate-180"
                     )}
                   />
                 </div>

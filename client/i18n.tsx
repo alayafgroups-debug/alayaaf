@@ -1868,6 +1868,13 @@ Object.assign(translations, {
   "المستند متطابق": "Document is reconciled",
   "تقرير داخلي": "Internal report",
   "لا يستخدم كإقرار ضريبي رسمي": "Not for use as an official tax return",
+  "تقرير حضور الموظفين المرتبط بالفروع والأقسام المحفوظة": "Employee attendance report linked to saved branches and departments",
+  "حالة الدوام": "Attendance status",
+  "نوع التقرير": "Report type",
+  "تقرير حساب دوام الموظفين": "Employee attendance calculation report",
+  "تقرير ملخص الأقسام": "Department summary report",
+  "نسبة الحضور": "Attendance rate",
+  "من السجلات": "records",
 });
 
 const getInitialLocale = (): Locale => {

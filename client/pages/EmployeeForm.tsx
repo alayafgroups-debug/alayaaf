@@ -343,16 +343,22 @@ export default function EmployeeForm({
   const [showPassword, setShowPassword] = useState(false);
   const [orgDepartments, setOrgDepartments] = useState<DeptOpt[]>([]);
   const [orgSections, setOrgSections] = useState<SectionOpt[]>([]);
+  const [orgBranches, setOrgBranches] = useState<string[]>(BRANCHES);
+  const [orgWorkLocations, setOrgWorkLocations] = useState<string[]>(DEFAULT_WORK_LOCATIONS);
+  const [orgWorkSchedules, setOrgWorkSchedules] = useState<string[]>(DEFAULT_WORK_SCHEDULES);
   const [employeeRoles, setEmployeeRoles] = useState<string[]>([]);
   const [jobTitles, setJobTitles] = useState<string[]>(DEFAULT_JOBS);
 
   useEffect(() => {
     (async () => {
-      const [d, s, r, j] = await Promise.all([
+      const [d, s, r, j, b, l, w] = await Promise.all([
         supabase.from("departments").select("id, name").order("name"),
         supabase.from("org_sections").select("id, name, department_id, department").order("name"),
         supabase.from("user_roles").select("name_ar").eq("status", "فعال").order("name_ar"),
         supabase.from("hr_jobs").select("name").eq("status", "فعال").order("name"),
+        supabase.from("branches").select("name").eq("status", "فعال").order("name"),
+        supabase.from("hr_work_locations").select("name").eq("status", "فعال").order("name"),
+        supabase.from("attendance_schedules").select("name").eq("status", "فعال").order("name"),
       ]);
       setOrgDepartments(
         ((d.data as Record<string, unknown>[]) ?? []).map((x) => ({ id: String(x.id), name: String(x.name ?? "") })),
@@ -371,7 +377,13 @@ export default function EmployeeForm({
           .filter(Boolean),
       );
       const databaseJobs = ((j.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
+      const databaseBranches = ((b.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
+      const databaseLocations = ((l.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
+      const databaseSchedules = ((w.data as Record<string, unknown>[]) ?? []).map((x) => String(x.name ?? "")).filter(Boolean);
       setJobTitles(databaseJobs.length ? databaseJobs : DEFAULT_JOBS);
+      setOrgBranches(databaseBranches.length ? databaseBranches : BRANCHES);
+      setOrgWorkLocations(databaseLocations.length ? databaseLocations : DEFAULT_WORK_LOCATIONS);
+      setOrgWorkSchedules(databaseSchedules.length ? databaseSchedules : DEFAULT_WORK_SCHEDULES);
     })();
   }, []);
 
@@ -554,7 +566,7 @@ export default function EmployeeForm({
         {/* Step Content */}
         <div className="bg-white border border-gray-200 rounded-b-xl shadow-sm p-6 mt-0">
           {step === 0 && <Step1Personal form={form} set={set} />}
-          {step === 1 && <Step2Job form={form} set={set} departments={orgDepartments} sections={orgSections} jobs={jobTitles} />}
+          {step === 1 && <Step2Job form={form} set={set} departments={orgDepartments} sections={orgSections} jobs={jobTitles} branches={orgBranches} workLocations={orgWorkLocations} workSchedules={orgWorkSchedules} />}
           {step === 2 && <Step3Financial form={form} set={set} />}
           {step === 3 && <Step4Permissions form={form} togglePermission={togglePermission} />}
           {step === 4 && <Step5Insurance form={form} set={set} />}
@@ -726,7 +738,7 @@ function Step1Personal({ form, set }: { form: EmpFormData; set: <K extends keyof
 }
 
 // ─── Step 2: Job Data ────────────────────────────────────────────────────────
-function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[]; jobs: string[] }) {
+function Step2Job({ form, set, departments, sections, jobs, branches, workLocations, workSchedules }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void; departments: DeptOpt[]; sections: SectionOpt[]; jobs: string[]; branches: string[]; workLocations: string[]; workSchedules: string[] }) {
   const { t } = useI18n();
   const availableSections = form.departmentId
     ? sections.filter((s) => s.departmentId === form.departmentId)
@@ -755,7 +767,7 @@ function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormDat
       {/* Row 2: Branch / Employment Type */}
       <div className="grid grid-cols-2 gap-4">
         <FSelect label="النوع *" value={form.employmentType} onChange={(v) => set("employmentType", v)} options={["أساسي", "كل الفروع", "جزئي", "عقد"]} placeholder="--" />
-        <FSelect label="الفرع *" value={form.branch} onChange={(v) => set("branch", v)} options={BRANCHES} placeholder="--" />
+        <FSelect label="الفرع *" value={form.branch} onChange={(v) => set("branch", v)} options={branches} placeholder="--" />
       </div>
 
       {/* Status Row */}
@@ -789,7 +801,7 @@ function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormDat
       {/* Row 4: Other Locations / Work Location */}
       <div className="grid grid-cols-2 gap-4">
         <FInput label="مواقع العمل الأخرى" value={form.otherWorkLocations} onChange={(v) => set("otherWorkLocations", v)} />
-        <FSelect label="مكان العمل *" value={form.workLocation} onChange={(v) => set("workLocation", v)} options={DEFAULT_WORK_LOCATIONS} placeholder="--" />
+        <FSelect label="مكان العمل *" value={form.workLocation} onChange={(v) => set("workLocation", v)} options={workLocations} placeholder="--" />
       </div>
       <p className="text-xs text-gray-400 -mt-3">{t("يمكنك إضافة مواقع متعددة بعد إدارة هذا الموظف للأساسي")}</p>
 
@@ -820,7 +832,7 @@ function Step2Job({ form, set, departments, sections, jobs }: { form: EmpFormDat
 
       {/* Row 8: Work Schedule / Work Time */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="جدول العمل *" value={form.workSchedule} onChange={(v) => set("workSchedule", v)} options={DEFAULT_WORK_SCHEDULES} placeholder="--" />
+        <FSelect label="جدول العمل *" value={form.workSchedule} onChange={(v) => set("workSchedule", v)} options={workSchedules} placeholder="--" />
         <FSelect label="وقت العمل *" value={form.workTime} onChange={(v) => set("workTime", v)} options={["صباحي", "مسائي", "كامل", "ورديات"]} placeholder="--" />
       </div>
 

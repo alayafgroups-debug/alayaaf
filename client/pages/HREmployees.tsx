@@ -23,7 +23,6 @@ import type { EmpFormData } from "./EmployeeForm";
 import { useI18n } from "@/i18n";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const DEPARTMENTS = ["قسم الصيانة والتشغيل", "قسم شركة البرمجيات", "قسم المبيعات", "قسم الموارد البشرية", "قسم المحاسبة", "الإدارة العليا"];
 const STATUSES = ["فعال", "غير فعال", "إجازة", "منتهي"];
 
 type OptionalColumn = "englishName" | "directorate" | "nationality" | "nationalId" | "hireDate" | "phone" | "email";
@@ -51,6 +50,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function HREmployees() {
   const { t, direction, locale, formatNumber } = useI18n();
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [selected, setSelected] = useState<EmpFormData | null>(null);
@@ -78,14 +78,12 @@ export default function HREmployees() {
     const load = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("employees")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (!error && data) {
-          setEmployees(data.map(mapRowToForm));
-        }
+        const [employeeResult, departmentResult] = await Promise.all([
+          supabase.from("employees").select("*").order("created_at", { ascending: false }),
+          supabase.from("departments").select("id, name").order("name"),
+        ]);
+        if (!employeeResult.error && employeeResult.data) setEmployees(employeeResult.data.map(mapRowToForm));
+        if (!departmentResult.error) setDepartments((departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) })));
       } catch {
         // no-op
       } finally {
@@ -99,10 +97,10 @@ export default function HREmployees() {
     const keyword = fSearch.trim().toLowerCase();
     if (keyword && ![e.name, e.firstName, e.empId, e.phone, e.email, e.nationalId]
       .some((value) => value.toLowerCase().includes(keyword))) return false;
-    if (fDepartment && e.department !== fDepartment) return false;
+    if (fDepartment && e.departmentId !== fDepartment && e.directorate !== departments.find((item) => item.id === fDepartment)?.name) return false;
     if (fStatus && e.status !== fStatus) return false;
     return true;
-  }), [employees, fSearch, fDepartment, fStatus]);
+  }), [departments, employees, fSearch, fDepartment, fStatus]);
 
   useEffect(() => {
     setPage(1);
@@ -247,7 +245,7 @@ export default function HREmployees() {
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
             >
               <option value="">{t("جميع الأقسام")}</option>
-              {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+              {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
             </select>
             <select
               value={fStatus}

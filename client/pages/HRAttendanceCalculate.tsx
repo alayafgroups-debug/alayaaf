@@ -26,6 +26,7 @@ type Employee = {
   jobTitle: string;
   workSchedule: string;
   workLocation: string;
+  photoUrl: string;
 };
 type AttendanceRecord = { empId: string; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number };
 type EmployeeSummary = Employee & { present: number; absent: number; late: number; leave: number; recorded: number; attendanceRate: number };
@@ -69,7 +70,8 @@ export default function HRAttendanceCalculate() {
   const [branch, setBranch] = useState(ALL);
   const [departmentId, setDepartmentId] = useState(ALL);
   const [sectionId, setSectionId] = useState(ALL);
-  const [employeeId, setEmployeeId] = useState(ALL);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [employeePickerSearch, setEmployeePickerSearch] = useState("");
   const [jobTitle, setJobTitle] = useState(ALL);
   const [workSchedule, setWorkSchedule] = useState(ALL);
   const [workLocation, setWorkLocation] = useState(ALL);
@@ -85,7 +87,7 @@ export default function HRAttendanceCalculate() {
     if (!dateFrom || !dateTo || dateFrom > dateTo) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
     setLoading(true); setError("");
     const [employeeResult, attendanceResult, departmentResult, sectionResult, branchResult, jobResult, scheduleResult, locationResult] = await Promise.all([
-      supabase.from("employees").select("id, emp_id, name, branch_id, branch, department_id, section_id, directorate, department, job_title, work_schedule, work_location").in("status", ["نشط", "فعال", "active"]).order("name"),
+      supabase.from("employees").select("id, emp_id, name, branch_id, branch, department_id, section_id, directorate, department, job_title, work_schedule, work_location, photo_url").in("status", ["نشط", "فعال", "active"]).order("name"),
       supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes").gte("date", dateFrom).lte("date", dateTo).order("date"),
       supabase.from("departments").select("id, name, branch_id").eq("status", "فعال").order("name"),
       supabase.from("org_sections").select("id, name, department_id").eq("status", "فعال").order("name"),
@@ -106,7 +108,7 @@ export default function HRAttendanceCalculate() {
       id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branchId: String(row.branch_id ?? ""), branch: branchById.get(String(row.branch_id ?? "")) || String(row.branch ?? ""),
       departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || String(row.directorate ?? ""),
       sectionId: String(row.section_id ?? ""), section: sectionById.get(String(row.section_id ?? "")) || String(row.department ?? ""),
-      jobTitle: String(row.job_title ?? ""), workSchedule: String(row.work_schedule ?? ""), workLocation: String(row.work_location ?? ""),
+      jobTitle: String(row.job_title ?? ""), workSchedule: String(row.work_schedule ?? ""), workLocation: String(row.work_location ?? ""), photoUrl: String(row.photo_url ?? ""),
     }));
     setDepartments(departmentRows);
     setSections(sectionRows);
@@ -120,7 +122,7 @@ export default function HRAttendanceCalculate() {
   };
 
   useEffect(() => { void loadData(); }, [dateFrom, dateTo]);
-  useEffect(() => { setPage(1); }, [branch, departmentId, sectionId, employeeId, jobTitle, workSchedule, workLocation, statusFilter, mode, search, pageSize]);
+  useEffect(() => { setPage(1); }, [branch, departmentId, sectionId, selectedEmployeeIds, jobTitle, workSchedule, workLocation, statusFilter, mode, search, pageSize]);
 
   const employeeSummaries = useMemo<EmployeeSummary[]>(() => {
     const totalDays = dayCount(dateFrom, dateTo);
@@ -145,7 +147,7 @@ export default function HRAttendanceCalculate() {
     const departmentMatches = departmentId === ALL || employee.departmentId === departmentId || (!employee.departmentId && employee.department === departments.find((item) => item.id === departmentId)?.name);
     const sectionMatches = sectionId === ALL || employee.sectionId === sectionId || (!employee.sectionId && employee.section === sections.find((item) => item.id === sectionId)?.name);
     const keyword = search.trim().toLowerCase();
-    return (branch === ALL || employee.branchId === branch) && departmentMatches && sectionMatches && (employeeId === ALL || employee.id === employeeId) && (jobTitle === ALL || employee.jobTitle === jobTitle) && (workSchedule === ALL || employee.workSchedule === workSchedule) && (workLocation === ALL || employee.workLocation === workLocation) && (statusFilter === "all" || employee[statusFilter] > 0) && (!keyword || [employee.name, employee.empId, employee.department, employee.section, employee.jobTitle, employee.branch].some((value) => value.toLowerCase().includes(keyword)));
+    return selectedEmployeeIds.includes(employee.id) && (branch === ALL || employee.branchId === branch) && departmentMatches && sectionMatches && (jobTitle === ALL || employee.jobTitle === jobTitle) && (workSchedule === ALL || employee.workSchedule === workSchedule) && (workLocation === ALL || employee.workLocation === workLocation) && (statusFilter === "all" || employee[statusFilter] > 0) && (!keyword || [employee.name, employee.empId, employee.department, employee.section, employee.jobTitle, employee.branch].some((value) => value.toLowerCase().includes(keyword)));
   });
   const departmentSummaries = useMemo<DepartmentSummary[]>(() => {
     const grouped = new Map<string, DepartmentSummary>();
@@ -170,23 +172,59 @@ export default function HRAttendanceCalculate() {
   const reportOptions = { title: reportTitle, subtitle: `${dateFrom} — ${dateTo}`, columns, rows: reportRows, fileName: `${mode}-attendance-${dateFrom}-${dateTo}`, landscape: true, summary: [{ label: t("عدد السجلات"), value: reportRows.length }] };
   const departmentOptions = departments.filter((item) => branch === ALL || item.branchId === branch).map((item) => ({ value: item.id, label: item.name }));
   const sectionOptions = sections.filter((item) => departmentId === ALL || item.departmentId === departmentId).map((item) => ({ value: item.id, label: item.name }));
-  const selectableEmployees = employees.filter((employee) => (branch === ALL || employee.branchId === branch) && (departmentId === ALL || employee.departmentId === departmentId) && (sectionId === ALL || employee.sectionId === sectionId));
+  const selectableEmployees = employees.filter((employee) => {
+    const keyword = employeePickerSearch.trim().toLowerCase();
+    return (branch === ALL || employee.branchId === branch)
+      && (departmentId === ALL || employee.departmentId === departmentId)
+      && (sectionId === ALL || employee.sectionId === sectionId)
+      && (jobTitle === ALL || employee.jobTitle === jobTitle)
+      && (workSchedule === ALL || employee.workSchedule === workSchedule)
+      && (workLocation === ALL || employee.workLocation === workLocation)
+      && (!keyword || [employee.name, employee.empId, employee.department, employee.section, employee.jobTitle].some((value) => value.toLowerCase().includes(keyword)));
+  });
+  const allSelectableSelected = selectableEmployees.length > 0 && selectableEmployees.every((employee) => selectedEmployeeIds.includes(employee.id));
+  const toggleEmployee = (id: string) => setSelectedEmployeeIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleAllSelectable = () => setSelectedEmployeeIds((current) => {
+    const selectableIds = selectableEmployees.map((employee) => employee.id);
+    return allSelectableSelected ? current.filter((id) => !selectableIds.includes(id)) : [...new Set([...current, ...selectableIds])];
+  });
 
   return <Layout><main dir={direction} className="space-y-4">
     <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1><p className="mt-1 text-sm text-slate-500">{t("تقرير حضور الموظفين المرتبط بالفروع والإدارات والأقسام المحفوظة")}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => void loadData()} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => printReport(reportOptions)} disabled={!reportRows.length} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => exportReportExcel(reportOptions)} disabled={!reportRows.length} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button></div></header>
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("من تاريخ")}</span><Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
       <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("إلى تاريخ")}</span><Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
-      <FilterSelect label={t("الفرع")} value={branch} onChange={(value) => { setBranch(value); setDepartmentId(ALL); setSectionId(ALL); setEmployeeId(ALL); }} options={branches.map((item) => ({ value: item.id, label: item.name }))} allLabel={t("الكل")} />
-      <FilterSelect label={t("الإدارة")} value={departmentId} onChange={(value) => { setDepartmentId(value); setSectionId(ALL); setEmployeeId(ALL); }} options={departmentOptions} allLabel={t("الكل")} />
-      <FilterSelect label={t("القسم")} value={sectionId} onChange={(value) => { setSectionId(value); setEmployeeId(ALL); }} options={sectionOptions} allLabel={t("الكل")} />
-      <FilterSelect label={t("الموظف")} value={employeeId} onChange={setEmployeeId} options={selectableEmployees.map((employee) => ({ value: employee.id, label: `${employee.name} — ${employee.empId}` }))} allLabel={t("الكل")} />
+      <FilterSelect label={t("الفرع")} value={branch} onChange={(value) => { setBranch(value); setDepartmentId(ALL); setSectionId(ALL); setSelectedEmployeeIds([]); }} options={branches.map((item) => ({ value: item.id, label: item.name }))} allLabel={t("الكل")} />
+      <FilterSelect label={t("الإدارة")} value={departmentId} onChange={(value) => { setDepartmentId(value); setSectionId(ALL); setSelectedEmployeeIds([]); }} options={departmentOptions} allLabel={t("الكل")} />
+      <FilterSelect label={t("القسم")} value={sectionId} onChange={(value) => { setSectionId(value); setSelectedEmployeeIds([]); }} options={sectionOptions} allLabel={t("الكل")} />
       <FilterSelect label={t("المسمى الوظيفي")} value={jobTitle} onChange={setJobTitle} options={jobTitles.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
       <FilterSelect label={t("جدول العمل")} value={workSchedule} onChange={setWorkSchedule} options={workSchedules.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
       <FilterSelect label={t("مكان العمل")} value={workLocation} onChange={setWorkLocation} options={workLocations.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
       <FilterSelect label={t("حالة الدوام")} value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={[{ value: "present", label: t("حاضر") }, { value: "absent", label: t("غائب") }, { value: "late", label: t("متأخر") }, { value: "leave", label: t("إجازة") }]} allLabel={t("الكل")} />
       <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("نوع التقرير")}</span><select value={mode} onChange={(event) => setMode(event.target.value as ReportMode)} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"><option value="employees">{t("تقرير حساب دوام الموظفين")}</option><option value="departments">{t("تقرير ملخص الأقسام")}</option></select></label>
     </div></section>
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div>
+          <h2 className="font-bold text-slate-800">{t("الموظفون")}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t("حدد موظفًا واحدًا أو عدة موظفين لإنشاء التقرير")}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#075f94]">{t("المحدد")}: {formatNumber(selectedEmployeeIds.length)}</span>
+          <div className="relative w-64 max-w-full"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={employeePickerSearch} onChange={(event) => setEmployeePickerSearch(event.target.value)} placeholder={t("بحث عن موظف...")} className="pr-9" /></div>
+        </div>
+      </div>
+      <div className="max-h-80 overflow-auto">
+        <table className="min-w-full text-xs">
+          <thead className="sticky top-0 z-10 bg-[#075f94] text-white"><tr><th className="w-12 px-3 py-3"><input type="checkbox" checked={allSelectableSelected} onChange={toggleAllSelectable} aria-label={t("تحديد الكل")} className="h-4 w-4 accent-blue-600" /></th><th className="px-3 py-3">{t("الصورة")}</th><th className="px-3 py-3 text-right">{t("الاسم")}</th><th className="px-3 py-3 text-right">{t("المسمى الوظيفي")}</th><th className="px-3 py-3 text-right">{t("الإدارة")}</th><th className="px-3 py-3 text-right">{t("القسم")}</th><th className="px-3 py-3 text-right">{t("جدول العمل")}</th><th className="px-3 py-3 text-right">{t("مكان العمل")}</th></tr></thead>
+          <tbody>{loading ? <tr><td colSpan={8} className="py-10 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : selectableEmployees.length === 0 ? <tr><td colSpan={8} className="py-10 text-center text-slate-400">{t("لا يوجد موظفون مرتبطون بالفلاتر المحددة")}</td></tr> : selectableEmployees.map((employee) => {
+            const selected = selectedEmployeeIds.includes(employee.id);
+            return <tr key={employee.id} onClick={() => toggleEmployee(employee.id)} className={`cursor-pointer border-b transition-colors ${selected ? "bg-blue-50" : "hover:bg-slate-50"}`}><td className="px-3 py-3 text-center"><input type="checkbox" checked={selected} onChange={() => toggleEmployee(employee.id)} onClick={(event) => event.stopPropagation()} aria-label={`${t("تحديد")} ${employee.name}`} className="h-4 w-4 accent-blue-600" /></td><td className="px-3 py-2"><div className="mx-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-md bg-slate-100 text-sm font-bold text-slate-500">{employee.photoUrl ? <img src={employee.photoUrl} alt={employee.name} className="h-full w-full object-cover" /> : employee.name.trim().charAt(0)}</div></td><td className="px-3 py-3 font-semibold text-slate-800"><div>{employee.name}</div><div className="mt-0.5 font-normal text-slate-400">{employee.empId}</div></td><td className="px-3 py-3">{employee.jobTitle || "—"}</td><td className="px-3 py-3">{employee.department || "—"}</td><td className="px-3 py-3">{employee.section || "—"}</td><td className="px-3 py-3">{employee.workSchedule || "—"}</td><td className="px-3 py-3">{employee.workLocation || "—"}</td></tr>;
+          })}</tbody>
+        </table>
+      </div>
+    </section>
+    {selectedEmployeeIds.length === 0 && !loading && <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("حدد موظفًا واحدًا على الأقل لعرض التقرير وطباعته")}</div>}
     {error && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div className="flex flex-wrap gap-4 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-sky-600">● {t("إجازة")}</span></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-500">{t("عرض")}<select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded border px-2 py-1"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><div className="relative w-64"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث...")} className="pr-9" /></div></div></div>

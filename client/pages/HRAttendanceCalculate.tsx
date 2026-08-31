@@ -27,8 +27,10 @@ type Employee = {
   workSchedule: string;
   workLocation: string;
   photoUrl: string;
+  dailyHours: number;
 };
-type AttendanceRecord = { empId: string; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number };
+type AttendanceRecord = { empId: string; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number; notes: string };
+type DailyAttendanceDetail = Employee & { rowId: string; date: string; statusLabel: string; checkIn: string; checkOut: string; worked: string; required: string; late: string; deficit: string; overtime: string; notes: string };
 type EmployeeSummary = Employee & { present: number; absent: number; late: number; leave: number; recorded: number; attendanceRate: number };
 type DepartmentSummary = { id: string; department: string; employees: number; present: number; absent: number; late: number; leave: number; attendanceRate: number };
 
@@ -41,6 +43,25 @@ const monthRange = () => {
 };
 const unique = (values: string[]) => [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
 const dayCount = (from: string, to: string) => Math.max(1, Math.floor((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86400000) + 1);
+const timeToSeconds = (value: string) => {
+  if (!value) return null;
+  const [hours, minutes, seconds = "0"] = value.split(":");
+  const total = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+  return Number.isFinite(total) ? total : null;
+};
+const durationBetween = (start: string, end: string) => {
+  const startSeconds = timeToSeconds(start);
+  const endSeconds = timeToSeconds(end);
+  if (startSeconds === null || endSeconds === null) return 0;
+  return endSeconds >= startSeconds ? endSeconds - startSeconds : 86400 - startSeconds + endSeconds;
+};
+const formatDuration = (seconds: number) => {
+  const safeSeconds = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+};
 const classifyStatus = (record: AttendanceRecord | undefined): Exclude<StatusFilter, "all"> => {
   if (!record) return "absent";
   const status = record.status.toLowerCase();
@@ -87,8 +108,8 @@ export default function HRAttendanceCalculate() {
     if (!dateFrom || !dateTo || dateFrom > dateTo) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
     setLoading(true); setError("");
     const [employeeResult, attendanceResult, departmentResult, sectionResult, branchResult, jobResult, scheduleResult, locationResult] = await Promise.all([
-      supabase.from("employees").select("id, emp_id, name, branch_id, branch, department_id, section_id, directorate, department, job_title, work_schedule, work_location, photo_url").in("status", ["نشط", "فعال", "active"]).order("name"),
-      supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes").gte("date", dateFrom).lte("date", dateTo).order("date"),
+      supabase.from("employees").select("id, emp_id, name, branch_id, branch, department_id, section_id, directorate, department, job_title, work_schedule, work_location, photo_url, daily_hours").in("status", ["نشط", "فعال", "active"]).order("name"),
+      supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes, notes").gte("date", dateFrom).lte("date", dateTo).order("date"),
       supabase.from("departments").select("id, name, branch_id").eq("status", "فعال").order("name"),
       supabase.from("org_sections").select("id, name, department_id").eq("status", "فعال").order("name"),
       supabase.from("branches").select("id, name").eq("status", "فعال").order("name"),
@@ -108,12 +129,12 @@ export default function HRAttendanceCalculate() {
       id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branchId: String(row.branch_id ?? ""), branch: branchById.get(String(row.branch_id ?? "")) || String(row.branch ?? ""),
       departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || String(row.directorate ?? ""),
       sectionId: String(row.section_id ?? ""), section: sectionById.get(String(row.section_id ?? "")) || String(row.department ?? ""),
-      jobTitle: String(row.job_title ?? ""), workSchedule: String(row.work_schedule ?? ""), workLocation: String(row.work_location ?? ""), photoUrl: String(row.photo_url ?? ""),
+      jobTitle: String(row.job_title ?? ""), workSchedule: String(row.work_schedule ?? ""), workLocation: String(row.work_location ?? ""), photoUrl: String(row.photo_url ?? ""), dailyHours: Number(row.daily_hours ?? 8),
     }));
     setDepartments(departmentRows);
     setSections(sectionRows);
     setEmployees(loadedEmployees);
-    setAttendance((attendanceResult.data ?? []).map((row) => ({ empId: String(row.emp_id ?? ""), date: String(row.date ?? ""), status: String(row.status ?? ""), checkIn: String(row.check_in ?? ""), checkOut: String(row.check_out ?? ""), lateMinutes: Number(row.late_minutes ?? 0) })));
+    setAttendance((attendanceResult.data ?? []).map((row) => ({ empId: String(row.emp_id ?? ""), date: String(row.date ?? ""), status: String(row.status ?? ""), checkIn: String(row.check_in ?? ""), checkOut: String(row.check_out ?? ""), lateMinutes: Number(row.late_minutes ?? 0), notes: String(row.notes ?? "") })));
     setBranches(branchRows);
     setJobTitles(unique([...(jobResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.jobTitle)]));
     setWorkSchedules(unique([...(scheduleResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.workSchedule)]));
@@ -149,6 +170,37 @@ export default function HRAttendanceCalculate() {
     const keyword = search.trim().toLowerCase();
     return selectedEmployeeIds.includes(employee.id) && (branch === ALL || employee.branchId === branch) && departmentMatches && sectionMatches && (jobTitle === ALL || employee.jobTitle === jobTitle) && (workSchedule === ALL || employee.workSchedule === workSchedule) && (workLocation === ALL || employee.workLocation === workLocation) && (statusFilter === "all" || employee[statusFilter] > 0) && (!keyword || [employee.name, employee.empId, employee.department, employee.section, employee.jobTitle, employee.branch].some((value) => value.toLowerCase().includes(keyword)));
   });
+  const detailedRows = useMemo<DailyAttendanceDetail[]>(() => {
+    const recordsByEmployeeAndDate = new Map(attendance.map((record) => [`${record.empId}:${record.date}`, record]));
+    const rows: DailyAttendanceDetail[] = [];
+    employeeSummaries.filter((employee) => selectedEmployeeIds.includes(employee.id)).forEach((employee) => {
+      const requiredSeconds = Math.max(0, employee.dailyHours) * 3600;
+      for (let offset = 0; offset < dayCount(dateFrom, dateTo); offset += 1) {
+        const currentDate = new Date(`${dateFrom}T00:00:00`);
+        currentDate.setDate(currentDate.getDate() + offset);
+        const date = currentDate.toISOString().slice(0, 10);
+        const record = recordsByEmployeeAndDate.get(`${employee.empId}:${date}`);
+        const workedSeconds = record ? durationBetween(record.checkIn, record.checkOut) : 0;
+        const category = classifyStatus(record);
+        rows.push({
+          ...employee,
+          rowId: `${employee.id}:${date}`,
+          date,
+          statusLabel: category === "present" ? t("حاضر") : category === "late" ? t("متأخر") : category === "leave" ? t("إجازة") : t("غائب"),
+          checkIn: record?.checkIn || "—",
+          checkOut: record?.checkOut || "—",
+          worked: formatDuration(workedSeconds),
+          required: formatDuration(category === "leave" ? 0 : requiredSeconds),
+          late: formatDuration((record?.lateMinutes ?? 0) * 60),
+          deficit: formatDuration(category === "leave" ? 0 : Math.max(requiredSeconds - workedSeconds, 0)),
+          overtime: formatDuration(Math.max(workedSeconds - requiredSeconds, 0)),
+          notes: record?.notes || "",
+        });
+      }
+    });
+    return rows;
+  }, [attendance, dateFrom, dateTo, employeeSummaries, selectedEmployeeIds, t]);
+
   const departmentSummaries = useMemo<DepartmentSummary[]>(() => {
     const grouped = new Map<string, DepartmentSummary>();
     filteredEmployees.forEach((employee) => {
@@ -165,9 +217,9 @@ export default function HRAttendanceCalculate() {
   const safePage = Math.min(page, totalPages);
   const pagedRows = allRows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const columns: ReportColumn[] = mode === "employees"
-    ? [{ key: "empId", label: t("رقم الموظف") }, { key: "name", label: t("اسم الموظف") }, { key: "department", label: t("الإدارة") }, { key: "section", label: t("القسم") }, { key: "jobTitle", label: t("المسمى الوظيفي") }, { key: "branch", label: t("الفرع") }, { key: "workSchedule", label: t("جدول العمل") }, { key: "workLocation", label: t("مكان العمل") }, { key: "present", label: t("حاضر") }, { key: "absent", label: t("غائب") }, { key: "late", label: t("متأخر") }, { key: "leave", label: t("إجازة") }, { key: "attendanceRate", label: t("نسبة الحضور") }]
+    ? [{ key: "name", label: t("اسم الموظف") }, { key: "empId", label: t("رقم الموظف") }, { key: "date", label: t("التاريخ") }, { key: "statusLabel", label: t("الحالة") }, { key: "checkIn", label: t("دخول") }, { key: "checkOut", label: t("خروج") }, { key: "worked", label: t("ساعات الحضور") }, { key: "required", label: t("الساعات المستحقة") }, { key: "late", label: t("ساعات التأخير") }, { key: "deficit", label: t("ساعات النقص") }, { key: "overtime", label: t("الساعات الإضافية") }, { key: "notes", label: t("ملاحظات") }]
     : [{ key: "department", label: t("الإدارة") }, { key: "employees", label: t("عدد الموظفين") }, { key: "present", label: t("حاضر") }, { key: "absent", label: t("غائب") }, { key: "late", label: t("متأخر") }, { key: "leave", label: t("إجازة") }, { key: "attendanceRate", label: t("نسبة الحضور") }];
-  const reportRows = allRows.map((row) => mode === "employees" ? { ...(row as EmployeeSummary), attendanceRate: `${(row as EmployeeSummary).attendanceRate.toFixed(1)}%` } : { ...(row as DepartmentSummary), attendanceRate: `${(row as DepartmentSummary).attendanceRate.toFixed(1)}%` });
+  const reportRows = mode === "employees" ? detailedRows : departmentSummaries.map((row) => ({ ...row, attendanceRate: `${row.attendanceRate.toFixed(1)}%` }));
   const reportTitle = t(mode === "employees" ? "تقرير حساب دوام الموظفين" : "تقرير ملخص الأقسام");
   const reportOptions = { title: reportTitle, subtitle: `${dateFrom} — ${dateTo}`, columns, rows: reportRows, fileName: `${mode}-attendance-${dateFrom}-${dateTo}`, landscape: true, summary: [{ label: t("عدد السجلات"), value: reportRows.length }] };
   const departmentOptions = departments.filter((item) => branch === ALL || item.branchId === branch).map((item) => ({ value: item.id, label: item.name }));
@@ -188,10 +240,28 @@ export default function HRAttendanceCalculate() {
     const selectableIds = selectableEmployees.map((employee) => employee.id);
     return allSelectableSelected ? current.filter((id) => !selectableIds.includes(id)) : [...new Set([...current, ...selectableIds])];
   });
+  const selectedEmployeesForDetail = employeeSummaries.filter((employee) => selectedEmployeeIds.includes(employee.id));
+  const printCurrentReport = () => mode === "employees" ? window.print() : printReport(reportOptions);
+  const showDepartmentSummary = () => mode === "departments";
 
   return <Layout><main dir={direction} className="space-y-4">
-    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1><p className="mt-1 text-sm text-slate-500">{t("تقرير حضور الموظفين المرتبط بالفروع والإدارات والأقسام المحفوظة")}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => void loadData()} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => printReport(reportOptions)} disabled={!reportRows.length} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => exportReportExcel(reportOptions)} disabled={!reportRows.length} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button></div></header>
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <style>{`
+      .attendance-print-only { display: none; }
+      @media print {
+        @page { size: A4 landscape; margin: 8mm; }
+        body * { visibility: hidden !important; }
+        #attendance-print-area, #attendance-print-area * { visibility: visible !important; }
+        #attendance-print-area { position: absolute; inset: 0; width: 100%; background: white; }
+        .attendance-no-print { display: none !important; }
+        .attendance-print-only { display: block !important; }
+        .attendance-print-page { break-after: page; box-shadow: none !important; border: 0 !important; }
+        .attendance-print-page:last-child { break-after: auto; }
+        .attendance-detail-table { font-size: 9px !important; }
+        .attendance-detail-table th, .attendance-detail-table td { padding: 5px !important; }
+      }
+    `}</style>
+    <header className="attendance-no-print flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1><p className="mt-1 text-sm text-slate-500">{t("تقرير حضور الموظفين المرتبط بالفروع والإدارات والأقسام المحفوظة")}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => void loadData()} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={printCurrentReport} disabled={!reportRows.length} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => exportReportExcel(reportOptions)} disabled={!reportRows.length} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button></div></header>
+    <section className="attendance-no-print rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("من تاريخ")}</span><Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
       <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("إلى تاريخ")}</span><Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
       <FilterSelect label={t("الفرع")} value={branch} onChange={(value) => { setBranch(value); setDepartmentId(ALL); setSectionId(ALL); setSelectedEmployeeIds([]); }} options={branches.map((item) => ({ value: item.id, label: item.name }))} allLabel={t("الكل")} />
@@ -220,7 +290,7 @@ export default function HRAttendanceCalculate() {
         </Button>
       </div>
     </div></section>
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <section className="attendance-no-print overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
           <h2 className="font-bold text-slate-800">{t("الموظفون")}</h2>
@@ -241,12 +311,45 @@ export default function HRAttendanceCalculate() {
         </table>
       </div>
     </section>
-    {selectedEmployeeIds.length === 0 && !loading && <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("حدد موظفًا واحدًا على الأقل لعرض التقرير وطباعته")}</div>}
-    {error && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    {selectedEmployeeIds.length === 0 && !loading && <div className="attendance-no-print rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("حدد موظفًا واحدًا على الأقل لعرض التقرير وطباعته")}</div>}
+    {error && <div className="attendance-no-print rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+    {mode === "employees" && selectedEmployeesForDetail.length > 0 && <div id="attendance-print-area" className="space-y-4">
+      {selectedEmployeesForDetail.map((employee) => {
+        const rows = detailedRows.filter((row) => row.id === employee.id);
+        const totalWorked = rows.reduce((sum, row) => sum + (timeToSeconds(row.worked) ?? 0), 0);
+        const totalRequired = rows.reduce((sum, row) => sum + (timeToSeconds(row.required) ?? 0), 0);
+        const totalLate = rows.reduce((sum, row) => sum + (timeToSeconds(row.late) ?? 0), 0);
+        const totalDeficit = rows.reduce((sum, row) => sum + (timeToSeconds(row.deficit) ?? 0), 0);
+        const totalOvertime = rows.reduce((sum, row) => sum + (timeToSeconds(row.overtime) ?? 0), 0);
+        const presentDays = rows.filter((row) => row.statusLabel === t("حاضر") || row.statusLabel === t("متأخر")).length;
+        const absentDays = rows.filter((row) => row.statusLabel === t("غائب")).length;
+        const leaveDays = rows.filter((row) => row.statusLabel === t("إجازة")).length;
+        return <article key={employee.id} className="attendance-print-page overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="attendance-print-only border-b-2 border-[#075f94] px-6 py-4 text-center">
+            <h1 className="text-2xl font-bold text-[#075f94]">{t("شركة إدارة العياف للمقاولات")}</h1>
+            <p className="mt-1 text-sm font-semibold text-slate-600">{t("تقرير حساب الدوام التفصيلي")}</p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b bg-slate-50 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border bg-white text-xl font-bold text-slate-500">{employee.photoUrl ? <img src={employee.photoUrl} alt={employee.name} className="h-full w-full object-cover" /> : employee.name.trim().charAt(0)}</div>
+              <div><h2 className="text-lg font-bold text-slate-900">{employee.name}</h2><p className="text-sm text-slate-500">{employee.jobTitle || t("غير محدد")}</p></div>
+            </div>
+            <div className="attendance-no-print flex flex-wrap gap-2 text-xs"><span className="rounded-md bg-emerald-50 px-3 py-2 text-emerald-700">{t("حاضر")}: {formatNumber(presentDays)}</span><span className="rounded-md bg-red-50 px-3 py-2 text-red-700">{t("غائب")}: {formatNumber(absentDays)}</span><span className="rounded-md bg-sky-50 px-3 py-2 text-sky-700">{t("إجازة")}: {formatNumber(leaveDays)}</span></div>
+          </div>
+          <div className="grid gap-px border-b bg-slate-200 sm:grid-cols-2 lg:grid-cols-4">
+            {[{ label: t("الرقم الوظيفي"), value: employee.empId }, { label: t("الإدارة"), value: employee.department || "—" }, { label: t("القسم"), value: employee.section || "—" }, { label: t("الفرع"), value: employee.branch || "—" }, { label: t("مكان العمل"), value: employee.workLocation || "—" }, { label: t("جدول العمل"), value: employee.workSchedule || "—" }, { label: t("من تاريخ"), value: dateFrom }, { label: t("إلى تاريخ"), value: dateTo }].map((item) => <div key={item.label} className="bg-white px-4 py-3"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-slate-800">{item.value}</strong></div>)}
+          </div>
+          <div className="attendance-no-print flex flex-wrap gap-4 border-b px-5 py-3 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-sky-600">● {t("إجازة")}</span></div>
+          <div className="overflow-x-auto"><table className="attendance-detail-table min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("دخول")}</th><th className="px-3 py-3">{t("خروج")}</th><th className="px-3 py-3">{t("ساعات الحضور")}</th><th className="px-3 py-3">{t("الساعات المستحقة")}</th><th className="px-3 py-3">{t("ساعات التأخير")}</th><th className="px-3 py-3">{t("ساعات النقص")}</th><th className="px-3 py-3">{t("الساعات الإضافية")}</th><th className="px-3 py-3">{t("ملاحظات")}</th></tr></thead><tbody>{rows.map((row) => <tr key={row.rowId} className="border-b odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-3 py-2 text-center">{row.date}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 font-semibold ${row.statusLabel === t("حاضر") ? "bg-emerald-50 text-emerald-700" : row.statusLabel === t("متأخر") ? "bg-amber-50 text-amber-700" : row.statusLabel === t("إجازة") ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-700"}`}>{row.statusLabel}</span></td><td className="px-3 py-2 text-center text-emerald-700">{row.checkIn}</td><td className="px-3 py-2 text-center text-red-600">{row.checkOut}</td><td className="px-3 py-2 text-center font-semibold">{row.worked}</td><td className="px-3 py-2 text-center">{row.required}</td><td className="px-3 py-2 text-center text-amber-700">{row.late}</td><td className="px-3 py-2 text-center text-red-700">{row.deficit}</td><td className="px-3 py-2 text-center text-blue-700">{row.overtime}</td><td className="max-w-40 px-3 py-2">{row.notes || "—"}</td></tr>)}</tbody></table></div>
+          <div className="grid gap-px bg-slate-200 sm:grid-cols-2 lg:grid-cols-5">{[{ label: t("إجمالي ساعات الحضور"), value: formatDuration(totalWorked) }, { label: t("إجمالي الساعات المستحقة"), value: formatDuration(totalRequired) }, { label: t("إجمالي ساعات التأخير"), value: formatDuration(totalLate) }, { label: t("إجمالي ساعات النقص"), value: formatDuration(totalDeficit) }, { label: t("إجمالي الساعات الإضافية"), value: formatDuration(totalOvertime) }, { label: t("أيام الحضور"), value: formatNumber(presentDays) }, { label: t("أيام الغياب"), value: formatNumber(absentDays) }, { label: t("أيام الإجازات"), value: formatNumber(leaveDays) }, { label: t("أيام الفترة"), value: formatNumber(rows.length) }, { label: t("نسبة الحضور"), value: `${formatNumber(employee.attendanceRate, { maximumFractionDigits: 1 })}%` }].map((item) => <div key={item.label} className="bg-white px-3 py-3 text-center"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-[#075f94]">{item.value}</strong></div>)}</div>
+          <div className="attendance-print-only px-5 py-3 text-left text-[10px] text-slate-400">{t("تاريخ إصدار التقرير")}: {new Date().toLocaleDateString("ar-SA")}</div>
+        </article>;
+      })}
+    </div>}
+    {showDepartmentSummary() && <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div className="flex flex-wrap gap-4 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-sky-600">● {t("إجازة")}</span></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-500">{t("عرض")}<select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded border px-2 py-1"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><div className="relative w-64"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث...")} className="pr-9" /></div></div></div>
       <div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr>{columns.map((column) => <th key={column.key} className="whitespace-nowrap px-3 py-3 text-center font-semibold">{column.label}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : !pagedRows.length ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("لا توجد بيانات")}</td></tr> : mode === "employees" ? (pagedRows as EmployeeSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 text-center">{row.empId}</td><td className="px-3 py-3 font-semibold">{row.name}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{row.section || "—"}</td><td className="px-3 py-3">{row.jobTitle || "—"}</td><td className="px-3 py-3">{row.branch || "—"}</td><td className="px-3 py-3">{row.workSchedule || "—"}</td><td className="px-3 py-3">{row.workLocation || "—"}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>) : (pagedRows as DepartmentSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 font-semibold">{row.department}</td><td className="px-3 py-3 text-center">{formatNumber(row.employees)}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>)}</tbody></table></div>
       <footer className="flex items-center justify-between border-t px-4 py-3 text-xs text-slate-500"><span>{formatNumber(allRows.length)} {t("من السجلات")}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("السابق")}</Button><span>{formatNumber(safePage)} / {formatNumber(totalPages)}</span><Button variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>{t("التالي")}</Button></div></footer>
-    </section>
+    </section>}
   </main></Layout>;
 }

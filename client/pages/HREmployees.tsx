@@ -21,6 +21,7 @@ import { PageHeader } from "@/components/SalesPageUI";
 import EmployeeForm, { emptyForm, mapRowToForm } from "./EmployeeForm";
 import type { EmpFormData } from "./EmployeeForm";
 import { useI18n } from "@/i18n";
+import * as XLSX from "xlsx";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const STATUSES = ["فعال", "غير فعال", "إجازة", "منتهي"];
@@ -113,25 +114,92 @@ export default function HREmployees() {
   const visibleColumnCount = 8 + Object.values(visibleColumns).filter(Boolean).length;
   const allPageSelected = pageData.length > 0 && pageData.every((employee) => selectedIds.has(employee.id));
 
-  const exportCsv = () => {
+  const exportEmployeesExcel = () => {
     if (!filtered.length) {
       toast({ title: t("لا توجد بيانات للتصدير") });
       return;
     }
-    const rows = filtered.map((employee) => [
-      employee.empId, employee.name, employee.firstName, employee.status, employee.branch,
-      employee.department, employee.jobTitle, employee.directorate, employee.nationality,
-      employee.nationalId, employee.hireDate, employee.phone, employee.email,
+
+    const headers = [
+      t("م"), t("الرقم الوظيفي"), t("الاسم العربي"), t("الاسم بالإنجليزية"),
+      t("الحالة"), t("الفرع"), t("الإدارة"), t("القسم"),
+      t("المسمى الوظيفي"), t("الجنسية"), t("رقم الهوية"),
+      t("تاريخ التعيين"), t("رقم الجوال"), t("البريد الإلكتروني"),
+    ];
+    const rows = filtered.map((employee, index) => [
+      index + 1,
+      employee.empId || employee.accountTitle || "—",
+      employee.name || "—",
+      employee.firstName || "—",
+      employee.status || "—",
+      employee.branch || "—",
+      employee.directorate || "—",
+      employee.department || "—",
+      employee.jobTitle || "—",
+      employee.nationality || "—",
+      employee.nationalId || "—",
+      employee.hireDate || "—",
+      employee.phone || "—",
+      employee.email || "—",
     ]);
-    const csv = [[t("رقم الموظف"), t("الاسم العربي"), t("الاسم بالإنجليزية"), t("الحالة"), t("الفرع"), t("القسم"), t("المسمى الوظيفي"), t("الإدارة"), t("الجنسية"), t("رقم الهوية"), t("تاريخ التعيين"), t("رقم الجوال"), t("البريد الإلكتروني")], ...rows]
-      .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "employees.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    const activeCount = filtered.filter((employee) => ["فعال", "نشط", "active"].includes(employee.status)).length;
+    const reportRows = [
+      [t("شركة إدارة العياف للمقاولات")],
+      [t("تقرير قائمة الموظفين")],
+      [`${t("تاريخ الإصدار")}: ${new Date().toLocaleDateString("ar-SA")}`, "", "", `${t("إجمالي الموظفين")}: ${filtered.length}`, "", "", `${t("الموظفون النشطون")}: ${activeCount}`],
+      [],
+      headers,
+      ...rows,
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(reportRows);
+    const lastColumn = headers.length - 1;
+    const lastRow = reportRows.length - 1;
+    worksheet["!rtl"] = true;
+    worksheet["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: lastColumn } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: lastColumn } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 2 } },
+      { s: { r: 2, c: 3 }, e: { r: 2, c: 5 } },
+      { s: { r: 2, c: 6 }, e: { r: 2, c: 8 } },
+    ];
+    worksheet["!cols"] = [
+      { wch: 6 }, { wch: 16 }, { wch: 28 }, { wch: 26 }, { wch: 12 },
+      { wch: 22 }, { wch: 24 }, { wch: 24 }, { wch: 26 }, { wch: 16 },
+      { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 30 },
+    ];
+    worksheet["!rows"] = [{ hpt: 30 }, { hpt: 25 }, { hpt: 22 }, { hpt: 8 }, { hpt: 26 }];
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 5 };
+    worksheet["!autofilter"] = { ref: XLSX.utils.encode_range({ r: 4, c: 0 }, { r: lastRow, c: lastColumn }) };
+    worksheet["!margins"] = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
+
+    const titleStyle = { font: { bold: true, sz: 18, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "075F94" } }, alignment: { horizontal: "center", vertical: "center" } };
+    const subtitleStyle = { font: { bold: true, sz: 14, color: { rgb: "075F94" } }, alignment: { horizontal: "center", vertical: "center" } };
+    const summaryStyle = { font: { bold: true, color: { rgb: "075F94" } }, fill: { fgColor: { rgb: "EAF4FA" } }, alignment: { horizontal: "center", vertical: "center" }, border: { top: { style: "thin", color: { rgb: "B8D4E5" } }, bottom: { style: "thin", color: { rgb: "B8D4E5" } }, left: { style: "thin", color: { rgb: "B8D4E5" } }, right: { style: "thin", color: { rgb: "B8D4E5" } } } };
+    const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "075F94" } }, alignment: { horizontal: "center", vertical: "center", wrapText: true }, border: { top: { style: "thin", color: { rgb: "FFFFFF" } }, bottom: { style: "thin", color: { rgb: "FFFFFF" } }, left: { style: "thin", color: { rgb: "FFFFFF" } }, right: { style: "thin", color: { rgb: "FFFFFF" } } } };
+    if (worksheet.A1) worksheet.A1.s = titleStyle;
+    if (worksheet.A2) worksheet.A2.s = subtitleStyle;
+    ["A3", "D3", "G3"].forEach((address) => { if (worksheet[address]) worksheet[address].s = summaryStyle; });
+    for (let column = 0; column <= lastColumn; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: 4, c: column });
+      if (worksheet[address]) worksheet[address].s = headerStyle;
+    }
+    for (let row = 5; row <= lastRow; row += 1) {
+      for (let column = 0; column <= lastColumn; column += 1) {
+        const address = XLSX.utils.encode_cell({ r: row, c: column });
+        if (!worksheet[address]) continue;
+        worksheet[address].s = {
+          fill: { fgColor: { rgb: row % 2 === 0 ? "F3F8FB" : "FFFFFF" } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: { bottom: { style: "thin", color: { rgb: "DCE6EC" } } },
+        };
+      }
+    }
+
+    const workbook = XLSX.utils.book_new();
+    workbook.Workbook = { Views: [{ RTL: true }] };
+    XLSX.utils.book_append_sheet(workbook, worksheet, t("الموظفون").slice(0, 31));
+    XLSX.writeFile(workbook, "Employee_List_Professional.xlsx", { compression: true, cellStyles: true });
   };
 
   const togglePageSelection = () => {
@@ -193,7 +261,7 @@ export default function HREmployees() {
               {t("قائمة الموظفين")} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <div className="flex items-center gap-1">
-              <button onClick={exportCsv} title={t("تصدير CSV")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
+              <button onClick={exportEmployeesExcel} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
               <button title={t("طباعة")} className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
               <button onClick={() => setRefreshKey((k) => k + 1)} title={t("تحديث")} className="p-1.5 rounded hover:bg-white/20 transition"><RefreshCw className="h-4 w-4" /></button>
               <div className="relative">

@@ -49,6 +49,43 @@ const STATUS_COLORS: Record<string, string> = {
   "منتهي": "bg-rose-50 text-rose-700 border-rose-200",
 };
 
+const EXPORT_ENGLISH_VALUES: Record<string, string> = {
+  "شركة إدارة العياف للمقاولات": "Idarat Al Ayaf For Contracting",
+  "الفرع الرئيسي": "Main Branch",
+  "الإدارة العليا": "Executive Management",
+  "إدارة الموارد البشرية": "Human Resources Management",
+  "قسم الموارد البشرية": "Human Resources Department",
+  "الموارد البشرية": "Human Resources",
+  "إدارة المالية": "Finance Management",
+  "قسم المالية": "Finance Department",
+  "المحاسبة": "Accounting",
+  "إدارة التشغيل": "Operations Management",
+  "الصيانة والتشغيل": "Maintenance and Operations",
+  "إدارة المبيعات": "Sales Management",
+  "المبيعات": "Sales",
+  "تقنية المعلومات": "Information Technology",
+  "عامل نظافة": "Cleaner",
+  "المملكة العربية السعودية": "Saudi Arabia", "الإمارات العربية المتحدة": "United Arab Emirates",
+  "البحرين": "Bahrain", "الكويت": "Kuwait", "عُمان": "Oman", "قطر": "Qatar",
+  "مصر": "Egypt", "السودان": "Sudan", "جنوب السودان": "South Sudan", "ليبيا": "Libya",
+  "تونس": "Tunisia", "الجزائر": "Algeria", "المغرب": "Morocco", "موريتانيا": "Mauritania",
+  "الصومال": "Somalia", "جيبوتي": "Djibouti", "جزر القمر": "Comoros", "سوريا": "Syria",
+  "الأردن": "Jordan", "لبنان": "Lebanon", "فلسطين": "Palestine", "العراق": "Iraq", "اليمن": "Yemen",
+  "الهند": "India", "باكستان": "Pakistan", "بنغلاديش": "Bangladesh", "سريلانكا": "Sri Lanka",
+  "نيبال": "Nepal", "بوتان": "Bhutan", "أفغانستان": "Afghanistan", "المالديف": "Maldives",
+  "الفلبين": "Philippines", "إندونيسيا": "Indonesia", "ماليزيا": "Malaysia", "تايلاند": "Thailand",
+  "فيتنام": "Vietnam", "ميانمار": "Myanmar", "الصين": "China", "اليابان": "Japan", "كوريا الجنوبية": "South Korea",
+  "إثيوبيا": "Ethiopia", "إريتريا": "Eritrea", "كينيا": "Kenya", "أوغندا": "Uganda",
+  "تنزانيا": "Tanzania", "نيجيريا": "Nigeria", "غانا": "Ghana", "السنغال": "Senegal",
+  "الكاميرون": "Cameroon", "جنوب أفريقيا": "South Africa", "تركيا": "Turkey", "إيران": "Iran",
+  "أذربيجان": "Azerbaijan", "أوزبكستان": "Uzbekistan", "كازاخستان": "Kazakhstan",
+  "روسيا": "Russia", "أوكرانيا": "Ukraine", "المملكة المتحدة": "United Kingdom", "فرنسا": "France",
+  "ألمانيا": "Germany", "إيطاليا": "Italy", "إسبانيا": "Spain", "هولندا": "Netherlands",
+  "السويد": "Sweden", "اليونان": "Greece", "الولايات المتحدة": "United States", "كندا": "Canada",
+  "المكسيك": "Mexico", "البرازيل": "Brazil", "الأرجنتين": "Argentina", "أستراليا": "Australia",
+  "نيوزيلندا": "New Zealand", "أخرى": "Other",
+};
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HREmployees() {
   const { t, direction, locale, formatNumber } = useI18n();
@@ -127,7 +164,8 @@ export default function HREmployees() {
     const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);
     const englishValue = (value: string | null | undefined, fallback = "-") => {
       const clean = String(value ?? "").trim();
-      return clean && !containsArabic(clean) ? clean : fallback;
+      if (!clean) return fallback;
+      return EXPORT_ENGLISH_VALUES[clean] || (!containsArabic(clean) ? clean : fallback);
     };
     const statusInEnglish: Record<string, string> = {
       "فعال": "Active", "نشط": "Active", active: "Active",
@@ -136,8 +174,32 @@ export default function HREmployees() {
     };
 
     try {
-      const response = await fetch(templateUrl);
+      const [response, branchResult, departmentResult, jobResult, sectionResult] = await Promise.all([
+        fetch(templateUrl),
+        supabase.from("branches").select("id, name, name_en"),
+        supabase.from("departments").select("id, name, name_en"),
+        supabase.from("hr_jobs").select("name, name_en"),
+        supabase.from("org_sections").select("id, name"),
+      ]);
       if (!response.ok) throw new Error("Unable to download the Excel template");
+
+      const branchesById = new Map((branchResult.data ?? []).map((row) => [
+        String(row.id),
+        englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified")),
+      ]));
+      const departmentsById = new Map((departmentResult.data ?? []).map((row) => [
+        String(row.id),
+        englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified")),
+      ]));
+      const jobsByName = new Map((jobResult.data ?? []).map((row) => [
+        String(row.name ?? "").trim(),
+        englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified")),
+      ]));
+      const sectionsById = new Map((sectionResult.data ?? []).map((row) => [
+        String(row.id),
+        englishValue(String(row.name ?? ""), "Not specified"),
+      ]));
+
       const workbook = await XlsxPopulate.fromDataAsync(await response.arrayBuffer());
       const worksheet = workbook.sheet(0);
       const values = worksheet.usedRange().value();
@@ -176,10 +238,10 @@ export default function HREmployees() {
         if (key.includes("arabicname")) return "-";
         if (key.includes("name")) return englishValue(employee.firstName, englishValue(employee.name, employee.empId || "-"));
         if (key.includes("status")) return statusInEnglish[employee.status] || englishValue(employee.status, "Not specified");
-        if (key.includes("branch")) return englishValue(employee.branch, "Not specified");
-        if (key.includes("directorate")) return englishValue(employee.directorate, "Not specified");
-        if (key.includes("department") || key.includes("section")) return englishValue(employee.department, "Not specified");
-        if (key.includes("jobtitle") || key.includes("designation") || key.includes("position")) return englishValue(employee.jobTitle, "Not specified");
+        if (key.includes("branch")) return branchesById.get(employee.branchId) || englishValue(employee.branch, "Not specified");
+        if (key.includes("management") || key.includes("directorate")) return departmentsById.get(employee.departmentId) || englishValue(employee.directorate, "Not specified");
+        if (key.includes("department") || key.includes("section")) return sectionsById.get(employee.sectionId) || englishValue(employee.department, "Not specified");
+        if (key.includes("jobtitle") || key.includes("designation") || key.includes("position")) return jobsByName.get(employee.jobTitle.trim()) || englishValue(employee.jobTitle, "Not specified");
         if (key.includes("nationality")) return englishValue(employee.nationality, "Not specified");
         if (key.includes("nationalid") || key.includes("identity")) return employee.nationalId || "-";
         if (key.includes("hiredate") || key.includes("joiningdate")) return employee.hireDate || "-";

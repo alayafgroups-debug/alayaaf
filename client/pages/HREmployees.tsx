@@ -122,7 +122,7 @@ export default function HREmployees() {
       return;
     }
 
-    const templateUrl = "https://cdn.builder.io/o/assets%2Fce04605038104603b965d31c7c18e8db%2F436f094c89454327970ffe9bb11fdd3f?alt=media&token=06421ef6-2a54-4a30-8920-d579eea7d4ce&apiKey=ce04605038104603b965d31c7c18e8db";
+    const templateUrl = "/api/hr/employee-template";
     const dayName = new Date().toLocaleDateString("en-US", { weekday: "long" });
     const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);
     const englishValue = (value: string | null | undefined, fallback = "-") => {
@@ -216,7 +216,7 @@ export default function HREmployees() {
       return;
     }
 
-    const templateUrl = "https://cdn.builder.io/o/assets%2Fce04605038104603b965d31c7c18e8db%2F436f094c89454327970ffe9bb11fdd3f?alt=media&token=06421ef6-2a54-4a30-8920-d579eea7d4ce&apiKey=ce04605038104603b965d31c7c18e8db";
+    const templateUrl = "/api/hr/employee-template";
     const reportDate = new Date();
     const dayName = reportDate.toLocaleDateString("en-US", { weekday: "long" });
     const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);

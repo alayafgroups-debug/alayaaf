@@ -24,6 +24,7 @@ type EmpLite = {
   branch: string;
   workLocationId: string;
   workLocation: string;
+  workTime: string;
   employeeType: string;
   status: string;
   nationality: string;
@@ -95,6 +96,7 @@ export default function HRPayrollStatement() {
   const [monthFilter, setMonthFilter] = useState(defaultMonth);
   const [branchFilter, setBranchFilter] = useState("الكل");
   const [departmentFilter, setDepartmentFilter] = useState("الكل");
+  const [sectionFilter, setSectionFilter] = useState("الكل");
   const [locationFilter, setLocationFilter] = useState("الكل");
   const [typeFilter, setTypeFilter] = useState("الكل");
   const [statusFilter, setStatusFilter] = useState("نشط");
@@ -117,7 +119,7 @@ export default function HRPayrollStatement() {
       setLoading(true);
       try {
         const [employeeResult, departmentResult, sectionResult, branchResult, locationResult, jobResult] = await Promise.all([
-          supabase.from("employees").select("id, emp_id, name, job_title, department_id, section_id, branch_id, attendance_location_id, employment_type, status, nationality, base_salary").order("name"),
+          supabase.from("employees").select("id, emp_id, name, job_title, department_id, section_id, branch_id, attendance_location_id, work_time, work_schedule, employment_type, status, nationality, base_salary").order("name"),
           supabase.from("departments").select("id, name, name_en, branch_id").eq("status", "فعال"),
           supabase.from("org_sections").select("id, name, name_en, department_id").eq("status", "فعال"),
           supabase.from("branches").select("id, name, name_en").eq("status", "فعال"),
@@ -158,6 +160,7 @@ export default function HRPayrollStatement() {
             branch: branchById.get(String(r.branch_id ?? "")) || t("غير مرتبط"),
             workLocationId: String(r.attendance_location_id ?? ""),
             workLocation: locationById.get(String(r.attendance_location_id ?? "")) || t("غير مرتبط"),
+            workTime: String(r.work_time ?? r.work_schedule ?? t("غير مرتبط")),
             employeeType: String(r.employment_type ?? "أساسي"),
             status: String(r.status ?? "نشط"),
             nationality: String(r.nationality ?? ""),
@@ -176,10 +179,14 @@ export default function HRPayrollStatement() {
     const uniq = (list: string[]) => ["الكل", ...Array.from(new Set(list.filter(Boolean)))];
 
     return {
-      years: Array.from({ length: 6 }, (_, idx) => String(Number(defaultYear) - 2 + idx)),
+      years: Array.from({ length: 6 }, (_, idx) => {
+        const value = String(Number(defaultYear) - 2 + idx);
+        return { value, label: `${value} ${t("ميلادي")}` };
+      }),
       months: Object.entries(monthNames).map(([value, label]) => ({ value, label: t(label) })),
       branches: uniq(employees.map((e) => e.branch)),
       departments: uniq(employees.map((e) => e.department)),
+      sections: uniq(employees.map((e) => e.section)),
       locations: uniq(employees.map((e) => e.workLocation)),
       types: uniq(employees.map((e) => e.employeeType)),
       statuses: ["الكل", "نشط", "موقوف", "غير فعال"],
@@ -198,6 +205,7 @@ export default function HRPayrollStatement() {
 
       if (branchFilter !== "الكل" && e.branch !== branchFilter) return false;
       if (departmentFilter !== "الكل" && e.department !== departmentFilter) return false;
+      if (sectionFilter !== "الكل" && e.section !== sectionFilter) return false;
       if (locationFilter !== "الكل" && e.workLocation !== locationFilter) return false;
       if (typeFilter !== "الكل" && e.employeeType !== typeFilter) return false;
       if (statusFilter !== "الكل") {
@@ -208,11 +216,11 @@ export default function HRPayrollStatement() {
 
       return true;
     });
-  }, [employees, search, branchFilter, departmentFilter, locationFilter, typeFilter, statusFilter]);
+  }, [employees, search, branchFilter, departmentFilter, sectionFilter, locationFilter, typeFilter, statusFilter]);
 
   useEffect(() => {
     setSelected(new Set());
-  }, [search, branchFilter, departmentFilter, locationFilter, typeFilter, statusFilter]);
+  }, [search, branchFilter, departmentFilter, sectionFilter, locationFilter, typeFilter, statusFilter]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -397,7 +405,6 @@ export default function HRPayrollStatement() {
     setApprovalBranch("الكل");
     setApprovalLocation("الكل");
     setApprovalStopKeyword("");
-    setStoppedEmployeeIds(new Set());
     setApprovalOpen(true);
   };
 
@@ -417,10 +424,10 @@ export default function HRPayrollStatement() {
     const keyword = approvalStopKeyword.trim();
     if (!keyword) return [];
 
-    return getApprovalEmployees()
+    return (approvalOpen ? getApprovalEmployees() : filtered)
       .filter((e) => !stoppedEmployeeIds.has(e.id) && e.name.includes(keyword))
       .slice(0, 6);
-  }, [approvalStopKeyword, selectedEmployees, approvalScope, approvalDepartment, approvalSection, approvalBranch, approvalLocation, stoppedEmployeeIds]);
+  }, [approvalStopKeyword, approvalOpen, filtered, selectedEmployees, approvalScope, approvalDepartment, approvalSection, approvalBranch, approvalLocation, stoppedEmployeeIds]);
 
   const addStoppedEmployee = (employee: EmpLite) => {
     setStoppedEmployeeIds((prev) => new Set(prev).add(employee.id));
@@ -551,6 +558,7 @@ export default function HRPayrollStatement() {
       });
       setApprovalOpen(false);
       setSelected(new Set());
+      setStoppedEmployeeIds(new Set());
       setPageMode("setup");
     } catch (error) {
       toast({ title: t("تعذر تطبيق كشف الرواتب"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
@@ -562,56 +570,64 @@ export default function HRPayrollStatement() {
   return (
     <Layout>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
+        <div className="overflow-visible rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-5 py-4">
             <h2 className="text-lg font-bold text-gray-800">{t("حساب الراتب")}</h2>
           </div>
 
-          <div className="p-6 space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-5 p-5">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-3">
               <FilterSelect t={t} label="السنة" value={yearFilter} onChange={setYearFilter} options={options.years} />
               <FilterSelect t={t} label="شهر" value={monthFilter} onChange={setMonthFilter} options={options.months.map((m) => ({ value: m.value, label: m.label }))} />
-              <FilterSelect t={t} label="الفئة" value={typeFilter} onChange={setTypeFilter} options={options.types} />
+              <FilterSelect t={t} label="الفرع" value={branchFilter} onChange={setBranchFilter} options={options.branches} />
 
               <FilterSelect t={t} label="مكان العمل" value={locationFilter} onChange={setLocationFilter} options={options.locations} />
               <FilterSelect t={t} label="الإدارة" value={departmentFilter} onChange={setDepartmentFilter} options={options.departments} />
-              <FilterSelect t={t} label="القسم/الفرع" value={branchFilter} onChange={setBranchFilter} options={options.branches} />
+              <FilterSelect t={t} label="القسم" value={sectionFilter} onChange={setSectionFilter} options={options.sections} />
 
-              <FilterSelect t={t} label="إيقاف/تفعيل الموظفين" value={statusFilter} onChange={setStatusFilter} options={options.statuses} />
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">{t("نوع الموظفين")}</label>
-                <div className="h-10 border border-gray-300 rounded-md px-3 flex items-center bg-gray-50 text-sm text-gray-700">
-                  {t(typeFilter)}
+              <div className="relative space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-gray-700">{t("إيقاف رواتب الموظفين")}</label>
+                <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-md border border-gray-300 bg-white px-2 py-1">
+                  {filtered.filter((employee) => stoppedEmployeeIds.has(employee.id)).map((employee) => (
+                    <span key={employee.id} className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">
+                      {employee.name}
+                      <button type="button" onClick={() => removeStoppedEmployee(employee.id)} aria-label={`${t("إلغاء إيقاف راتب")} ${employee.name}`}><X className="h-3 w-3" /></button>
+                    </span>
+                  ))}
+                  <input value={approvalStopKeyword} onChange={(event) => setApprovalStopKeyword(event.target.value)} placeholder={t("ابدأ بكتابة اسم الموظف")} className="min-w-48 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none" />
                 </div>
+                {stopSuggestions.length > 0 && !approvalOpen && (
+                  <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+                    {stopSuggestions.map((employee) => <button key={employee.id} type="button" onClick={() => addStoppedEmployee(employee)} className="block w-full border-b px-4 py-2 text-start text-sm last:border-0 hover:bg-gray-50"><span className="font-medium">{employee.name}</span><span className="ms-2 text-xs text-gray-400">{employee.section}</span></button>)}
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">{t("بحث الموظفين")}</label>
-                <div className="relative">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder={t("بحث بالاسم / القسم / الفرع")}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-3 pr-9 h-10"
-                  />
-                </div>
-              </div>
+              <FilterSelect t={t} label="نوع الموظفين" value={typeFilter} onChange={setTypeFilter} options={options.types} />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={handleFullReport}>{t("تقرير كامل")}</Button>
-              <Button onClick={handleGenerate} disabled={generating || selected.size === 0} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
+            <div className="flex flex-wrap justify-end gap-3 pt-1">
+              <Button onClick={handleGenerate} disabled={generating || selected.size === 0} className="bg-[#075f94] text-white hover:bg-[#064f7b]">
                 {generating ? t("جاري المعالجة...") : t("اختيار الموظفين (تفصيلي)")}
               </Button>
+              <Button variant="outline" onClick={handleFullReport}>{t("تقرير شامل (ملخص)")}</Button>
             </div>
           </div>
         </div>
 
         {pageMode === "setup" ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center gap-4">
-              <h2 className="text-lg font-bold text-gray-800">{t("الموظفون")} ({formatNumber(filtered.length)})</h2>
-              <div className="text-sm text-gray-600">{t("فترة المسير")}: {period}</div>
+            <div className="space-y-4 border-b border-gray-100 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-lg font-bold text-gray-800">{t("الموظفون")}</h2>
+                <div className="text-sm text-gray-500">{t("فترة المسير")}: {period}</div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input placeholder={t("بحث")} value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 pr-9" />
+                </div>
+                <span className="text-xs text-gray-500">{formatNumber(filtered.length)} {t("من السجلات")}</span>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -629,19 +645,17 @@ export default function HRPayrollStatement() {
                     <th className="py-3 px-4 font-medium">{t("الاسم")}</th>
                     <th className="py-3 px-4 font-medium">{t("المسمى الوظيفي")}</th>
                     <th className="py-3 px-4 font-medium">{t("الإدارة")}</th>
-                    <th className="py-3 px-4 font-medium">{t("القسم/الفرع")}</th>
+                    <th className="py-3 px-4 font-medium">{t("القسم")}</th>
                     <th className="py-3 px-4 font-medium">{t("مكان العمل")}</th>
-                    <th className="py-3 px-4 font-medium">{t("نوع الموظف")}</th>
-                    <th className="py-3 px-4 font-medium">{t("الحالة")}</th>
-                    <th className="py-3 px-4 font-medium">{t("الراتب الأساسي")}</th>
+                    <th className="py-3 px-4 font-medium">{t("وقت العمل")}</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
-                    <tr><td colSpan={10} className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
+                    <tr><td colSpan={8} className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={10} className="py-8 text-center text-gray-500">{t("لا يوجد موظفون مطابقون للفلاتر")}</td></tr>
+                    <tr><td colSpan={8} className="py-8 text-center text-gray-500">{t("لا يوجد موظفون مطابقون للفلاتر")}</td></tr>
                   ) : (
                     filtered.map((emp) => (
                       <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
@@ -656,11 +670,9 @@ export default function HRPayrollStatement() {
                         <td className="py-3 px-4 font-medium text-gray-900">{emp.name}</td>
                         <td className="py-3 px-4">{emp.jobTitle || t("غير متوفر")}</td>
                         <td className="py-3 px-4">{emp.department || t("غير متوفر")}</td>
-                        <td className="py-3 px-4">{emp.branch || t("غير متوفر")}</td>
+                        <td className="py-3 px-4">{emp.section || t("غير متوفر")}</td>
                         <td className="py-3 px-4">{emp.workLocation || t("غير متوفر")}</td>
-                        <td className="py-3 px-4">{emp.employeeType || t("غير متوفر")}</td>
-                        <td className="py-3 px-4">{emp.status ? t(emp.status) : t("غير متوفر")}</td>
-                        <td className="py-3 px-4 font-semibold text-emerald-700">{formatNumber(emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ر.س")}</td>
+                        <td className="py-3 px-4">{emp.workTime || t("غير متوفر")}</td>
                       </tr>
                     ))
                   )}

@@ -1939,6 +1939,7 @@ Object.assign(translations, {
   "القسم المرسل": "Sending department",
   "المسؤول المرسل": "Responsible sender",
   "تمت المراجعة بواسطة": "Reviewed by",
+  "ميلادي": "Gregorian",
 });
 
 const getInitialLocale = (): Locale => {

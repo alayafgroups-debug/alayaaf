@@ -16,8 +16,13 @@ type EmpLite = {
   empId: string;
   name: string;
   jobTitle: string;
+  departmentId: string;
   department: string;
+  sectionId: string;
+  section: string;
+  branchId: string;
   branch: string;
+  workLocationId: string;
   workLocation: string;
   employeeType: string;
   status: string;
@@ -78,6 +83,10 @@ export default function HRPayrollStatement() {
   const { t, locale, direction, formatNumber, formatDate } = useI18n();
   const [search, setSearch] = useState("");
   const [employees, setEmployees] = useState<EmpLite[]>([]);
+  const [organizationBranches, setOrganizationBranches] = useState<{ id: string; name: string }[]>([]);
+  const [organizationDepartments, setOrganizationDepartments] = useState<{ id: string; name: string; branchId: string }[]>([]);
+  const [organizationSections, setOrganizationSections] = useState<{ id: string; name: string; departmentId: string }[]>([]);
+  const [organizationLocations, setOrganizationLocations] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
@@ -97,6 +106,7 @@ export default function HRPayrollStatement() {
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
 
   const [approvalDepartment, setApprovalDepartment] = useState("الكل");
+  const [approvalSection, setApprovalSection] = useState("الكل");
   const [approvalBranch, setApprovalBranch] = useState("الكل");
   const [approvalLocation, setApprovalLocation] = useState("الكل");
   const [approvalStopKeyword, setApprovalStopKeyword] = useState("");
@@ -106,23 +116,33 @@ export default function HRPayrollStatement() {
     const load = async () => {
       setLoading(true);
       try {
-        const [employeeResult, departmentResult, branchResult, locationResult, jobResult] = await Promise.all([
-          supabase.from("employees").select("id, emp_id, name, job_title, department_id, branch_id, attendance_location_id, employment_type, status, nationality, base_salary").order("name"),
-          supabase.from("departments").select("id, name, name_en").eq("status", "فعال"),
+        const [employeeResult, departmentResult, sectionResult, branchResult, locationResult, jobResult] = await Promise.all([
+          supabase.from("employees").select("id, emp_id, name, job_title, department_id, section_id, branch_id, attendance_location_id, employment_type, status, nationality, base_salary").order("name"),
+          supabase.from("departments").select("id, name, name_en, branch_id").eq("status", "فعال"),
+          supabase.from("org_sections").select("id, name, name_en, department_id").eq("status", "فعال"),
           supabase.from("branches").select("id, name, name_en").eq("status", "فعال"),
           supabase.from("hr_work_locations").select("id, name, name_en").eq("status", "فعال"),
           supabase.from("hr_jobs").select("name, name_en").eq("status", "فعال"),
         ]);
-        const firstError = employeeResult.error ?? departmentResult.error ?? branchResult.error ?? locationResult.error ?? jobResult.error;
+        const firstError = employeeResult.error ?? departmentResult.error ?? sectionResult.error ?? branchResult.error ?? locationResult.error ?? jobResult.error;
         if (firstError) {
           toast({ title: t("تعذر تحميل الموظفين"), description: firstError.message });
           return;
         }
 
         const localizedName = (row: { name?: unknown; name_en?: unknown }) => locale === "en" && String(row.name_en ?? "").trim() ? String(row.name_en) : String(row.name ?? "");
-        const departmentById = new Map((departmentResult.data ?? []).map((row) => [String(row.id), localizedName(row)]));
-        const branchById = new Map((branchResult.data ?? []).map((row) => [String(row.id), localizedName(row)]));
-        const locationById = new Map((locationResult.data ?? []).map((row) => [String(row.id), localizedName(row)]));
+        const departmentOptions = (departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row), branchId: String(row.branch_id ?? "") }));
+        const sectionOptions = (sectionResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row), departmentId: String(row.department_id ?? "") }));
+        const branchOptions = (branchResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row) }));
+        const locationOptions = (locationResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row) }));
+        const departmentById = new Map(departmentOptions.map((row) => [row.id, row.name]));
+        const sectionById = new Map(sectionOptions.map((row) => [row.id, row.name]));
+        const branchById = new Map(branchOptions.map((row) => [row.id, row.name]));
+        const locationById = new Map(locationOptions.map((row) => [row.id, row.name]));
+        setOrganizationDepartments(departmentOptions);
+        setOrganizationSections(sectionOptions);
+        setOrganizationBranches(branchOptions);
+        setOrganizationLocations(locationOptions);
         const jobByName = new Map((jobResult.data ?? []).map((row) => [String(row.name), localizedName(row)]));
         setEmployees(
           (employeeResult.data ?? []).map((r) => ({
@@ -130,8 +150,13 @@ export default function HRPayrollStatement() {
             empId: String(r.emp_id ?? r.id ?? ""),
             name: String(r.name ?? ""),
             jobTitle: jobByName.get(String(r.job_title ?? "")) || t("غير مرتبط"),
+            departmentId: String(r.department_id ?? ""),
             department: departmentById.get(String(r.department_id ?? "")) || t("غير مرتبط"),
+            sectionId: String(r.section_id ?? ""),
+            section: sectionById.get(String(r.section_id ?? "")) || t("غير مرتبط"),
+            branchId: String(r.branch_id ?? ""),
             branch: branchById.get(String(r.branch_id ?? "")) || t("غير مرتبط"),
+            workLocationId: String(r.attendance_location_id ?? ""),
             workLocation: locationById.get(String(r.attendance_location_id ?? "")) || t("غير مرتبط"),
             employeeType: String(r.employment_type ?? "أساسي"),
             status: String(r.status ?? "نشط"),
@@ -357,7 +382,7 @@ export default function HRPayrollStatement() {
   ];
   const payrollRows = selectedEmployees.map((employee) => {
     const computed = calc[employee.id];
-    return { empId: employee.empId, name: employee.name, department: employee.department || t("غير متوفر"), branch: employee.branch || t("غير متوفر"), workDays: computed ? `${formatNumber(computed.presentDays)}/${formatNumber(computed.workDays)}` : t("غير متوفر"), basic: formatNumber(computed?.basic ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), allowances: formatNumber(computed?.allowances ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), overtime: formatNumber(computed?.overtime ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), socialInsurance: formatNumber(computed?.socialInsurance ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), deductions: formatNumber(computed?.deductions ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), net: formatNumber(computed?.net ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
+    return { empId: employee.empId, name: employee.name, department: employee.section || t("غير متوفر"), branch: employee.branch || t("غير متوفر"), workDays: computed ? `${formatNumber(computed.presentDays)}/${formatNumber(computed.workDays)}` : t("غير متوفر"), basic: formatNumber(computed?.basic ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), allowances: formatNumber(computed?.allowances ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), overtime: formatNumber(computed?.overtime ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), socialInsurance: formatNumber(computed?.socialInsurance ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), deductions: formatNumber(computed?.deductions ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), net: formatNumber(computed?.net ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
   });
   const payrollTotal = selectedEmployees.reduce((total, employee) => total + (calc[employee.id]?.net ?? employee.baseSalary), 0);
   const payrollSubtitle = `${t("كشف الرواتب")} ${formatDate(`${period}-01`, { month: "long", year: "numeric" })}`;
@@ -368,6 +393,7 @@ export default function HRPayrollStatement() {
     setApprovalScope("all");
     setApprovalStep(1);
     setApprovalDepartment("الكل");
+    setApprovalSection("الكل");
     setApprovalBranch("الكل");
     setApprovalLocation("الكل");
     setApprovalStopKeyword("");
@@ -379,9 +405,10 @@ export default function HRPayrollStatement() {
     if (approvalScope === "all") return selectedEmployees;
 
     return selectedEmployees.filter((e) => {
-      if (approvalDepartment !== "الكل" && e.department !== approvalDepartment) return false;
-      if (approvalBranch !== "الكل" && e.branch !== approvalBranch) return false;
-      if (approvalLocation !== "الكل" && e.workLocation !== approvalLocation) return false;
+      if (approvalDepartment !== "الكل" && e.departmentId !== approvalDepartment) return false;
+      if (approvalSection !== "الكل" && e.sectionId !== approvalSection) return false;
+      if (approvalBranch !== "الكل" && e.branchId !== approvalBranch) return false;
+      if (approvalLocation !== "الكل" && e.workLocationId !== approvalLocation) return false;
       return true;
     });
   };
@@ -393,7 +420,7 @@ export default function HRPayrollStatement() {
     return getApprovalEmployees()
       .filter((e) => !stoppedEmployeeIds.has(e.id) && e.name.includes(keyword))
       .slice(0, 6);
-  }, [approvalStopKeyword, selectedEmployees, approvalScope, approvalDepartment, approvalBranch, approvalLocation, stoppedEmployeeIds]);
+  }, [approvalStopKeyword, selectedEmployees, approvalScope, approvalDepartment, approvalSection, approvalBranch, approvalLocation, stoppedEmployeeIds]);
 
   const addStoppedEmployee = (employee: EmpLite) => {
     setStoppedEmployeeIds((prev) => new Set(prev).add(employee.id));
@@ -432,7 +459,7 @@ export default function HRPayrollStatement() {
           return {
             emp_id: employee.empId,
             emp_name: employee.name,
-            department: employee.department,
+            department: employee.section,
             month: period,
             basic_salary: c.basic,
             allowances: c.allowances + c.overtime,
@@ -688,7 +715,7 @@ export default function HRPayrollStatement() {
                     <tr key={emp.id} className="hover:bg-gray-50">
                       <td className="py-2 px-2">{formatNumber(idx + 1)}</td>
                       <td className="py-2 px-2 font-medium">{emp.name}</td>
-                      <td className="py-2 px-2">{emp.department || t("غير متوفر")}</td>
+                      <td className="py-2 px-2">{emp.section || t("غير متوفر")}</td>
                       <td className="py-2 px-2">{emp.branch || t("غير متوفر")}</td>
                       <td className="py-2 px-2">{c ? `${formatNumber(c.presentDays)}/${formatNumber(c.workDays)}` : t("غير متوفر")}</td>
                       <td className="py-2 px-2">{formatNumber(c?.basic ?? emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -733,24 +760,31 @@ export default function HRPayrollStatement() {
                 {approvalStep === 2 && approvalScope === "partial" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">{t("اختر الإدارة")}</label>
-                      <select value={approvalDepartment} onChange={(e) => setApprovalDepartment(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
+                      <label className="text-lg font-semibold text-gray-700">{t("اختر الفرع")}</label>
+                      <select value={approvalBranch} onChange={(e) => { setApprovalBranch(e.target.value); setApprovalDepartment("الكل"); setApprovalSection("الكل"); }} className="w-full h-12 border border-gray-300 rounded-md px-3">
                         <option value="الكل">{t("الكل")}</option>
-                        {options.departments.filter((d) => d !== "الكل").map((d) => <option key={d}>{d}</option>)}
+                        {organizationBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">{t("اختر الفرع")}</label>
-                      <select value={approvalBranch} onChange={(e) => setApprovalBranch(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
+                      <label className="text-lg font-semibold text-gray-700">{t("اختر الإدارة")}</label>
+                      <select value={approvalDepartment} onChange={(e) => { setApprovalDepartment(e.target.value); setApprovalSection("الكل"); }} className="w-full h-12 border border-gray-300 rounded-md px-3">
                         <option value="الكل">{t("الكل")}</option>
-                        {options.branches.filter((b) => b !== "الكل").map((b) => <option key={b}>{b}</option>)}
+                        {organizationDepartments.filter((department) => approvalBranch === "الكل" || department.branchId === approvalBranch).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
                       </select>
                     </div>
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="space-y-2">
+                      <label className="text-lg font-semibold text-gray-700">{t("اختر القسم")}</label>
+                      <select value={approvalSection} onChange={(e) => setApprovalSection(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
+                        <option value="الكل">{t("الكل")}</option>
+                        {organizationSections.filter((section) => approvalDepartment === "الكل" || section.departmentId === approvalDepartment).map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
                       <label className="text-lg font-semibold text-gray-700">{t("اختر موقع العمل")}</label>
                       <select value={approvalLocation} onChange={(e) => setApprovalLocation(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
                         <option value="الكل">{t("الكل")}</option>
-                        {options.locations.filter((l) => l !== "الكل").map((l) => <option key={l}>{l}</option>)}
+                        {organizationLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2 md:col-span-2">

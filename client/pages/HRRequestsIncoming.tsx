@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { readUserSession } from "@/lib/authSession";
 
 type RequestRow = {
   id: string; requestDate: string; empId: string; empName: string;
   moveType: string; requestType: string; status: string; lastUpdate: string;
   adminNote: string; signatureData: string; signedAt: string; source: "leave" | "request";
-  details: Record<string, unknown>;
+  details: Record<string, unknown>; senderDepartment: string; senderName: string;
 };
 
 type PayrollDetailRow = {
@@ -61,18 +62,23 @@ export default function HRRequestsIncoming() {
         status: normalizeStatus(String(r.status ?? "").trim()),
         lastUpdate: r.updated_at ?? "",
         adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "leave",
-        details: {},
+        details: {}, senderDepartment: "", senderName: r.emp_name ?? "",
       }));
 
-      const reqRows: RequestRow[] = (reqRes.data ?? []).map((r: any) => ({
-        id: String(r.id), requestDate: r.created_at ?? "",
-        empId: r.emp_id ?? "", empName: r.emp_name ?? "",
-        moveType: "طلب", requestType: r.request_type ?? "",
-        status: normalizeStatus(String(r.status ?? "").trim()),
-        lastUpdate: r.updated_at ?? "",
-        adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "request",
-        details: r.details && typeof r.details === "object" ? r.details as Record<string, unknown> : {},
-      }));
+      const reqRows: RequestRow[] = (reqRes.data ?? []).map((r: any) => {
+        const details = r.details && typeof r.details === "object" ? r.details as Record<string, unknown> : {};
+        return {
+          id: String(r.id), requestDate: r.created_at ?? "",
+          empId: r.emp_id ?? "", empName: r.emp_name ?? "",
+          moveType: "طلب", requestType: r.request_type ?? "",
+          status: normalizeStatus(String(r.status ?? "").trim()),
+          lastUpdate: r.updated_at ?? "",
+          adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "request" as const,
+          details,
+          senderDepartment: String(details.sender_department ?? ""),
+          senderName: String(details.sender_name ?? r.emp_name ?? ""),
+        };
+      });
 
       setItems([...leaveRows, ...reqRows].sort((a, b) => b.requestDate.localeCompare(a.requestDate)));
     } catch { setItems([]); } finally { setLoading(false); }
@@ -102,12 +108,26 @@ export default function HRRequestsIncoming() {
         if (payrollError) throw payrollError;
       }
 
+      const reviewer = readUserSession();
+      const requestUpdate = item.source === "request"
+        ? {
+            status,
+            admin_note: reviewNotes[item.id]?.trim() || item.adminNote || null,
+            details: {
+              ...item.details,
+              reviewed_by_name: reviewer?.name ?? "",
+              reviewed_by_user_id: reviewer?.id ?? "",
+              reviewed_at: new Date().toISOString(),
+              review_decision: status,
+            },
+          }
+        : {
+            status,
+            admin_note: reviewNotes[item.id]?.trim() || item.adminNote || null,
+          };
       const { error } = await supabase
         .from(item.source === "leave" ? "leave_requests" : "hr_requests")
-        .update({
-          status,
-          admin_note: reviewNotes[item.id]?.trim() || item.adminNote || null,
-        })
+        .update(requestUpdate)
         .eq("id", item.id);
       if (error) throw error;
 
@@ -195,7 +215,10 @@ export default function HRRequestsIncoming() {
                 ) : filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50/50">
                     <td className="py-3 px-4">{formatRequestDate(row.requestDate)}</td>
-                    <td className="py-3 px-4 font-medium">{row.empName}</td>
+                    <td className="py-3 px-4 font-medium">
+                      <div>{row.senderDepartment || row.senderName}</div>
+                      {row.senderDepartment && row.senderName && <div className="mt-1 text-xs font-normal text-gray-500">{row.senderName}</div>}
+                    </td>
                     <td className="py-3 px-4">{t(row.moveType)}</td>
                     <td className="py-3 px-4">{row.requestType ? t(row.requestType) : "—"}</td>
                     <td className="py-3 px-4 text-center">
@@ -248,12 +271,13 @@ export default function HRRequestsIncoming() {
               <div className="flex items-center justify-between border-b px-5 py-4">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">{t("تفاصيل الطلب")}</h2>
-                  <p className="mt-1 text-sm text-gray-500">{t(detailRequest.requestType)} — {detailRequest.empName}</p>
+                  <p className="mt-1 text-sm text-gray-500">{t(detailRequest.requestType)} — {detailRequest.senderDepartment || detailRequest.senderName}</p>
                 </div>
                 <button onClick={() => setDetailRequest(null)} className="rounded-md p-2 text-gray-500 hover:bg-gray-100" title={t("إغلاق")}><X className="h-5 w-5" /></button>
               </div>
               <div className="grid gap-3 border-b bg-gray-50 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <div><span className="block text-xs text-gray-500">{t("المرسل")}</span><strong>{detailRequest.empName}</strong></div>
+                <div><span className="block text-xs text-gray-500">{t("القسم المرسل")}</span><strong>{detailRequest.senderDepartment || "—"}</strong></div>
+                <div><span className="block text-xs text-gray-500">{t("المسؤول المرسل")}</span><strong>{detailRequest.senderName || "—"}</strong></div>
                 <div><span className="block text-xs text-gray-500">{t("نوع الطلب")}</span><strong>{t(detailRequest.requestType)}</strong></div>
                 <div><span className="block text-xs text-gray-500">{t("تاريخ الطلب")}</span><strong>{formatRequestDate(detailRequest.requestDate)}</strong></div>
                 <div><span className="block text-xs text-gray-500">{t("الحالة")}</span><strong>{t(detailRequest.status)}</strong></div>

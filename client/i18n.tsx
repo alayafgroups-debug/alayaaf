@@ -1935,6 +1935,10 @@ Object.assign(translations, {
   "فترة الرواتب": "Payroll period",
   "رواتب قيد الاعتماد": "Payrolls pending approval",
   "رواتب موقوفة": "Stopped payrolls",
+  "مسؤول الموارد البشرية": "Human Resources officer",
+  "القسم المرسل": "Sending department",
+  "المسؤول المرسل": "Responsible sender",
+  "تمت المراجعة بواسطة": "Reviewed by",
 });
 
 const getInitialLocale = (): Locale => {

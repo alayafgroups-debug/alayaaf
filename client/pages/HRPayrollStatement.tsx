@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 import { useI18n } from "@/i18n";
+import { readUserSession } from "@/lib/authSession";
 
 type EmpLite = {
   id: string;
@@ -463,8 +464,14 @@ export default function HRPayrollStatement() {
         if (error) throw error;
       }
 
+      const session = readUserSession();
+      const senderName = session?.name?.trim() || t("مسؤول الموارد البشرية");
       const requestDetails = {
         workflow: "payroll_approval",
+        sender_department: "قسم الموارد البشرية",
+        sender_name: senderName,
+        sender_user_id: session?.id ?? "",
+        sender_emp_id: session?.empId ?? "",
         payroll_period: period,
         employee_ids: target.map((employee) => employee.empId),
         active_employee_ids: activeIds,
@@ -488,7 +495,7 @@ export default function HRPayrollStatement() {
           .from("hr_requests")
           .update({
             emp_id: `PAYROLL-${period}`,
-            emp_name: "قسم الرواتب",
+            emp_name: `قسم الموارد البشرية — ${senderName}`,
             start_date: `${period}-01`,
             end_date: `${period}-${String(new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
             status: "معلق",
@@ -501,7 +508,7 @@ export default function HRPayrollStatement() {
       } else {
         const { error: requestError } = await supabase.from("hr_requests").insert({
           emp_id: `PAYROLL-${period}`,
-          emp_name: "قسم الرواتب",
+          emp_name: `قسم الموارد البشرية — ${senderName}`,
           request_type: "اعتماد رواتب الموظفين",
           start_date: `${period}-01`,
           end_date: `${period}-${String(new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,

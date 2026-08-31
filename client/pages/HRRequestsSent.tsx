@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 
-type Request = { id: string; type: string; date: string; status: string; notes: string; approver: string; source: "leave" | "request" };
+type Request = { id: string; type: string; date: string; status: string; notes: string; approver: string; senderDepartment: string; senderName: string; source: "leave" | "request" };
 
 const normalizeStatus = (raw: string) =>
   ["معلق", "معلقة", "pending"].includes(raw)
@@ -41,17 +41,23 @@ export default function HRRequestsSent() {
       const leaveRows: Request[] = (leaveRes.data ?? []).map((r: any) => ({
         id: String(r.id), type: r.leave_type ?? "إجازة",
         date: r.created_at ?? "",
-        status: normalizeStatus(String(r.status ?? "").trim()), notes: r.notes ?? "-",
-        approver: "مدير الموارد البشرية", source: "leave",
+        status: normalizeStatus(String(r.status ?? "").trim()), notes: r.admin_note ?? r.notes ?? "-",
+        approver: r.approver_name ?? "-", senderDepartment: "", senderName: r.emp_name ?? "", source: "leave",
       }));
 
-      const reqRows: Request[] = (reqRes.data ?? []).map((r: any) => ({
-        id: String(r.id), type: r.request_type ?? "طلب",
-        date: r.created_at ?? "",
-        status: normalizeStatus(String(r.status ?? "").trim()),
-        notes: r.details ? JSON.stringify(r.details) : "-",
-        approver: "مدير الموارد البشرية", source: "request",
-      }));
+      const reqRows: Request[] = (reqRes.data ?? []).map((r: any) => {
+        const details = r.details && typeof r.details === "object" ? r.details as Record<string, unknown> : {};
+        return {
+          id: String(r.id), type: r.request_type ?? "طلب",
+          date: r.created_at ?? "",
+          status: normalizeStatus(String(r.status ?? "").trim()),
+          notes: r.admin_note ?? "-",
+          approver: String(details.reviewed_by_name ?? "-"),
+          senderDepartment: String(details.sender_department ?? ""),
+          senderName: String(details.sender_name ?? r.emp_name ?? ""),
+          source: "request" as const,
+        };
+      });
 
       setItems([...leaveRows, ...reqRows].sort((a, b) => b.date.localeCompare(a.date)));
     } catch { setItems([]); } finally { setLoading(false); }
@@ -72,7 +78,7 @@ export default function HRRequestsSent() {
 
   const filtered = items.filter((r) => {
     if (filter && r.status !== filter) return false;
-    if (search && !r.type.includes(search) && !r.approver.includes(search)) return false;
+    if (search && !r.type.includes(search) && !r.approver.includes(search) && !r.senderDepartment.includes(search) && !r.senderName.includes(search)) return false;
     return true;
   });
 
@@ -122,7 +128,8 @@ export default function HRRequestsSent() {
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="px-4 py-3 text-right font-semibold text-gray-700">{t("إجراءات")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("الحالة")}</th>
-                  <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("جهة الموافقة")}</th>
+                  <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("المرسل (القسم أو الموظف)")}</th>
+                  <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("تمت المراجعة بواسطة")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("الملاحظات")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("تاريخ الإرسال")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("نوع الطلب")}</th>
@@ -130,9 +137,9 @@ export default function HRRequestsSent() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6} className="py-12 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
+                  <tr><td colSpan={7} className="py-12 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={6} className="py-12 text-center text-gray-400">{t("لا توجد طلبات مرسلة")}</td></tr>
+                  <tr><td colSpan={7} className="py-12 text-center text-gray-400">{t("لا توجد طلبات مرسلة")}</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/60">
                     <td className="px-4 py-3">
@@ -144,7 +151,8 @@ export default function HRRequestsSent() {
                     <td className="px-4 py-3">
                       <span className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border", STATUS_STYLE[r.status] ?? "bg-gray-100 text-gray-600")}>{t(r.status)}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{t(r.approver)}</td>
+                    <td className="px-4 py-3 text-gray-600"><div>{r.senderDepartment || r.senderName}</div>{r.senderDepartment && r.senderName && <div className="mt-1 text-xs text-gray-400">{r.senderName}</div>}</td>
+                    <td className="px-4 py-3 text-gray-600">{r.approver === "-" ? "-" : r.approver}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px] truncate">{r.notes}</td>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{r.date ? formatDate(r.date) : "-"}</td>
                     <td className="px-4 py-3 font-medium text-gray-700">{t(r.type)}</td>

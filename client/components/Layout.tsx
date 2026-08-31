@@ -186,6 +186,11 @@ const hrNavItems: HRNavItem[] = [
     children: [
       { icon: Clock, label: "حساب الدوام", href: "/hr/attendance/calculate" },
       {
+        icon: FileBarChart,
+        label: "الحضور والغياب للموظفين",
+        href: "/hr/attendance/monthly",
+      },
+      {
         icon: FileText,
         label: "تقرير الحضور والانصراف",
         href: "/hr/attendance/report",
@@ -194,11 +199,6 @@ const hrNavItems: HRNavItem[] = [
         icon: Users,
         label: "التحضير الفردي والجماعي",
         href: "/hr/attendance/individual-group",
-      },
-      {
-        icon: FileBarChart,
-        label: "تقرير الحضور الشهري",
-        href: "/hr/attendance/monthly",
       },
       {
         icon: Settings,

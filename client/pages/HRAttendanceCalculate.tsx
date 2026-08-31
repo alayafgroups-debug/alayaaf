@@ -79,7 +79,7 @@ function FilterSelect({ label, value, onChange, options, allLabel }: { label: st
 }
 
 export default function HRAttendanceCalculate() {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, locale, direction, formatNumber } = useI18n();
   const initialRange = monthRange();
   const [dateFrom, setDateFrom] = useState(initialRange.from);
   const [dateTo, setDateTo] = useState(initialRange.to);
@@ -127,26 +127,34 @@ export default function HRAttendanceCalculate() {
       supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes, notes").gte("date", dateFrom).lte("date", dateTo).order("date"),
       supabase.from("overtime_records").select("employee_id, date, hours").gte("date", dateFrom).lte("date", dateTo).in("status", ["معتمدة", "معتمد", "approved"]),
       supabase.from("hr_requests").select("emp_id, start_date, details").eq("request_type", "استئذان").gte("start_date", dateFrom).lte("start_date", dateTo).in("status", ["معتمدة", "معتمد", "approved"]),
-      supabase.from("departments").select("id, name, branch_id").eq("status", "فعال").order("name"),
-      supabase.from("org_sections").select("id, name, department_id").eq("status", "فعال").order("name"),
-      supabase.from("branches").select("id, name").eq("status", "فعال").order("name"),
-      supabase.from("hr_jobs").select("id, name").eq("status", "فعال").order("name"),
+      supabase.from("departments").select("id, name, name_en, branch_id").eq("status", "فعال").order("name"),
+      supabase.from("org_sections").select("id, name, name_en, department_id").eq("status", "فعال").order("name"),
+      supabase.from("branches").select("id, name, name_en").eq("status", "فعال").order("name"),
+      supabase.from("hr_jobs").select("id, name, name_en").eq("status", "فعال").order("name"),
       supabase.from("attendance_schedules").select("id, name").eq("status", "فعال").order("name"),
-      supabase.from("hr_work_locations").select("id, name").eq("status", "فعال").order("name"),
+      supabase.from("hr_work_locations").select("id, name, name_en").eq("status", "فعال").order("name"),
     ]);
     const firstError = employeeResult.error ?? attendanceResult.error ?? overtimeResult.error ?? permissionResult.error ?? departmentResult.error ?? sectionResult.error ?? branchResult.error ?? jobResult.error ?? scheduleResult.error ?? locationResult.error;
     if (firstError) { setError(firstError.message); setLoading(false); return; }
-    const branchRows: BranchOption[] = (branchResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) }));
+    const localizedName = (row: { name: unknown; name_en?: unknown }) => {
+      const arabicName = String(row.name ?? "");
+      const englishName = String(row.name_en ?? "").trim();
+      return locale === "en" ? englishName || t(arabicName) : arabicName;
+    };
+    const branchRows: BranchOption[] = (branchResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row) }));
     const branchById = new Map(branchRows.map((item) => [item.id, item.name]));
-    const departmentRows: DepartmentOption[] = (departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name), branchId: String(row.branch_id ?? "") }));
+    const departmentRows: DepartmentOption[] = (departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row), branchId: String(row.branch_id ?? "") }));
     const departmentById = new Map(departmentRows.map((item) => [item.id, item.name]));
-    const sectionRows: SectionOption[] = (sectionResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name), departmentId: String(row.department_id ?? "") }));
+    const sectionRows: SectionOption[] = (sectionResult.data ?? []).map((row) => ({ id: String(row.id), name: localizedName(row), departmentId: String(row.department_id ?? "") }));
     const sectionById = new Map(sectionRows.map((item) => [item.id, item.name]));
+    const jobByName = new Map((jobResult.data ?? []).map((row) => [String(row.name ?? ""), localizedName(row)]));
+    const scheduleByName = new Map((scheduleResult.data ?? []).map((row) => [String(row.name ?? ""), t(String(row.name ?? ""))]));
+    const locationByName = new Map((locationResult.data ?? []).map((row) => [String(row.name ?? ""), localizedName(row)]));
     const loadedEmployees: Employee[] = (employeeResult.data ?? []).map((row) => ({
-      id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branchId: String(row.branch_id ?? ""), branch: branchById.get(String(row.branch_id ?? "")) || String(row.branch ?? ""),
-      departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || String(row.directorate ?? ""),
-      sectionId: String(row.section_id ?? ""), section: sectionById.get(String(row.section_id ?? "")) || String(row.department ?? ""),
-      jobTitle: String(row.job_title ?? ""), workSchedule: String(row.work_schedule ?? ""), workLocation: String(row.work_location ?? ""), photoUrl: String(row.photo_url ?? ""), dailyHours: Number(row.daily_hours ?? 8),
+      id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branchId: String(row.branch_id ?? ""), branch: branchById.get(String(row.branch_id ?? "")) || t(String(row.branch ?? "")),
+      departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || t(String(row.directorate ?? "")),
+      sectionId: String(row.section_id ?? ""), section: sectionById.get(String(row.section_id ?? "")) || t(String(row.department ?? "")),
+      jobTitle: jobByName.get(String(row.job_title ?? "")) || t(String(row.job_title ?? "")), workSchedule: scheduleByName.get(String(row.work_schedule ?? "")) || t(String(row.work_schedule ?? "")), workLocation: locationByName.get(String(row.work_location ?? "")) || t(String(row.work_location ?? "")), photoUrl: String(row.photo_url ?? ""), dailyHours: Number(row.daily_hours ?? 8),
     }));
     setDepartments(departmentRows);
     setSections(sectionRows);
@@ -155,13 +163,13 @@ export default function HRAttendanceCalculate() {
     setOvertimeRecords((overtimeResult.data ?? []).map((row) => ({ employeeId: String(row.employee_id ?? ""), date: String(row.date ?? ""), hours: Number(row.hours ?? 0) })));
     setPermissionRecords((permissionResult.data ?? []).map((row) => { const details = row.details && typeof row.details === "object" ? row.details as Record<string, unknown> : {}; return { empId: String(row.emp_id ?? ""), date: String(row.start_date ?? ""), hours: Number(details.hours ?? 0) }; }));
     setBranches(branchRows);
-    setJobTitles(unique([...(jobResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.jobTitle)]));
-    setWorkSchedules(unique([...(scheduleResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.workSchedule)]));
-    setWorkLocations(unique([...(locationResult.data ?? []).map((row) => String(row.name ?? "")), ...loadedEmployees.map((item) => item.workLocation)]));
+    setJobTitles(unique([...(jobResult.data ?? []).map((row) => localizedName(row)), ...loadedEmployees.map((item) => item.jobTitle)]));
+    setWorkSchedules(unique([...(scheduleResult.data ?? []).map((row) => t(String(row.name ?? ""))), ...loadedEmployees.map((item) => item.workSchedule)]));
+    setWorkLocations(unique([...(locationResult.data ?? []).map((row) => localizedName(row)), ...loadedEmployees.map((item) => item.workLocation)]));
     setLoading(false);
   };
 
-  useEffect(() => { void loadData(); }, [dateFrom, dateTo]);
+  useEffect(() => { void loadData(); }, [dateFrom, dateTo, locale]);
   useEffect(() => { setPage(1); }, [branch, departmentId, sectionId, selectedEmployeeIds, jobTitle, workSchedule, workLocation, statusFilter, mode, search, pageSize]);
 
   const employeeSummaries = useMemo<EmployeeSummary[]>(() => {

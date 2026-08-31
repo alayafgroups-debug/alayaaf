@@ -157,11 +157,17 @@ export default function HREmployees() {
         .map((_, index) => index)
         .filter((index) => index !== dataColumnIndex);
       const templateDataRow = Math.min(headerIndex + 2, values.length);
-      const templateStyles = visibleColumnNumbers.map((columnIndex) => {
-        const sourceCell = worksheet.cell(templateDataRow, columnIndex + 1);
-        sourceCell.style("bold");
-        return (sourceCell as unknown as { _style: unknown })._style;
-      });
+      const templateStyleNames = [
+        "bold", "italic", "underline", "strikethrough", "subscript", "superscript",
+        "fontSize", "fontFamily", "fontGenericFamily", "fontColor", "fontScheme",
+        "horizontalAlignment", "verticalAlignment", "wrapText", "shrinkToFit",
+        "textDirection", "textRotation", "indent", "justifyLastLine", "fill",
+        "numberFormat", "border", "borderColor", "borderStyle",
+        "diagonalBorderDirection",
+      ];
+      const templateStyles = visibleColumnNumbers.map((columnIndex) =>
+        worksheet.cell(templateDataRow, columnIndex + 1).style(templateStyleNames)
+      );
 
       const valueForHeader = (employee: EmpFormData, header: string, index: number): string | number => {
         const key = header.toLowerCase().replace(/[^a-z0-9]/g, "");

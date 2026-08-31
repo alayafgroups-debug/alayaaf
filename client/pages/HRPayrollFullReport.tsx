@@ -3,10 +3,11 @@ import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
-import { ArrowRight, Columns3, Download, Printer, X } from "lucide-react";
+import { ArrowRight, Columns3, Download, Printer, Send, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { toast } from "@/hooks/use-toast";
+import { readUserSession } from "@/lib/authSession";
 
 type ReportConfig = {
   period: string;
@@ -64,6 +65,7 @@ export default function HRPayrollFullReport() {
   });
   const [rows, setRows] = useState<PayrollRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
   const [visible, setVisible] = useState<Record<string, boolean>>(() => Object.fromEntries(columns.map((column) => [column.key, column.defaultVisible !== false])));
   const [filterNames, setFilterNames] = useState({ branch: "الكل", department: "الكل", section: "الكل", location: "الكل" });
@@ -139,6 +141,115 @@ export default function HRPayrollFullReport() {
   const yearLabel = config?.period?.slice(0, 4) ?? "-";
   const formatCell = (column: PayrollColumn, value: string | number) => column.money ? formatNumber(Number(value), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(value ?? "");
 
+  const sendPayrollApproval = async () => {
+    if (!config?.period || rows.length === 0) {
+      toast({ title: t("لا يوجد موظفون"), description: t("لا توجد بيانات رواتب جاهزة للإرسال"), variant: "destructive" });
+      return;
+    }
+
+    setApprovalSubmitting(true);
+    try {
+      const employeeIds = rows.map((row) => String(row.empId));
+      const { data: existingPayroll, error: lookupError } = await supabase
+        .from("payroll")
+        .select("emp_id")
+        .eq("month", config.period);
+      if (lookupError) throw lookupError;
+
+      const existingIds = new Set((existingPayroll ?? []).map((row) => String(row.emp_id)));
+      const missingPayroll = rows
+        .filter((row) => !existingIds.has(String(row.empId)))
+        .map((row) => ({
+          emp_id: String(row.empId),
+          emp_name: String(row.name),
+          department: String(row.section || row.department || ""),
+          month: config.period,
+          basic_salary: Number(row.basicSalary ?? 0),
+          allowances: money(Number(row.totalEarnings ?? 0) - Number(row.basicSalary ?? 0)),
+          social_insurance_deduction: Number(row.socialInsurance ?? 0),
+          social_insurance_rate: Number(row.socialInsurance ?? 0) > 0 ? 0.0975 : 0,
+          deductions: Number(row.totalDeductions ?? 0),
+          net_salary: Number(row.netSalary ?? 0),
+          status: "معلق",
+          notes: `أيام الغياب ${Number(row.absenceDays ?? 0)} - ساعات إضافية ${String(row.overtimeHours ?? "00:00:00")}`,
+        }));
+
+      if (missingPayroll.length > 0) {
+        const { error } = await supabase.from("payroll").insert(missingPayroll);
+        if (error) throw error;
+      }
+
+      const { error: statusError } = await supabase
+        .from("payroll")
+        .update({ status: "معلق" })
+        .eq("month", config.period)
+        .in("emp_id", employeeIds);
+      if (statusError) throw statusError;
+
+      const session = readUserSession();
+      const senderName = session?.name?.trim() || t("مسؤول الموارد البشرية");
+      const requestDetails = {
+        workflow: "payroll_approval",
+        sender_department: "قسم الموارد البشرية",
+        sender_name: senderName,
+        sender_user_id: session?.id ?? "",
+        sender_emp_id: session?.empId ?? "",
+        payroll_period: config.period,
+        employee_ids: employeeIds,
+        active_employee_ids: employeeIds,
+        stopped_employee_ids: [],
+        employee_count: employeeIds.length,
+        active_employee_count: employeeIds.length,
+        stopped_employee_count: 0,
+      };
+      const { data: existingRequest, error: requestLookupError } = await supabase
+        .from("hr_requests")
+        .select("id")
+        .eq("request_type", "اعتماد رواتب الموظفين")
+        .contains("details", { workflow: "payroll_approval", payroll_period: config.period })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (requestLookupError) throw requestLookupError;
+
+      const [year, month] = config.period.split("-").map(Number);
+      const requestPayload = {
+        emp_id: `PAYROLL-${config.period}`,
+        emp_name: `قسم الموارد البشرية — ${senderName}`,
+        start_date: `${config.period}-01`,
+        end_date: `${config.period}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`,
+        status: "معلق",
+        admin_note: null,
+        details: requestDetails,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (existingRequest) {
+        const { error } = await supabase.from("hr_requests").update(requestPayload).eq("id", existingRequest.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("hr_requests").insert({
+          ...requestPayload,
+          request_type: "اعتماد رواتب الموظفين",
+        });
+        if (error) throw error;
+      }
+
+      toast({
+        title: t("تم إرسال طلب الاعتماد"),
+        description: `${t("تم إرسال كشف رواتب")} ${formatNumber(employeeIds.length)} ${t("موظف للإدارة")}`,
+      });
+    } catch (error) {
+      toast({
+        title: t("تعذر إرسال طلب الاعتماد"),
+        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
+        variant: "destructive",
+      });
+    } finally {
+      setApprovalSubmitting(false);
+    }
+  };
+
   const exportExcel = async () => {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Idarat Al Ayaf Management System";
@@ -168,7 +279,7 @@ export default function HRPayrollFullReport() {
     <style>{`@media print { body * { visibility: hidden !important; } #payroll-full-report, #payroll-full-report * { visibility: visible !important; } #payroll-full-report { position:absolute; inset:0; width:100%; } .payroll-no-print { display:none !important; } @page { size:A3 landscape; margin:6mm; } }`}</style>
     <div className="payroll-no-print flex flex-wrap items-center justify-between gap-3">
       <Button variant="outline" onClick={() => navigate("/hr/payroll/statement")}><ArrowRight className="h-4 w-4" />{t("رجوع")}</Button>
-      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setShowColumns(true)}><Columns3 className="h-4 w-4" />{t("إظهار/إخفاء الأعمدة")}</Button><Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{t("طباعة / PDF")}</Button><Button onClick={() => void exportExcel()} className="bg-[#075f94] hover:bg-[#064f7b]"><Download className="h-4 w-4" />Excel</Button></div>
+      <div className="flex flex-wrap gap-2"><Button onClick={() => void sendPayrollApproval()} disabled={loading || approvalSubmitting || rows.length === 0} className="bg-emerald-700 text-white hover:bg-emerald-800"><Send className="h-4 w-4" />{approvalSubmitting ? t("جارٍ الإرسال...") : t("إرسال كشف اعتماد الرواتب للإدارة")}</Button><Button variant="outline" onClick={() => setShowColumns(true)}><Columns3 className="h-4 w-4" />{t("إظهار/إخفاء الأعمدة")}</Button><Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{t("طباعة / PDF")}</Button><Button onClick={() => void exportExcel()} className="bg-[#075f94] hover:bg-[#064f7b]"><Download className="h-4 w-4" />Excel</Button></div>
     </div>
     <section id="payroll-full-report" className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
       <header className="border-b-2 border-[#075f94] p-5">

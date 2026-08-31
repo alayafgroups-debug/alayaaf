@@ -1882,6 +1882,8 @@ Object.assign(translations, {
   "تقرير شامل (ملخص)": "Comprehensive report (summary)",
   "حدد موظفًا واحدًا أو عدة موظفين لإنشاء التقرير": "Select one or more employees to generate the report",
   "بحث عن موظف...": "Search for an employee...",
+  "البحث عن موظف": "Employee search",
+  "ابحث بالاسم أو الرقم الوظيفي": "Search by name or employee number",
   "المحدد": "Selected",
   "إظهار الأيام بدون تسجيل": "Show days without records",
   "إظهار الملاحظات": "Show notes",

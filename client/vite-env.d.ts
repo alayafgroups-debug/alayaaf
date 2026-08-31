@@ -4,7 +4,7 @@ declare module "xlsx-populate/browser/xlsx-populate" {
   type Cell = {
     value(): unknown;
     value(value: unknown): Cell;
-    style(): unknown;
+    style(name: string): unknown;
     style(value: unknown): Cell;
   };
 

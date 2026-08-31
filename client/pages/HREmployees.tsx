@@ -22,6 +22,7 @@ import EmployeeForm, { emptyForm, mapRowToForm } from "./EmployeeForm";
 import type { EmpFormData } from "./EmployeeForm";
 import { useI18n } from "@/i18n";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const STATUSES = ["فعال", "غير فعال", "إجازة", "منتهي"];
@@ -113,6 +114,125 @@ export default function HREmployees() {
   const pageData = filtered.slice(pageStart, pageStart + pageSize);
   const visibleColumnCount = 8 + Object.values(visibleColumns).filter(Boolean).length;
   const allPageSelected = pageData.length > 0 && pageData.every((employee) => selectedIds.has(employee.id));
+
+  const exportExactEnglishTemplate = async () => {
+    if (!filtered.length) {
+      toast({ title: t("لا توجد بيانات للتصدير") });
+      return;
+    }
+
+    const templateUrl = "https://cdn.builder.io/o/assets%2Fce04605038104603b965d31c7c18e8db%2F436f094c89454327970ffe9bb11fdd3f?alt=media&token=06421ef6-2a54-4a30-8920-d579eea7d4ce&apiKey=ce04605038104603b965d31c7c18e8db";
+    const reportDate = new Date();
+    const dayName = reportDate.toLocaleDateString("en-US", { weekday: "long" });
+    const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);
+    const englishValue = (value: string | null | undefined, fallback = "-") => {
+      const clean = String(value ?? "").trim();
+      return clean && !containsArabic(clean) ? clean : fallback;
+    };
+    const statusInEnglish: Record<string, string> = {
+      "فعال": "Active", "نشط": "Active", active: "Active",
+      "غير فعال": "Inactive", "غير نشط": "Inactive",
+      "إجازة": "On Leave", "منتهي": "Terminated",
+    };
+
+    try {
+      const response = await fetch(templateUrl);
+      if (!response.ok) throw new Error("Unable to download the Excel template");
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await response.arrayBuffer());
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) throw new Error("The Excel template has no worksheet");
+
+      let headerRowNumber = 0;
+      worksheet.eachRow((row, rowNumber) => {
+        if (headerRowNumber) return;
+        const labels = row.values as unknown[];
+        if (labels.some((value) => {
+          const label = String(value ?? "").toLowerCase();
+          return label.includes("employee") && (label.includes("id") || label.includes("name"));
+        })) headerRowNumber = rowNumber;
+      });
+      if (!headerRowNumber) throw new Error("The employee header row was not found in the template");
+
+      const headerRow = worksheet.getRow(headerRowNumber);
+      let dataColumnNumber = 0;
+      headerRow.eachCell((cell, columnNumber) => {
+        if (String(cell.value ?? "").trim().toLowerCase() === "data") dataColumnNumber = columnNumber;
+      });
+      if (dataColumnNumber) worksheet.spliceColumns(dataColumnNumber, 1);
+
+      const refreshedHeader = worksheet.getRow(headerRowNumber);
+      const templateDataRow = worksheet.getRow(headerRowNumber + 1);
+      const templateHeight = templateDataRow.height;
+      const templateStyles = Array.from({ length: refreshedHeader.cellCount }, (_, index) => {
+        const source = templateDataRow.getCell(index + 1);
+        return {
+          style: JSON.parse(JSON.stringify(source.style || {})),
+          numFmt: source.numFmt,
+        };
+      });
+
+      if (worksheet.rowCount > headerRowNumber) {
+        worksheet.spliceRows(headerRowNumber + 1, worksheet.rowCount - headerRowNumber);
+      }
+
+      const valueForHeader = (employee: EmpFormData, header: string, index: number): string | number => {
+        const key = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (["no", "number", "srno", "serial", "sno"].includes(key)) return index + 1;
+        if (key.includes("employeeid") || key.includes("employeeno") || key === "id") return englishValue(employee.empId || employee.accountTitle);
+        if (key.includes("arabicname")) return "-";
+        if (key.includes("name")) return englishValue(employee.firstName, englishValue(employee.name, employee.empId || "-"));
+        if (key.includes("status")) return statusInEnglish[employee.status] || englishValue(employee.status, "Not specified");
+        if (key.includes("branch")) return englishValue(employee.branch, "Not specified");
+        if (key.includes("directorate")) return englishValue(employee.directorate, "Not specified");
+        if (key.includes("department") || key.includes("section")) return englishValue(employee.department, "Not specified");
+        if (key.includes("jobtitle") || key.includes("designation") || key.includes("position")) return englishValue(employee.jobTitle, "Not specified");
+        if (key.includes("nationality")) return englishValue(employee.nationality, "Not specified");
+        if (key.includes("nationalid") || key.includes("identity")) return englishValue(employee.nationalId);
+        if (key.includes("hiredate") || key.includes("joiningdate")) return employee.hireDate || "-";
+        if (key.includes("mobile") || key.includes("phone")) return employee.phone || "-";
+        if (key.includes("email")) return englishValue(employee.email);
+        return "-";
+      };
+
+      const headers = Array.from({ length: refreshedHeader.cellCount }, (_, index) => String(refreshedHeader.getCell(index + 1).value ?? ""));
+      filtered.forEach((employee, employeeIndex) => {
+        const row = worksheet.addRow(headers.map((header) => valueForHeader(employee, header, employeeIndex)));
+        row.height = templateHeight;
+        row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+          const templateStyle = templateStyles[columnNumber - 1];
+          if (!templateStyle) return;
+          cell.style = JSON.parse(JSON.stringify(templateStyle.style));
+          cell.numFmt = templateStyle.numFmt;
+        });
+      });
+
+      worksheet.views = [{ state: "frozen", ySplit: headerRowNumber, rightToLeft: false }];
+      worksheet.autoFilter = {
+        from: { row: headerRowNumber, column: 1 },
+        to: { row: headerRowNumber + filtered.length, column: refreshedHeader.cellCount },
+      };
+      worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+        if (rowNumber >= headerRowNumber) return;
+        row.eachCell((cell) => {
+          const value = String(cell.value ?? "");
+          if (value.toLowerCase().includes("employee") && value.toLowerCase().includes("list")) {
+            cell.value = `EMPLOYEE LIST — ${dayName.toUpperCase()}`;
+          }
+        });
+      });
+
+      const output = await workbook.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Employee_List_${dayName}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      toast({ title: "Excel export failed", description: exportError instanceof Error ? exportError.message : "Unable to generate the employee report", variant: "destructive" });
+    }
+  };
 
   const exportEmployeesExcel = async () => {
     if (!filtered.length) {
@@ -349,7 +469,7 @@ export default function HREmployees() {
               {t("قائمة الموظفين")} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <div className="flex items-center gap-1">
-              <button onClick={exportEmployeesExcel} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
+              <button onClick={() => void exportExactEnglishTemplate()} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
               <button title={t("طباعة")} className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
               <button onClick={() => setRefreshKey((k) => k + 1)} title={t("تحديث")} className="p-1.5 rounded hover:bg-white/20 transition"><RefreshCw className="h-4 w-4" /></button>
               <div className="relative">

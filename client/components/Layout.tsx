@@ -197,7 +197,7 @@ const hrNavItems: HRNavItem[] = [
       },
       {
         icon: FileBarChart,
-        label: "تقرير حساب دوام الموظفين",
+        label: "تقرير الحضور الشهري",
         href: "/hr/attendance/monthly",
       },
       {

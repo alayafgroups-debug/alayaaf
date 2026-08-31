@@ -4,8 +4,9 @@ import { Download, Printer, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
-import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
+import { exportReportExcel, type ReportColumn } from "@/lib/reportExport";
 import { useI18n } from "@/i18n";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 
 const ALL = "all";
 type ReportMode = "employees" | "departments";
@@ -27,6 +28,7 @@ type Employee = {
   jobTitle: string;
   workSchedule: string;
   workLocation: string;
+  employmentType: string;
   photoUrl: string;
   dailyHours: number;
 };
@@ -123,7 +125,7 @@ export default function HRAttendanceCalculate() {
     if (!dateFrom || !dateTo || dateFrom > dateTo) { setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية")); return; }
     setLoading(true); setError("");
     const [employeeResult, attendanceResult, overtimeResult, permissionResult, departmentResult, sectionResult, branchResult, jobResult, scheduleResult, locationResult] = await Promise.all([
-      supabase.from("employees").select("id, emp_id, name, branch_id, branch, department_id, section_id, directorate, department, job_title, work_schedule, work_location, photo_url, daily_hours").in("status", ["نشط", "فعال", "active"]).order("name"),
+      supabase.from("employees").select("id, emp_id, name, branch_id, branch, department_id, section_id, directorate, department, job_title, work_schedule, work_location, employment_type, photo_url, daily_hours").in("status", ["نشط", "فعال", "active"]).order("name"),
       supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes, notes").gte("date", dateFrom).lte("date", dateTo).order("date"),
       supabase.from("overtime_records").select("employee_id, date, hours").gte("date", dateFrom).lte("date", dateTo).in("status", ["معتمدة", "معتمد", "approved"]),
       supabase.from("hr_requests").select("emp_id, start_date, details").eq("request_type", "استئذان").gte("start_date", dateFrom).lte("start_date", dateTo).in("status", ["معتمدة", "معتمد", "approved"]),
@@ -154,7 +156,7 @@ export default function HRAttendanceCalculate() {
       id: String(row.id), empId: String(row.emp_id ?? row.id), name: String(row.name ?? "-"), branchId: String(row.branch_id ?? ""), branch: branchById.get(String(row.branch_id ?? "")) || t("غير مرتبط"),
       departmentId: String(row.department_id ?? ""), department: departmentById.get(String(row.department_id ?? "")) || t("غير مرتبط"),
       sectionId: String(row.section_id ?? ""), section: sectionById.get(String(row.section_id ?? "")) || t("غير مرتبط"),
-      jobTitle: jobByName.get(String(row.job_title ?? "")) || t(String(row.job_title ?? "")), workSchedule: scheduleByName.get(String(row.work_schedule ?? "")) || t(String(row.work_schedule ?? "")), workLocation: locationByName.get(String(row.work_location ?? "")) || t(String(row.work_location ?? "")), photoUrl: String(row.photo_url ?? ""), dailyHours: Number(row.daily_hours ?? 8),
+      jobTitle: jobByName.get(String(row.job_title ?? "")) || t(String(row.job_title ?? "")), workSchedule: scheduleByName.get(String(row.work_schedule ?? "")) || t(String(row.work_schedule ?? "")), workLocation: locationByName.get(String(row.work_location ?? "")) || t(String(row.work_location ?? "")), employmentType: t(String(row.employment_type ?? "دوام كامل")), photoUrl: String(row.photo_url ?? ""), dailyHours: Number(row.daily_hours ?? 8),
     }));
     setDepartments(departmentRows);
     setSections(sectionRows);
@@ -319,14 +321,61 @@ export default function HRAttendanceCalculate() {
     }
   };
   const selectedEmployeesForDetail = employeeSummaries.filter((employee) => selectedEmployeeIds.includes(employee.id));
-  const printCurrentReport = () => mode === "employees" ? window.print() : printReport(reportOptions);
-  const showDepartmentSummary = () => mode === "departments";
+  const comprehensiveRows = selectedEmployeesForDetail.map((employee) => {
+    const employeeAttendance = attendance.filter((record) => record.empId === employee.empId);
+    const presentDays = employeeAttendance.filter((record) => ["present", "late"].includes(classifyStatus(record))).length;
+    const absentDays = employeeAttendance.filter((record) => classifyStatus(record) === "absent").length;
+    const workedSeconds = employeeAttendance.reduce((sum, record) => sum + durationBetween(record.checkIn, record.checkOut), 0);
+    const lateSeconds = employeeAttendance.reduce((sum, record) => sum + record.lateMinutes * 60, 0);
+    const permissionSeconds = permissionRecords.filter((record) => record.empId === employee.empId).reduce((sum, record) => sum + record.hours * 3600, 0);
+    const manualOvertimeSeconds = overtimeRecords.filter((record) => record.employeeId === employee.id).reduce((sum, record) => sum + record.hours * 3600, 0);
+    const expectedWorkDays = Array.from({ length: dayCount(dateFrom, dateTo) }, (_, offset) => {
+      const date = new Date(`${dateFrom}T00:00:00`);
+      date.setDate(date.getDate() + offset);
+      return date.getDay();
+    }).filter((day) => day !== 5 && day !== 6).length;
+    const requiredSeconds = expectedWorkDays * Math.max(0, employee.dailyHours) * 3600;
+    const calculatedOvertimeSeconds = employeeAttendance.reduce((sum, record) => sum + Math.max(durationBetween(record.checkIn, record.checkOut) - employee.dailyHours * 3600, 0), 0);
+    return {
+      empId: employee.empId,
+      name: employee.name,
+      workTime: employee.employmentType || t("دوام كامل"),
+      periodDays: expectedWorkDays,
+      presentDays,
+      absentDays,
+      overtime: formatDuration(manualOvertimeSeconds + calculatedOvertimeSeconds),
+      required: formatDuration(requiredSeconds),
+      worked: formatDuration(workedSeconds),
+      late: formatDuration(lateSeconds),
+      permission: formatDuration(permissionSeconds),
+      deficit: formatDuration(Math.max(requiredSeconds - workedSeconds - permissionSeconds, 0)),
+      workSchedule: employee.workSchedule || t("غير محدد"),
+    };
+  });
+  const comprehensiveColumns: ReportColumn[] = [
+    { key: "empId", label: t("الرقم الوظيفي"), width: 14 },
+    { key: "name", label: t("اسم الموظف"), width: 24 },
+    { key: "workTime", label: t("وقت العمل"), width: 15 },
+    { key: "periodDays", label: t("أيام العمل في الفترة"), width: 15 },
+    { key: "presentDays", label: t("مجموع أيام الحضور"), width: 16 },
+    { key: "absentDays", label: t("مجموع أيام الغياب"), width: 16 },
+    { key: "overtime", label: t("إجمالي الساعات الإضافية"), width: 18 },
+    { key: "required", label: t("إجمالي الساعات المستحقة في الفترة"), width: 21 },
+    { key: "worked", label: t("إجمالي ساعات العمل"), width: 18 },
+    { key: "late", label: t("إجمالي ساعات التأخير"), width: 18 },
+    { key: "permission", label: t("إجمالي ساعات الاستئذان"), width: 18 },
+    { key: "deficit", label: t("إجمالي ساعات النقص"), width: 18 },
+    { key: "workSchedule", label: t("جدول العمل"), width: 18 },
+  ];
+  const comprehensiveReportOptions = { title: t("النتائج (تقرير شامل)"), subtitle: `${dateFrom} — ${dateTo}`, columns: comprehensiveColumns, rows: comprehensiveRows, fileName: `comprehensive-attendance-${dateFrom}-${dateTo}`, landscape: true, summary: [{ label: t("عدد الموظفين"), value: comprehensiveRows.length }] };
+  const printCurrentReport = () => window.print();
+  const showDepartmentSummary = () => false;
 
   return <Layout><main dir={direction} className="space-y-4">
     <style>{`
       .attendance-print-only { display: none; }
       @media print {
-        @page { size: A4 landscape; margin: 8mm; }
+        @page { size: A3 landscape; margin: 8mm; }
         body * { visibility: hidden !important; }
         #attendance-print-area, #attendance-print-area * { visibility: visible !important; }
         #attendance-print-area { position: absolute; inset: 0; width: 100%; background: white; }
@@ -338,7 +387,7 @@ export default function HRAttendanceCalculate() {
         .attendance-detail-table th, .attendance-detail-table td { padding: 5px !important; }
       }
     `}</style>
-    <header className="attendance-no-print flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1><p className="mt-1 text-sm text-slate-500">{t("تقرير حضور الموظفين المرتبط بالفروع والإدارات والأقسام المحفوظة")}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => void loadData()} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={printCurrentReport} disabled={!reportRows.length} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => exportReportExcel(reportOptions)} disabled={!reportRows.length} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button></div></header>
+    <header className="attendance-no-print flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1><p className="mt-1 text-sm text-slate-500">{t("تقرير حضور الموظفين المرتبط بالفروع والإدارات والأقسام المحفوظة")}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => void loadData()} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={printCurrentReport} disabled={!reportRows.length} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => exportReportExcel(mode === "departments" ? comprehensiveReportOptions : reportOptions)} disabled={mode === "departments" ? !comprehensiveRows.length : !reportRows.length} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button></div></header>
     <section className="attendance-no-print rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("من تاريخ")}</span><Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
       <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("إلى تاريخ")}</span><Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
@@ -458,6 +507,26 @@ export default function HRAttendanceCalculate() {
         </article>;
       })}
     </div>}
+    {mode === "departments" && selectedEmployeeIds.length > 0 && <section id="attendance-print-area" className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+      <div className="attendance-no-print flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+        <h2 className="text-lg font-bold text-slate-900">{t("النتائج (تقرير شامل)")}</h2>
+        <div className="flex gap-2"><Button type="button" variant="outline" size="sm" onClick={() => exportReportExcel(comprehensiveReportOptions)} disabled={!comprehensiveRows.length}><Download className="ms-1 h-4 w-4" />{t("تصدير إلى ملف Excel")}</Button><Button type="button" variant="outline" size="sm" onClick={() => window.print()} disabled={!comprehensiveRows.length}><Printer className="ms-1 h-4 w-4" />{t("طباعة")}</Button></div>
+      </div>
+      <div className="border-b border-slate-400 px-5 py-5">
+        <div className="flex items-start justify-between gap-6">
+          <img src={COMPANY_PROFILE.logoUrl} alt={t("شعار الشركة")} className="h-20 w-28 object-contain" />
+          <div className="grid flex-1 gap-x-8 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+            <span>{t("من تاريخ")}: <b>{dateFrom}</b></span><span>{t("إلى تاريخ")}: <b>{dateTo}</b></span>
+            <span>{t("الإدارة")}: <b>{departmentId === ALL ? t("الكل") : departments.find((item) => item.id === departmentId)?.name || t("الكل")}</b></span>
+            <span>{t("القسم")}: <b>{sectionId === ALL ? t("الكل") : sections.find((item) => item.id === sectionId)?.name || t("الكل")}</b></span>
+            <span>{t("الفرع")}: <b>{branch === ALL ? t("الكل") : branches.find((item) => item.id === branch)?.name || t("الكل")}</b></span>
+            <span>{t("مكان العمل")}: <b>{workLocation === ALL ? t("الكل") : workLocation}</b></span>
+            <span>{t("عدد الموظفين")}: <b>{formatNumber(comprehensiveRows.length)}</b></span>
+          </div>
+        </div>
+      </div>
+      <div className="overflow-x-auto"><table className="min-w-[1700px] border-collapse text-[11px]"><thead className="bg-[#075f94] text-white"><tr>{comprehensiveColumns.map((column) => <th key={column.key} className="border border-white/30 px-3 py-3 text-center font-bold whitespace-normal">{column.label}</th>)}</tr></thead><tbody>{comprehensiveRows.map((row) => <tr key={String(row.empId)} className="border-b odd:bg-white even:bg-slate-50">{comprehensiveColumns.map((column) => <td key={column.key} className="border border-slate-200 px-3 py-3 text-center">{String(row[column.key as keyof typeof row] ?? "")}</td>)}</tr>)}</tbody></table></div>
+    </section>}
     {showDepartmentSummary() && <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div className="flex flex-wrap gap-4 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-sky-600">● {t("إجازة")}</span></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-500">{t("عرض")}<select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded border px-2 py-1"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><div className="relative w-64"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث...")} className="pr-9" /></div></div></div>
       <div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr>{columns.map((column) => <th key={column.key} className="whitespace-nowrap px-3 py-3 text-center font-semibold">{column.label}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : !pagedRows.length ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("لا توجد بيانات")}</td></tr> : mode === "employees" ? (pagedRows as EmployeeSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 text-center">{row.empId}</td><td className="px-3 py-3 font-semibold">{row.name}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{row.section || "—"}</td><td className="px-3 py-3">{row.jobTitle || "—"}</td><td className="px-3 py-3">{row.branch || "—"}</td><td className="px-3 py-3">{row.workSchedule || "—"}</td><td className="px-3 py-3">{row.workLocation || "—"}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>) : (pagedRows as DepartmentSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 font-semibold">{row.department}</td><td className="px-3 py-3 text-center">{formatNumber(row.employees)}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>)}</tbody></table></div>

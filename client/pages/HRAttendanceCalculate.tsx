@@ -201,7 +201,24 @@ export default function HRAttendanceCalculate() {
       <FilterSelect label={t("جدول العمل")} value={workSchedule} onChange={setWorkSchedule} options={workSchedules.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
       <FilterSelect label={t("مكان العمل")} value={workLocation} onChange={setWorkLocation} options={workLocations.map((name) => ({ value: name, label: name }))} allLabel={t("الكل")} />
       <FilterSelect label={t("حالة الدوام")} value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={[{ value: "present", label: t("حاضر") }, { value: "absent", label: t("غائب") }, { value: "late", label: t("متأخر") }, { value: "leave", label: t("إجازة") }]} allLabel={t("الكل")} />
-      <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("نوع التقرير")}</span><select value={mode} onChange={(event) => setMode(event.target.value as ReportMode)} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"><option value="employees">{t("تقرير حساب دوام الموظفين")}</option><option value="departments">{t("تقرير ملخص الأقسام")}</option></select></label>
+      <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+        <Button
+          type="button"
+          onClick={() => setMode("employees")}
+          aria-pressed={mode === "employees"}
+          className={mode === "employees" ? "bg-[#075f94] text-white hover:bg-[#064f7b]" : "border border-[#075f94] bg-white text-[#075f94] hover:bg-blue-50"}
+        >
+          {t("اختيار الموظفين (تفصيلي)")}
+        </Button>
+        <Button
+          type="button"
+          onClick={() => setMode("departments")}
+          aria-pressed={mode === "departments"}
+          className={mode === "departments" ? "bg-[#075f94] text-white hover:bg-[#064f7b]" : "border border-[#075f94] bg-white text-[#075f94] hover:bg-blue-50"}
+        >
+          {t("تقرير شامل (ملخص)")}
+        </Button>
+      </div>
     </div></section>
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">

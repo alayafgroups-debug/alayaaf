@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 import { useI18n } from "@/i18n";
+import { useNavigate } from "react-router-dom";
 import { readUserSession } from "@/lib/authSession";
 
 type EmpLite = {
@@ -82,6 +83,7 @@ const defaultMonth = String(current.getMonth() + 1).padStart(2, "0");
 
 export default function HRPayrollStatement() {
   const { t, locale, direction, formatNumber, formatDate } = useI18n();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [employees, setEmployees] = useState<EmpLite[]>([]);
   const [organizationBranches, setOrganizationBranches] = useState<{ id: string; name: string }[]>([]);
@@ -370,14 +372,22 @@ export default function HRPayrollStatement() {
     }
   };
 
-  const handleFullReport = async () => {
+  const handleFullReport = () => {
     if (selectedEmployees.length === 0) {
       toast({ title: t("تنبيه"), description: t("اختر الموظفين أولاً لعرض التقرير الكامل"), variant: "destructive" });
       return;
     }
-    const computed = await computePayroll(selectedEmployees);
-    setCalc(computed);
-    setPageMode("report");
+    sessionStorage.setItem("payroll_full_report", JSON.stringify({
+      period,
+      employeeIds: selectedEmployees.map((employee) => employee.id),
+      filters: {
+        branch: branchFilter,
+        department: departmentFilter,
+        section: sectionFilter,
+        location: locationFilter,
+      },
+    }));
+    navigate("/hr/payroll/statement/full-report");
   };
 
   const payrollColumns: ReportColumn[] = [

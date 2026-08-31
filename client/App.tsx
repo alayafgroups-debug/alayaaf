@@ -59,6 +59,7 @@ import EmployeePortal from "./pages/EmployeePortal";
 import EmployeeApp from "./pages/EmployeeApp";
 import AdminEmployeeRegistration from "./pages/AdminEmployeeRegistration";
 import HRPayrollStatement from "./pages/HRPayrollStatement";
+import HRPayrollFullReport from "./pages/HRPayrollFullReport";
 import HRPayrollArchive from "./pages/HRPayrollArchive";
 import HRPayrollFinancialData from "./pages/HRPayrollFinancialData";
 import HRPayrollTransfer from "./pages/HRPayrollTransfer";
@@ -190,6 +191,7 @@ const App = () => (
           <Route path="/hr/requests/form-settings" element={<HRRequestFormSettings />} />
           <Route path="/hr/payroll" element={<Navigate to="/hr/payroll/statement" replace />} />
           <Route path="/hr/payroll/statement" element={<HRPayrollStatement />} />
+          <Route path="/hr/payroll/statement/full-report" element={<HRPayrollFullReport />} />
           <Route path="/hr/payroll/archive" element={<HRPayrollArchive />} />
           <Route path="/hr/payroll/financial-data" element={<HRPayrollFinancialData />} />
           <Route path="/hr/payroll/transfer" element={<HRPayrollTransfer />} />

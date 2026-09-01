@@ -90,7 +90,7 @@ const EXPORT_ENGLISH_VALUES: Record<string, string> = {
 export default function HREmployees() {
   const { t, direction, locale, formatNumber } = useI18n();
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<{ id: string; name: string; nameEn: string }[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [selected, setSelected] = useState<EmpFormData | null>(null);
@@ -99,6 +99,7 @@ export default function HREmployees() {
   // Filters
   const [fSearch, setFSearch] = useState("");
   const [fDepartment, setFDepartment] = useState("");
+  const [fNationalId, setFNationalId] = useState("");
   const [fStatus, setFStatus] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -120,10 +121,16 @@ export default function HREmployees() {
       try {
         const [employeeResult, departmentResult] = await Promise.all([
           supabase.from("employees").select("*").order("created_at", { ascending: false }),
-          supabase.from("departments").select("id, name").order("name"),
+          supabase.from("org_sections").select("id, name, name_en").order("name"),
         ]);
         if (!employeeResult.error && employeeResult.data) setEmployees(employeeResult.data.map(mapRowToForm));
-        if (!departmentResult.error) setDepartments((departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) })));
+        if (!departmentResult.error) {
+          setDepartmentOptions((departmentResult.data ?? []).map((row) => ({
+            id: String(row.id),
+            name: String(row.name),
+            nameEn: String(row.name_en ?? ""),
+          })));
+        }
       } catch {
         // no-op
       } finally {
@@ -133,18 +140,28 @@ export default function HREmployees() {
     load();
   }, [refreshKey]);
 
-  const filtered = useMemo(() => employees.filter((e) => {
+  const filtered = useMemo(() => employees.filter((employee) => {
     const keyword = fSearch.trim().toLowerCase();
-    if (keyword && ![e.name, e.firstName, e.empId, e.phone, e.email, e.nationalId]
+    if (keyword && ![employee.name, employee.firstName, employee.empId, employee.phone, employee.email, employee.nationalId]
       .some((value) => value.toLowerCase().includes(keyword))) return false;
-    if (fDepartment && e.departmentId !== fDepartment && e.directorate !== departments.find((item) => item.id === fDepartment)?.name) return false;
-    if (fStatus && e.status !== fStatus) return false;
+
+    const selectedDepartment = departmentOptions.find((item) => item.id === fDepartment);
+    if (
+      fDepartment
+      && employee.sectionId !== fDepartment
+      && employee.department.trim() !== selectedDepartment?.name.trim()
+    ) return false;
+
+    const nationalIdKeyword = fNationalId.replace(/\D/g, "");
+    const employeeNationalId = employee.nationalId.replace(/\D/g, "");
+    if (nationalIdKeyword && !employeeNationalId.includes(nationalIdKeyword)) return false;
+    if (fStatus && employee.status !== fStatus) return false;
     return true;
-  }), [departments, employees, fSearch, fDepartment, fStatus]);
+  }), [departmentOptions, employees, fSearch, fDepartment, fNationalId, fStatus]);
 
   useEffect(() => {
     setPage(1);
-  }, [fSearch, fDepartment, fStatus, pageSize]);
+  }, [fSearch, fDepartment, fNationalId, fStatus, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -786,7 +803,7 @@ export default function HREmployees() {
               <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder={t("بحث سريع...")}
+                placeholder={t("البحث بالاسم أو الرقم الوظيفي...")}
                 value={fSearch}
                 onChange={(e) => setFSearch(e.target.value)}
                 className="w-full rounded-md border border-gray-300 bg-white pe-8 ps-3 py-1.5 text-sm text-start focus:outline-none focus:border-blue-400"
@@ -798,8 +815,23 @@ export default function HREmployees() {
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
             >
               <option value="">{t("جميع الأقسام")}</option>
-              {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+              {departmentOptions.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {locale === "en" && department.nameEn ? department.nameEn : department.name}
+                </option>
+              ))}
             </select>
+            <div className="relative min-w-[170px]">
+              <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder={t("البحث برقم الهوية...")}
+                value={fNationalId}
+                onChange={(e) => setFNationalId(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white pe-8 ps-3 py-1.5 text-sm text-start focus:outline-none focus:border-blue-400"
+              />
+            </div>
             <select
               value={fStatus}
               onChange={(e) => setFStatus(e.target.value)}
@@ -809,7 +841,7 @@ export default function HREmployees() {
               {STATUSES.map((s) => <option key={s}>{t(s)}</option>)}
             </select>
             <button
-              onClick={() => { setFSearch(""); setFDepartment(""); setFStatus(""); }}
+              onClick={() => { setFSearch(""); setFDepartment(""); setFNationalId(""); setFStatus(""); }}
               className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-100 transition text-gray-600"
             >
               {t("مسح")}

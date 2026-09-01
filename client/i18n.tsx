@@ -1335,6 +1335,8 @@ Object.assign(translations, {
   "إظهار/إخفاء الأعمدة": "Show/hide columns",
   "إظهار / إخفاء الأعمدة": "Show / hide columns",
   "بحث سريع...": "Quick search...",
+  "البحث بالاسم أو الرقم الوظيفي...": "Search by name or employee ID...",
+  "البحث برقم الهوية...": "Search by national ID...",
   "جميع الأقسام": "All sections",
   "جميع الحالات": "All statuses",
   "مسح": "Clear",

@@ -159,7 +159,7 @@ export default function HREmployees() {
       return;
     }
 
-    const templateUrl = "/api/hr/employee-template";
+    const templateUrl = "/employee-template.xlsx";
     const dayName = new Date().toLocaleDateString("en-US", { weekday: "long" });
     const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);
     const englishValue = (value: string | null | undefined, fallback = "-") => {
@@ -288,7 +288,7 @@ export default function HREmployees() {
       return;
     }
 
-    const templateUrl = "/api/hr/employee-template";
+    const templateUrl = "/employee-template.xlsx";
     const reportDate = new Date();
     const dayName = reportDate.toLocaleDateString("en-US", { weekday: "long" });
     const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);

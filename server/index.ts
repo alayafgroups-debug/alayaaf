@@ -2,7 +2,6 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
-import { handleEmployeeExcelTemplate } from "./routes/excel-template";
 import {
   handleComplianceCheck,
   handleReport,
@@ -24,8 +23,6 @@ export function createServer() {
   });
 
   app.get("/api/demo", handleDemo);
-  app.get("/api/hr/employee-template", handleEmployeeExcelTemplate);
-  app.get("/hr/employee-template", handleEmployeeExcelTemplate);
 
   // ZATCA invoice relays. Secure onboarding runs only in the authenticated Edge Function.
   app.post("/api/zatca/compliance-check", handleComplianceCheck);

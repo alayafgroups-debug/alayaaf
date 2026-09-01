@@ -25,6 +25,7 @@ export function createServer() {
 
   app.get("/api/demo", handleDemo);
   app.get("/api/hr/employee-template", handleEmployeeExcelTemplate);
+  app.get("/hr/employee-template", handleEmployeeExcelTemplate);
 
   // ZATCA invoice relays. Secure onboarding runs only in the authenticated Edge Function.
   app.post("/api/zatca/compliance-check", handleComplianceCheck);

@@ -282,6 +282,116 @@ export default function HREmployees() {
     }
   };
 
+  const exportSafeEmployeesExcel = async () => {
+    if (!filtered.length) {
+      toast({ title: t("لا توجد بيانات للتصدير") });
+      return;
+    }
+
+    const reportDate = new Date();
+    const dateLabel = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 1).padStart(2, "0")}-${String(reportDate.getDate()).padStart(2, "0")}`;
+    const dayName = reportDate.toLocaleDateString("en-US", { weekday: "long" });
+    const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);
+    const englishValue = (value: string | null | undefined, fallback = "-") => {
+      const clean = String(value ?? "").trim();
+      if (!clean) return fallback;
+      return EXPORT_ENGLISH_VALUES[clean] || (!containsArabic(clean) ? clean : fallback);
+    };
+    const statusInEnglish: Record<string, string> = {
+      "فعال": "Active", "نشط": "Active", active: "Active",
+      "غير فعال": "Inactive", "غير نشط": "Inactive",
+      "إجازة": "On Leave", "منتهي": "Terminated",
+    };
+
+    try {
+      const [branchResult, departmentResult, jobResult, sectionResult] = await Promise.all([
+        supabase.from("branches").select("id, name, name_en"),
+        supabase.from("departments").select("id, name, name_en"),
+        supabase.from("hr_jobs").select("name, name_en"),
+        supabase.from("org_sections").select("id, name, name_en"),
+      ]);
+      const firstError = branchResult.error ?? departmentResult.error ?? jobResult.error ?? sectionResult.error;
+      if (firstError) throw firstError;
+
+      const branchesById = new Map((branchResult.data ?? []).map((row) => [String(row.id), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
+      const departmentsById = new Map((departmentResult.data ?? []).map((row) => [String(row.id), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
+      const sectionsById = new Map((sectionResult.data ?? []).map((row) => [String(row.id), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
+      const jobsByName = new Map((jobResult.data ?? []).map((row) => [String(row.name ?? "").trim(), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
+      const headers = ["No.", "Employee ID", "Employee Name", "Status", "Branch", "Management", "Department", "Job Title", "Nationality", "National ID", "Hire Date", "Mobile Number", "Email Address"];
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Idarat Al Ayaf Management System";
+      workbook.created = reportDate;
+      workbook.modified = reportDate;
+      const worksheet = workbook.addWorksheet("Employees", { views: [{ state: "frozen", ySplit: 5, rightToLeft: false }] });
+      const lastColumn = headers.length;
+
+      worksheet.mergeCells(1, 1, 1, lastColumn);
+      worksheet.getCell(1, 1).value = `EMPLOYEE LIST — ${dayName.toUpperCase()}`;
+      worksheet.mergeCells(2, 1, 2, lastColumn);
+      worksheet.getCell(2, 1).value = "Al Ayaf Contracting Management Company | Master employee register";
+      worksheet.mergeCells(3, 1, 3, lastColumn);
+      worksheet.getCell(3, 1).value = `Last updated: ${dateLabel} | Use the filter arrows to search and sort records.`;
+      worksheet.getRow(4).height = 8;
+      worksheet.addRow(headers);
+
+      filtered.forEach((employee, index) => {
+        worksheet.addRow([
+          index + 1,
+          employee.empId || employee.accountTitle || "-",
+          englishValue(employee.firstName, englishValue(employee.name, employee.empId || "-")),
+          statusInEnglish[employee.status] || englishValue(employee.status, "Not specified"),
+          branchesById.get(employee.branchId) || englishValue(employee.branch, "Not specified"),
+          departmentsById.get(employee.departmentId) || englishValue(employee.directorate, "Not specified"),
+          sectionsById.get(employee.sectionId) || englishValue(employee.department, "Not specified"),
+          jobsByName.get(employee.jobTitle.trim()) || englishValue(employee.jobTitle, "Not specified"),
+          englishValue(employee.nationality, "Not specified"),
+          employee.nationalId || "-",
+          employee.hireDate || "-",
+          employee.phone || "-",
+          englishValue(employee.email),
+        ]);
+      });
+
+      worksheet.columns = [8, 16, 28, 14, 22, 24, 24, 26, 18, 18, 16, 18, 30].map((width) => ({ width }));
+      worksheet.getRow(1).height = 42;
+      worksheet.getRow(2).height = 24;
+      worksheet.getRow(3).height = 22;
+      worksheet.getRow(5).height = 30;
+      worksheet.getCell(1, 1).font = { bold: true, size: 22, color: { argb: "FFFFFFFF" } };
+      worksheet.getCell(1, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF12324A" } };
+      worksheet.getCell(1, 1).alignment = { horizontal: "left", vertical: "middle" };
+      worksheet.getCell(2, 1).font = { italic: true, size: 12, color: { argb: "FF607080" } };
+      worksheet.getCell(3, 1).font = { size: 10, color: { argb: "FF607080" } };
+      worksheet.getRow(5).eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF087B68" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = { top: { style: "thin", color: { argb: "FFFFFFFF" } }, bottom: { style: "thin", color: { argb: "FFFFFFFF" } }, left: { style: "thin", color: { argb: "FFFFFFFF" } }, right: { style: "thin", color: { argb: "FFFFFFFF" } } };
+      });
+      for (let rowNumber = 6; rowNumber <= worksheet.rowCount; rowNumber += 1) {
+        const row = worksheet.getRow(rowNumber);
+        row.height = 22;
+        row.eachCell({ includeEmpty: true }, (cell) => {
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowNumber % 2 === 0 ? "FFF1F7F5" : "FFFFFFFF" } };
+          cell.border = { bottom: { style: "thin", color: { argb: "FFD9E5E1" } } };
+        });
+      }
+      worksheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: Math.max(5, worksheet.rowCount), column: lastColumn } };
+      worksheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+
+      const output = await workbook.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Employee_List_${dateLabel}_${dayName}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      toast({ title: "Excel export failed", description: exportError instanceof Error ? exportError.message : "Unable to generate the employee report", variant: "destructive" });
+    }
+  };
+
   const exportExactEnglishTemplate = async () => {
     if (!filtered.length) {
       toast({ title: t("لا توجد بيانات للتصدير") });
@@ -636,7 +746,7 @@ export default function HREmployees() {
               {t("قائمة الموظفين")} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <div className="flex items-center gap-1">
-              <button onClick={() => void exportPreservedEnglishTemplate()} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
+              <button onClick={() => void exportSafeEmployeesExcel()} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
               <button title={t("طباعة")} className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
               <button onClick={() => setRefreshKey((k) => k + 1)} title={t("تحديث")} className="p-1.5 rounded hover:bg-white/20 transition"><RefreshCw className="h-4 w-4" /></button>
               <div className="relative">

@@ -119,15 +119,23 @@ export default function QuickActionsBar() {
   const [operator, setOperator] = useState<"+" | "-" | "×" | "÷">("+");
 
   const loadNotices = async () => {
+    if (!session?.id) {
+      setNotices([]);
+      setNoticeCount(0);
+      return;
+    }
+
     const [leaveResult, requestResult] = await Promise.all([
       supabase
         .from("leave_requests")
         .select("id, leave_type, status, created_at")
+        .eq("recipient_auth_user_id", session.id)
         .order("created_at", { ascending: false })
         .limit(5),
       supabase
         .from("hr_requests")
         .select("id, request_type, status, created_at")
+        .eq("recipient_auth_user_id", session.id)
         .order("created_at", { ascending: false })
         .limit(5),
     ]);

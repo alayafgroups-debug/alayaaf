@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { readUserSession } from "@/lib/authSession";
 
 type Request = { id: string; type: string; date: string; status: string; notes: string; approver: string; senderDepartment: string; senderName: string; source: "leave" | "request" };
 
@@ -33,9 +34,15 @@ export default function HRRequestsSent() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const session = readUserSession();
+      if (!session?.id) {
+        setItems([]);
+        return;
+      }
+
       const [leaveRes, reqRes] = await Promise.all([
-        supabase.from("leave_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("hr_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("leave_requests").select("*").eq("sender_auth_user_id", session.id).order("created_at", { ascending: false }),
+        supabase.from("hr_requests").select("*").eq("sender_auth_user_id", session.id).order("created_at", { ascending: false }),
       ]);
 
       const leaveRows: Request[] = (leaveRes.data ?? []).map((r: any) => ({

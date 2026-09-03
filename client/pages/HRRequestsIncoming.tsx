@@ -50,9 +50,15 @@ export default function HRRequestsIncoming() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const session = readUserSession();
+      if (!session?.id) {
+        setItems([]);
+        return;
+      }
+
       const [leaveRes, reqRes] = await Promise.all([
-        supabase.from("leave_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("hr_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("leave_requests").select("*").eq("recipient_auth_user_id", session.id).order("created_at", { ascending: false }),
+        supabase.from("hr_requests").select("*").eq("recipient_auth_user_id", session.id).order("created_at", { ascending: false }),
       ]);
 
       const leaveRows: RequestRow[] = (leaveRes.data ?? []).map((r: any) => ({

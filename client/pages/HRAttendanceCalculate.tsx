@@ -109,6 +109,8 @@ export default function HRAttendanceCalculate() {
   const [showNotes, setShowNotes] = useState(true);
   const [attendanceAction, setAttendanceAction] = useState<AttendanceAction | null>(null);
   const [actionDate, setActionDate] = useState(initialRange.from);
+  const [actionDateFrom, setActionDateFrom] = useState(initialRange.from);
+  const [actionDateTo, setActionDateTo] = useState(initialRange.to);
   const [actionCheckIn, setActionCheckIn] = useState("08:00");
   const [actionCheckOut, setActionCheckOut] = useState("17:00");
   const [actionHours, setActionHours] = useState("1");
@@ -278,19 +280,30 @@ export default function HRAttendanceCalculate() {
     return allSelectableSelected ? current.filter((id) => !selectableIds.includes(id)) : [...new Set([...current, ...selectableIds])];
   });
   const actionEmployees = employees.filter((employee) => selectedEmployeeIds.includes(employee.id));
+  const rangeActions: AttendanceAction[] = ["bulk", "clear-punches", "delete-bulk"];
+  const openAttendanceAction = (action: AttendanceAction) => {
+    setAttendanceAction(action);
+    setActionDate(dateFrom);
+    setActionDateFrom(dateFrom);
+    setActionDateTo(dateTo);
+    setActionMessage("");
+  };
   const saveAttendanceAction = async () => {
     if (!attendanceAction || actionEmployees.length === 0) return;
     setActionSaving(true);
     setActionMessage("");
     try {
+      if (rangeActions.includes(attendanceAction) && (!actionDateFrom || !actionDateTo || actionDateFrom > actionDateTo)) {
+        throw new Error(t("تاريخ البداية يجب أن يسبق تاريخ النهاية"));
+      }
       if (attendanceAction === "punch") {
         const payload = actionEmployees.map((employee) => ({ emp_id: employee.empId, emp_name: employee.name, department: employee.department, date: actionDate, check_in: actionCheckIn || null, check_out: actionCheckOut || null, status: "حاضر", late_minutes: 0, notes: actionReason || "إضافة دخول وخروج من حساب الدوام", entry_source: "manager_manual", prepared_by: "الإدارة", updated_at: new Date().toISOString() }));
         const { error: saveError } = await supabase.from("attendance").upsert(payload, { onConflict: "emp_id,date" });
         if (saveError) throw saveError;
       } else if (attendanceAction === "bulk") {
-        const payload = actionEmployees.flatMap((employee) => Array.from({ length: dayCount(dateFrom, dateTo) }, (_, offset) => {
-          const date = new Date(`${dateFrom}T00:00:00`); date.setDate(date.getDate() + offset);
-          return { emp_id: employee.empId, emp_name: employee.name, department: employee.department, date: date.toISOString().slice(0, 10), check_in: actionCheckIn || null, check_out: actionCheckOut || null, status: "حاضر", late_minutes: 0, notes: actionReason || "تحضير متعدد من حساب الدوام", entry_source: "manager_manual", prepared_by: "الإدارة", updated_at: new Date().toISOString() };
+        const payload = actionEmployees.flatMap((employee) => Array.from({ length: dayCount(actionDateFrom, actionDateTo) }, (_, offset) => {
+          const date = new Date(`${actionDateFrom}T00:00:00`); date.setDate(date.getDate() + offset);
+          return { emp_id: employee.empId, emp_name: employee.name, department: employee.department, date: date.toISOString().slice(0, 10), check_in: null, check_out: null, status: "حاضر", late_minutes: 0, notes: actionReason || "تحضير متعدد من حساب الدوام", entry_source: "manager_manual", prepared_by: "الإدارة", updated_at: new Date().toISOString() };
         }));
         const { error: saveError } = await supabase.from("attendance").upsert(payload, { onConflict: "emp_id,date" });
         if (saveError) throw saveError;
@@ -305,10 +318,10 @@ export default function HRAttendanceCalculate() {
         const { error: saveError } = await supabase.from("hr_requests").insert(actionEmployees.map((employee) => ({ emp_id: employee.empId, emp_name: employee.name, request_type: "استئذان", start_date: actionDate, end_date: actionDate, status: "معتمد", details: { hours, reason: actionReason, source: "attendance_calculation" } })));
         if (saveError) throw saveError;
       } else if (attendanceAction === "clear-punches") {
-        const { error: saveError } = await supabase.from("attendance").update({ check_in: null, check_out: null, status: "غائب", notes: actionReason || "حذف الدخول والخروج من حساب الدوام", updated_at: new Date().toISOString() }).in("emp_id", actionEmployees.map((employee) => employee.empId)).eq("date", actionDate);
+        const { error: saveError } = await supabase.from("attendance").update({ check_in: null, check_out: null, status: "غائب", notes: actionReason || "حذف الدخول والخروج من حساب الدوام", updated_at: new Date().toISOString() }).in("emp_id", actionEmployees.map((employee) => employee.empId)).gte("date", actionDateFrom).lte("date", actionDateTo);
         if (saveError) throw saveError;
       } else {
-        const { error: saveError } = await supabase.from("attendance").delete().in("emp_id", actionEmployees.map((employee) => employee.empId)).gte("date", dateFrom).lte("date", dateTo).eq("entry_source", "manager_manual");
+        const { error: saveError } = await supabase.from("attendance").delete().in("emp_id", actionEmployees.map((employee) => employee.empId)).gte("date", actionDateFrom).lte("date", actionDateTo).eq("entry_source", "manager_manual");
         if (saveError) throw saveError;
       }
       setActionMessage(t("تم تنفيذ العملية بنجاح"));
@@ -441,21 +454,24 @@ export default function HRAttendanceCalculate() {
     {selectedEmployeeIds.length === 0 && !loading && <div className="attendance-no-print rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("حدد موظفًا واحدًا على الأقل لعرض التقرير وطباعته")}</div>}
     {mode === "employees" && selectedEmployeeIds.length > 0 && <section className="attendance-no-print rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" onClick={() => setAttendanceAction("punch")} className="bg-[#075f94] text-white hover:bg-[#064f7b]">{t("أضف دخول/خروج")}</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("bulk")}>{t("إضافة تحضير متعدد")}</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("overtime")}>{t("أضف ساعات إضافية")}</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("permission")}>{t("أضف ساعات استئذان")}</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("clear-punches")} className="border-red-200 text-red-700 hover:bg-red-50">{t("حذف دخول/خروج")}</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction("delete-bulk")} className="border-red-200 text-red-700 hover:bg-red-50">{t("حذف تحضير متعدد")}</Button>
+        <Button type="button" size="sm" onClick={() => openAttendanceAction("punch")} className="bg-[#075f94] text-white hover:bg-[#064f7b]">{t("أضف دخول/خروج")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => openAttendanceAction("bulk")}>{t("إضافة تحضير متعدد")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => openAttendanceAction("overtime")}>{t("أضف ساعات إضافية")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => openAttendanceAction("permission")}>{t("أضف ساعات استئذان")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => openAttendanceAction("clear-punches")} className="border-red-200 text-red-700 hover:bg-red-50">{t("حذف دخول/خروج")}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => openAttendanceAction("delete-bulk")} className="border-red-200 text-red-700 hover:bg-red-50">{t("حذف تحضير متعدد")}</Button>
       </div>
       {attendanceAction && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/50 p-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {attendanceAction !== "bulk" && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("التاريخ")}</span><Input type="date" min={dateFrom} max={dateTo} value={actionDate} onChange={(event) => setActionDate(event.target.value)} /></label>}
-          {(attendanceAction === "punch" || attendanceAction === "bulk") && <><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الدخول")}</span><Input type="time" value={actionCheckIn} onChange={(event) => setActionCheckIn(event.target.value)} /></label><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الخروج")}</span><Input type="time" value={actionCheckOut} onChange={(event) => setActionCheckOut(event.target.value)} /></label></>}
+          {rangeActions.includes(attendanceAction) ? <>
+            <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("من تاريخ")}</span><Input type="date" min={dateFrom} max={dateTo} value={actionDateFrom} onChange={(event) => setActionDateFrom(event.target.value)} /></label>
+            <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("إلى تاريخ")}</span><Input type="date" min={actionDateFrom || dateFrom} max={dateTo} value={actionDateTo} onChange={(event) => setActionDateTo(event.target.value)} /></label>
+          </> : <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("التاريخ")}</span><Input type="date" min={dateFrom} max={dateTo} value={actionDate} onChange={(event) => setActionDate(event.target.value)} /></label>}
+          {attendanceAction === "punch" && <><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الدخول")}</span><Input type="time" value={actionCheckIn} onChange={(event) => setActionCheckIn(event.target.value)} /></label><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الخروج")}</span><Input type="time" value={actionCheckOut} onChange={(event) => setActionCheckOut(event.target.value)} /></label></>}
           {(attendanceAction === "overtime" || attendanceAction === "permission") && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("عدد الساعات")}</span><Input type="number" min="0.25" step="0.25" value={actionHours} onChange={(event) => setActionHours(event.target.value)} /></label>}
           {attendanceAction !== "delete-bulk" && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("السبب / الملاحظات")}</span><Input value={actionReason} onChange={(event) => setActionReason(event.target.value)} /></label>}
         </div>
-        <p className="mt-3 text-xs text-slate-600">{attendanceAction === "bulk" || attendanceAction === "delete-bulk" ? `${t("سيتم التطبيق على الموظفين المحددين خلال الفترة")}: ${dateFrom} — ${dateTo}` : `${t("سيتم التطبيق على الموظفين المحددين")}: ${formatNumber(actionEmployees.length)}`}</p>
+        <p className="mt-3 text-xs text-slate-600">{rangeActions.includes(attendanceAction) ? `${t("سيتم التطبيق على الموظفين المحددين خلال الفترة")}: ${actionDateFrom} — ${actionDateTo}` : `${t("سيتم التطبيق على الموظفين المحددين")}: ${formatNumber(actionEmployees.length)}`}</p>
         {(attendanceAction === "clear-punches" || attendanceAction === "delete-bulk") && <p className="mt-2 text-xs font-semibold text-red-700">{attendanceAction === "delete-bulk" ? t("سيتم حذف سجلات التحضير الإداري فقط ولن تُحذف بصمات الموظفين الجغرافية") : t("سيتم مسح وقت الدخول والخروج مع إبقاء سجل اليوم")}</p>}
         <div className="mt-4 flex gap-2"><Button type="button" size="sm" onClick={() => void saveAttendanceAction()} disabled={actionSaving}>{actionSaving ? t("جاري الحفظ...") : t("تأكيد العملية")}</Button><Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction(null)} disabled={actionSaving}>{t("إلغاء")}</Button></div>
       </div>}

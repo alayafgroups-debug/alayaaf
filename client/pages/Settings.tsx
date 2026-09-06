@@ -4,33 +4,37 @@ import { Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
+import DocumentTemplateWorkspace from "@/components/document-templates/DocumentTemplateWorkspace";
 
 export default function Settings() {
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t, direction } = useI18n();
+  const [activeSection, setActiveSection] = useState<"company" | "templates">("company");
 
   return (
     <Layout subMenu={null}>
-      <div className="space-y-6">
+      <div className="space-y-6" dir={direction}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>الإعدادات</span>
               <span>/</span>
-              <span>إعدادات الشركة</span>
+              <span>{t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}</span>
             </div>
             <h1 className="mt-2 text-3xl font-bold text-foreground">
-              إعدادات الشركة
+              {t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}
             </h1>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200">
-            <SettingsIcon className="h-4 w-4" />
-            حفظ الإعدادات
-          </button>
+          {activeSection === "company" && (
+            <button className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200">
+              <SettingsIcon className="h-4 w-4" />
+              {t("حفظ الإعدادات")}
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <button className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-500/20 hover:shadow-xl transition-all duration-200">
-            معلومات الشركة
+          <button onClick={() => setActiveSection("company")} className={cn("rounded-xl px-5 py-2.5 font-bold transition-all duration-200", activeSection === "company" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20" : "border border-border/50 bg-white text-foreground hover:bg-muted/50")}>
+            {t("معلومات الشركة")}
           </button>
           <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
             الإعدادات الضريبية
@@ -44,9 +48,12 @@ export default function Settings() {
           <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
             إعدادات إضافية
           </button>
+          <button onClick={() => setActiveSection("templates")} className={cn("rounded-xl px-5 py-2.5 font-bold transition-all duration-200", activeSection === "templates" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20" : "border border-border/50 bg-white text-foreground hover:bg-muted/50")}>
+            {t("قوالب المستندات")}
+          </button>
         </div>
 
-        <div className="space-y-6">
+        {activeSection === "templates" ? <DocumentTemplateWorkspace /> : <div className="space-y-6">
           <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-sm animate-fade-in-up">
             <div className="bg-gradient-to-l from-blue-800 to-blue-900 px-6 py-4 text-sm font-bold text-white flex items-center gap-2">
               <SettingsIcon className="h-4 w-4" />
@@ -227,7 +234,7 @@ export default function Settings() {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </Layout>
   );

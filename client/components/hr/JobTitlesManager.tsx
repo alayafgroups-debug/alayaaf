@@ -71,7 +71,7 @@ export default function JobTitlesManager({ embedded = false }: { embedded?: bool
       {showForm && (
         <div className="grid grid-cols-1 gap-3 border-b border-gray-200 bg-gray-50 p-4 md:grid-cols-2 lg:grid-cols-4">
           <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder="المسمى بالعربية *" />
-          <input value={form.nameEn} onChange={(event) => setForm((current) => ({ ...current, nameEn: event.target.value }))} className={inputClass} placeholder="Job title in English" />
+          <input value={form.nameEn} onChange={(event) => setForm((current) => ({ ...current, nameEn: event.target.value }))} className={inputClass} placeholder="المسمى بالإنجليزية" />
           <input value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} className={inputClass} placeholder="الإدارة" />
           <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))} className={inputClass}><option value="فعال">فعال</option><option value="غير فعال">غير فعال</option></select>
           <div className="flex gap-2 md:col-span-2 lg:col-span-4">

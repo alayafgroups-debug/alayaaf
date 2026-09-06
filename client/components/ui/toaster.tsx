@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 import {
   Toast,
   ToastClose,
@@ -10,9 +11,10 @@ import {
 
 export function Toaster() {
   const { toasts } = useToast();
+  const { t } = useI18n();
 
   return (
-    <ToastProvider>
+    <ToastProvider label={t("الإشعارات")}>
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
@@ -23,7 +25,7 @@ export function Toaster() {
               )}
             </div>
             {action}
-            <ToastClose />
+            <ToastClose aria-label={t("إغلاق")} />
           </Toast>
         );
       })}

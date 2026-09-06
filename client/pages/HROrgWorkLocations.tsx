@@ -142,8 +142,8 @@ export default function HROrgWorkLocations() {
       <div className="p-6 max-w-[1200px] mx-auto space-y-5" dir={direction}>
         <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
           <div className="flex gap-2">
-            <Button variant="outline" size="icon"><Printer className="h-4 w-4 text-blue-600" /></Button>
-            <Button variant="outline" size="icon"><FileText className="h-4 w-4 text-blue-600" /></Button>
+            <Button variant="outline" size="icon" title={t("طباعة")} aria-label={t("طباعة")}><Printer className="h-4 w-4 text-blue-600" /></Button>
+            <Button variant="outline" size="icon" title={t("تصدير")} aria-label={t("تصدير")}><FileText className="h-4 w-4 text-blue-600" /></Button>
             <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1" onClick={() => { resetForm(); setShowForm(true); }}>
               <Plus className="h-4 w-4" /> {t("إضافة موقع")}
             </Button>
@@ -223,8 +223,8 @@ export default function HROrgWorkLocations() {
                   <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.status === "فعال" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"}`}>{t(row.status)}</span></td>
                   <td className="py-3 px-4">
                     <div className="flex justify-center gap-2">
-                      <button onClick={() => startEdit(row)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => handleDelete(row)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => startEdit(row)} title={t("تعديل")} aria-label={t("تعديل")} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => handleDelete(row)} title={t("حذف")} aria-label={t("حذف")} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>

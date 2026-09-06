@@ -15,6 +15,8 @@ type PayrollRow = {
   deductions: number;
   net: number;
   status: string;
+  accountingStatus: string;
+  journalEntryId: string;
 };
 
 const now = new Date();
@@ -31,7 +33,7 @@ export default function HRPayrollTransfer() {
     setLoading(true);
     const { data, error } = await supabase
       .from("payroll")
-      .select("id, emp_name, department, basic_salary, allowances, deductions, net_salary, status")
+      .select("id, emp_name, department, basic_salary, allowances, deductions, net_salary, status, accounting_status, accounting_journal_entry_id")
       .eq("month", p)
       .order("emp_name");
     setLoading(false);
@@ -49,6 +51,8 @@ export default function HRPayrollTransfer() {
         deductions: Number(r.deductions ?? 0),
         net: Number(r.net_salary ?? 0),
         status: String(r.status ?? "معلق"),
+        accountingStatus: String(r.accounting_status ?? "unposted"),
+        journalEntryId: String(r.accounting_journal_entry_id ?? ""),
       }))
     );
   };
@@ -71,28 +75,27 @@ export default function HRPayrollTransfer() {
     [rows]
   );
 
-  const transferable = rows.filter((r) => r.status !== "مرحّل" && r.status !== "موقوف");
-  const alreadyTransferred = rows.filter((r) => r.status === "مرحّل").length;
+  const transferable = rows.filter((r) => r.status === "معتمد" && r.accountingStatus !== "posted");
+  const awaitingApproval = rows.filter((r) => !["معتمد", "مرحّل"].includes(r.status)).length;
+  const alreadyTransferred = rows.filter((r) => r.accountingStatus === "posted" && r.journalEntryId).length;
   const formattedPeriod = period ? formatDate(`${period}-01`, { month: "long", year: "numeric" }) : "-";
 
   const handleTransfer = async () => {
     if (transferable.length === 0) {
-      toast({ title: t("لا يوجد ما يمكن ترحيله"), description: t("جميع سجلات هذه الفترة مُرحّلة أو موقوفة"), variant: "destructive" });
+      toast({ title: t("لا يوجد ما يمكن ترحيله"), description: t("يجب اعتماد جميع رواتب الفترة قبل الترحيل المحاسبي"), variant: "destructive" });
       return;
     }
     if (!window.confirm(`${t("تأكيد الترحيل")}: ${t("هل تريد ترحيل سجلات الرواتب المحددة إلى النظام المحاسبي؟")} (${formatNumber(transferable.length)})`)) return;
     setTransferring(true);
-    const { error } = await supabase
-      .from("payroll")
-      .update({ status: "مرحّل" })
-      .eq("month", period)
-      .not("status", "in", "(مرحّل,موقوف)");
+    const { data: journalEntryId, error } = await supabase.rpc("post_payroll_period_accounting", {
+      p_period: period,
+    });
     setTransferring(false);
     if (error) {
       toast({ title: t("تعذر الترحيل"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: t("تم الترحيل"), description: `${t("تم ترحيل سجل راتب")}: ${formatNumber(transferable.length)} — ${t("الفترة")}: ${formattedPeriod}` });
+    toast({ title: t("تم الترحيل"), description: `${t("تم إنشاء قيد الرواتب وربطه بالسجلات")}: ${formatNumber(transferable.length)} — ${t("رقم القيد")}: ${String(journalEntryId)}` });
     void load(period);
   };
 
@@ -163,7 +166,7 @@ export default function HRPayrollTransfer() {
             <div className="flex items-center justify-between pt-2 gap-4 flex-wrap">
               <div className="text-sm text-gray-500 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-500" aria-hidden="true" />
-                {formatNumber(alreadyTransferred)} {t("سجل مُرحّل مسبقاً")} • {formatNumber(transferable.length)} {t("جاهز للترحيل")}
+                {formatNumber(alreadyTransferred)} {t("سجل مُرحّل مسبقاً")} • {formatNumber(transferable.length)} {t("جاهز للترحيل")} • {formatNumber(awaitingApproval)} {t("بانتظار الاعتماد")}
               </div>
               <Button onClick={handleTransfer} disabled={transferring || transferable.length === 0} aria-label={t("البدء في الترحيل")} className="bg-[#004e89] hover:bg-[#003865] text-white h-11 px-8 rounded-lg">
                 {transferring ? t("جاري الترحيل...") : t("البدء في الترحيل")}

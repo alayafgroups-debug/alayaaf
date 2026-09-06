@@ -15,6 +15,7 @@ create table if not exists public.document_template_settings (
   margin_right integer not null default 10 check (margin_right between 0 and 40),
   margin_bottom integer not null default 10 check (margin_bottom between 0 and 40),
   margin_left integer not null default 10 check (margin_left between 0 and 40),
+  fields jsonb not null default '[]'::jsonb check (jsonb_typeof(fields) = 'array'),
   updated_by uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now()
 );

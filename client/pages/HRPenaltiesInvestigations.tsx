@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type Employee = {
   id: string;
@@ -51,6 +52,7 @@ const emptyForm = {
 };
 
 export default function HRPenaltiesInvestigations() {
+  const { t, direction } = useI18n();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [groups, setGroups] = useState<Option[]>([]);
   const [types, setTypes] = useState<Option[]>([]);
@@ -108,8 +110,8 @@ export default function HRPenaltiesInvestigations() {
       );
     } catch (error) {
       toast({
-        title: "تعذر تحميل المساءلات",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+        title: t("تعذر تحميل المساءلات"),
+        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
         variant: "destructive",
       });
     } finally {
@@ -127,7 +129,7 @@ export default function HRPenaltiesInvestigations() {
 
   const validateForm = () => {
     if (!selectedEmployee || !form.date || !selectedGroup || !selectedType || !form.subject.trim() || !form.message.trim()) {
-      toast({ title: "أكمل الحقول المطلوبة", description: "الموظف والتاريخ والمخالفة والموضوع ونص المساءلة مطلوبة", variant: "destructive" });
+      toast({ title: t("أكمل الحقول المطلوبة"), description: t("الموظف والتاريخ والمخالفة والموضوع ونص المساءلة مطلوبة"), variant: "destructive" });
       return false;
     }
     return true;
@@ -160,15 +162,15 @@ export default function HRPenaltiesInvestigations() {
 
       if (error) throw error;
 
-      toast({ title: "تم إرسال المساءلة", description: `تم إرسال المساءلة إلى ${selectedEmployee.name}` });
+      toast({ title: t("تم إرسال المساءلة"), description: `${t("تم إرسال المساءلة إلى")} ${selectedEmployee.name}` });
       setForm({ ...emptyForm, date: getLocalDate() });
       setPreviewOpen(false);
       setShowForm(false);
       await loadData();
     } catch (error) {
       toast({
-        title: "تعذر إرسال المساءلة",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+        title: t("تعذر إرسال المساءلة"),
+        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
         variant: "destructive",
       });
     } finally {
@@ -186,80 +188,80 @@ export default function HRPenaltiesInvestigations() {
 
   return (
     <Layout>
-      <div className="w-full p-4 space-y-5" dir="rtl">
+      <div className="w-full p-4 space-y-5" dir={direction}>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">المساءلات</h1>
-            <p className="mt-1 text-sm text-gray-500">إنشاء مساءلة وإرسالها مباشرة إلى لوحة الموظف</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t("المساءلات")}</h1>
+            <p className="mt-1 text-sm text-gray-500">{t("إنشاء مساءلة وإرسالها مباشرة إلى لوحة الموظف")}</p>
           </div>
           <Button
             onClick={() => setShowForm((current) => !current)}
             className="bg-[#004e89] hover:bg-[#003d6d] text-white"
           >
             {showForm ? <X className="h-4 w-4 ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
-            {showForm ? "إغلاق النموذج" : "إرسال مساءلة"}
+            {showForm ? t("إغلاق النموذج") : t("إرسال مساءلة")}
           </Button>
         </div>
 
         {showForm && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900">إرسال مساءلة</h2>
+              <h2 className="font-bold text-gray-900">{t("إرسال مساءلة")}</h2>
             </div>
 
             <div className="p-5 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Field label="الموظف" required>
+                <Field label={t("الموظف")} required>
                   <select
                     value={form.employeeId}
                     onChange={(event) => setForm((current) => ({ ...current, employeeId: event.target.value }))}
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
-                    <option value="">اختر الموظف</option>
+                    <option value="">{t("اختر الموظف")}</option>
                     {employees.map((employee) => (
                       <option key={employee.id} value={employee.id}>{employee.name}</option>
                     ))}
                   </select>
                 </Field>
 
-                <Field label="التاريخ" required>
+                <Field label={t("التاريخ")} required>
                   <Input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
                 </Field>
 
-                <Field label="مجموعات المخالفات" required>
+                <Field label={t("مجموعات المخالفات")} required>
                   <select
                     value={form.groupId}
                     onChange={(event) => setForm((current) => ({ ...current, groupId: event.target.value }))}
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
-                    <option value="">اختر مجموعة المخالفات</option>
+                    <option value="">{t("اختر مجموعة المخالفات")}</option>
                     {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                   </select>
                 </Field>
 
-                <Field label="المخالفة" required>
+                <Field label={t("المخالفة")} required>
                   <select
                     value={form.typeId}
                     onChange={(event) => setForm((current) => ({ ...current, typeId: event.target.value }))}
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
-                    <option value="">اختر المخالفة</option>
+                    <option value="">{t("اختر المخالفة")}</option>
                     {types.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
                   </select>
                 </Field>
 
                 <div className="md:col-span-2">
-                  <Field label="الموضوع" required>
+                  <Field label={t("الموضوع")} required>
                     <Input
                       value={form.subject}
                       onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
-                      placeholder="اكتب عنوان المساءلة"
+                      placeholder={t("اكتب عنوان المساءلة")}
                     />
                   </Field>
                 </div>
 
                 <div className="md:col-span-2">
-                  <Field label="نص المساءلة" required>
+                  <Field label={t("نص المساءلة")} required>
                     <textarea
                       value={form.message}
                       onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))}
@@ -271,9 +273,9 @@ export default function HRPenaltiesInvestigations() {
               </div>
 
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-                <Button variant="outline" onClick={handlePreview}><Eye className="h-4 w-4 ml-2" /> معاينة</Button>
+                <Button variant="outline" onClick={handlePreview}><Eye className="h-4 w-4 ml-2" /> {t("معاينة")}</Button>
                 <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                  {saving ? "جاري الإرسال..." : "حفظ وإرسال"}
+                  {saving ? t("جاري الإرسال...") : t("حفظ وإرسال")}
                 </Button>
               </div>
             </div>
@@ -282,10 +284,10 @@ export default function HRPenaltiesInvestigations() {
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <h2 className="font-bold text-gray-900">سجل المساءلات ({filtered.length})</h2>
+            <h2 className="font-bold text-gray-900">{t("سجل المساءلات")} ({filtered.length})</h2>
             <div className="relative w-full sm:w-80">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="بحث في المساءلات" className="pr-9" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث في المساءلات")} className="pr-9" />
             </div>
           </div>
 
@@ -293,24 +295,24 @@ export default function HRPenaltiesInvestigations() {
             <table className="w-full min-w-[1050px] text-sm text-right">
               <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <th className="py-3 px-4">رقم المساءلة</th>
-                  <th className="py-3 px-4">التاريخ</th>
-                  <th className="py-3 px-4">اسم الموظف</th>
-                  <th className="py-3 px-4">الإدارة</th>
-                  <th className="py-3 px-4">المخالفة</th>
-                  <th className="py-3 px-4">الموضوع</th>
-                  <th className="py-3 px-4">الحالة</th>
-                  <th className="py-3 px-4 text-center">عرض</th>
+                  <th className="py-3 px-4">{t("رقم المساءلة")}</th>
+                  <th className="py-3 px-4">{t("التاريخ")}</th>
+                  <th className="py-3 px-4">{t("اسم الموظف")}</th>
+                  <th className="py-3 px-4">{t("الإدارة")}</th>
+                  <th className="py-3 px-4">{t("المخالفة")}</th>
+                  <th className="py-3 px-4">{t("الموضوع")}</th>
+                  <th className="py-3 px-4">{t("الحالة")}</th>
+                  <th className="py-3 px-4 text-center">{t("عرض")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={8} className="py-10 text-center text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={8} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-10 text-center text-gray-500">
                       <FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />
-                      لا توجد مساءلات مرسلة
+                      {t("لا توجد مساءلات مرسلة")}
                     </td>
                   </tr>
                 ) : filtered.map((item, index) => (
@@ -321,7 +323,7 @@ export default function HRPenaltiesInvestigations() {
                     <td className="py-3 px-4">{item.department || "—"}</td>
                     <td className="py-3 px-4">{item.typeName || "—"}</td>
                     <td className="py-3 px-4">{item.subject}</td>
-                    <td className="py-3 px-4"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700">{item.status}</span></td>
+                    <td className="py-3 px-4"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700">{t(item.status)}</span></td>
                     <td className="py-3 px-4 text-center">
                       <button
                         type="button"
@@ -333,7 +335,7 @@ export default function HRPenaltiesInvestigations() {
                           setPreviewOpen(true);
                         }}
                         className="text-[#004e89] hover:text-[#003d6d]"
-                        aria-label={`عرض مساءلة ${item.empName}`}
+                        aria-label={`${t("عرض مساءلة")} ${item.empName}`}
                       >
                         <Eye className="h-4 w-4" />
                       </button>
@@ -346,29 +348,29 @@ export default function HRPenaltiesInvestigations() {
         </div>
 
         {previewOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir={direction}>
             <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl overflow-hidden">
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-                <h3 className="text-xl font-bold text-gray-900">معاينة المساءلة</h3>
+                <h3 className="text-xl font-bold text-gray-900">{t("معاينة المساءلة")}</h3>
                 <button type="button" onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-900"><X className="h-5 w-5" /></button>
               </div>
               <div className="p-6 space-y-5">
                 <div className="text-center border-b border-gray-100 pb-4">
-                  <h4 className="text-2xl font-bold text-[#004e89]">مساءلة إدارية</h4>
-                  <p className="mt-1 text-sm text-gray-500">التاريخ: {form.date}</p>
+                  <h4 className="text-2xl font-bold text-[#004e89]">{t("مساءلة إدارية")}</h4>
+                  <p className="mt-1 text-sm text-gray-500">{t("التاريخ")}: {form.date}</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                  <PreviewItem label="الموظف" value={selectedEmployee?.name || "—"} />
-                  <PreviewItem label="مجموعة المخالفة" value={selectedGroup?.name || "—"} />
-                  <PreviewItem label="المخالفة" value={selectedType?.name || "—"} />
-                  <PreviewItem label="الموضوع" value={form.subject || "—"} />
+                  <PreviewItem label={t("الموظف")} value={selectedEmployee?.name || "—"} />
+                  <PreviewItem label={t("مجموعة المخالفة")} value={selectedGroup?.name || "—"} />
+                  <PreviewItem label={t("المخالفة")} value={selectedType?.name || "—"} />
+                  <PreviewItem label={t("الموضوع")} value={form.subject || "—"} />
                 </div>
                 <div className="rounded-lg bg-gray-50 p-4 whitespace-pre-wrap leading-7 text-gray-800">{form.message}</div>
               </div>
               <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
-                <Button variant="outline" onClick={() => setPreviewOpen(false)}>رجوع</Button>
+                <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t("رجوع")}</Button>
                 <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                  {saving ? "جاري الإرسال..." : "حفظ وإرسال للموظف"}
+                  {saving ? t("جاري الإرسال...") : t("حفظ وإرسال للموظف")}
                 </Button>
               </div>
             </div>

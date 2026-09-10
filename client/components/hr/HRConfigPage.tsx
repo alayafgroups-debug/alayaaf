@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import Layout from "@/components/Layout";
+import { useI18n } from "@/i18n";
 
 type ConfigItem = {
   id: string;
@@ -24,6 +25,7 @@ type Props = {
 };
 
 export default function HRConfigPage({ title, configType, valueLabel = "القيمة", showValue = true }: Props) {
+  const { t, direction } = useI18n();
   const [items, setItems] = useState<ConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,50 +60,50 @@ export default function HRConfigPage({ title, configType, valueLabel = "القي
   };
 
   const handleSave = async () => {
-    if (!formNameAr.trim()) { toast({ title: "خطأ", description: "الوصف بالعربية مطلوب", variant: "destructive" }); return; }
+    if (!formNameAr.trim()) { toast({ title: t("خطأ"), description: t("الوصف بالعربية مطلوب"), variant: "destructive" }); return; }
     setSaving(true);
     try {
       if (editingId) {
         await supabase.from("hr_config_items").update({ name_ar: formNameAr, name_en: formNameEn, value: formValue }).eq("id", editingId);
-        toast({ title: "تم التعديل" });
+        toast({ title: t("تم التعديل") });
       } else {
         await supabase.from("hr_config_items").insert([{ config_type: configType, name_ar: formNameAr, name_en: formNameEn, value: formValue }]);
-        toast({ title: "تمت الإضافة" });
+        toast({ title: t("تمت الإضافة") });
       }
       resetForm(); loadData();
-    } catch { toast({ title: "خطأ", variant: "destructive" }); } finally { setSaving(false); }
+    } catch { toast({ title: t("خطأ"), variant: "destructive" }); } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: ConfigItem) => {
-    if (!confirm(`حذف "${item.nameAr}"؟`)) return;
+    if (!confirm(`${t("حذف")} "${item.nameAr}"؟`)) return;
     await supabase.from("hr_config_items").delete().eq("id", item.id);
     setItems((prev) => prev.filter((i) => i.id !== item.id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   const filtered = items.filter((i) => !searchTerm || i.nameAr.includes(searchTerm) || i.nameEn.includes(searchTerm));
 
   return (
     <Layout>
-      <div className="space-y-6 p-6 max-w-[1200px] mx-auto" dir="rtl">
+      <div className="space-y-6 p-6 max-w-[1200px] mx-auto" dir={direction}>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t(title)}</h1>
           <Button className="bg-[#004e89] hover:bg-[#003b6d]" onClick={() => { resetForm(); setShowForm(true); }}>
-            <Plus className="h-5 w-5 ml-2" /> إضافة جديد
+            <Plus className="h-5 w-5 ml-2" /> {t("إضافة جديد")}
           </Button>
         </div>
 
         {showForm && (
           <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
-            <h3 className="font-bold text-lg">{editingId ? "تعديل" : "إضافة جديد"}</h3>
+            <h3 className="font-bold text-lg">{editingId ? t("تعديل") : t("إضافة جديد")}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div><label className="block text-sm font-medium mb-1">الوصف بالعربية *</label><Input value={formNameAr} onChange={(e) => setFormNameAr(e.target.value)} /></div>
-              <div><label className="block text-sm font-medium mb-1">الوصف بالإنجليزية</label><Input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} /></div>
-              {showValue && <div><label className="block text-sm font-medium mb-1">{valueLabel}</label><Input value={formValue} onChange={(e) => setFormValue(e.target.value)} /></div>}
+              <div><label className="block text-sm font-medium mb-1">{t("الوصف بالعربية")} *</label><Input value={formNameAr} onChange={(e) => setFormNameAr(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("الوصف بالإنجليزية")}</label><Input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} /></div>
+              {showValue && <div><label className="block text-sm font-medium mb-1">{t(valueLabel)}</label><Input value={formValue} onChange={(e) => setFormValue(e.target.value)} /></div>}
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003b6d]"><Save className="h-4 w-4 ml-1" /> {saving ? "جاري الحفظ..." : "حفظ"}</Button>
-              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003b6d]"><Save className="h-4 w-4 ml-1" /> {saving ? t("جاري الحفظ...") : t("حفظ")}</Button>
+              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> {t("إلغاء")}</Button>
             </div>
           </div>
         )}
@@ -110,26 +112,26 @@ export default function HRConfigPage({ title, configType, valueLabel = "القي
           <div className="p-4 border-b flex justify-between items-center">
             <div className="relative w-64">
               <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
-              <Input placeholder="بحث..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pr-9" />
+              <Input placeholder={t("بحث...")} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pr-9" />
             </div>
-            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+            <span className="text-sm text-gray-500">{filtered.length} {t("سجل")}</span>
           </div>
 
           <Table>
             <TableHeader className="bg-[#004e89]">
               <TableRow>
                 <TableHead className="text-white text-right w-12">#</TableHead>
-                <TableHead className="text-white text-right">وصف (عربي)</TableHead>
-                <TableHead className="text-white text-right">وصف (إنجليزي)</TableHead>
-                {showValue && <TableHead className="text-white text-right">{valueLabel}</TableHead>}
-                <TableHead className="text-white text-center w-24">الإجراءات</TableHead>
+                <TableHead className="text-white text-right">{t("وصف (عربي)")}</TableHead>
+                <TableHead className="text-white text-right">{t("وصف (إنجليزي)")}</TableHead>
+                {showValue && <TableHead className="text-white text-right">{t(valueLabel)}</TableHead>}
+                <TableHead className="text-white text-center w-24">{t("الإجراءات")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={showValue ? 5 : 4} className="text-center py-8 text-gray-400">جاري التحميل...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={showValue ? 5 : 4} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={showValue ? 5 : 4} className="text-center py-8 text-gray-400">لا توجد بيانات</TableCell></TableRow>
+                <TableRow><TableCell colSpan={showValue ? 5 : 4} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</TableCell></TableRow>
               ) : filtered.map((item, i) => (
                 <TableRow key={item.id}>
                   <TableCell>{i + 1}</TableCell>
@@ -138,8 +140,8 @@ export default function HRConfigPage({ title, configType, valueLabel = "القي
                   {showValue && <TableCell>{item.value}</TableCell>}
                   <TableCell>
                     <div className="flex justify-center items-center gap-2">
-                      <button onClick={() => startEdit(item)} className="text-gray-500 hover:text-[#004e89]"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => handleDelete(item)} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => startEdit(item)} title={t("تعديل")} aria-label={t("تعديل")} className="text-gray-500 hover:text-[#004e89]"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => handleDelete(item)} title={t("حذف")} aria-label={t("حذف")} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </TableCell>
                 </TableRow>

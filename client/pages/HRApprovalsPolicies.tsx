@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 const SETTING_KEY = "approval_policies";
 
@@ -32,6 +33,7 @@ const defaults: Policies = {
 };
 
 export default function HRApprovalsPolicies() {
+  const { t, direction } = useI18n();
   const [policies, setPolicies] = useState<Policies>(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,16 +75,16 @@ export default function HRApprovalsPolicies() {
       );
     setSaving(false);
     if (error) {
-      toast({ title: "تعذّر الحفظ", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذّر الحفظ"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "تم حفظ سياسات الموافقات بنجاح" });
+    toast({ title: t("تم حفظ سياسات الموافقات بنجاح") });
   };
 
   if (loading) {
     return (
       <Layout>
-        <div className="p-6 flex items-center justify-center h-64" dir="rtl">
+        <div className="p-6 flex items-center justify-center h-64" dir={direction}>
           <Loader2 className="h-8 w-8 animate-spin text-[#004e89]" />
         </div>
       </Layout>
@@ -93,15 +95,15 @@ export default function HRApprovalsPolicies() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="bg-white rounded-lg border shadow-sm p-6">
           <div className="text-right font-semibold text-lg text-gray-800 border-b pb-4 mb-6">
-            سياسات الموافقات والتوقيع الالكتروني
+            {t("سياسات الموافقات والتوقيع الالكتروني")}
           </div>
 
           <div className="space-y-8">
             <div className="space-y-3">
-              <Label className="text-sm font-medium">تفعيل التوقيع الالكتروني في معالجة الطلبات</Label>
+              <Label className="text-sm font-medium">{t("تفعيل التوقيع الالكتروني في معالجة الطلبات")}</Label>
               <RadioGroup
                 value={policies.eSignature}
                 onValueChange={(v) => setPolicies((p) => ({ ...p, eSignature: v }))}
@@ -109,24 +111,24 @@ export default function HRApprovalsPolicies() {
               >
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="yes" id="e_sig_yes" />
-                  <Label htmlFor="e_sig_yes" className="font-normal cursor-pointer">نعم</Label>
+                  <Label htmlFor="e_sig_yes" className="font-normal cursor-pointer">{t("نعم")}</Label>
                 </div>
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="no" id="e_sig_no" />
-                  <Label htmlFor="e_sig_no" className="font-normal cursor-pointer">لا</Label>
+                  <Label htmlFor="e_sig_no" className="font-normal cursor-pointer">{t("لا")}</Label>
                 </div>
               </RadioGroup>
               <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-600 mt-2">
-                في حال تفعيل التوقيع الالكتروني على معالجة الطلبات لن يسمح باستكمال الموافقة على الطلب في حال كان المستخدم لم يقوم برفع توقيعه الالكتروني
+                {t("في حال تفعيل التوقيع الالكتروني على معالجة الطلبات لن يسمح باستكمال الموافقة على الطلب في حال كان المستخدم لم يقوم برفع توقيعه الالكتروني")}
               </div>
             </div>
 
             <div className="space-y-4">
-              <Label className="text-sm font-bold text-gray-800 border-b pb-2 block">الطلبات المرتبطة</Label>
+              <Label className="text-sm font-bold text-gray-800 border-b pb-2 block">{t("الطلبات المرتبطة")}</Label>
 
               <div className="flex items-center space-x-2 space-x-reverse mb-4">
                 <Checkbox id="select_all" checked={allSelected} onCheckedChange={(c) => toggleAll(Boolean(c))} />
-                <Label htmlFor="select_all" className="font-medium cursor-pointer">اختيار الكل</Label>
+                <Label htmlFor="select_all" className="font-medium cursor-pointer">{t("اختيار الكل")}</Label>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-y-3 gap-x-8">
@@ -137,14 +139,14 @@ export default function HRApprovalsPolicies() {
                       checked={policies.relatedRequests.includes(type)}
                       onCheckedChange={() => toggleType(type)}
                     />
-                    <Label htmlFor={`type_${index}`} className="font-normal cursor-pointer text-sm">{type}</Label>
+                    <Label htmlFor={`type_${index}`} className="font-normal cursor-pointer text-sm">{t(type)}</Label>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="space-y-3 pt-4 border-t">
-              <Label className="text-sm font-medium">تفعيل التفويض التلقائي للموظف البديل لمعالجة الطلبات</Label>
+              <Label className="text-sm font-medium">{t("تفعيل التفويض التلقائي للموظف البديل لمعالجة الطلبات")}</Label>
               <RadioGroup
                 value={policies.autoDelegation}
                 onValueChange={(v) => setPolicies((p) => ({ ...p, autoDelegation: v }))}
@@ -152,20 +154,20 @@ export default function HRApprovalsPolicies() {
               >
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="yes" id="auto_del_yes" />
-                  <Label htmlFor="auto_del_yes" className="font-normal cursor-pointer">نعم</Label>
+                  <Label htmlFor="auto_del_yes" className="font-normal cursor-pointer">{t("نعم")}</Label>
                 </div>
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="no" id="auto_del_no" />
-                  <Label htmlFor="auto_del_no" className="font-normal cursor-pointer">لا</Label>
+                  <Label htmlFor="auto_del_no" className="font-normal cursor-pointer">{t("لا")}</Label>
                 </div>
               </RadioGroup>
               <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-600 mt-2">
-                تفويض تلقائي للموظف البديل لمعالجة الطلبات في حال كان الموظف المسؤول في إجازة معتمدة يتم تفويض الموظف البديل لمعالجة الطلبات في فترة إجازة الموظف
+                {t("تفويض تلقائي للموظف البديل لمعالجة الطلبات في حال كان الموظف المسؤول في إجازة معتمدة يتم تفويض الموظف البديل لمعالجة الطلبات في فترة إجازة الموظف")}
               </div>
             </div>
 
             <div className="space-y-3 pt-4 border-t">
-              <Label className="text-sm font-medium">تفعيل تجاوز معالجة الطلب التلقائي على الطلب</Label>
+              <Label className="text-sm font-medium">{t("تفعيل تجاوز معالجة الطلب التلقائي على الطلب")}</Label>
               <RadioGroup
                 value={policies.autoBypass}
                 onValueChange={(v) => setPolicies((p) => ({ ...p, autoBypass: v }))}
@@ -173,21 +175,21 @@ export default function HRApprovalsPolicies() {
               >
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="yes" id="bypass_yes" />
-                  <Label htmlFor="bypass_yes" className="font-normal cursor-pointer">نعم</Label>
+                  <Label htmlFor="bypass_yes" className="font-normal cursor-pointer">{t("نعم")}</Label>
                 </div>
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="no" id="bypass_no" />
-                  <Label htmlFor="bypass_no" className="font-normal cursor-pointer">لا</Label>
+                  <Label htmlFor="bypass_no" className="font-normal cursor-pointer">{t("لا")}</Label>
                 </div>
               </RadioGroup>
               <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-600 mt-2">
-                تفعيل تجاوز الموافقة التلقائي على الطلبات سيتم نقل الطلب المعلق من شخص في سلسلة الاعتماد للشخص التالي إذا تجاوز المهلة المحددة للموافقة أو الرفض
+                {t("تفعيل تجاوز الموافقة التلقائي على الطلبات سيتم نقل الطلب المعلق من شخص في سلسلة الاعتماد للشخص التالي إذا تجاوز المهلة المحددة للموافقة أو الرفض")}
               </div>
             </div>
 
             <div className="flex justify-end pt-6">
               <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">
-                {saving ? "جاري الحفظ..." : "حفظ"}
+                {saving ? t("جاري الحفظ...") : t("حفظ")}
               </Button>
             </div>
           </div>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type Decision = {
   id: string;
@@ -14,6 +15,7 @@ type Decision = {
 };
 
 export default function HRPenaltiesDecisions() {
+  const { t, direction } = useI18n();
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Decision[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export default function HRPenaltiesDecisions() {
       .from("penalty_decisions")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error) toast({ title: "خطأ في التحميل", description: error.message, variant: "destructive" });
+    if (error) toast({ title: t("خطأ في التحميل"), description: error.message, variant: "destructive" });
     else setRows((data as Decision[]) ?? []);
     setLoading(false);
   };
@@ -68,7 +70,7 @@ export default function HRPenaltiesDecisions() {
 
   const handleSave = async () => {
     if (!nameAr.trim()) {
-      toast({ title: "خطأ", description: "الوصف بالعربية مطلوب", variant: "destructive" });
+      toast({ title: t("خطأ"), description: t("الوصف بالعربية مطلوب"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -78,7 +80,7 @@ export default function HRPenaltiesDecisions() {
         .update({ name_ar: nameAr, name_en: nameEn, status })
         .eq("id", editing.id);
       if (error) {
-        toast({ title: "تعذّر الحفظ", description: error.message, variant: "destructive" });
+        toast({ title: t("تعذّر الحفظ"), description: error.message, variant: "destructive" });
         setSaving(false);
         return;
       }
@@ -87,36 +89,36 @@ export default function HRPenaltiesDecisions() {
         .from("penalty_decisions")
         .insert([{ id: crypto.randomUUID(), name_ar: nameAr, name_en: nameEn, status }]);
       if (error) {
-        toast({ title: "تعذّر الحفظ", description: error.message, variant: "destructive" });
+        toast({ title: t("تعذّر الحفظ"), description: error.message, variant: "destructive" });
         setSaving(false);
         return;
       }
     }
     setSaving(false);
     setModalOpen(false);
-    toast({ title: "تم الحفظ بنجاح" });
+    toast({ title: t("تم الحفظ بنجاح") });
     load();
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("هل تريد حذف هذا القرار؟")) return;
+    if (!confirm(t("هل تريد حذف هذا القرار؟"))) return;
     const { error } = await supabase.from("penalty_decisions").delete().eq("id", id);
     if (error) {
-      toast({ title: "تعذّر الحذف", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذّر الحذف"), description: error.message, variant: "destructive" });
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir={direction}>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-800">القرارات النهائية</h2>
+            <h2 className="text-lg font-bold text-gray-800">{t("القرارات النهائية")}</h2>
             <Button onClick={openAdd} className="bg-[#004e89] hover:bg-[#003865] text-white flex items-center gap-2">
-              <Plus className="h-4 w-4" /> إضافة قرار
+              <Plus className="h-4 w-4" /> {t("إضافة قرار")}
             </Button>
           </div>
 
@@ -125,7 +127,7 @@ export default function HRPenaltiesDecisions() {
               <div className="relative w-72">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="بحث"
+                  placeholder={t("بحث")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-3 pr-9 h-10"
@@ -137,11 +139,11 @@ export default function HRPenaltiesDecisions() {
               <table className="w-full text-sm text-right">
                 <thead className="bg-[#004e89] text-white">
                   <tr>
-                    <th className="py-3 px-4 font-medium w-24">معرف</th>
-                    <th className="py-3 px-4 font-medium min-w-[200px]">الوصف بالعربية</th>
-                    <th className="py-3 px-4 font-medium min-w-[200px]">الوصف بالانجليزية</th>
-                    <th className="py-3 px-4 font-medium">الحالة</th>
-                    <th className="py-3 px-4 font-medium text-center w-32">الأمر</th>
+                    <th className="py-3 px-4 font-medium w-24">{t("معرف")}</th>
+                    <th className="py-3 px-4 font-medium min-w-[200px]">{t("الوصف بالعربية")}</th>
+                    <th className="py-3 px-4 font-medium min-w-[200px]">{t("الوصف بالإنجليزية")}</th>
+                    <th className="py-3 px-4 font-medium">{t("الحالة")}</th>
+                    <th className="py-3 px-4 font-medium text-center w-32">{t("الأمر")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -154,7 +156,7 @@ export default function HRPenaltiesDecisions() {
                   ) : filtered.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-gray-500 font-medium bg-gray-50/30">
-                        لا توجد بيانات في الجدول
+                        {t("لا توجد بيانات في الجدول")}
                       </td>
                     </tr>
                   ) : (
@@ -170,15 +172,15 @@ export default function HRPenaltiesDecisions() {
                               (d.status === "فعال" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600")
                             }
                           >
-                            {d.status}
+                            {t(d.status)}
                           </span>
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => openEdit(d)} className="text-blue-500 hover:text-blue-700" title="تعديل">
+                            <button onClick={() => openEdit(d)} className="text-blue-500 hover:text-blue-700" title={t("تعديل")} aria-label={t("تعديل")}>
                               <Pencil className="h-4 w-4" />
                             </button>
-                            <button onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-700" title="حذف">
+                            <button onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
@@ -191,46 +193,46 @@ export default function HRPenaltiesDecisions() {
             </div>
 
             <div className="flex items-center justify-between text-sm text-gray-500 pt-2">
-              <span>يعرض {filtered.length} من أصل {rows.length} سجل</span>
+              <span>{t("يعرض")} {filtered.length} {t("من أصل")} {rows.length} {t("سجل")}</span>
             </div>
           </div>
         </div>
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" dir="rtl">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" dir={direction}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="font-bold text-gray-800">{editing ? "تعديل القرار" : "إضافة قرار نهائي"}</h3>
+              <h3 className="font-bold text-gray-800">{editing ? t("تعديل القرار") : t("إضافة قرار نهائي")}</h3>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">الوصف بالعربية *</label>
-                <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="مثال: إنذار كتابي" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("الوصف بالعربية")} *</label>
+                <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder={t("مثال: إنذار كتابي")} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">الوصف بالانجليزية</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("الوصف بالإنجليزية")}</label>
                 <Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="Written warning" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("الحالة")}</label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
                 >
-                  <option value="فعال">فعال</option>
-                  <option value="غير فعال">غير فعال</option>
+                  <option value="فعال">{t("فعال")}</option>
+                  <option value="غير فعال">{t("غير فعال")}</option>
                 </select>
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t">
-              <Button variant="outline" onClick={() => setModalOpen(false)}>إلغاء</Button>
+              <Button variant="outline" onClick={() => setModalOpen(false)}>{t("إلغاء")}</Button>
               <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865] text-white">
-                {saving ? "جاري الحفظ..." : "حفظ"}
+                {saving ? t("جاري الحفظ...") : t("حفظ")}
               </Button>
             </div>
           </div>

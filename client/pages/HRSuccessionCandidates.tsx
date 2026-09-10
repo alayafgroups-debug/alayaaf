@@ -3,59 +3,61 @@ import { Plus, Search, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useI18n } from "@/i18n";
 
 export default function HRSuccessionCandidates() {
+  const { t, direction } = useI18n();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6" dir={direction}>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">الموظفين المرشحين</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t("الموظفين المرشحين")}</h1>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-[#004e89] hover:bg-[#003b6d]">
               <Plus className="h-5 w-5 ml-2" />
-              إضافة مرشح
+              {t("إضافة مرشح")}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>إضافة مرشح</DialogTitle>
+              <DialogTitle>{t("إضافة مرشح")}</DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">الإدارة</label>
+                <label className="text-sm font-medium">{t("الإدارة")}</label>
                 <select className="w-full border rounded-md p-2 bg-gray-50">
-                  <option>الإدارة</option>
+                  <option>{t("الإدارة")}</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">القسم</label>
+                <label className="text-sm font-medium">{t("القسم")}</label>
                 <select className="w-full border rounded-md p-2 bg-gray-50">
-                  <option>القسم</option>
+                  <option>{t("القسم")}</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">موظف *</label>
+                <label className="text-sm font-medium">{t("موظف")} *</label>
                 <select className="w-full border rounded-md p-2">
                   <option></option>
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">المنصب *</label>
+                <label className="text-sm font-medium">{t("المنصب")} *</label>
                 <select className="w-full border rounded-md p-2">
                   <option></option>
                 </select>
               </div>
               <div className="space-y-2 col-span-2">
-                <label className="text-sm font-medium">استبيان الموظفين المرشحين للتعاقب *</label>
+                <label className="text-sm font-medium">{t("استبيان الموظفين المرشحين للتعاقب")} *</label>
                 <select className="w-full border rounded-md p-2">
                   <option></option>
                 </select>
               </div>
             </div>
             <div className="flex justify-start">
-              <Button className="bg-[#004e89] hover:bg-[#003b6d] w-24">حفظ</Button>
+              <Button className="bg-[#004e89] hover:bg-[#003b6d] w-24">{t("حفظ")}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -64,9 +66,9 @@ export default function HRSuccessionCandidates() {
       <div className="bg-white rounded-md border shadow-sm">
         <div className="p-4 border-b flex justify-between items-center bg-[#004e89] text-white">
           <div className="flex items-center gap-4">
-            <span className="font-semibold">الموظفين المرشحين</span>
+            <span className="font-semibold">{t("الموظفين المرشحين")}</span>
             <div className="flex items-center gap-2">
-              <span>الكل</span>
+              <span>{t("الكل")}</span>
               <select className="text-black rounded px-2 py-1">
                 <option></option>
               </select>
@@ -87,19 +89,19 @@ export default function HRSuccessionCandidates() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-right">اسم الموظف</TableHead>
-              <TableHead className="text-right">الإدارة</TableHead>
-              <TableHead className="text-right">القسم</TableHead>
-              <TableHead className="text-right">الوظيفة الحالية</TableHead>
-              <TableHead className="text-right">الوظيفة المستهدفة بالتعاقب</TableHead>
-              <TableHead className="text-right">الحالة</TableHead>
-              <TableHead className="text-center w-24">الأمر</TableHead>
+              <TableHead className="text-right">{t("اسم الموظف")}</TableHead>
+              <TableHead className="text-right">{t("الإدارة")}</TableHead>
+              <TableHead className="text-right">{t("القسم")}</TableHead>
+              <TableHead className="text-right">{t("الوظيفة الحالية")}</TableHead>
+              <TableHead className="text-right">{t("الوظيفة المستهدفة بالتعاقب")}</TableHead>
+              <TableHead className="text-right">{t("الحالة")}</TableHead>
+              <TableHead className="text-center w-24">{t("الأمر")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow>
               <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                لا توجد بيانات
+                {t("لا توجد بيانات")}
               </TableCell>
             </TableRow>
           </TableBody>

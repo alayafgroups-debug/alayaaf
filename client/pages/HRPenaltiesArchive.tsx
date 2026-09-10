@@ -4,6 +4,7 @@ import { Printer, FileText, Download, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type PenaltyRow = {
   id: string;
@@ -18,6 +19,7 @@ type PenaltyRow = {
 };
 
 export default function HRPenaltiesArchive() {
+  const { t, direction } = useI18n();
   const [rows, setRows] = useState<PenaltyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("الكل");
@@ -30,7 +32,7 @@ export default function HRPenaltiesArchive() {
       .select("*")
       .order("created_at", { ascending: false });
     if (error) {
-      toast({ title: "خطأ في التحميل", description: error.message, variant: "destructive" });
+      toast({ title: t("خطأ في التحميل"), description: error.message, variant: "destructive" });
     } else {
       setRows((data as PenaltyRow[]) ?? []);
     }
@@ -57,20 +59,20 @@ export default function HRPenaltiesArchive() {
   );
 
   const handleDelete = async (id: string) => {
-    if (!confirm("هل تريد حذف هذا الجزاء من الأرشيف؟")) return;
+    if (!confirm(t("هل تريد حذف هذا الجزاء من الأرشيف؟"))) return;
     const { error } = await supabase.from("penalties").delete().eq("id", id);
     if (error) {
-      toast({ title: "تعذّر الحذف", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذّر الحذف"), description: error.message, variant: "destructive" });
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   const handlePrint = () => window.print();
 
   const handleExport = () => {
-    const header = ["رقم المساءلة", "إسم الموظف", "المخالفة", "الجزاء", "المبلغ", "الحالة", "التاريخ"];
+    const header = [t("رقم المساءلة"), t("إسم الموظف"), t("المخالفة"), t("الجزاء"), t("المبلغ"), t("الحالة"), t("التاريخ")];
     const lines = filtered.map((r) =>
       [r.id, r.emp_name ?? "", r.reason ?? "", r.penalty_type ?? "", r.amount ?? 0, r.status ?? "", r.date ?? ""]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -88,45 +90,45 @@ export default function HRPenaltiesArchive() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4 w-full md:w-auto">
-              <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">ارشيف الجزاءات</h2>
+              <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">{t("ارشيف الجزاءات")}</h2>
               <div className="flex gap-2 text-black w-full sm:w-auto">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="h-8 rounded px-2 text-sm bg-white border-none outline-none flex-1 sm:w-[120px]"
                 >
-                  <option>الكل</option>
-                  <option>معتمد</option>
-                  <option>معلق</option>
-                  <option>مرفوض</option>
+                  <option>{t("الكل")}</option>
+                  <option>{t("معتمد")}</option>
+                  <option>{t("معلق")}</option>
+                  <option>{t("مرفوض")}</option>
                 </select>
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
                   className="h-8 rounded px-2 text-sm bg-white border-none outline-none flex-1 sm:w-[180px]"
                 >
-                  <option>الكل</option>
-                  {penaltyTypes.map((t) => (
-                    <option key={t}>{t}</option>
+                  <option>{t("الكل")}</option>
+                  {penaltyTypes.map((pt) => (
+                    <option key={pt}>{pt}</option>
                   ))}
                 </select>
               </div>
             </div>
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-              <h2 className="text-lg font-bold sm:hidden">ارشيف الجزاءات</h2>
+              <h2 className="text-lg font-bold sm:hidden">{t("ارشيف الجزاءات")}</h2>
               <div className="flex items-center gap-2">
-                <button onClick={handleExport} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="تصدير">
+                <button onClick={handleExport} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("تصدير")} aria-label={t("تصدير")}>
                   <Download className="h-4 w-4" />
                 </button>
-                <button onClick={load} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="تحديث">
+                <button onClick={load} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("تحديث")} aria-label={t("تحديث")}>
                   <FileText className="h-4 w-4" />
                 </button>
-                <button onClick={handlePrint} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="طباعة">
+                <button onClick={handlePrint} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("طباعة")} aria-label={t("طباعة")}>
                   <Printer className="h-4 w-4" />
                 </button>
               </div>
@@ -137,15 +139,15 @@ export default function HRPenaltiesArchive() {
             <table className="w-full text-sm text-center whitespace-nowrap">
               <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
                 <tr>
-                  <th className="py-3 px-2 font-medium">رقم المساءلة</th>
-                  <th className="py-3 px-2 font-medium min-w-[150px]">إسم الموظف</th>
-                  <th className="py-3 px-2 font-medium">رقم الموظف</th>
-                  <th className="py-3 px-2 font-medium min-w-[160px]">المخالفة</th>
-                  <th className="py-3 px-2 font-medium">الجزاء</th>
-                  <th className="py-3 px-2 font-medium">المبلغ</th>
-                  <th className="py-3 px-2 font-medium">الحالة</th>
-                  <th className="py-3 px-2 font-medium">تاريخ الإضافة</th>
-                  <th className="py-3 px-2 font-medium">الإجراءات</th>
+                  <th className="py-3 px-2 font-medium">{t("رقم المساءلة")}</th>
+                  <th className="py-3 px-2 font-medium min-w-[150px]">{t("إسم الموظف")}</th>
+                  <th className="py-3 px-2 font-medium">{t("رقم الموظف")}</th>
+                  <th className="py-3 px-2 font-medium min-w-[160px]">{t("المخالفة")}</th>
+                  <th className="py-3 px-2 font-medium">{t("الجزاء")}</th>
+                  <th className="py-3 px-2 font-medium">{t("المبلغ")}</th>
+                  <th className="py-3 px-2 font-medium">{t("الحالة")}</th>
+                  <th className="py-3 px-2 font-medium">{t("تاريخ الإضافة")}</th>
+                  <th className="py-3 px-2 font-medium">{t("الإجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -160,7 +162,7 @@ export default function HRPenaltiesArchive() {
                     <td colSpan={9} className="py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <FileText className="h-10 w-10 text-gray-300" />
-                        <p>لا توجد بيانات في الجدول</p>
+                        <p>{t("لا توجد بيانات في الجدول")}</p>
                       </div>
                     </td>
                   </tr>
@@ -184,14 +186,14 @@ export default function HRPenaltiesArchive() {
                                 : "bg-amber-100 text-amber-700")
                           }
                         >
-                          {r.status || "معلق"}
+                          {t(r.status || "معلق")}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-gray-500">
                         {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString("ar-EG") : "-")}
                       </td>
                       <td className="py-2.5 px-2">
-                        <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700" title="حذف">
+                        <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
                           <Trash2 className="h-4 w-4 mx-auto" />
                         </button>
                       </td>
@@ -203,10 +205,10 @@ export default function HRPenaltiesArchive() {
           </div>
 
           <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-500">يعرض {filtered.length} من أصل {rows.length} سجل</span>
+            <span className="text-gray-500">{t("يعرض")} {filtered.length} {t("من أصل")} {rows.length} {t("سجل")}</span>
             <div className="flex gap-1 opacity-50 pointer-events-none">
-              <Button variant="outline" size="sm" className="h-8 px-3">السابق</Button>
-              <Button variant="outline" size="sm" className="h-8 px-3">التالي</Button>
+              <Button variant="outline" size="sm" className="h-8 px-3">{t("السابق")}</Button>
+              <Button variant="outline" size="sm" className="h-8 px-3">{t("التالي")}</Button>
             </div>
           </div>
         </div>

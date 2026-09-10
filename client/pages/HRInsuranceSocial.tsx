@@ -4,10 +4,12 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
+import { useI18n } from "@/i18n";
 
 type Row = { id: string; jobId: string; name: string; employeeShare: string; companyShare: string; total: string; subscriptionNumber: string; subscriptionDate: string };
 
 export default function HRInsuranceSocial() {
+  const { t, direction } = useI18n();
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -31,37 +33,37 @@ export default function HRInsuranceSocial() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">التأمينات الاجتماعية</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("التأمينات الاجتماعية")}</h1>
         </div>
 
         <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
           <div className="p-4 border-b flex justify-between items-center">
             <div className="relative w-72">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input placeholder="بحث بالاسم أو الرقم الوظيفي..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+              <Input placeholder={t("بحث بالاسم أو الرقم الوظيفي...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
             </div>
-            <span className="text-sm text-gray-500">{filtered.length} موظف</span>
+            <span className="text-sm text-gray-500">{filtered.length} {t("موظف")}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-right min-w-[1000px]">
               <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <th className="py-3 px-4 font-medium">الرقم الوظيفي</th>
-                  <th className="py-3 px-4 font-medium">الاسم</th>
-                  <th className="py-3 px-4 font-medium">نسبة تحمل الموظف</th>
-                  <th className="py-3 px-4 font-medium">نسبة تحمل المنشأة</th>
-                  <th className="py-3 px-4 font-medium">الإجمالي</th>
-                  <th className="py-3 px-4 font-medium">رقم الاشتراك</th>
-                  <th className="py-3 px-4 font-medium">تاريخ الاشتراك</th>
+                  <th className="py-3 px-4 font-medium">{t("الرقم الوظيفي")}</th>
+                  <th className="py-3 px-4 font-medium">{t("الاسم")}</th>
+                  <th className="py-3 px-4 font-medium">{t("نسبة تحمل الموظف")}</th>
+                  <th className="py-3 px-4 font-medium">{t("نسبة تحمل المنشأة")}</th>
+                  <th className="py-3 px-4 font-medium">{t("الإجمالي")}</th>
+                  <th className="py-3 px-4 font-medium">{t("رقم الاشتراك")}</th>
+                  <th className="py-3 px-4 font-medium">{t("تاريخ الاشتراك")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y bg-white">
                 {loading ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50/50">
                     <td className="py-3 px-4">{row.jobId}</td>

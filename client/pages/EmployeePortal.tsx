@@ -1873,7 +1873,7 @@ export default function EmployeePortal() {
                       {tab === "received" && t("الواردة")}
                       {tab === "draft" && t("المسودة")}
                       {tab === "sent" && t("المرسلة")}
-                      {tab === "attached" && t("المملحقة")}
+                      {tab === "attached" && t("الملحقة")}
                     </button>
                   ))}
                 </div>

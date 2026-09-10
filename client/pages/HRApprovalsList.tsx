@@ -7,6 +7,7 @@ import { Search, Plus, Trash2, Edit } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type ApprovalChain = {
   id: string;
@@ -17,6 +18,7 @@ type ApprovalChain = {
 };
 
 export default function HRApprovalsList() {
+  const { t, direction } = useI18n();
   const [chains, setChains] = useState<ApprovalChain[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,10 +38,10 @@ export default function HRApprovalsList() {
   }, []);
 
   const handleDelete = async (chain: ApprovalChain) => {
-    if (!confirm(`حذف سلسلة الموافقات "${chain.name}"؟`)) return;
+    if (!confirm(`${t("حذف سلسلة الموافقات")} "${chain.name}"؟`)) return;
     await supabase.from("approval_chains").delete().eq("id", chain.id);
     setChains((prev) => prev.filter((c) => c.id !== chain.id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   const filtered = chains.filter((c) =>
@@ -48,23 +50,23 @@ export default function HRApprovalsList() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
           <div className="flex gap-2">
             <Link to="/hr/approvals/add">
               <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white flex gap-2">
                 <Plus className="h-4 w-4" />
-                <span>إضافة سلسلة موافقات</span>
+                <span>{t("إضافة سلسلة موافقات")}</span>
               </Button>
             </Link>
           </div>
-          <div className="font-semibold text-lg text-[#004e89]">قائمة سلسلة الموافقات</div>
+          <div className="font-semibold text-lg text-[#004e89]">{t("قائمة سلسلة الموافقات")}</div>
         </div>
 
         <div className="bg-white p-4 rounded-lg border shadow-sm flex items-center justify-between">
           <div className="relative w-1/3">
             <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
-            <Input placeholder="بحث..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pr-9" />
+            <Input placeholder={t("بحث...")} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pr-9" />
           </div>
         </div>
 
@@ -73,31 +75,31 @@ export default function HRApprovalsList() {
             <TableHeader>
               <TableRow className="bg-[#004e89] hover:bg-[#004e89]">
                 <TableHead className="text-white text-right font-medium w-[60px]">#</TableHead>
-                <TableHead className="text-white text-right font-medium">اسم السلسلة</TableHead>
-                <TableHead className="text-white text-right font-medium">النوع</TableHead>
-                <TableHead className="text-white text-right font-medium">عدد الخطوات</TableHead>
-                <TableHead className="text-white text-center font-medium w-[100px]">الحالة</TableHead>
-                <TableHead className="text-white text-center font-medium w-[120px]">الإجراءات</TableHead>
+                <TableHead className="text-white text-right font-medium">{t("اسم السلسلة")}</TableHead>
+                <TableHead className="text-white text-right font-medium">{t("النوع")}</TableHead>
+                <TableHead className="text-white text-right font-medium">{t("عدد الخطوات")}</TableHead>
+                <TableHead className="text-white text-center font-medium w-[100px]">{t("الحالة")}</TableHead>
+                <TableHead className="text-white text-center font-medium w-[120px]">{t("الإجراءات")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">جاري التحميل...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">لا توجد سلاسل موافقات</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">{t("لا توجد سلاسل موافقات")}</TableCell></TableRow>
               ) : filtered.map((row, i) => (
                 <TableRow key={row.id}>
                   <TableCell>{i + 1}</TableCell>
                   <TableCell className="font-medium">{row.name}</TableCell>
                   <TableCell>{row.type || "—"}</TableCell>
-                  <TableCell>{row.steps.length} خطوة</TableCell>
+                  <TableCell>{row.steps.length} {t("خطوة")}</TableCell>
                   <TableCell className="text-center">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">{row.status}</span>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">{t(row.status)}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(row)}><Trash2 className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" title={t("تعديل")} aria-label={t("تعديل")} className="h-8 w-8 text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" title={t("حذف")} aria-label={t("حذف")} className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(row)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -105,7 +107,7 @@ export default function HRApprovalsList() {
             </TableBody>
           </Table>
         </div>
-        <div className="text-sm text-gray-500">إظهار {filtered.length} سجل</div>
+        <div className="text-sm text-gray-500">{t("إظهار")} {filtered.length} {t("سجل")}</div>
       </div>
     </Layout>
   );

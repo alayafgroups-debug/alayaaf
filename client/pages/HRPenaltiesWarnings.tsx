@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type Employee = {
   id: string;
@@ -39,6 +40,7 @@ const initialForm = {
 };
 
 export default function HRPenaltiesWarnings() {
+  const { t, direction } = useI18n();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [form, setForm] = useState(initialForm);
@@ -84,8 +86,8 @@ export default function HRPenaltiesWarnings() {
       );
     } catch (error) {
       toast({
-        title: "تعذر تحميل الإنذارات",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+        title: t("تعذر تحميل الإنذارات"),
+        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
         variant: "destructive",
       });
     } finally {
@@ -101,7 +103,7 @@ export default function HRPenaltiesWarnings() {
 
   const validateForm = () => {
     if (!selectedEmployee || !form.subject.trim() || !form.date || !form.message.trim()) {
-      toast({ title: "أكمل الحقول المطلوبة", description: "الموظف والموضوع والتاريخ ونص الإنذار مطلوبة", variant: "destructive" });
+      toast({ title: t("أكمل الحقول المطلوبة"), description: t("الموظف والموضوع والتاريخ ونص الإنذار مطلوبة"), variant: "destructive" });
       return false;
     }
     return true;
@@ -131,15 +133,15 @@ export default function HRPenaltiesWarnings() {
       });
       if (error) throw error;
 
-      toast({ title: "تم إرسال الإنذار", description: `تم إرسال الإنذار إلى ${selectedEmployee.name}` });
+      toast({ title: t("تم إرسال الإنذار"), description: `${t("تم إرسال الإنذار إلى")} ${selectedEmployee.name}` });
       setForm({ ...initialForm, date: getLocalDate() });
       setPreviewOpen(false);
       setShowForm(false);
       await loadData();
     } catch (error) {
       toast({
-        title: "تعذر إرسال الإنذار",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+        title: t("تعذر إرسال الإنذار"),
+        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
         variant: "destructive",
       });
     } finally {
@@ -170,52 +172,52 @@ export default function HRPenaltiesWarnings() {
 
   return (
     <Layout>
-      <div className="w-full p-4 space-y-5" dir="rtl">
+      <div className="w-full p-4 space-y-5" dir={direction}>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">الإنذارات</h1>
-            <p className="mt-1 text-sm text-gray-500">إنشاء إنذار رسمي وإرساله مباشرة إلى لوحة الموظف</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t("الإنذارات")}</h1>
+            <p className="mt-1 text-sm text-gray-500">{t("إنشاء إنذار رسمي وإرساله مباشرة إلى لوحة الموظف")}</p>
           </div>
           <Button onClick={() => setShowForm((current) => !current)} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
             {showForm ? <X className="h-4 w-4 ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
-            {showForm ? "إغلاق النموذج" : "إرسال إنذار"}
+            {showForm ? t("إغلاق النموذج") : t("إرسال إنذار")}
           </Button>
         </div>
 
         {showForm && (
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <h2 className="font-bold text-gray-900">إرسال إنذار</h2>
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}><ArrowRight className="h-4 w-4 ml-1" /> عودة</Button>
+              <h2 className="font-bold text-gray-900">{t("إرسال إنذار")}</h2>
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}><ArrowRight className="h-4 w-4 ml-1" /> {t("عودة")}</Button>
             </div>
 
             <div className="p-5 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Field label="اسم الموظف" required>
+                <Field label={t("اسم الموظف")} required>
                   <select
                     value={form.employeeId}
                     onChange={(event) => setForm((current) => ({ ...current, employeeId: event.target.value }))}
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
-                    <option value="">اختر الموظف</option>
+                    <option value="">{t("اختر الموظف")}</option>
                     {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
                   </select>
                 </Field>
 
-                <Field label="الموضوع" required>
+                <Field label={t("الموضوع")} required>
                   <Input
                     value={form.subject}
                     onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
-                    placeholder="اكتب موضوع الإنذار"
+                    placeholder={t("اكتب موضوع الإنذار")}
                   />
                 </Field>
 
-                <Field label="التاريخ" required>
+                <Field label={t("التاريخ")} required>
                   <Input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
                 </Field>
 
                 <div className="md:col-span-2">
-                  <Field label="النص" required>
+                  <Field label={t("النص")} required>
                     <textarea
                       value={form.message}
                       onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))}
@@ -227,9 +229,9 @@ export default function HRPenaltiesWarnings() {
               </div>
 
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-                <Button variant="outline" onClick={openFormPreview}><Eye className="h-4 w-4 ml-2" /> معاينة</Button>
+                <Button variant="outline" onClick={openFormPreview}><Eye className="h-4 w-4 ml-2" /> {t("معاينة")}</Button>
                 <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                  {saving ? "جاري الإرسال..." : "حفظ وإرسال"}
+                  {saving ? t("جاري الإرسال...") : t("حفظ وإرسال")}
                 </Button>
               </div>
             </div>
@@ -238,10 +240,10 @@ export default function HRPenaltiesWarnings() {
 
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-gray-100 p-4">
-            <h2 className="font-bold text-gray-900">سجل الإنذارات ({filtered.length})</h2>
+            <h2 className="font-bold text-gray-900">{t("سجل الإنذارات")} ({filtered.length})</h2>
             <div className="relative w-full sm:w-80">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="بحث في الإنذارات" className="pr-9" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث في الإنذارات")} className="pr-9" />
             </div>
           </div>
 
@@ -249,20 +251,20 @@ export default function HRPenaltiesWarnings() {
             <table className="w-full min-w-[1000px] text-sm text-right">
               <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <th className="py-3 px-4">التاريخ</th>
-                  <th className="py-3 px-4">اسم الموظف</th>
-                  <th className="py-3 px-4">الإدارة</th>
-                  <th className="py-3 px-4">المرسل</th>
-                  <th className="py-3 px-4">الموضوع</th>
-                  <th className="py-3 px-4">الحالة</th>
-                  <th className="py-3 px-4 text-center">عرض</th>
+                  <th className="py-3 px-4">{t("التاريخ")}</th>
+                  <th className="py-3 px-4">{t("اسم الموظف")}</th>
+                  <th className="py-3 px-4">{t("الإدارة")}</th>
+                  <th className="py-3 px-4">{t("المرسل")}</th>
+                  <th className="py-3 px-4">{t("الموضوع")}</th>
+                  <th className="py-3 px-4">{t("الحالة")}</th>
+                  <th className="py-3 px-4 text-center">{t("عرض")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={7} className="py-10 text-center text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={7} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />لا توجد إنذارات مرسلة</td></tr>
+                  <tr><td colSpan={7} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />{t("لا توجد إنذارات مرسلة")}</td></tr>
                 ) : filtered.map((warning) => (
                   <tr key={warning.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4">{warning.date}</td>
@@ -270,9 +272,9 @@ export default function HRPenaltiesWarnings() {
                     <td className="py-3 px-4">{warning.department || "—"}</td>
                     <td className="py-3 px-4">{warning.senderName}</td>
                     <td className="py-3 px-4">{warning.subject}</td>
-                    <td className="py-3 px-4"><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-700">{warning.status}</span></td>
+                    <td className="py-3 px-4"><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-700">{t(warning.status)}</span></td>
                     <td className="py-3 px-4 text-center">
-                      <button type="button" onClick={() => showSavedWarning(warning)} className="text-[#004e89] hover:text-[#003d6d]" aria-label={`عرض إنذار ${warning.empName}`}>
+                      <button type="button" onClick={() => showSavedWarning(warning)} className="text-[#004e89] hover:text-[#003d6d]" aria-label={`${t("عرض إنذار")} ${warning.empName}`}>
                         <Eye className="h-4 w-4" />
                       </button>
                     </td>
@@ -284,32 +286,32 @@ export default function HRPenaltiesWarnings() {
         </div>
 
         {previewOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir={direction}>
             <div className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-xl">
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-                <h3 className="text-xl font-bold text-gray-900">معاينة الإنذار</h3>
+                <h3 className="text-xl font-bold text-gray-900">{t("معاينة الإنذار")}</h3>
                 <button type="button" onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-900"><X className="h-5 w-5" /></button>
               </div>
               <div className="p-6 space-y-5">
                 <div className="border-b border-gray-100 pb-4 text-center">
-                  <h4 className="text-2xl font-bold text-[#004e89]">إنذار إداري</h4>
-                  <p className="mt-1 text-sm text-gray-500">التاريخ: {form.date}</p>
+                  <h4 className="text-2xl font-bold text-[#004e89]">{t("إنذار إداري")}</h4>
+                  <p className="mt-1 text-sm text-gray-500">{t("التاريخ")}: {form.date}</p>
                 </div>
                 <div>
-                  <span className="block text-xs text-gray-500 mb-1">الموظف</span>
+                  <span className="block text-xs text-gray-500 mb-1">{t("الموظف")}</span>
                   <span className="font-medium text-gray-900">{selectedEmployee?.name || "—"}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-gray-500 mb-1">الموضوع</span>
+                  <span className="block text-xs text-gray-500 mb-1">{t("الموضوع")}</span>
                   <span className="font-medium text-gray-900">{form.subject}</span>
                 </div>
                 <div className="whitespace-pre-wrap rounded-lg bg-gray-50 p-4 leading-7 text-gray-800">{form.message}</div>
               </div>
               <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
-                <Button variant="outline" onClick={() => setPreviewOpen(false)}>رجوع</Button>
+                <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t("رجوع")}</Button>
                 {!historyPreview && (
                   <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                    {saving ? "جاري الإرسال..." : "حفظ وإرسال للموظف"}
+                    {saving ? t("جاري الإرسال...") : t("حفظ وإرسال للموظف")}
                   </Button>
                 )}
               </div>

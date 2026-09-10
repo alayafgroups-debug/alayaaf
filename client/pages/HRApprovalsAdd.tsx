@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 const DEFAULT_REQUEST_TYPES = ["إجازة", "سلفة", "نقل", "استئذان", "عهدة", "مصروفات", "أخرى", "الرواتب"];
 const ADD_REQUEST_TYPE = "__add_request_type__";
@@ -15,6 +16,7 @@ const ADD_REQUEST_TYPE = "__add_request_type__";
 type Step = { order: number; approver: string; role: string };
 
 export default function HRApprovalsAdd() {
+  const { t, direction } = useI18n();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -65,13 +67,13 @@ export default function HRApprovalsAdd() {
 
   const handleSave = async () => {
     if (!nameAr.trim()) {
-      toast({ title: "بيانات ناقصة", description: "أدخل اسم سلسلة الموافقات بالعربية", variant: "destructive" });
+      toast({ title: t("بيانات ناقصة"), description: t("أدخل اسم سلسلة الموافقات بالعربية"), variant: "destructive" });
       setStep(1);
       return;
     }
     const validSteps = steps.filter((s) => s.approver.trim());
     if (validSteps.length === 0) {
-      toast({ title: "بيانات ناقصة", description: "أضف خطوة اعتماد واحدة على الأقل", variant: "destructive" });
+      toast({ title: t("بيانات ناقصة"), description: t("أضف خطوة اعتماد واحدة على الأقل"), variant: "destructive" });
       return;
     }
 
@@ -84,16 +86,16 @@ export default function HRApprovalsAdd() {
     });
     setSaving(false);
     if (error) {
-      toast({ title: "تعذر الحفظ", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر الحفظ"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "تم الحفظ", description: "تم إنشاء سلسلة الموافقات بنجاح" });
+    toast({ title: t("تم الحفظ"), description: t("تم إنشاء سلسلة الموافقات بنجاح") });
     navigate("/hr/approvals/list");
   };
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir={direction}>
         <div className="bg-white p-6 rounded-lg border shadow-sm space-y-6">
           <div className="flex gap-2">
             {[1, 2, 3].map((n) => (
@@ -103,26 +105,26 @@ export default function HRApprovalsAdd() {
 
           {step === 1 && (
             <div className="space-y-6">
-              <h2 className="text-lg font-bold text-gray-800 border-b pb-3">بيانات سلسلة الموافقات</h2>
+              <h2 className="text-lg font-bold text-gray-800 border-b pb-3">{t("بيانات سلسلة الموافقات")}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label className="text-gray-700">الوصف بالعربية *</Label>
+                  <Label className="text-gray-700">{t("الوصف بالعربية")} *</Label>
                   <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} className="bg-gray-50" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-gray-700">الوصف بالإنجليزية</Label>
+                  <Label className="text-gray-700">{t("الوصف بالإنجليزية")}</Label>
                   <Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} className="bg-gray-50" dir="ltr" />
                 </div>
                 <div className="space-y-3 col-span-1 md:col-span-2">
-                  <Label className="text-gray-700">فعال *</Label>
+                  <Label className="text-gray-700">{t("فعال")} *</Label>
                   <RadioGroup value={active ? "yes" : "no"} onValueChange={(v) => setActive(v === "yes")} className="flex gap-6 mt-2">
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <RadioGroupItem value="yes" id="active_yes" />
-                      <Label htmlFor="active_yes" className="font-normal cursor-pointer">نعم</Label>
+                      <Label htmlFor="active_yes" className="font-normal cursor-pointer">{t("نعم")}</Label>
                     </div>
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <RadioGroupItem value="no" id="active_no" />
-                      <Label htmlFor="active_no" className="font-normal cursor-pointer">لا</Label>
+                      <Label htmlFor="active_no" className="font-normal cursor-pointer">{t("لا")}</Label>
                     </div>
                   </RadioGroup>
                 </div>
@@ -132,9 +134,9 @@ export default function HRApprovalsAdd() {
 
           {step === 2 && (
             <div className="space-y-6">
-              <h2 className="text-lg font-bold text-gray-800 border-b pb-3">مجال سلسلة الموافقات</h2>
+              <h2 className="text-lg font-bold text-gray-800 border-b pb-3">{t("مجال سلسلة الموافقات")}</h2>
               <div className="space-y-2 max-w-md">
-                <Label className="text-gray-700">نوع الطلب المرتبط *</Label>
+                <Label className="text-gray-700">{t("نوع الطلب المرتبط")} *</Label>
                 <select
                   value={type}
                   onChange={(e) => {
@@ -147,8 +149,8 @@ export default function HRApprovalsAdd() {
                   }}
                   className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm"
                 >
-                  {requestTypes.map((requestType) => <option key={requestType} value={requestType}>{requestType}</option>)}
-                  <option value={ADD_REQUEST_TYPE}>إضافة</option>
+                  {requestTypes.map((requestType) => <option key={requestType} value={requestType}>{t(requestType)}</option>)}
+                  <option value={ADD_REQUEST_TYPE}>{t("إضافة")}</option>
                 </select>
                 {addingRequestType && (
                   <div className="flex gap-2 pt-2">
@@ -161,11 +163,11 @@ export default function HRApprovalsAdd() {
                           addCustomRequestType();
                         }
                       }}
-                      placeholder="اكتب نوع الطلب الجديد"
+                      placeholder={t("اكتب نوع الطلب الجديد")}
                       autoFocus
                     />
                     <Button type="button" onClick={addCustomRequestType} className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1 shrink-0">
-                      <Plus className="h-4 w-4" /> إضافة
+                      <Plus className="h-4 w-4" /> {t("إضافة")}
                     </Button>
                   </div>
                 )}
@@ -176,24 +178,24 @@ export default function HRApprovalsAdd() {
           {step === 3 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b pb-3">
-                <h2 className="text-lg font-bold text-gray-800">تسلسل لجنة الموافقات</h2>
-                <Button onClick={addStep} variant="outline" className="gap-2"><Plus className="h-4 w-4" /> إضافة خطوة</Button>
+                <h2 className="text-lg font-bold text-gray-800">{t("تسلسل لجنة الموافقات")}</h2>
+                <Button onClick={addStep} variant="outline" className="gap-2"><Plus className="h-4 w-4" /> {t("إضافة خطوة")}</Button>
               </div>
               <div className="space-y-3">
                 {steps.map((st) => (
                   <div key={st.order} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
                     <div className="w-8 h-8 rounded-full bg-[#004e89] text-white flex items-center justify-center text-sm shrink-0">{st.order}</div>
                     <select value={st.approver} onChange={(e) => updateStep(st.order, { approver: e.target.value })} className="flex-1 h-10 border border-gray-300 rounded-md px-3 bg-white text-sm">
-                      <option value="">اختر المعتمِد</option>
+                      <option value="">{t("اختر المعتمِد")}</option>
                       {managers.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
                     </select>
                     <select value={st.role} onChange={(e) => updateStep(st.order, { role: e.target.value })} className="w-40 h-10 border border-gray-300 rounded-md px-3 bg-white text-sm">
-                      <option value="معتمد">معتمد</option>
-                      <option value="مراجع">مراجع</option>
-                      <option value="معتمد نهائي">معتمد نهائي</option>
+                      <option value="معتمد">{t("معتمد")}</option>
+                      <option value="مراجع">{t("مراجع")}</option>
+                      <option value="معتمد نهائي">{t("معتمد نهائي")}</option>
                     </select>
                     {steps.length > 1 && (
-                      <button onClick={() => removeStep(st.order)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => removeStep(st.order)} title={t("حذف")} aria-label={t("حذف")} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
                     )}
                   </div>
                 ))}
@@ -203,11 +205,11 @@ export default function HRApprovalsAdd() {
 
           <div className="flex justify-start gap-2 pt-4 border-t">
             {step < 3 ? (
-              <Button onClick={() => setStep((s) => s + 1)} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">التالي</Button>
+              <Button onClick={() => setStep((s) => s + 1)} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">{t("التالي")}</Button>
             ) : (
-              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">{saving ? "جاري الحفظ..." : "حفظ السلسلة"}</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">{saving ? t("جاري الحفظ...") : t("حفظ السلسلة")}</Button>
             )}
-            <Button variant="outline" className="text-gray-500 px-8" disabled={step === 1} onClick={() => setStep((s) => Math.max(1, s - 1))}>السابق</Button>
+            <Button variant="outline" className="text-gray-500 px-8" disabled={step === 1} onClick={() => setStep((s) => Math.max(1, s - 1))}>{t("السابق")}</Button>
           </div>
         </div>
       </div>

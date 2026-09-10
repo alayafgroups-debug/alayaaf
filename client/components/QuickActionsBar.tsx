@@ -523,7 +523,7 @@ export default function QuickActionsBar() {
                     />
                     <span className="flex-1">
                       <span className="block text-sm font-medium">
-                        {notice.title}
+                        {t(notice.title)}
                       </span>
                       <span className="text-[10px] text-slate-400">
                         {notice.date

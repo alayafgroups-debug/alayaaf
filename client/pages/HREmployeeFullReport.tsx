@@ -14,6 +14,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useI18n } from "@/i18n";
 
 type Employee = {
   id: string;
@@ -153,6 +154,7 @@ const escapeHtml = (value: unknown) =>
     .replace(/'/g, "&#039;");
 
 export default function HREmployeeFullReport() {
+  const { t, direction } = useI18n();
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -176,7 +178,7 @@ export default function HREmployeeFullReport() {
 
       if (error) {
         toast({
-          title: "تعذر تحميل الموظفين",
+          title: t("تعذر تحميل الموظفين"),
           description: error.message,
           variant: "destructive",
         });
@@ -269,11 +271,11 @@ export default function HREmployeeFullReport() {
 
   const generateReport = async () => {
     if (selectedEmployees.length === 0) {
-      toast({ title: "اختر موظفاً واحداً على الأقل", variant: "destructive" });
+      toast({ title: t("اختر موظفاً واحداً على الأقل"), variant: "destructive" });
       return;
     }
     if (!month) {
-      toast({ title: "اختر شهراً للتقرير", variant: "destructive" });
+      toast({ title: t("اختر شهراً للتقرير"), variant: "destructive" });
       return;
     }
 
@@ -442,7 +444,7 @@ export default function HREmployeeFullReport() {
       setReports(generatedReports);
     } catch (error: any) {
       toast({
-        title: "تعذر إنشاء التقرير",
+        title: t("تعذر إنشاء التقرير"),
         description: error?.message,
         variant: "destructive",
       });
@@ -577,21 +579,20 @@ export default function HREmployeeFullReport() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-1" dir="rtl">
+      <div className="space-y-6 p-1" dir={direction}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <button
               onClick={() => navigate("/hr/dashboard")}
               className="mb-2 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
             >
-              <ArrowRight className="h-4 w-4" /> العودة إلى لوحة التحكم
+              <ArrowRight className="h-4 w-4" /> {t("العودة إلى لوحة التحكم")}
             </button>
             <h1 className="text-3xl font-bold text-slate-900">
-              تقرير الموظف الكامل
+              {t("تقرير الموظف الكامل")}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              تقرير موحد للحضور والانصراف والراتب والخصومات، جاهز للطباعة بمقاس
-              A4
+              {t("تقرير موحد للحضور والانصراف والراتب والخصومات، جاهز للطباعة بمقاس A4")}
             </p>
           </div>
           {reports.length > 0 && (
@@ -599,7 +600,7 @@ export default function HREmployeeFullReport() {
               onClick={printReports}
               className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white shadow-lg hover:bg-slate-800"
             >
-              <Printer className="h-5 w-5" /> طباعة التقرير
+              <Printer className="h-5 w-5" /> {t("طباعة التقرير")}
             </button>
           )}
         </div>
@@ -611,9 +612,9 @@ export default function HREmployeeFullReport() {
                 <FileText className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold">إعداد التقرير</h2>
+                <h2 className="text-xl font-bold">{t("إعداد التقرير")}</h2>
                 <p className="text-sm text-emerald-50">
-                  حدد الموظفين والفترة الزمنية ثم أنشئ التقرير
+                  {t("حدد الموظفين والفترة الزمنية ثم أنشئ التقرير")}
                 </p>
               </div>
             </div>
@@ -621,28 +622,28 @@ export default function HREmployeeFullReport() {
           <div className="grid gap-4 p-5 md:grid-cols-3">
             <label className="space-y-1.5">
               <span className="text-xs font-semibold text-slate-600">
-                رقم أو اسم الموظف
+                {t("رقم أو اسم الموظف")}
               </span>
               <div className="relative">
                 <Search className="absolute right-3 top-3 h-4 w-4 text-slate-400" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="مثال: 1001"
+                  placeholder={t("مثال: 1001")}
                   className="h-10 w-full rounded-lg border border-slate-200 pr-9 pl-3 text-sm outline-none focus:border-emerald-500"
                 />
               </div>
             </label>
             <label className="space-y-1.5">
               <span className="text-xs font-semibold text-slate-600">
-                الإدارة
+                {t("الإدارة")}
               </span>
               <select
                 value={administration}
                 onChange={(event) => setAdministration(event.target.value)}
                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
               >
-                <option value="الكل">كل الإدارات</option>
+                <option value="الكل">{t("كل الإدارات")}</option>
                 {administrations.map((item) => (
                   <option key={item}>{item}</option>
                 ))}
@@ -650,14 +651,14 @@ export default function HREmployeeFullReport() {
             </label>
             <label className="space-y-1.5">
               <span className="text-xs font-semibold text-slate-600">
-                القسم
+                {t("القسم")}
               </span>
               <select
                 value={department}
                 onChange={(event) => setDepartment(event.target.value)}
                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
               >
-                <option value="الكل">كل الأقسام</option>
+                <option value="الكل">{t("كل الأقسام")}</option>
                 {departments.map((item) => (
                   <option key={item}>{item}</option>
                 ))}
@@ -667,7 +668,7 @@ export default function HREmployeeFullReport() {
           <div className="flex flex-wrap items-end gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4">
             <label className="space-y-1.5">
               <span className="block text-xs font-semibold text-slate-600">
-                شهر التقرير
+                {t("شهر التقرير")}
               </span>
               <input
                 type="month"
@@ -681,7 +682,7 @@ export default function HREmployeeFullReport() {
             </label>
             <div className="mr-auto flex items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">
-                تم اختيار {selectedIds.size} موظف
+                {t("تم اختيار")} {selectedIds.size} {t("موظف")}
               </span>
               <button
                 onClick={generateReport}
@@ -689,7 +690,7 @@ export default function HREmployeeFullReport() {
                 className="flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-6 font-bold text-white shadow-md hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FileText className="h-5 w-5" />
-                {generating ? "جاري الإنشاء..." : "إنشاء التقرير"}
+                {generating ? t("جاري الإنشاء...") : t("إنشاء التقرير")}
               </button>
             </div>
           </div>
@@ -699,7 +700,7 @@ export default function HREmployeeFullReport() {
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-emerald-600" />
-              <h2 className="font-bold text-slate-900">اختيار الموظفين</h2>
+              <h2 className="font-bold text-slate-900">{t("اختيار الموظفين")}</h2>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
                 {filteredEmployees.length}
               </span>
@@ -708,16 +709,16 @@ export default function HREmployeeFullReport() {
               onClick={toggleFiltered}
               className="text-sm font-semibold text-emerald-700 hover:underline"
             >
-              تحديد / إلغاء الكل
+              {t("تحديد / إلغاء الكل")}
             </button>
           </div>
           {loading ? (
             <div className="py-12 text-center text-sm text-slate-500">
-              جاري تحميل الموظفين...
+              {t("جاري تحميل الموظفين...")}
             </div>
           ) : filteredEmployees.length === 0 ? (
             <div className="py-12 text-center text-sm text-slate-500">
-              لا يوجد موظفون مطابقون للفلاتر
+              {t("لا يوجد موظفون مطابقون للفلاتر")}
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -757,7 +758,7 @@ export default function HREmployeeFullReport() {
           <section className="space-y-4">
             <div className="flex items-center gap-2">
               <WalletCards className="h-5 w-5 text-sky-600" />
-              <h2 className="text-xl font-bold">معاينة التقرير</h2>
+              <h2 className="text-xl font-bold">{t("معاينة التقرير")}</h2>
             </div>
             {reports.map((report) => {
               const payroll = report.payroll.reduce(
@@ -815,35 +816,35 @@ export default function HREmployeeFullReport() {
                   <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-5">
                     <div className="rounded-xl bg-emerald-50 p-3">
                       <span className="text-xs text-emerald-700">
-                        أيام الحضور
+                        {t("أيام الحضور")}
                       </span>
                       <strong className="mt-1 block text-xl text-emerald-800">
                         {present}
                       </strong>
                     </div>
                     <div className="rounded-xl bg-rose-50 p-3">
-                      <span className="text-xs text-rose-700">أيام الغياب</span>
+                      <span className="text-xs text-rose-700">{t("أيام الغياب")}</span>
                       <strong className="mt-1 block text-xl text-rose-800">
                         {absent}
                       </strong>
                     </div>
                     <div className="rounded-xl bg-sky-50 p-3">
                       <span className="text-xs text-sky-700">
-                        إجمالي الراتب
+                        {t("إجمالي الراتب")}
                       </span>
                       <strong className="mt-1 block text-lg text-sky-800">
                         {money(payroll.gross)}
                       </strong>
                     </div>
                     <div className="rounded-xl bg-amber-50 p-3">
-                      <span className="text-xs text-amber-700">الخصومات</span>
+                      <span className="text-xs text-amber-700">{t("الخصومات")}</span>
                       <strong className="mt-1 block text-lg text-amber-800">
                         {money(totalDeductions)}
                       </strong>
                     </div>
                     <div className="rounded-xl bg-slate-900 p-3 text-white">
                       <span className="text-xs text-slate-300">
-                        صافي الراتب
+                        {t("صافي الراتب")}
                       </span>
                       <strong className="mt-1 block text-lg">
                         {money(
@@ -856,20 +857,20 @@ export default function HREmployeeFullReport() {
                     <div className="border-t border-slate-100 px-5 py-4">
                       <div className="mb-3 flex items-center justify-between">
                         <h4 className="font-bold text-slate-900">
-                          تفصيل الخصومات وأسبابها
+                          {t("تفصيل الخصومات وأسبابها")}
                         </h4>
                         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-                          تم إبلاغ الموظف وأكد الاستلام
+                          {t("تم إبلاغ الموظف وأكد الاستلام")}
                         </span>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[760px] text-right text-xs">
                           <thead>
                             <tr className="bg-slate-50 text-slate-600">
-                              <th className="p-2">المسؤول</th>
-                              <th className="p-2">المبلغ</th>
-                              <th className="p-2">السبب</th>
-                              <th className="p-2">الإبلاغ والتأكيد</th>
+                              <th className="p-2">{t("المسؤول")}</th>
+                              <th className="p-2">{t("المبلغ")}</th>
+                              <th className="p-2">{t("السبب")}</th>
+                              <th className="p-2">{t("الإبلاغ والتأكيد")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -882,7 +883,7 @@ export default function HREmployeeFullReport() {
                                   {item.title}
                                 </td>
                                 <td className="p-2 whitespace-nowrap font-bold text-rose-700">
-                                  {money(item.amount)} ر.س
+                                  {money(item.amount)} {t("ر.س")}
                                 </td>
                                 <td className="p-2 text-slate-600">
                                   {item.reason}
@@ -901,16 +902,16 @@ export default function HREmployeeFullReport() {
                           <tfoot>
                             <tr className="border-t-2 border-slate-300 bg-rose-50">
                               <td className="p-2 font-bold" colSpan={1}>
-                                إجمالي الخصومات
+                                {t("إجمالي الخصومات")}
                               </td>
                               <td className="p-2 font-bold text-rose-700">
-                                {money(totalDeductions)} ر.س
+                                {money(totalDeductions)} {t("ر.س")}
                               </td>
                               <td
                                 className="p-2 font-bold text-slate-700"
                                 colSpan={2}
                               >
-                                الراتب {money(payroll.gross)} ر.س — صافي المستحق {money(report.finalNet)} ر.س
+                                {t("الراتب")} {money(payroll.gross)} {t("ر.س")} — {t("صافي المستحق")} {money(report.finalNet)} {t("ر.س")}
                               </td>
                             </tr>
                           </tfoot>
@@ -921,12 +922,12 @@ export default function HREmployeeFullReport() {
                   <div className="border-t border-slate-100 px-5 py-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <h4 className="font-bold text-slate-900">
-                        ملخص الحضور والانصراف للشهر الكامل
+                        {t("ملخص الحضور والانصراف للشهر الكامل")}
                       </h4>
                       <div className="flex gap-3 text-xs font-semibold">
-                        <span className="text-emerald-700">✓ حضور</span>
-                        <span className="text-rose-600">✕ غياب</span>
-                        <span className="text-slate-400">○ يوم قادم</span>
+                        <span className="text-emerald-700">✓ {t("حضور")}</span>
+                        <span className="text-rose-600">✕ {t("غياب")}</span>
+                        <span className="text-slate-400">○ {t("يوم قادم")}</span>
                       </div>
                     </div>
                     <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -934,7 +935,7 @@ export default function HREmployeeFullReport() {
                         <thead className="bg-blue-700 text-white">
                           <tr>
                             <th className="sticky right-0 z-10 min-w-[170px] bg-blue-700 px-3 py-2 text-right">
-                              الموظف
+                              {t("الموظف")}
                             </th>
                             {monthlyAttendance.map((item) => (
                               <th
@@ -959,7 +960,7 @@ export default function HREmployeeFullReport() {
                             {monthlyAttendance.map((item) => (
                               <td
                                 key={item.date}
-                                title={`${formatDate(item.date)} - ${item.record?.status || (item.status === "future" ? "قادم" : "غائب")}`}
+                                title={`${formatDate(item.date)} - ${item.record?.status || (item.status === "future" ? t("قادم") : t("غائب"))}`}
                                 className="border-r border-slate-100 px-1 py-2 text-lg font-bold"
                               >
                                 {item.status === "present" ? (

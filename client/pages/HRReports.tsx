@@ -3,6 +3,7 @@ import Layout from "@/components/Layout";
 import { cn } from "@/lib/utils";
 import DynamicReport from "@/components/hr/reports/DynamicReport";
 import { reportSchemas } from "@/components/hr/reports/reportSchemas";
+import { useI18n } from "@/i18n";
 
 // Reports Sidebar Menu Items mapping
 const REPORT_CATEGORIES = [
@@ -32,16 +33,17 @@ const REPORT_CATEGORIES = [
 ];
 
 export default function HRReports() {
+  const { t, direction } = useI18n();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
 
   return (
     <Layout>
-      <div className="flex h-[calc(100vh-100px)] gap-4 mx-auto max-w-[1400px]" dir="rtl">
+      <div className="flex h-[calc(100vh-100px)] gap-4 mx-auto max-w-[1400px]" dir={direction}>
         
         {/* Right Sidebar - Report Categories */}
         <div className="w-64 flex-shrink-0 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-            <h2 className="font-bold text-gray-800 text-sm">قسم التقارير</h2>
+            <h2 className="font-bold text-gray-800 text-sm">{t("قسم التقارير")}</h2>
           </div>
           
           <div className="flex-1 overflow-y-auto py-2">
@@ -57,7 +59,7 @@ export default function HRReports() {
                         : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     )}
                   >
-                    {category}
+                    {t(category)}
                   </button>
                 </li>
               ))}
@@ -71,7 +73,7 @@ export default function HRReports() {
           {/* Header */}
           <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-800">
-              {selectedReport ? `تقرير ${selectedReport}` : "التقارير الشاملة"}
+              {selectedReport ? `${t("تقرير")} ${t(selectedReport)}` : t("التقارير الشاملة")}
             </h2>
           </div>
 
@@ -86,14 +88,14 @@ export default function HRReports() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">جاري العمل على تقرير "{selectedReport}"</h3>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">{t("جاري العمل على تقرير")} "{t(selectedReport)}"</h3>
                 <p className="text-gray-500 text-sm max-w-md">
-                  هذا التقرير قيد التطوير وسيتم توفيره قريباً. سيشمل تفاصيل وإحصائيات متقدمة مع إمكانية التصدير والطباعة.
+                  {t("هذا التقرير قيد التطوير وسيتم توفيره قريباً. سيشمل تفاصيل وإحصائيات متقدمة مع إمكانية التصدير والطباعة.")}
                 </p>
                 
                 <div className="mt-8 flex gap-3">
-                  <button className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium cursor-not-allowed opacity-50">تصدير PDF</button>
-                  <button className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium cursor-not-allowed opacity-50">تصدير Excel</button>
+                  <button className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium cursor-not-allowed opacity-50">{t("تصدير PDF")}</button>
+                  <button className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium cursor-not-allowed opacity-50">{t("تصدير Excel")}</button>
                 </div>
               </div>
             ) : (
@@ -104,9 +106,9 @@ export default function HRReports() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">اختر نوع التقرير من القائمة</h2>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">{t("اختر نوع التقرير من القائمة")}</h2>
                   <p className="text-gray-500 max-w-sm mx-auto">
-                    قم بتحديد التقرير المطلوب من القائمة الجانبية لاستعراض البيانات والإحصائيات الخاصة به
+                    {t("قم بتحديد التقرير المطلوب من القائمة الجانبية لاستعراض البيانات والإحصائيات الخاصة به")}
                   </p>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { Search, Filter, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type BalanceRow = {
   id: string;
@@ -38,6 +39,7 @@ function computeYearFraction(hireDateStr: string): number {
 }
 
 export default function HRLeavesAnnualBalance() {
+  const { t, direction } = useI18n();
   const [rows, setRows] = useState<BalanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -150,8 +152,8 @@ export default function HRLeavesAnnualBalance() {
         setRows(computed);
       } catch (error) {
         toast({
-          title: "تعذر تحميل أرصدة الإجازات",
-          description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+          title: t("تعذر تحميل أرصدة الإجازات"),
+          description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
           variant: "destructive",
         });
       } finally {
@@ -185,7 +187,7 @@ export default function HRLeavesAnnualBalance() {
   }, [rows, search, branchFilter, deptFilter, locationFilter, adminFilter]);
 
   const exportCSV = () => {
-    const headers = ["الرقم الوظيفي", "الاسم", "الرصيد السنوي", "رصيد سنوات سابقة", "حتى نهاية السنة الحالية", "رصيد متبقي من الإجازات", "رصيد اللحظة الحالية", "آخر عودة من أذن إجازة", "تاريخ التعاقد", "تاريخ الهيودة من أذن"].join(",");
+    const headers = [t("الرقم الوظيفي"), t("الاسم"), t("الرصيد السنوي"), t("رصيد سنوات سابقة"), t("حتى نهاية السنة الحالية"), t("رصيد متبقي من الإجازات"), t("رصيد اللحظة الحالية"), t("آخر عودة من أذن إجازة"), t("تاريخ التعاقد"), t("تاريخ الهيودة من أذن")].join(",");
     const csvRows = filtered.map((r) =>
       [r.empId, r.name, r.annualEntitlement.toFixed(2), r.prevYearBalance.toFixed(2), r.endOfYearBalance.toFixed(2), r.remainingBalance.toFixed(2), r.currentBalance.toFixed(2), r.lastReturnDate, r.hireDate, r.contractEndDate].join(",")
     );
@@ -200,58 +202,58 @@ export default function HRLeavesAnnualBalance() {
 
   return (
     <Layout>
-      <div className="w-full p-4 space-y-4" dir="rtl">
+      <div className="w-full p-4 space-y-4" dir={direction}>
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-xl font-bold text-gray-900">أرصدة الإجازات</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t("أرصدة الإجازات")}</h1>
           <div className="flex items-center gap-3 text-sm text-gray-600">
-            <span>تاريخ التقرير: {new Date().toLocaleDateString("ar-SA")}</span>
-            <button onClick={exportCSV} title="تصدير CSV" className="flex items-center gap-1 px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50 text-sm">
-              <Download className="h-4 w-4" /> تصدير
+            <span>{t("تاريخ التقرير")}: {new Date().toLocaleDateString("ar-SA")}</span>
+            <button onClick={exportCSV} title={t("تصدير CSV")} aria-label={t("تصدير CSV")} className="flex items-center gap-1 px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50 text-sm">
+              <Download className="h-4 w-4" /> {t("تصدير")}
             </button>
           </div>
         </div>
 
         {/* Filter bar */}
         <div className="bg-white rounded-lg border border-gray-200 p-3 flex flex-wrap gap-2 items-end">
-          <FilterSelect label="الفرع" value={branchFilter} onChange={setBranchFilter} options={options.branches} />
-          <FilterSelect label="الإدارة" value={adminFilter} onChange={setAdminFilter} options={options.admins} />
-          <FilterSelect label="القسم" value={deptFilter} onChange={setDeptFilter} options={options.departments} />
-          <FilterSelect label="مكان العمل" value={locationFilter} onChange={setLocationFilter} options={options.locations} />
-          <FilterSelect label="وقت العمل" value={workTimeFilter} onChange={setWorkTimeFilter} options={["الكل", "صباحي", "مسائي", "دوام كامل"]} />
-          <FilterSelect label="الموارد البشرية" value={humanFilter} onChange={setHumanFilter} options={["الكل"]} />
+          <FilterSelect label={t("الفرع")} value={branchFilter} onChange={setBranchFilter} options={options.branches} t={t} />
+          <FilterSelect label={t("الإدارة")} value={adminFilter} onChange={setAdminFilter} options={options.admins} t={t} />
+          <FilterSelect label={t("القسم")} value={deptFilter} onChange={setDeptFilter} options={options.departments} t={t} />
+          <FilterSelect label={t("مكان العمل")} value={locationFilter} onChange={setLocationFilter} options={options.locations} t={t} />
+          <FilterSelect label={t("وقت العمل")} value={workTimeFilter} onChange={setWorkTimeFilter} options={["الكل", "صباحي", "مسائي", "دوام كامل"]} t={t} />
+          <FilterSelect label={t("الموارد البشرية")} value={humanFilter} onChange={setHumanFilter} options={["الكل"]} t={t} />
           <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9 h-9 text-sm" />
+            <Input placeholder={t("بحث...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9 h-9 text-sm" />
           </div>
         </div>
 
         {/* Table */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 text-sm text-gray-600">
-            <span>العدد {filtered.length}</span>
+            <span>{t("العدد")} {filtered.length}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-center whitespace-nowrap">
               <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <th className="py-3 px-3 font-medium">الرقم الوظيفي</th>
-                  <th className="py-3 px-3 font-medium text-right">الاسم</th>
-                  <th className="py-3 px-3 font-medium">الرصيد السنوي</th>
-                  <th className="py-3 px-3 font-medium">رصيد متبقي من السنوات السابقة</th>
-                  <th className="py-3 px-3 font-medium">الرصيد الكلية حتى نهاية السنة الحالية التعاقدية</th>
-                  <th className="py-3 px-3 font-medium">رصيد متبقي من أذن السنة الحالية</th>
-                  <th className="py-3 px-3 font-medium text-[#a5d8ff]">الرصيد الكلية حتى اللحظة الحالية المتاح</th>
-                  <th className="py-3 px-3 font-medium">آخر عودة من أذن إجازة</th>
-                  <th className="py-3 px-3 font-medium">تاريخ التعاقد</th>
-                  <th className="py-3 px-3 font-medium">تاريخ الهيودة من أذن إجازة</th>
-                  <th className="py-3 px-3 font-medium">إجراءات</th>
+                  <th className="py-3 px-3 font-medium">{t("الرقم الوظيفي")}</th>
+                  <th className="py-3 px-3 font-medium text-right">{t("الاسم")}</th>
+                  <th className="py-3 px-3 font-medium">{t("الرصيد السنوي")}</th>
+                  <th className="py-3 px-3 font-medium">{t("رصيد متبقي من السنوات السابقة")}</th>
+                  <th className="py-3 px-3 font-medium">{t("الرصيد الكلية حتى نهاية السنة الحالية التعاقدية")}</th>
+                  <th className="py-3 px-3 font-medium">{t("رصيد متبقي من أذن السنة الحالية")}</th>
+                  <th className="py-3 px-3 font-medium text-[#a5d8ff]">{t("الرصيد الكلية حتى اللحظة الحالية المتاح")}</th>
+                  <th className="py-3 px-3 font-medium">{t("آخر عودة من أذن إجازة")}</th>
+                  <th className="py-3 px-3 font-medium">{t("تاريخ التعاقد")}</th>
+                  <th className="py-3 px-3 font-medium">{t("تاريخ الهيودة من أذن إجازة")}</th>
+                  <th className="py-3 px-3 font-medium">{t("إجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y bg-white">
                 {loading ? (
-                  <tr><td colSpan={11} className="py-10 text-center text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={11} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={11} className="py-10 text-center text-gray-500">لا توجد بيانات</td></tr>
+                  <tr><td colSpan={11} className="py-10 text-center text-gray-500">{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50/50">
                     <td className="py-2.5 px-3">{row.empId || "—"}</td>
@@ -273,7 +275,7 @@ export default function HRLeavesAnnualBalance() {
             </table>
           </div>
           <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 text-right">
-            عرض 1 إلى {filtered.length} من أصل {rows.length} سجل
+            {t("عرض")} 1 {t("إلى")} {filtered.length} {t("من أصل")} {rows.length} {t("سجل")}
           </div>
         </div>
       </div>
@@ -281,7 +283,7 @@ export default function HRLeavesAnnualBalance() {
   );
 }
 
-function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+function FilterSelect({ label, value, onChange, options, t }: { label: string; value: string; onChange: (v: string) => void; options: string[]; t: (s: string) => string }) {
   return (
     <div className="flex flex-col gap-0.5 min-w-[110px]">
       <span className="text-xs text-gray-500">{label}</span>
@@ -290,7 +292,7 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
         onChange={(e) => onChange(e.target.value)}
         className="h-9 border border-gray-300 rounded-md px-2 bg-white text-sm outline-none focus:ring-1 focus:ring-[#004e89]"
       >
-        {options.map((op) => <option key={op} value={op}>{op}</option>)}
+        {options.map((op) => <option key={op} value={op}>{t(op)}</option>)}
       </select>
     </div>
   );

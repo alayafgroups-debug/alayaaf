@@ -5,6 +5,7 @@ import { ArrowRight, CalendarClock, MapPin, Save, Settings2 } from "lucide-react
 import { supabase } from "@/lib/supabaseClient";
 import JobTitlesManager from "@/components/hr/JobTitlesManager";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type TabKey = "general" | "recruitment" | "payroll" | "leaves" | "attendance";
 
@@ -124,14 +125,6 @@ const defaultSettings: HRSettingsState = {
   },
 };
 
-const tabLabels: Record<TabKey, string> = {
-  general: "الإعدادات العامة",
-  recruitment: "التوظيف والعقود",
-  payroll: "الرواتب والتأمينات",
-  leaves: "الإجازات",
-  attendance: "الدوام",
-};
-
 function readLocalSettings(): HRSettingsState | null {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -155,11 +148,20 @@ function mergeTab<T extends Record<string, unknown>>(defaults: T, incoming: unkn
 }
 
 export default function HRSettings() {
+  const { t, direction } = useI18n();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>("general");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<HRSettingsState>(defaultSettings);
+
+  const tabLabels: Record<TabKey, string> = {
+    general: t("الإعدادات العامة"),
+    recruitment: t("التوظيف والعقود"),
+    payroll: t("الرواتب والتأمينات"),
+    leaves: t("الإجازات"),
+    attendance: t("الدوام"),
+  };
 
   useEffect(() => {
     void loadSettings();
@@ -216,8 +218,8 @@ export default function HRSettings() {
       setSettings(fallback);
       if (result.failed) {
         toast({
-          title: "وضع دون اتصال",
-          description: "تعذر الوصول لقاعدة البيانات، تم تحميل آخر إعدادات محفوظة محلياً",
+          title: t("وضع دون اتصال"),
+          description: t("تعذر الوصول لقاعدة البيانات، تم تحميل آخر إعدادات محفوظة محلياً"),
         });
       }
     }
@@ -226,12 +228,12 @@ export default function HRSettings() {
   }
 
   const saveLabel = useMemo(() => {
-    if (activeTab === "general") return "حفظ الإعدادات العامة";
-    if (activeTab === "recruitment") return "حفظ إعدادات التوظيف والعقود";
-    if (activeTab === "payroll") return "حفظ إعدادات الرواتب والتأمينات";
-    if (activeTab === "leaves") return "حفظ إعدادات الإجازات";
-    return "حفظ إعدادات الدوام";
-  }, [activeTab]);
+    if (activeTab === "general") return t("حفظ الإعدادات العامة");
+    if (activeTab === "recruitment") return t("حفظ إعدادات التوظيف والعقود");
+    if (activeTab === "payroll") return t("حفظ إعدادات الرواتب والتأمينات");
+    if (activeTab === "leaves") return t("حفظ إعدادات الإجازات");
+    return t("حفظ إعدادات الدوام");
+  }, [activeTab, t]);
 
   async function saveCurrentTab() {
     const payload = {
@@ -256,13 +258,13 @@ export default function HRSettings() {
     writeLocalSettings(settings);
 
     if (!result.error) {
-      toast({ title: "تم الحفظ", description: "تم حفظ الإعدادات في قاعدة البيانات" });
+      toast({ title: t("تم الحفظ"), description: t("تم حفظ الإعدادات في قاعدة البيانات") });
     } else {
       toast({
-        title: "تم الحفظ محليًا",
+        title: t("تم الحفظ محليًا"),
         description: result.failed
-          ? "تعذر الاتصال بقاعدة البيانات، تم الحفظ محليًا"
-          : "تعذر حفظ الإعدادات في قاعدة البيانات حالياً",
+          ? t("تعذر الاتصال بقاعدة البيانات، تم الحفظ محليًا")
+          : t("تعذر حفظ الإعدادات في قاعدة البيانات حالياً"),
       });
     }
 
@@ -271,18 +273,18 @@ export default function HRSettings() {
 
   return (
     <Layout>
-      <div dir="rtl" className="space-y-5">
+      <div dir={direction} className="space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Settings2 className="h-6 w-6 text-gray-700" />
-            <h1 className="text-2xl font-bold">إعدادات الموارد البشرية</h1>
+            <h1 className="text-2xl font-bold">{t("إعدادات الموارد البشرية")}</h1>
           </div>
           <button
             onClick={() => navigate("/hr/dashboard")}
             className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm hover:bg-gray-50"
           >
             <ArrowRight className="h-4 w-4" />
-            العودة
+            {t("العودة")}
           </button>
         </div>
 
@@ -307,19 +309,19 @@ export default function HRSettings() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition"
             >
               <MapPin className="h-4 w-4" />
-              مواقع العمل
+              {t("مواقع العمل")}
             </button>
             <button
               onClick={() => navigate("/hr/organization/work-schedules")}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition"
             >
               <CalendarClock className="h-4 w-4" />
-              جداول العمل والشركات
+              {t("جداول العمل والشركات")}
             </button>
           </div>
 
           <div className="p-4 space-y-4">
-            {loading ? <div className="text-center text-gray-500 py-6">جاري تحميل الإعدادات...</div> : null}
+            {loading ? <div className="text-center text-gray-500 py-6">{t("جاري تحميل الإعدادات...")}</div> : null}
 
             {!loading && activeTab === "general" ? (
               <>
@@ -366,7 +368,7 @@ export default function HRSettings() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />
-                {saving ? "جاري الحفظ..." : saveLabel}
+                {saving ? t("جاري الحفظ...") : saveLabel}
               </button>
             </div>
           </div>
@@ -424,6 +426,7 @@ function SelectInput({
   onChange: (value: string) => void;
   options: string[];
 }) {
+  const { t } = useI18n();
   return (
     <select
       value={value}
@@ -432,7 +435,7 @@ function SelectInput({
     >
       {options.map((option) => (
         <option key={option} value={option}>
-          {option}
+          {t(option)}
         </option>
       ))}
     </select>
@@ -446,30 +449,31 @@ function GeneralSettingsTab({
   value: HRSettingsState["general"];
   onChange: (value: HRSettingsState["general"]) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <Section title="الإعدادات العامة" colorClass="bg-blue-600">
-      <Field label="عدد ساعات العمل الشهرية">
+    <Section title={t("الإعدادات العامة")} colorClass="bg-blue-600">
+      <Field label={t("عدد ساعات العمل الشهرية")}>
         <NumberInput value={value.monthlyHours} onChange={(v) => onChange({ ...value, monthlyHours: v })} />
       </Field>
-      <Field label="نسبة الأجر الإضافي السعودي (%)">
+      <Field label={t("نسبة الأجر الإضافي السعودي (%)")}>
         <NumberInput value={value.overtimeRateSaudi} onChange={(v) => onChange({ ...value, overtimeRateSaudi: v })} />
       </Field>
-      <Field label="يبدأ الإضافي بعد (ساعات)">
+      <Field label={t("يبدأ الإضافي بعد (ساعات)")}>
         <NumberInput value={value.overtimeStartAfterHours} onChange={(v) => onChange({ ...value, overtimeStartAfterHours: v })} />
       </Field>
-      <Field label="الحد الأعلى للإضافي الشهري (ساعة)">
+      <Field label={t("الحد الأعلى للإضافي الشهري (ساعة)")}>
         <NumberInput value={value.monthlyOvertimeCap} onChange={(v) => onChange({ ...value, monthlyOvertimeCap: v })} />
       </Field>
-      <Field label="العملة">
+      <Field label={t("العملة")}>
         <SelectInput value={value.currency} onChange={(v) => onChange({ ...value, currency: v })} options={["ريال سعودي", "دولار", "درهم"]} />
       </Field>
-      <Field label="فترة التجربة (بالأشهر)">
+      <Field label={t("فترة التجربة (بالأشهر)")}>
         <NumberInput value={value.probationMonths} onChange={(v) => onChange({ ...value, probationMonths: v })} />
       </Field>
-      <Field label="الويكند الأول">
+      <Field label={t("الويكند الأول")}>
         <SelectInput value={value.weekendDay1} onChange={(v) => onChange({ ...value, weekendDay1: v })} options={["الجمعة", "السبت", "الأحد"]} />
       </Field>
-      <Field label="الويكند الثاني">
+      <Field label={t("الويكند الثاني")}>
         <SelectInput value={value.weekendDay2} onChange={(v) => onChange({ ...value, weekendDay2: v })} options={["السبت", "الأحد", "لا يوجد"]} />
       </Field>
     </Section>
@@ -483,37 +487,38 @@ function RecruitmentSettingsTab({
   value: HRSettingsState["recruitment"];
   onChange: (value: HRSettingsState["recruitment"]) => void;
 }) {
+  const { t } = useI18n();
   return (
     <>
-      <Section title="إعدادات التوظيف" colorClass="bg-green-600">
-        <Field label="فترة التجربة (يوم)">
+      <Section title={t("إعدادات التوظيف")} colorClass="bg-green-600">
+        <Field label={t("فترة التجربة (يوم)")}>
           <NumberInput value={value.probationDays} onChange={(v) => onChange({ ...value, probationDays: v })} />
         </Field>
-        <Field label="إغلاق الطلب الوظيفي بعد (يوم)">
+        <Field label={t("إغلاق الطلب الوظيفي بعد (يوم)")}>
           <NumberInput value={value.autoCloseRequisitionDays} onChange={(v) => onChange({ ...value, autoCloseRequisitionDays: v })} />
         </Field>
-        <Field label="أدنى تقييم للفرز (%)">
+        <Field label={t("أدنى تقييم للفرز (%)")}>
           <NumberInput value={value.minScreeningScore} onChange={(v) => onChange({ ...value, minScreeningScore: v })} />
         </Field>
-        <Field label="تجديد العقد تلقائيًا">
+        <Field label={t("تجديد العقد تلقائيًا")}>
           <SelectInput value={value.allowAutoRenew} onChange={(v) => onChange({ ...value, allowAutoRenew: v })} options={["إجباري", "اختياري", "معطل"]} />
         </Field>
       </Section>
 
-      <Section title="إعدادات العقود" colorClass="bg-cyan-500">
-        <Field label="نوع العقد الافتراضي">
+      <Section title={t("إعدادات العقود")} colorClass="bg-cyan-500">
+        <Field label={t("نوع العقد الافتراضي")}>
           <SelectInput value={value.defaultContractType} onChange={(v) => onChange({ ...value, defaultContractType: v })} options={["سنوي", "محدد المدة", "غير محدد المدة"]} />
         </Field>
-        <Field label="مدة العقد الافتراضية (سنة)">
+        <Field label={t("مدة العقد الافتراضية (سنة)")}>
           <NumberInput value={value.defaultContractYears} onChange={(v) => onChange({ ...value, defaultContractYears: v })} />
         </Field>
-        <Field label="ساعات العمل الأسبوعية">
+        <Field label={t("ساعات العمل الأسبوعية")}>
           <NumberInput value={value.weeklyWorkHours} onChange={(v) => onChange({ ...value, weeklyWorkHours: v })} />
         </Field>
-        <Field label="ساعات العمل اليومية">
+        <Field label={t("ساعات العمل اليومية")}>
           <NumberInput value={value.dailyWorkHours} onChange={(v) => onChange({ ...value, dailyWorkHours: v })} />
         </Field>
-        <Field label="الإجازة السنوية الافتراضية (يوم)">
+        <Field label={t("الإجازة السنوية الافتراضية (يوم)")}>
           <NumberInput value={value.annualVacationDays} onChange={(v) => onChange({ ...value, annualVacationDays: v })} />
         </Field>
       </Section>
@@ -528,40 +533,41 @@ function PayrollSettingsTab({
   value: HRSettingsState["payroll"];
   onChange: (value: HRSettingsState["payroll"]) => void;
 }) {
+  const { t } = useI18n();
   return (
     <>
-      <Section title="إعدادات الرواتب" colorClass="bg-yellow-500">
-        <Field label="بدل السكن (%)">
+      <Section title={t("إعدادات الرواتب")} colorClass="bg-yellow-500">
+        <Field label={t("بدل السكن (%)")}>
           <NumberInput value={value.housingAllowancePct} onChange={(v) => onChange({ ...value, housingAllowancePct: v })} />
         </Field>
-        <Field label="بدل النقل (%)">
+        <Field label={t("بدل النقل (%)")}>
           <NumberInput value={value.transportAllowancePct} onChange={(v) => onChange({ ...value, transportAllowancePct: v })} />
         </Field>
-        <Field label="تاريخ صرف الراتب">
+        <Field label={t("تاريخ صرف الراتب")}>
           <NumberInput value={value.payrollDay} onChange={(v) => onChange({ ...value, payrollDay: v })} />
         </Field>
-        <Field label="طريقة صرف الراتب">
+        <Field label={t("طريقة صرف الراتب")}>
           <SelectInput value={value.transferMethod} onChange={(v) => onChange({ ...value, transferMethod: v })} options={["تحويل بنكي", "نقدي", "شيك"]} />
         </Field>
-        <Field label="WPS نظام حماية الأجور">
+        <Field label={t("WPS نظام حماية الأجور")}>
           <SelectInput value={value.wpsEnabled} onChange={(v) => onChange({ ...value, wpsEnabled: v })} options={["مفعل", "معطل"]} />
         </Field>
       </Section>
 
-      <Section title="إعدادات التأمينات الاجتماعية" colorClass="bg-red-600">
-        <Field label="نسبة التأمينات على الموظف (%)">
+      <Section title={t("إعدادات التأمينات الاجتماعية")} colorClass="bg-red-600">
+        <Field label={t("نسبة التأمينات على الموظف (%)")}>
           <NumberInput value={value.gosiEmployeePct} onChange={(v) => onChange({ ...value, gosiEmployeePct: v })} />
         </Field>
-        <Field label="نسبة التأمينات على صاحب العمل (%)">
+        <Field label={t("نسبة التأمينات على صاحب العمل (%)")}>
           <NumberInput value={value.gosiEmployerPct} onChange={(v) => onChange({ ...value, gosiEmployerPct: v })} />
         </Field>
-        <Field label="احتساب نهاية الخدمة بعد (سنة)">
+        <Field label={t("احتساب نهاية الخدمة بعد (سنة)")}>
           <NumberInput value={value.eosAfterYears} onChange={(v) => onChange({ ...value, eosAfterYears: v })} />
         </Field>
-        <Field label="معامل نهاية الخدمة أول 5 سنوات">
+        <Field label={t("معامل نهاية الخدمة أول 5 سنوات")}>
           <NumberInput value={value.eosFactorFirst5} onChange={(v) => onChange({ ...value, eosFactorFirst5: v })} />
         </Field>
-        <Field label="معامل نهاية الخدمة بعد 5 سنوات">
+        <Field label={t("معامل نهاية الخدمة بعد 5 سنوات")}>
           <NumberInput value={value.eosFactorAfter5} onChange={(v) => onChange({ ...value, eosFactorAfter5: v })} />
         </Field>
       </Section>
@@ -576,37 +582,38 @@ function LeavesSettingsTab({
   value: HRSettingsState["leaves"];
   onChange: (value: HRSettingsState["leaves"]) => void;
 }) {
+  const { t } = useI18n();
   return (
     <>
-      <Section title="إعدادات الإجازات" colorClass="bg-slate-600">
-        <Field label="إجازة سنوية (يوم)">
+      <Section title={t("إعدادات الإجازات")} colorClass="bg-slate-600">
+        <Field label={t("إجازة سنوية (يوم)")}>
           <NumberInput value={value.annualLeaveDays} onChange={(v) => onChange({ ...value, annualLeaveDays: v })} />
         </Field>
-        <Field label="إجازة زواج (يوم)">
+        <Field label={t("إجازة زواج (يوم)")}>
           <NumberInput value={value.marriageLeaveDays} onChange={(v) => onChange({ ...value, marriageLeaveDays: v })} />
         </Field>
-        <Field label="إجازة أمومة (يوم)">
+        <Field label={t("إجازة أمومة (يوم)")}>
           <NumberInput value={value.maternityLeaveDays} onChange={(v) => onChange({ ...value, maternityLeaveDays: v })} />
         </Field>
-        <Field label="إجازة أبوة (يوم)">
+        <Field label={t("إجازة أبوة (يوم)")}>
           <NumberInput value={value.paternityLeaveDays} onChange={(v) => onChange({ ...value, paternityLeaveDays: v })} />
         </Field>
-        <Field label="إجازة طارئة (يوم)">
+        <Field label={t("إجازة طارئة (يوم)")}>
           <NumberInput value={value.emergencyLeaveDays} onChange={(v) => onChange({ ...value, emergencyLeaveDays: v })} />
         </Field>
-        <Field label="إجازة مرضية (يوم)">
+        <Field label={t("إجازة مرضية (يوم)")}>
           <NumberInput value={value.sickLeaveDays} onChange={(v) => onChange({ ...value, sickLeaveDays: v })} />
         </Field>
-        <Field label="ترحيل الإجازات (يوم)">
+        <Field label={t("ترحيل الإجازات (يوم)")}>
           <NumberInput value={value.carryForwardDays} onChange={(v) => onChange({ ...value, carryForwardDays: v })} />
         </Field>
-        <Field label="الطلب قبل الإجازة (يوم)">
+        <Field label={t("الطلب قبل الإجازة (يوم)")}>
           <NumberInput value={value.requestBeforeDays} onChange={(v) => onChange({ ...value, requestBeforeDays: v })} />
         </Field>
       </Section>
 
-      <Section title="الإجازات غير المدفوعة" colorClass="bg-gray-900">
-        <Field label="الإجازة غير المدفوعة">
+      <Section title={t("الإجازات غير المدفوعة")} colorClass="bg-gray-900">
+        <Field label={t("الإجازة غير المدفوعة")}>
           <SelectInput value={value.unpaidLeaveAllowed} onChange={(v) => onChange({ ...value, unpaidLeaveAllowed: v })} options={["مسموح", "غير مسموح"]} />
         </Field>
       </Section>
@@ -621,30 +628,31 @@ function AttendanceSettingsTab({
   value: HRSettingsState["attendance"];
   onChange: (value: HRSettingsState["attendance"]) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <Section title="إعدادات الدوام" colorClass="bg-indigo-700">
-      <Field label="عدد أيام العمل بالأسبوع">
+    <Section title={t("إعدادات الدوام")} colorClass="bg-indigo-700">
+      <Field label={t("عدد أيام العمل بالأسبوع")}>
         <NumberInput value={value.workDaysPerWeek} onChange={(v) => onChange({ ...value, workDaysPerWeek: v })} />
       </Field>
-      <Field label="بداية الدوام الافتراضية">
+      <Field label={t("بداية الدوام الافتراضية")}>
         <TextInput value={value.defaultShiftStart} onChange={(v) => onChange({ ...value, defaultShiftStart: v })} />
       </Field>
-      <Field label="نهاية الدوام الافتراضية">
+      <Field label={t("نهاية الدوام الافتراضية")}>
         <TextInput value={value.defaultShiftEnd} onChange={(v) => onChange({ ...value, defaultShiftEnd: v })} />
       </Field>
-      <Field label="فترة السماح (دقيقة)">
+      <Field label={t("فترة السماح (دقيقة)")}>
         <NumberInput value={value.graceMinutes} onChange={(v) => onChange({ ...value, graceMinutes: v })} />
       </Field>
-      <Field label="الحد الأدنى للإضافي (دقيقة)">
+      <Field label={t("الحد الأدنى للإضافي (دقيقة)")}>
         <NumberInput value={value.overtimeMinMinutes} onChange={(v) => onChange({ ...value, overtimeMinMinutes: v })} />
       </Field>
-      <Field label="خصم التأخير">
+      <Field label={t("خصم التأخير")}>
         <SelectInput value={value.latePenaltyEnabled} onChange={(v) => onChange({ ...value, latePenaltyEnabled: v })} options={["مفعل", "معطل"]} />
       </Field>
-      <Field label="خصم الغياب">
+      <Field label={t("خصم الغياب")}>
         <SelectInput value={value.absencePenaltyEnabled} onChange={(v) => onChange({ ...value, absencePenaltyEnabled: v })} options={["مفعل", "معطل"]} />
       </Field>
-      <Field label="معامل إضافي أيام الراحة">
+      <Field label={t("معامل إضافي أيام الراحة")}>
         <NumberInput value={value.weekendOvertimeMultiplier} onChange={(v) => onChange({ ...value, weekendOvertimeMultiplier: v })} />
       </Field>
     </Section>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type LeaveType = {
   id: string;
@@ -19,6 +20,7 @@ type LeaveType = {
 };
 
 export default function HRLeavesTypes() {
+  const { t, direction } = useI18n();
   const [items, setItems] = useState<LeaveType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -46,7 +48,7 @@ export default function HRLeavesTypes() {
         gender: r.gender ?? "both", status: r.status ?? "مفعلة",
       })));
     } catch (error) {
-      toast({ title: "تعذر تحميل تصنيفات الإجازات", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع", variant: "destructive" });
+      toast({ title: t("تعذر تحميل تصنيفات الإجازات"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
     } finally { setLoading(false); }
   };
 
@@ -66,7 +68,7 @@ export default function HRLeavesTypes() {
   };
 
   const handleSave = async () => {
-    if (!formName.trim()) { toast({ title: "خطأ", description: "اسم التصنيف مطلوب", variant: "destructive" }); return; }
+    if (!formName.trim()) { toast({ title: t("خطأ"), description: t("اسم التصنيف مطلوب"), variant: "destructive" }); return; }
     setSaving(true);
     try {
       const payload = {
@@ -77,76 +79,76 @@ export default function HRLeavesTypes() {
       if (editingId) {
         const { error } = await supabase.from("leave_types").update(payload).eq("id", editingId);
         if (error) throw error;
-        toast({ title: "تم التعديل بنجاح" });
+        toast({ title: t("تم التعديل بنجاح") });
       } else {
         const { error } = await supabase.from("leave_types").insert([payload]);
         if (error) throw error;
-        toast({ title: "تمت الإضافة بنجاح" });
+        toast({ title: t("تمت الإضافة بنجاح") });
       }
       resetForm();
       await loadData();
     } catch (error) {
-      toast({ title: "تعذر حفظ التصنيف", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع", variant: "destructive" });
+      toast({ title: t("تعذر حفظ التصنيف"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: LeaveType) => {
-    if (!confirm(`حذف "${item.name}"؟`)) return;
+    if (!confirm(`${t("حذف")} "${item.name}"؟`)) return;
     const { error } = await supabase.from("leave_types").delete().eq("id", item.id);
     if (error) {
-      toast({ title: "تعذر حذف التصنيف", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذر حذف التصنيف"), description: error.message, variant: "destructive" });
       return;
     }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   const filtered = items.filter((i) => !search || i.name.includes(search) || i.name_en.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1400px] mx-auto space-y-6" dir={direction}>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">تصنيف الإجازات</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("تصنيف الإجازات")}</h1>
           <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[#004e89] hover:bg-[#003865]">
-            <Plus className="h-4 w-4 ml-2" /> تصنيف جديد
+            <Plus className="h-4 w-4 ml-2" /> {t("تصنيف جديد")}
           </Button>
         </div>
 
         {showForm && (
           <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
-            <h3 className="font-bold text-lg">{editingId ? "تعديل التصنيف" : "تصنيف جديد"}</h3>
+            <h3 className="font-bold text-lg">{editingId ? t("تعديل التصنيف") : t("تصنيف جديد")}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div><label className="block text-sm font-medium mb-1">الاسم بالعربية *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
-              <div><label className="block text-sm font-medium mb-1">الاسم بالإنجليزية</label><Input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} /></div>
-              <div><label className="block text-sm font-medium mb-1">مدة الإجازة (يوم)</label><Input type="number" value={formDays} onChange={(e) => setFormDays(e.target.value)} /></div>
-              <div><label className="block text-sm font-medium mb-1">نسبة الخصم (%)</label><Input type="number" value={formDeduction} onChange={(e) => setFormDeduction(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("الاسم بالعربية")} *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("الاسم بالإنجليزية")}</label><Input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("مدة الإجازة (يوم)")}</label><Input type="number" value={formDays} onChange={(e) => setFormDays(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("نسبة الخصم (%)")}</label><Input type="number" value={formDeduction} onChange={(e) => setFormDeduction(e.target.value)} /></div>
               <div>
-                <label className="block text-sm font-medium mb-1">إجازة مدفوعة</label>
+                <label className="block text-sm font-medium mb-1">{t("إجازة مدفوعة")}</label>
                 <div className="flex gap-4 h-10 items-center">
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={formPaid} onChange={() => setFormPaid(true)} /><span>نعم</span></label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={!formPaid} onChange={() => setFormPaid(false)} /><span>لا</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={formPaid} onChange={() => setFormPaid(true)} /><span>{t("نعم")}</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={!formPaid} onChange={() => setFormPaid(false)} /><span>{t("لا")}</span></label>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">تؤثر على الرصيد</label>
+                <label className="block text-sm font-medium mb-1">{t("تؤثر على الرصيد")}</label>
                 <div className="flex gap-4 h-10 items-center">
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={formAffects} onChange={() => setFormAffects(true)} /><span>نعم</span></label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={!formAffects} onChange={() => setFormAffects(false)} /><span>لا</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={formAffects} onChange={() => setFormAffects(true)} /><span>{t("نعم")}</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={!formAffects} onChange={() => setFormAffects(false)} /><span>{t("لا")}</span></label>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">تقييد الجنس</label>
+                <label className="block text-sm font-medium mb-1">{t("تقييد الجنس")}</label>
                 <select value={formGender} onChange={(e) => setFormGender(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
-                  <option value="both">لكلا الجنسين</option>
-                  <option value="male">ذكور فقط</option>
-                  <option value="female">إناث فقط</option>
+                  <option value="both">{t("لكلا الجنسين")}</option>
+                  <option value="male">{t("ذكور فقط")}</option>
+                  <option value="female">{t("إناث فقط")}</option>
                 </select>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? "جاري الحفظ..." : "حفظ"}</Button>
-              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? t("جاري الحفظ...") : t("حفظ")}</Button>
+              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> {t("إلغاء")}</Button>
             </div>
           </div>
         )}
@@ -155,9 +157,9 @@ export default function HRLeavesTypes() {
           <div className="p-4 border-b flex justify-between items-center">
             <div className="relative w-72">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+              <Input placeholder={t("بحث...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
             </div>
-            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+            <span className="text-sm text-gray-500">{filtered.length} {t("سجل")}</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -165,31 +167,31 @@ export default function HRLeavesTypes() {
               <thead className="bg-[#004e89] text-white">
                 <tr>
                   <th className="py-3 px-4 font-medium w-16">#</th>
-                  <th className="py-3 px-4 font-medium">اسم التصنيف</th>
-                  <th className="py-3 px-4 font-medium">مدة الإجازة</th>
-                  <th className="py-3 px-4 font-medium">نسبة الخصم</th>
-                  <th className="py-3 px-4 font-medium text-center">الحالة</th>
-                  <th className="py-3 px-4 font-medium text-center w-24">الإجراءات</th>
+                  <th className="py-3 px-4 font-medium">{t("اسم التصنيف")}</th>
+                  <th className="py-3 px-4 font-medium">{t("مدة الإجازة")}</th>
+                  <th className="py-3 px-4 font-medium">{t("نسبة الخصم")}</th>
+                  <th className="py-3 px-4 font-medium text-center">{t("الحالة")}</th>
+                  <th className="py-3 px-4 font-medium text-center w-24">{t("الإجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y bg-white">
                 {loading ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((item, i) => (
                   <tr key={item.id} className="hover:bg-gray-50/50">
                     <td className="py-3 px-4">{i + 1}</td>
                     <td className="py-3 px-4 font-medium">{item.name}</td>
-                    <td className="py-3 px-4">{item.max_days} يوم</td>
+                    <td className="py-3 px-4">{item.max_days} {t("يوم")}</td>
                     <td className="py-3 px-4">{item.deduction_percent}%</td>
                     <td className="py-3 px-4 text-center">
-                      <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded text-xs font-medium">{item.status}</span>
+                      <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded text-xs font-medium">{t(item.status)}</span>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex justify-center items-center gap-2">
-                        <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-[#004e89]"><Edit className="h-4 w-4" /></button>
-                        <button onClick={() => handleDelete(item)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => startEdit(item)} title={t("تعديل")} aria-label={t("تعديل")} className="text-gray-400 hover:text-[#004e89]"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => handleDelete(item)} title={t("حذف")} aria-label={t("حذف")} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>

@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type Reason = { id: string; reason: string; effect: string };
 
 export default function HRTerminationReasons() {
+  const { t, direction } = useI18n();
   const [items, setItems] = useState<Reason[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -42,56 +44,56 @@ export default function HRTerminationReasons() {
   };
 
   const handleSave = async () => {
-    if (!formReason.trim()) { toast({ title: "خطأ", description: "السبب مطلوب", variant: "destructive" }); return; }
+    if (!formReason.trim()) { toast({ title: t("خطأ"), description: t("السبب مطلوب"), variant: "destructive" }); return; }
     setSaving(true);
     try {
       const payload = { reason: formReason, effect: effectLabels[formEffect] };
       if (editingId) {
         await supabase.from("termination_reasons").update(payload).eq("id", editingId);
-        toast({ title: "تم التعديل" });
+        toast({ title: t("تم التعديل") });
       } else {
         await supabase.from("termination_reasons").insert([payload]);
-        toast({ title: "تمت الإضافة" });
+        toast({ title: t("تمت الإضافة") });
       }
       resetForm(); loadData();
-    } catch { toast({ title: "خطأ", variant: "destructive" }); } finally { setSaving(false); }
+    } catch { toast({ title: t("خطأ"), variant: "destructive" }); } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: Reason) => {
-    if (!confirm(`حذف "${item.reason}"؟`)) return;
+    if (!confirm(`${t("حذف")} "${item.reason}"؟`)) return;
     await supabase.from("termination_reasons").delete().eq("id", item.id);
     setItems((prev) => prev.filter((i) => i.id !== item.id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   const filtered = items.filter((i) => !search || i.reason.includes(search));
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">أسباب إنهاء الخدمة</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("أسباب إنهاء الخدمة")}</h1>
           <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[#004e89] hover:bg-[#003865]">
-            <Plus className="h-4 w-4 ml-2" /> إضافة سبب جديد
+            <Plus className="h-4 w-4 ml-2" /> {t("إضافة سبب جديد")}
           </Button>
         </div>
 
         {showForm && (
           <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
-            <h3 className="font-bold text-lg">{editingId ? "تعديل السبب" : "إضافة سبب جديد"}</h3>
+            <h3 className="font-bold text-lg">{editingId ? t("تعديل السبب") : t("إضافة سبب جديد")}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium mb-1">السبب *</label><Input value={formReason} onChange={(e) => setFormReason(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("السبب")} *</label><Input value={formReason} onChange={(e) => setFormReason(e.target.value)} /></div>
               <div>
-                <label className="block text-sm font-medium mb-1">تأثيره على مكافأة نهاية الخدمة</label>
+                <label className="block text-sm font-medium mb-1">{t("تأثيره على مكافأة نهاية الخدمة")}</label>
                 <select value={formEffect} onChange={(e) => setFormEffect(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
-                  <option value="no_effect">{effectLabels.no_effect}</option>
-                  <option value="has_effect">{effectLabels.has_effect}</option>
+                  <option value="no_effect">{t(effectLabels.no_effect)}</option>
+                  <option value="has_effect">{t(effectLabels.has_effect)}</option>
                 </select>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? "جاري الحفظ..." : "حفظ"}</Button>
-              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? t("جاري الحفظ...") : t("حفظ")}</Button>
+              <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 ml-1" /> {t("إلغاء")}</Button>
             </div>
           </div>
         )}
@@ -100,34 +102,34 @@ export default function HRTerminationReasons() {
           <div className="p-4 border-b flex justify-between items-center">
             <div className="relative w-72">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
+              <Input placeholder={t("بحث...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" />
             </div>
-            <span className="text-sm text-gray-500">{filtered.length} سجل</span>
+            <span className="text-sm text-gray-500">{filtered.length} {t("سجل")}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-right">
               <thead className="bg-[#004e89] text-white">
                 <tr>
                   <th className="py-3 px-4 font-medium w-16">#</th>
-                  <th className="py-3 px-4 font-medium">السبب</th>
-                  <th className="py-3 px-4 font-medium">تأثيره على مكافأة نهاية الخدمة</th>
-                  <th className="py-3 px-4 font-medium text-center w-24">الإجراءات</th>
+                  <th className="py-3 px-4 font-medium">{t("السبب")}</th>
+                  <th className="py-3 px-4 font-medium">{t("تأثيره على مكافأة نهاية الخدمة")}</th>
+                  <th className="py-3 px-4 font-medium text-center w-24">{t("الإجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y bg-white">
                 {loading ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">لا توجد بيانات</td></tr>
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((item, i) => (
                   <tr key={item.id} className="hover:bg-gray-50/50">
                     <td className="py-3 px-4">{i + 1}</td>
                     <td className="py-3 px-4 font-medium">{item.reason}</td>
-                    <td className="py-3 px-4">{item.effect}</td>
+                    <td className="py-3 px-4">{t(item.effect)}</td>
                     <td className="py-3 px-4">
                       <div className="flex justify-center items-center gap-2">
-                        <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-blue-500"><Edit className="h-4 w-4" /></button>
-                        <button onClick={() => handleDelete(item)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => startEdit(item)} title={t("تعديل")} aria-label={t("تعديل")} className="text-gray-400 hover:text-blue-500"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => handleDelete(item)} title={t("حذف")} aria-label={t("حذف")} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>

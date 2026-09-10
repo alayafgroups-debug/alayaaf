@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type Employee = {
   id: string;
@@ -41,7 +42,7 @@ const TERM_REASONS = [
 
 const CONTRACT_TYPES = ["دائم", "مؤقت", "موسمي", "جزئي"];
 
-function calcServiceDuration(hireDateStr: string, endDateStr: string): string {
+function calcServiceDuration(hireDateStr: string, endDateStr: string, t: (s: string) => string): string {
   if (!hireDateStr || !endDateStr) return "";
   const hire = new Date(hireDateStr);
   const end = new Date(endDateStr);
@@ -52,9 +53,9 @@ function calcServiceDuration(hireDateStr: string, endDateStr: string): string {
   if (days < 0) { months -= 1; days += 30; }
   if (months < 0) { years -= 1; months += 12; }
   const parts: string[] = [];
-  if (years > 0) parts.push(`${years} سنة`);
-  if (months > 0) parts.push(`${months} أشهر`);
-  if (days > 0) parts.push(`${days} يوم`);
+  if (years > 0) parts.push(`${years} ${t("سنة")}`);
+  if (months > 0) parts.push(`${months} ${t("أشهر")}`);
+  if (days > 0) parts.push(`${days} ${t("يوم")}`);
   return parts.join(" ");
 }
 
@@ -96,6 +97,7 @@ const emptyForm = {
 };
 
 export default function HRTerminationEmployees() {
+  const { t, direction } = useI18n();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [items, setItems] = useState<TermRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,8 +156,8 @@ export default function HRTerminationEmployees() {
       );
     } catch (error) {
       toast({
-        title: "تعذر تحميل البيانات",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+        title: t("تعذر تحميل البيانات"),
+        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
         variant: "destructive",
       });
     } finally {
@@ -191,8 +193,8 @@ export default function HRTerminationEmployees() {
 
   const serviceDuration = useMemo(() => {
     if (!selectedEmployee) return "";
-    return calcServiceDuration(selectedEmployee.hireDate, form.terminationDate);
-  }, [selectedEmployee, form.terminationDate]);
+    return calcServiceDuration(selectedEmployee.hireDate, form.terminationDate, t);
+  }, [selectedEmployee, form.terminationDate, t]);
 
   const handleEmployeeChange = (employeeId: string) => {
     const emp = employees.find((e) => e.id === employeeId);
@@ -205,7 +207,7 @@ export default function HRTerminationEmployees() {
 
   const validateForm = () => {
     if (!selectedEmployee || !form.endReason || !form.terminationDate) {
-      toast({ title: "أكمل الحقول المطلوبة", description: "الموظف وسبب إنهاء الخدمة والتاريخ مطلوبة", variant: "destructive" });
+      toast({ title: t("أكمل الحقول المطلوبة"), description: t("الموظف وسبب إنهاء الخدمة والتاريخ مطلوبة"), variant: "destructive" });
       return false;
     }
     return true;
@@ -236,15 +238,15 @@ export default function HRTerminationEmployees() {
         status: "معلق",
       });
       if (error) throw error;
-      toast({ title: "تم حفظ إنهاء الخدمة", description: `تم تسجيل إنهاء خدمة ${selectedEmployee.name}` });
+      toast({ title: t("تم حفظ إنهاء الخدمة"), description: `${t("تم تسجيل إنهاء خدمة")} ${selectedEmployee.name}` });
       setForm(emptyForm);
       setShowForm(false);
       setPreviewOpen(false);
       await loadData();
     } catch (error) {
       toast({
-        title: "تعذر الحفظ",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+        title: t("تعذر الحفظ"),
+        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
         variant: "destructive",
       });
     } finally {
@@ -259,35 +261,35 @@ export default function HRTerminationEmployees() {
 
   return (
     <Layout>
-      <div className="w-full p-4 space-y-5" dir="rtl">
+      <div className="w-full p-4 space-y-5" dir={direction}>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">إنهاء خدمة الموظفين</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("إنهاء خدمة الموظفين")}</h1>
           <Button onClick={() => { setForm(emptyForm); setShowForm((v) => !v); }} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
             {showForm ? <X className="h-4 w-4 ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
-            {showForm ? "إغلاق" : "إنهاء خدمة"}
+            {showForm ? t("إغلاق") : t("إنهاء خدمة")}
           </Button>
         </div>
 
         {showForm && (
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <h2 className="font-bold text-gray-900">إنهاء خدمة الموظف</h2>
+              <h2 className="font-bold text-gray-900">{t("إنهاء خدمة الموظف")}</h2>
               {selectedEmployee && (
                 <span className="text-sm text-emerald-700 font-medium bg-emerald-50 px-3 py-1 rounded-full">
-                  راتب الموظف: SAR {selectedEmployee.totalSalary.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  {t("راتب الموظف")}: SAR {selectedEmployee.totalSalary.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </span>
               )}
             </div>
 
             <div className="p-5 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Field label="الموظف" required>
+                <Field label={t("الموظف")} required>
                   <select
                     value={form.employeeId}
                     onChange={(event) => handleEmployeeChange(event.target.value)}
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
-                    <option value="">اختر الموظف</option>
+                    <option value="">{t("اختر الموظف")}</option>
                     {employees.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.name} - {employee.empId}
@@ -296,70 +298,70 @@ export default function HRTerminationEmployees() {
                   </select>
                 </Field>
 
-                <Field label="نوع العقد">
+                <Field label={t("نوع العقد")}>
                   <select
                     value={form.contractType}
                     onChange={(event) => setForm((current) => ({ ...current, contractType: event.target.value }))}
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
-                    <option value="">اختر نوع العقد</option>
-                    {CONTRACT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                    <option value="">{t("اختر نوع العقد")}</option>
+                    {CONTRACT_TYPES.map((type) => <option key={type} value={type}>{t(type)}</option>)}
                   </select>
                 </Field>
 
-                <Field label="سبب إنهاء الخدمة" required>
+                <Field label={t("سبب إنهاء الخدمة")} required>
                   <select
                     value={form.endReason}
                     onChange={(event) => setForm((current) => ({ ...current, endReason: event.target.value }))}
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
-                    <option value="">اختر السبب</option>
-                    {TERM_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                    <option value="">{t("اختر السبب")}</option>
+                    {TERM_REASONS.map((reason) => <option key={reason} value={reason}>{t(reason)}</option>)}
                   </select>
                 </Field>
 
-                <Field label="تاريخ التعيين">
+                <Field label={t("تاريخ التعيين")}>
                   <Input type="date" value={form.hireDate || selectedEmployee?.hireDate || ""} readOnly className="bg-gray-50" />
                 </Field>
 
-                <Field label="تاريخ إنهاء الخدمة" required>
+                <Field label={t("تاريخ إنهاء الخدمة")} required>
                   <Input type="date" value={form.terminationDate} onChange={(event) => setForm((current) => ({ ...current, terminationDate: event.target.value }))} />
                   {serviceDuration && (
-                    <p className="text-xs text-gray-500 mt-1">المدة: {serviceDuration} يوم/أشهر</p>
+                    <p className="text-xs text-gray-500 mt-1">{t("المدة")}: {serviceDuration}</p>
                   )}
                 </Field>
 
-                <Field label="مساحة إنهاء الخدمة">
-                  <Input type="number" value={computedReward.toFixed(2)} readOnly className="bg-gray-50 font-medium" placeholder="تُحسب تلقائياً" />
+                <Field label={t("مساحة إنهاء الخدمة")}>
+                  <Input type="number" value={computedReward.toFixed(2)} readOnly className="bg-gray-50 font-medium" placeholder={t("تُحسب تلقائياً")} />
                 </Field>
 
-                <Field label="رصيد الإجازات السنوية المتبقية">
+                <Field label={t("رصيد الإجازات السنوية المتبقية")}>
                   <Input type="number" value={form.leaveRemaining} onChange={(event) => setForm((current) => ({ ...current, leaveRemaining: event.target.value }))} min="0" step="0.25" />
-                  <p className="text-xs text-gray-400 mt-0.5">يوم</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t("يوم")}</p>
                 </Field>
 
-                <Field label="قيمة الإجازات">
+                <Field label={t("قيمة الإجازات")}>
                   <Input value={computedLeaveValue.toFixed(2)} readOnly className="bg-gray-50 font-medium" />
-                  <p className="text-xs text-gray-400 mt-0.5">= راتب الموظف ÷ 30 × أيام الإجازة</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t("= راتب الموظف ÷ 30 × أيام الإجازة")}</p>
                 </Field>
 
-                <Field label="مستحقات أخرى">
+                <Field label={t("مستحقات أخرى")}>
                   <Input type="number" value={form.otherEntitlements} onChange={(event) => setForm((current) => ({ ...current, otherEntitlements: event.target.value }))} min="0" step="0.01" />
                 </Field>
 
-                <Field label="مطلبيات استقطاع أخرى">
+                <Field label={t("مطلبيات استقطاع أخرى")}>
                   <Input type="number" value={form.otherDeductions} onChange={(event) => setForm((current) => ({ ...current, otherDeductions: event.target.value }))} min="0" step="0.01" />
                 </Field>
 
-                <Field label="الإجمالي">
+                <Field label={t("الإجمالي")}>
                   <div className="flex items-center gap-3">
                     <Input value={computedTotal.toFixed(2)} readOnly className="bg-gray-50 font-bold text-[#004e89]" />
-                    <span className="text-xs text-gray-400 whitespace-nowrap">= مبلغ الراتب الأساسي</span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">{t("= مبلغ الراتب الأساسي")}</span>
                   </div>
                 </Field>
 
                 <div className="md:col-span-2">
-                  <Field label="ملاحظات">
+                  <Field label={t("ملاحظات")}>
                     <textarea
                       value={form.notes}
                       onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
@@ -370,19 +372,19 @@ export default function HRTerminationEmployees() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <Field label="المرفق">
+                  <Field label={t("المرفق")}>
                     <div className="flex items-center gap-2 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-500 cursor-pointer hover:bg-gray-50">
                       <FileText className="h-4 w-4" />
-                      <span>إضافة ملفات</span>
+                      <span>{t("إضافة ملفات")}</span>
                     </div>
                   </Field>
                 </div>
               </div>
 
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-                <Button variant="outline" onClick={() => setPreviewOpen(true)}>معاينة</Button>
+                <Button variant="outline" onClick={() => setPreviewOpen(true)}>{t("معاينة")}</Button>
                 <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                  {saving ? "جاري الحفظ..." : "حفظ"}
+                  {saving ? t("جاري الحفظ...") : t("حفظ")}
                 </Button>
               </div>
             </div>
@@ -392,10 +394,10 @@ export default function HRTerminationEmployees() {
         {/* Records table */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-gray-100 p-4">
-            <h2 className="font-bold text-gray-900">سجل إنهاءات الخدمة ({filtered.length})</h2>
+            <h2 className="font-bold text-gray-900">{t("سجل إنهاءات الخدمة")} ({filtered.length})</h2>
             <div className="relative w-full sm:w-80">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="بحث بالاسم أو الرقم الوظيفي" className="pr-9" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث بالاسم أو الرقم الوظيفي")} className="pr-9" />
             </div>
           </div>
 
@@ -403,28 +405,28 @@ export default function HRTerminationEmployees() {
             <table className="w-full min-w-[1000px] text-sm text-right">
               <thead className="bg-[#004e89] text-white">
                 <tr>
-                  <th className="py-3 px-4">الرقم الوظيفي</th>
-                  <th className="py-3 px-4">الاسم</th>
-                  <th className="py-3 px-4">الإدارة</th>
-                  <th className="py-3 px-4">سبب الإنهاء</th>
-                  <th className="py-3 px-4">تاريخ الإنهاء</th>
-                  <th className="py-3 px-4">مكافأة نهاية الخدمة</th>
-                  <th className="py-3 px-4">قيمة الإجازات</th>
-                  <th className="py-3 px-4">الإجمالي</th>
-                  <th className="py-3 px-4 text-center">الحالة</th>
+                  <th className="py-3 px-4">{t("الرقم الوظيفي")}</th>
+                  <th className="py-3 px-4">{t("الاسم")}</th>
+                  <th className="py-3 px-4">{t("الإدارة")}</th>
+                  <th className="py-3 px-4">{t("سبب الإنهاء")}</th>
+                  <th className="py-3 px-4">{t("تاريخ الإنهاء")}</th>
+                  <th className="py-3 px-4">{t("مكافأة نهاية الخدمة")}</th>
+                  <th className="py-3 px-4">{t("قيمة الإجازات")}</th>
+                  <th className="py-3 px-4">{t("الإجمالي")}</th>
+                  <th className="py-3 px-4 text-center">{t("الحالة")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={9} className="py-10 text-center text-gray-400">جاري التحميل...</td></tr>
+                  <tr><td colSpan={9} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />لا توجد بيانات</td></tr>
+                  <tr><td colSpan={9} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4">{row.jobId || "—"}</td>
                     <td className="py-3 px-4 font-medium">{row.name}</td>
                     <td className="py-3 px-4">{row.department || "—"}</td>
-                    <td className="py-3 px-4">{row.reason || "—"}</td>
+                    <td className="py-3 px-4">{t(row.reason) || "—"}</td>
                     <td className="py-3 px-4">{row.terminationDate || "—"}</td>
                     <td className="py-3 px-4">{row.reward.toFixed(2)}</td>
                     <td className="py-3 px-4">{row.leaveValue.toFixed(2)}</td>
@@ -434,7 +436,7 @@ export default function HRTerminationEmployees() {
                         row.status === "موافق عليه" ? "bg-emerald-100 text-emerald-800" :
                         row.status === "مرفوض" ? "bg-red-100 text-red-700" :
                         "bg-yellow-100 text-yellow-800"
-                      }`}>{row.status}</span>
+                      }`}>{t(row.status)}</span>
                     </td>
                   </tr>
                 ))}
@@ -444,35 +446,35 @@ export default function HRTerminationEmployees() {
         </div>
 
         {previewOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir={direction}>
             <div className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-xl">
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-                <h3 className="text-xl font-bold text-gray-900">معاينة إنهاء الخدمة</h3>
-                <button type="button" onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-900"><X className="h-5 w-5" /></button>
+                <h3 className="text-xl font-bold text-gray-900">{t("معاينة إنهاء الخدمة")}</h3>
+                <button type="button" onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-900" title={t("إغلاق")} aria-label={t("إغلاق")}><X className="h-5 w-5" /></button>
               </div>
               <div className="p-6 space-y-4">
-                <h4 className="text-center text-2xl font-bold text-[#004e89]">إنهاء خدمة الموظف</h4>
+                <h4 className="text-center text-2xl font-bold text-[#004e89]">{t("إنهاء خدمة الموظف")}</h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <PreviewItem label="الموظف" value={selectedEmployee?.name || "—"} />
-                  <PreviewItem label="الرقم الوظيفي" value={selectedEmployee?.empId || "—"} />
-                  <PreviewItem label="الإدارة" value={selectedEmployee?.department || "—"} />
-                  <PreviewItem label="نوع العقد" value={form.contractType || "—"} />
-                  <PreviewItem label="سبب الإنهاء" value={form.endReason || "—"} />
-                  <PreviewItem label="تاريخ التعيين" value={selectedEmployee?.hireDate || "—"} />
-                  <PreviewItem label="تاريخ إنهاء الخدمة" value={form.terminationDate} />
-                  <PreviewItem label="مدة الخدمة" value={serviceDuration || "—"} />
-                  <PreviewItem label="مكافأة نهاية الخدمة" value={`${computedReward.toFixed(2)} SAR`} />
-                  <PreviewItem label="قيمة الإجازات" value={`${computedLeaveValue.toFixed(2)} SAR`} />
-                  <PreviewItem label="مستحقات أخرى" value={`${Number(form.otherEntitlements).toFixed(2)} SAR`} />
-                  <PreviewItem label="استقطاعات أخرى" value={`${Number(form.otherDeductions).toFixed(2)} SAR`} />
-                  <PreviewItem label="الإجمالي" value={`${computedTotal.toFixed(2)} SAR`} />
+                  <PreviewItem label={t("الموظف")} value={selectedEmployee?.name || "—"} />
+                  <PreviewItem label={t("الرقم الوظيفي")} value={selectedEmployee?.empId || "—"} />
+                  <PreviewItem label={t("الإدارة")} value={selectedEmployee?.department || "—"} />
+                  <PreviewItem label={t("نوع العقد")} value={form.contractType ? t(form.contractType) : "—"} />
+                  <PreviewItem label={t("سبب الإنهاء")} value={form.endReason ? t(form.endReason) : "—"} />
+                  <PreviewItem label={t("تاريخ التعيين")} value={selectedEmployee?.hireDate || "—"} />
+                  <PreviewItem label={t("تاريخ إنهاء الخدمة")} value={form.terminationDate} />
+                  <PreviewItem label={t("مدة الخدمة")} value={serviceDuration || "—"} />
+                  <PreviewItem label={t("مكافأة نهاية الخدمة")} value={`${computedReward.toFixed(2)} SAR`} />
+                  <PreviewItem label={t("قيمة الإجازات")} value={`${computedLeaveValue.toFixed(2)} SAR`} />
+                  <PreviewItem label={t("مستحقات أخرى")} value={`${Number(form.otherEntitlements).toFixed(2)} SAR`} />
+                  <PreviewItem label={t("استقطاعات أخرى")} value={`${Number(form.otherDeductions).toFixed(2)} SAR`} />
+                  <PreviewItem label={t("الإجمالي")} value={`${computedTotal.toFixed(2)} SAR`} />
                 </div>
-                {form.notes && <p className="text-sm text-gray-600 border-t pt-3"><span className="font-medium">ملاحظات:</span> {form.notes}</p>}
+                {form.notes && <p className="text-sm text-gray-600 border-t pt-3"><span className="font-medium">{t("ملاحظات")}:</span> {form.notes}</p>}
               </div>
               <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
-                <Button variant="outline" onClick={() => setPreviewOpen(false)}>رجوع</Button>
+                <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t("رجوع")}</Button>
                 <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                  {saving ? "جاري الحفظ..." : "حفظ"}
+                  {saving ? t("جاري الحفظ...") : t("حفظ")}
                 </Button>
               </div>
             </div>

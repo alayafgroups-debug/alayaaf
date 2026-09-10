@@ -4,6 +4,7 @@ import { ArrowRight, Award, Eye, Plus, Save, Trash2, X, Edit, Search } from "luc
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 import {
   PageHeader,
   FilterBar,
@@ -108,6 +109,7 @@ function mergeCertificates(dbCertificates: Certificate[], localCertificates: Cer
 }
 
 export default function HRCertificates() {
+  const { t, direction } = useI18n();
   const [mode, setMode] = useState<"list" | "create">("list");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -168,13 +170,13 @@ export default function HRCertificates() {
 
   async function handleCreateCertificate() {
     if (!form.employeeId) {
-      toast({ title: "تنبيه", description: "اختر الموظف", variant: "destructive" });
+      toast({ title: t("تنبيه"), description: t("اختر الموظف"), variant: "destructive" });
       return;
     }
 
     const emp = employees.find((e) => e.id === form.employeeId);
     if (!emp) {
-      toast({ title: "خطأ", description: "بيانات الموظف غير متاحة", variant: "destructive" });
+      toast({ title: t("خطأ"), description: t("بيانات الموظف غير متاحة"), variant: "destructive" });
       return;
     }
 
@@ -219,21 +221,21 @@ export default function HRCertificates() {
       writeLocalCertificates(next);
       setMode("list");
       setForm(emptyForm());
-      toast({ title: "تم الحفظ", description: "تم إصدار شهادة الخبرة بنجاح" });
+      toast({ title: t("تم الحفظ"), description: t("تم إصدار شهادة الخبرة بنجاح") });
     } catch {
       const next = [newCertificate, ...certificates];
       setCertificates(next);
       writeLocalCertificates(next);
       setMode("list");
       setForm(emptyForm());
-      toast({ title: "تم الحفظ محليًا", description: "تم حفظ الشهادة محليًا لحين توفر قاعدة البيانات" });
+      toast({ title: t("تم الحفظ محليًا"), description: t("تم حفظ الشهادة محليًا لحين توفر قاعدة البيانات") });
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(certificate: Certificate) {
-    if (!confirm(`حذف الشهادة ${certificate.certificateNo}؟`)) return;
+    if (!confirm(`${t("حذف الشهادة")} ${certificate.certificateNo}؟`)) return;
 
     try {
       await supabase.from("hr_certificates").delete().eq("id", certificate.id);
@@ -243,18 +245,18 @@ export default function HRCertificates() {
     setCertificates(next);
     writeLocalCertificates(next);
     if (selected?.id === certificate.id) setSelected(null);
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   }
 
   const totalCertificates = certificates.length;
 
   return (
     <Layout>
-      <div dir="rtl" className="space-y-6">
+      <div dir={direction} className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Award className="h-7 w-7 text-amber-600" />
-            <h1 className="text-2xl font-bold text-foreground">شهادات الخبرة</h1>
+            <h1 className="text-2xl font-bold text-foreground">{t("شهادات الخبرة")}</h1>
           </div>
 
           <div className="flex items-center gap-2">
@@ -264,7 +266,7 @@ export default function HRCertificates() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50"
               >
                 <ArrowRight className="h-4 w-4" />
-                رجوع
+                {t("رجوع")}
               </button>
             ) : (
               <button
@@ -275,7 +277,7 @@ export default function HRCertificates() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600"
               >
                 <Plus className="h-4 w-4" />
-                إصدار شهادة جديدة
+                {t("إصدار شهادة جديدة")}
               </button>
             )}
           </div>
@@ -284,19 +286,19 @@ export default function HRCertificates() {
         {mode === "create" ? (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-              <h2 className="text-lg font-semibold text-gray-800">بيانات الشهادة</h2>
+              <h2 className="text-lg font-semibold text-gray-800">{t("بيانات الشهادة")}</h2>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">الموظف</label>
+                <label className="text-sm font-medium text-gray-700">{t("الموظف")}</label>
                 <select
                   value={form.employeeId}
                   onChange={(e) => setForm((prev) => ({ ...prev, employeeId: e.target.value }))}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 >
-                  <option value="">اختر الموظف</option>
+                  <option value="">{t("اختر الموظف")}</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.empId || "بدون رقم"})
+                      {emp.name} ({emp.empId || t("بدون رقم")})
                     </option>
                   ))}
                 </select>
@@ -304,7 +306,7 @@ export default function HRCertificates() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">تاريخ الإصدار</label>
+                  <label className="text-sm font-medium text-gray-700">{t("تاريخ الإصدار")}</label>
                   <input
                     type="date"
                     value={form.issueDate}
@@ -313,34 +315,34 @@ export default function HRCertificates() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">موجهة إلى</label>
+                  <label className="text-sm font-medium text-gray-700">{t("موجهة إلى")}</label>
                   <input
                     value={form.directedTo}
                     onChange={(e) => setForm((prev) => ({ ...prev, directedTo: e.target.value }))}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="لمن يهمه الأمر"
+                    placeholder={t("لمن يهمه الأمر")}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">الغرض</label>
+                <label className="text-sm font-medium text-gray-700">{t("الغرض")}</label>
                 <input
                   value={form.purpose}
                   onChange={(e) => setForm((prev) => ({ ...prev, purpose: e.target.value }))}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  placeholder="شهادة خبرة"
+                  placeholder={t("شهادة خبرة")}
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">ملاحظات إضافية</label>
+                <label className="text-sm font-medium text-gray-700">{t("ملاحظات إضافية")}</label>
                 <textarea
                   rows={4}
                   value={form.notes}
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  placeholder="أي تفاصيل إضافية تظهر داخل الشهادة"
+                  placeholder={t("أي تفاصيل إضافية تظهر داخل الشهادة")}
                 />
               </div>
 
@@ -351,7 +353,7 @@ export default function HRCertificates() {
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60"
                 >
                   <Save className="h-4 w-4" />
-                  {saving ? "جاري الحفظ..." : "حفظ الشهادة"}
+                  {saving ? t("جاري الحفظ...") : t("حفظ الشهادة")}
                 </button>
                 <button
                   onClick={() => {
@@ -361,40 +363,40 @@ export default function HRCertificates() {
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50"
                 >
                   <X className="h-4 w-4" />
-                  إلغاء
+                  {t("إلغاء")}
                 </button>
               </div>
             </div>
 
             <div className="bg-white rounded-xl border-2 border-amber-200 shadow-sm p-8">
               <div className="text-center border-b border-dashed border-amber-300 pb-4 mb-6">
-                <p className="text-sm text-gray-500">رقم الشهادة</p>
-                <p className="font-bold text-gray-800">توليد تلقائي بعد الحفظ</p>
+                <p className="text-sm text-gray-500">{t("رقم الشهادة")}</p>
+                <p className="font-bold text-gray-800">{t("توليد تلقائي بعد الحفظ")}</p>
               </div>
 
               <div className="space-y-4 leading-8 text-gray-700">
-                <h3 className="text-center text-2xl font-bold text-amber-700">شهادة خبرة</h3>
-                <p className="text-center text-sm">التاريخ: {form.issueDate || "-"}</p>
+                <h3 className="text-center text-2xl font-bold text-amber-700">{t("شهادة خبرة")}</h3>
+                <p className="text-center text-sm">{t("التاريخ")}: {form.issueDate || "-"}</p>
                 <p>
-                  تشهد إدارة الشركة بأن الموظف/ة
+                  {t("تشهد إدارة الشركة بأن الموظف/ة")}
                   <span className="font-bold mx-1">{selectedEmployee?.name || "................"}</span>
-                  رقم الموظف
+                  {t("رقم الموظف")}
                   <span className="font-bold mx-1">{selectedEmployee?.empId || "........"}</span>
-                  عمل لدينا بمسمى
+                  {t("عمل لدينا بمسمى")}
                   <span className="font-bold mx-1">{selectedEmployee?.jobTitle || "........"}</span>
                   .
                 </p>
                 <p>
-                  وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى:
+                  {t("وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى")}:
                   <span className="font-bold mx-1">{form.directedTo || "........"}</span>
                 </p>
                 <p>
-                  الغرض من الشهادة:
+                  {t("الغرض من الشهادة")}:
                   <span className="font-bold mx-1">{form.purpose || "........"}</span>
                 </p>
-                {form.notes ? <p>ملاحظات: {form.notes}</p> : null}
-                <p className="pt-8">وتفضلوا بقبول فائق الاحترام.</p>
-                <p className="pt-8 text-left">ختم وتوقيع الموارد البشرية</p>
+                {form.notes ? <p>{t("ملاحظات")}: {form.notes}</p> : null}
+                <p className="pt-8">{t("وتفضلوا بقبول فائق الاحترام.")}</p>
+                <p className="pt-8 text-left">{t("ختم وتوقيع الموارد البشرية")}</p>
               </div>
             </div>
           </div>
@@ -402,17 +404,17 @@ export default function HRCertificates() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p className="text-sm text-gray-500">إجمالي الشهادات</p>
+                <p className="text-sm text-gray-500">{t("إجمالي الشهادات")}</p>
                 <p className="mt-1 text-2xl font-bold text-gray-800">{totalCertificates}</p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p className="text-sm text-gray-500">الشهادات المعتمدة</p>
+                <p className="text-sm text-gray-500">{t("الشهادات المعتمدة")}</p>
                 <p className="mt-1 text-2xl font-bold text-green-700">
                   {certificates.filter((c) => c.status === "معتمدة").length}
                 </p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p className="text-sm text-gray-500">الموظفون المشمولون</p>
+                <p className="text-sm text-gray-500">{t("الموظفون المشمولون")}</p>
                 <p className="mt-1 text-2xl font-bold text-amber-700">
                   {new Set(certificates.map((c) => c.empId)).size}
                 </p>
@@ -425,7 +427,7 @@ export default function HRCertificates() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="بحث برقم الشهادة أو الموظف"
+                  placeholder={t("بحث برقم الشهادة أو الموظف")}
                   className="w-full rounded-lg border border-gray-300 pr-10 pl-3 py-2 text-sm"
                 />
               </div>
@@ -434,25 +436,25 @@ export default function HRCertificates() {
                 <table className="w-full min-w-[860px] text-sm">
                   <thead className="bg-gray-50 text-gray-600">
                     <tr>
-                      <th className="text-right px-3 py-2 font-semibold">رقم الشهادة</th>
-                      <th className="text-right px-3 py-2 font-semibold">الموظف</th>
-                      <th className="text-right px-3 py-2 font-semibold">المسمى الوظيفي</th>
-                      <th className="text-right px-3 py-2 font-semibold">تاريخ الإصدار</th>
-                      <th className="text-right px-3 py-2 font-semibold">الحالة</th>
-                      <th className="text-right px-3 py-2 font-semibold">إجراءات</th>
+                      <th className="text-right px-3 py-2 font-semibold">{t("رقم الشهادة")}</th>
+                      <th className="text-right px-3 py-2 font-semibold">{t("الموظف")}</th>
+                      <th className="text-right px-3 py-2 font-semibold">{t("المسمى الوظيفي")}</th>
+                      <th className="text-right px-3 py-2 font-semibold">{t("تاريخ الإصدار")}</th>
+                      <th className="text-right px-3 py-2 font-semibold">{t("الحالة")}</th>
+                      <th className="text-right px-3 py-2 font-semibold">{t("إجراءات")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
                         <td className="px-3 py-6 text-center text-gray-500" colSpan={6}>
-                          جاري التحميل...
+                          {t("جاري التحميل...")}
                         </td>
                       </tr>
                     ) : filtered.length === 0 ? (
                       <tr>
                         <td className="px-3 py-6 text-center text-gray-500" colSpan={6}>
-                          لا توجد شهادات حالياً
+                          {t("لا توجد شهادات حالياً")}
                         </td>
                       </tr>
                     ) : (
@@ -464,7 +466,7 @@ export default function HRCertificates() {
                           <td className="px-3 py-2">{certificate.issueDate || "-"}</td>
                           <td className="px-3 py-2">
                             <span className="inline-flex px-2 py-1 rounded border text-xs bg-green-100 text-green-700 border-green-200">
-                              {certificate.status}
+                              {t(certificate.status)}
                             </span>
                           </td>
                           <td className="px-3 py-2">
@@ -474,14 +476,14 @@ export default function HRCertificates() {
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700"
                               >
                                 <Eye className="h-3.5 w-3.5" />
-                                عرض
+                                {t("عرض")}
                               </button>
                               <button
                                 onClick={() => handleDelete(certificate)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-red-600 text-white text-xs hover:bg-red-700"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
-                                حذف
+                                {t("حذف")}
                               </button>
                             </div>
                           </td>
@@ -497,7 +499,7 @@ export default function HRCertificates() {
               <div className="bg-white rounded-xl border-2 border-amber-200 shadow-sm p-8">
                 <div className="flex items-center justify-between border-b border-dashed border-amber-300 pb-4 mb-6">
                   <div>
-                    <p className="text-sm text-gray-500">رقم الشهادة</p>
+                    <p className="text-sm text-gray-500">{t("رقم الشهادة")}</p>
                     <p className="font-bold text-gray-800">{selected.certificateNo}</p>
                   </div>
                   <button
@@ -505,33 +507,33 @@ export default function HRCertificates() {
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-gray-300 text-xs hover:bg-gray-50"
                   >
                     <X className="h-3.5 w-3.5" />
-                    إغلاق
+                    {t("إغلاق")}
                   </button>
                 </div>
 
                 <div className="space-y-4 leading-8 text-gray-700">
-                  <h3 className="text-center text-2xl font-bold text-amber-700">شهادة خبرة</h3>
-                  <p className="text-center text-sm">التاريخ: {selected.issueDate || "-"}</p>
+                  <h3 className="text-center text-2xl font-bold text-amber-700">{t("شهادة خبرة")}</h3>
+                  <p className="text-center text-sm">{t("التاريخ")}: {selected.issueDate || "-"}</p>
                   <p>
-                    تشهد إدارة الشركة بأن الموظف/ة
+                    {t("تشهد إدارة الشركة بأن الموظف/ة")}
                     <span className="font-bold mx-1">{selected.empName}</span>
-                    رقم الموظف
+                    {t("رقم الموظف")}
                     <span className="font-bold mx-1">{selected.empId || "-"}</span>
-                    عمل لدينا بمسمى
+                    {t("عمل لدينا بمسمى")}
                     <span className="font-bold mx-1">{selected.jobTitle || "-"}</span>
                     .
                   </p>
                   <p>
-                    وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى:
+                    {t("وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى")}:
                     <span className="font-bold mx-1">{selected.directedTo || "-"}</span>
                   </p>
                   <p>
-                    الغرض من الشهادة:
+                    {t("الغرض من الشهادة")}:
                     <span className="font-bold mx-1">{selected.purpose || "-"}</span>
                   </p>
-                  {selected.notes ? <p>ملاحظات: {selected.notes}</p> : null}
-                  <p className="pt-8">وتفضلوا بقبول فائق الاحترام.</p>
-                  <p className="pt-8 text-left">ختم وتوقيع الموارد البشرية</p>
+                  {selected.notes ? <p>{t("ملاحظات")}: {selected.notes}</p> : null}
+                  <p className="pt-8">{t("وتفضلوا بقبول فائق الاحترام.")}</p>
+                  <p className="pt-8 text-left">{t("ختم وتوقيع الموارد البشرية")}</p>
                 </div>
               </div>
             ) : null}

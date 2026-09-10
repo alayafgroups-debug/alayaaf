@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/i18n";
 
 type Holiday = {
   id: string;
@@ -21,6 +22,7 @@ type Holiday = {
 type Opt = { id: string; name: string };
 
 export default function HRLeavesHolidays() {
+  const { t, direction } = useI18n();
   const [rows, setRows] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<Opt[]>([]);
@@ -52,7 +54,7 @@ export default function HRLeavesHolidays() {
       supabase.from("departments").select("id, name").order("name"),
       supabase.from("org_sections").select("id, name").order("name"),
     ]);
-    if (hRes.error) toast({ title: "خطأ في التحميل", description: hRes.error.message, variant: "destructive" });
+    if (hRes.error) toast({ title: t("خطأ في التحميل"), description: hRes.error.message, variant: "destructive" });
     setRows((hRes.data as Holiday[]) ?? []);
     setBranches((bRes.data as Opt[]) ?? []);
     setDepartments((dRes.data as Opt[]) ?? []);
@@ -82,7 +84,7 @@ export default function HRLeavesHolidays() {
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast({ title: "خطأ", description: "اسم الإجازة مطلوب", variant: "destructive" });
+      toast({ title: t("خطأ"), description: t("اسم الإجازة مطلوب"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -101,41 +103,41 @@ export default function HRLeavesHolidays() {
       : await supabase.from("official_holidays").insert([{ id: crypto.randomUUID(), ...payload }]);
     setSaving(false);
     if (error) {
-      toast({ title: "تعذّر الحفظ", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذّر الحفظ"), description: error.message, variant: "destructive" });
       return;
     }
     setModalOpen(false);
-    toast({ title: "تم الحفظ بنجاح" });
+    toast({ title: t("تم الحفظ بنجاح") });
     load();
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("هل تريد حذف هذه العطلة؟")) return;
+    if (!confirm(t("هل تريد حذف هذه العطلة؟"))) return;
     const { error } = await supabase.from("official_holidays").delete().eq("id", id);
     if (error) {
-      toast({ title: "تعذّر الحذف", description: error.message, variant: "destructive" });
+      toast({ title: t("تعذّر الحذف"), description: error.message, variant: "destructive" });
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
-    toast({ title: "تم الحذف" });
+    toast({ title: t("تم الحذف") });
   };
 
   const set = <K extends keyof Holiday>(k: K, v: Holiday[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4 w-full md:w-auto">
-              <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">العُطل والاجازات الرسمية</h2>
+              <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">{t("العُطل والاجازات الرسمية")}</h2>
               <div className="flex gap-2 text-black w-full sm:w-auto">
                 <select
                   value={branchFilter}
                   onChange={(e) => setBranchFilter(e.target.value)}
                   className="h-8 rounded px-2 text-sm bg-white border-none outline-none flex-1 sm:w-[160px]"
                 >
-                  <option>الكل</option>
+                  <option>{t("الكل")}</option>
                   {branches.map((b) => (
                     <option key={b.id}>{b.name}</option>
                   ))}
@@ -144,15 +146,15 @@ export default function HRLeavesHolidays() {
             </div>
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-              <h2 className="text-lg font-bold sm:hidden">العُطل والاجازات الرسمية</h2>
+              <h2 className="text-lg font-bold sm:hidden">{t("العُطل والاجازات الرسمية")}</h2>
               <div className="flex items-center gap-2">
-                <button onClick={openAdd} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="إضافة">
+                <button onClick={openAdd} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("إضافة")} aria-label={t("إضافة")}>
                   <Plus className="h-5 w-5" />
                 </button>
-                <button onClick={load} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="تحديث">
+                <button onClick={load} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("تحديث")} aria-label={t("تحديث")}>
                   <FileText className="h-4 w-4" />
                 </button>
-                <button onClick={() => window.print()} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title="طباعة">
+                <button onClick={() => window.print()} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("طباعة")} aria-label={t("طباعة")}>
                   <Printer className="h-4 w-4" />
                 </button>
               </div>
@@ -163,15 +165,15 @@ export default function HRLeavesHolidays() {
             <table className="w-full text-sm text-center whitespace-nowrap">
               <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
                 <tr>
-                  <th className="py-3 px-2 font-medium min-w-[200px]">اسم الإجازة</th>
-                  <th className="py-3 px-2 font-medium">تاريخ البداية</th>
-                  <th className="py-3 px-2 font-medium">تاريخ الانتهاء</th>
-                  <th className="py-3 px-2 font-medium min-w-[140px]">اسم الفرع</th>
-                  <th className="py-3 px-2 font-medium min-w-[140px]">الإدارة</th>
-                  <th className="py-3 px-2 font-medium min-w-[140px]">اسم القسم</th>
-                  <th className="py-3 px-2 font-medium min-w-[120px]">فريق العمل</th>
-                  <th className="py-3 px-2 font-medium min-w-[180px]">الوصف</th>
-                  <th className="py-3 px-2 font-medium">الإجراءات</th>
+                  <th className="py-3 px-2 font-medium min-w-[200px]">{t("اسم الإجازة")}</th>
+                  <th className="py-3 px-2 font-medium">{t("تاريخ البداية")}</th>
+                  <th className="py-3 px-2 font-medium">{t("تاريخ النهاية")}</th>
+                  <th className="py-3 px-2 font-medium min-w-[140px]">{t("اسم الفرع")}</th>
+                  <th className="py-3 px-2 font-medium min-w-[140px]">{t("الإدارة")}</th>
+                  <th className="py-3 px-2 font-medium min-w-[140px]">{t("اسم القسم")}</th>
+                  <th className="py-3 px-2 font-medium min-w-[120px]">{t("فريق العمل")}</th>
+                  <th className="py-3 px-2 font-medium min-w-[180px]">{t("الوصف")}</th>
+                  <th className="py-3 px-2 font-medium">{t("الإجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -186,7 +188,7 @@ export default function HRLeavesHolidays() {
                     <td colSpan={9} className="py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <FileText className="h-10 w-10 text-gray-300" />
-                        <p>لا توجد بيانات في الجدول</p>
+                        <p>{t("لا توجد بيانات في الجدول")}</p>
                       </div>
                     </td>
                   </tr>
@@ -196,17 +198,17 @@ export default function HRLeavesHolidays() {
                       <td className="py-2.5 px-2 font-medium text-gray-800">{h.name}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.start_date || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.end_date || "-"}</td>
-                      <td className="py-2.5 px-2 text-gray-600">{h.branch || "الكل"}</td>
-                      <td className="py-2.5 px-2 text-gray-600">{h.department || "الكل"}</td>
-                      <td className="py-2.5 px-2 text-gray-600">{h.section || "الكل"}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{h.branch || t("الكل")}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{h.department || t("الكل")}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{h.section || t("الكل")}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.team || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.description || "-"}</td>
                       <td className="py-2.5 px-2">
                         <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => openEdit(h)} className="text-blue-500 hover:text-blue-700" title="تعديل">
+                          <button onClick={() => openEdit(h)} className="text-blue-500 hover:text-blue-700" title={t("تعديل")} aria-label={t("تعديل")}>
                             <Pencil className="h-4 w-4" />
                           </button>
-                          <button onClick={() => handleDelete(h.id)} className="text-red-500 hover:text-red-700" title="حذف">
+                          <button onClick={() => handleDelete(h.id)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
@@ -219,53 +221,53 @@ export default function HRLeavesHolidays() {
           </div>
 
           <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-500">يعرض {filtered.length} من أصل {rows.length} سجل</span>
+            <span className="text-gray-500">{t("يعرض")} {filtered.length} {t("من أصل")} {rows.length} {t("سجل")}</span>
             <div className="flex gap-1 opacity-50 pointer-events-none">
-              <Button variant="outline" size="sm" className="h-8 px-3">السابق</Button>
-              <Button variant="outline" size="sm" className="h-8 px-3">التالي</Button>
+              <Button variant="outline" size="sm" className="h-8 px-3">{t("السابق")}</Button>
+              <Button variant="outline" size="sm" className="h-8 px-3">{t("التالي")}</Button>
             </div>
           </div>
         </div>
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" dir="rtl">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" dir={direction}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
-              <h3 className="font-bold text-gray-800">{editing ? "تعديل عطلة رسمية" : "إضافة عطلة رسمية"}</h3>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <h3 className="font-bold text-gray-800">{editing ? t("تعديل عطلة رسمية") : t("إضافة عطلة رسمية")}</h3>
+              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600" title={t("إغلاق")} aria-label={t("إغلاق")}>
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">اسم الإجازة *</label>
-                <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="مثال: عيد الفطر" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("اسم الإجازة")} *</label>
+                <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={t("مثال: عيد الفطر")} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ البداية</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ البداية")}</label>
                   <Input type="date" value={form.start_date ?? ""} onChange={(e) => set("start_date", e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ الانتهاء</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ النهاية")}</label>
                   <Input type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الفرع</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("الفرع")}</label>
                   <select value={form.branch ?? ""} onChange={(e) => set("branch", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                    <option value="">الكل</option>
+                    <option value="">{t("الكل")}</option>
                     {branches.map((b) => (
                       <option key={b.id}>{b.name}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الإدارة</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("الإدارة")}</label>
                   <select value={form.department ?? ""} onChange={(e) => set("department", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                    <option value="">الكل</option>
+                    <option value="">{t("الكل")}</option>
                     {departments.map((d) => (
                       <option key={d.id}>{d.name}</option>
                     ))}
@@ -274,28 +276,28 @@ export default function HRLeavesHolidays() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">القسم</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("القسم")}</label>
                   <select value={form.section ?? ""} onChange={(e) => set("section", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                    <option value="">الكل</option>
+                    <option value="">{t("الكل")}</option>
                     {sections.map((s) => (
                       <option key={s.id}>{s.name}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">فريق العمل</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("فريق العمل")}</label>
                   <Input value={form.team ?? ""} onChange={(e) => set("team", e.target.value)} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">الوصف</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("الوصف")}</label>
                 <Input value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t sticky bottom-0 bg-white">
-              <Button variant="outline" onClick={() => setModalOpen(false)}>إلغاء</Button>
+              <Button variant="outline" onClick={() => setModalOpen(false)}>{t("إلغاء")}</Button>
               <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865] text-white">
-                {saving ? "جاري الحفظ..." : "حفظ"}
+                {saving ? t("جاري الحفظ...") : t("حفظ")}
               </Button>
             </div>
           </div>

@@ -65,12 +65,29 @@ const MODULE_TREE: ModuleNode[] = [
 const levelOf = (value: PermissionLevel | undefined): AccessLevel => value === "read" ? "read" : value === true || value === "manage" ? "manage" : "none";
 
 const crudPermissions = (prefix: string, item: string): Permission[] => [
-  { key: `${prefix}.view`, label: `استعراض ${item}` },
-  { key: `${prefix}.add`, label: `إضافة ${item}` },
-  { key: `${prefix}.edit`, label: `تعديل ${item}` },
-  { key: `${prefix}.delete`, label: `حذف ${item}` },
-  { key: `${prefix}.export`, label: `تصدير ${item}` },
+  { key: `${prefix}.view`, label: `view::${item}` },
+  { key: `${prefix}.add`, label: `add::${item}` },
+  { key: `${prefix}.edit`, label: `edit::${item}` },
+  { key: `${prefix}.delete`, label: `delete::${item}` },
+  { key: `${prefix}.export`, label: `export::${item}` },
 ];
+
+const CRUD_ACTION_LABELS: Record<string, string> = {
+  view: "استعراض",
+  add: "إضافة",
+  edit: "تعديل",
+  delete: "حذف",
+  export: "تصدير",
+};
+
+function translatePermissionLabel(label: string, t: (source: string) => string): string {
+  const separatorIndex = label.indexOf("::");
+  if (separatorIndex === -1) return t(label);
+  const action = label.slice(0, separatorIndex);
+  const item = label.slice(separatorIndex + 2);
+  const actionLabel = CRUD_ACTION_LABELS[action];
+  return actionLabel ? `${t(actionLabel)} ${t(item)}` : t(label);
+}
 
 const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
   "الوصول للأقسام": [
@@ -320,7 +337,7 @@ export default function HRPermissionsAddRole() {
             </div>
 
             <div className="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-3">
-              <div><p className="font-semibold text-gray-800">{t(`صلاحيات ${activeTab}`)}</p><p className="text-xs text-gray-500">{t("يتم حفظ جميع الخيارات المحددة مع الدور")}</p></div>
+              <div><p className="font-semibold text-gray-800">{t("صلاحيات")} {t(activeTab)}</p><p className="text-xs text-gray-500">{t("يتم حفظ جميع الخيارات المحددة مع الدور")}</p></div>
               <div className="flex items-center gap-2"><Label htmlFor="selectAll" className="cursor-pointer">{t("اختيار الكل")}</Label><Checkbox id="selectAll" checked={allActiveSelected} onCheckedChange={(value) => toggleCurrentTab(value === true)} /></div>
             </div>
 
@@ -362,7 +379,7 @@ export default function HRPermissionsAddRole() {
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-0">
                   {group.permissions.map((permission) => (
                     <div key={permission.key} className="flex items-center justify-between border-b border-gray-100 py-3 gap-4">
-                      <Label htmlFor={permission.key} className="text-sm cursor-pointer">{t(permission.label)}</Label>
+                      <Label htmlFor={permission.key} className="text-sm cursor-pointer">{translatePermissionLabel(permission.label, t)}</Label>
                       <Checkbox id={permission.key} checked={levelOf(permissions[permission.key]) === "manage"} onCheckedChange={(value) => handlePermissionChange(permission.key, value === true)} />
                     </div>
                   ))}

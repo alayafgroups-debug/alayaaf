@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Wrench, Lock } from "lucide-react";
 import Layout from "@/components/Layout";
 import DeductionSettingsPage from "./DeductionSettingsPage";
+import { useI18n } from "@/i18n";
 
 export default function HRDeductionsEmails() {
+  const { t, direction } = useI18n();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -14,7 +16,7 @@ export default function HRDeductionsEmails() {
       setPassword("");
       setError("");
     } else {
-      setError("كلمة المرور غير صحيحة");
+      setError(t("كلمة المرور غير صحيحة"));
       setPassword("");
     }
   };
@@ -36,11 +38,11 @@ export default function HRDeductionsEmails() {
               <div className="space-y-3">
                 <label className="block text-sm font-semibold text-gray-700">
                   <Lock className="h-4 w-4 inline mr-2" />
-                  كلمة المرور
+                  {t("كلمة المرور")}
                 </label>
                 <input
                   type="password"
-                  placeholder="أدخل كلمة المرور"
+                  placeholder={t("أدخل كلمة المرور")}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -61,7 +63,7 @@ export default function HRDeductionsEmails() {
                 onClick={handlePasswordSubmit}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-lg transition"
               >
-                دخول
+                {t("دخول")}
               </button>
             </div>
           </div>
@@ -72,7 +74,7 @@ export default function HRDeductionsEmails() {
 
   return (
     <Layout>
-      <div dir="rtl" className="space-y-6">
+      <div dir={direction} className="space-y-6">
         {/* Logo Only - No Text */}
         <div className="flex items-center justify-between mb-8">
           <div className="p-3 bg-orange-100 rounded-lg">
@@ -82,7 +84,7 @@ export default function HRDeductionsEmails() {
             onClick={() => setIsAuthenticated(false)}
             className="text-sm text-gray-600 hover:text-gray-900 font-medium"
           >
-            خروج
+            {t("خروج")}
           </button>
         </div>
 

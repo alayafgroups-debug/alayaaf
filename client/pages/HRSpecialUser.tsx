@@ -39,7 +39,7 @@ export default function HRSpecialUser() {
       return;
     }
     setLoading(true);
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const { data: sessionData, error: sessionError } = await supabase.auth.refreshSession();
     const accessToken = sessionData.session?.access_token;
     if (sessionError || !accessToken) {
       setLoading(false);

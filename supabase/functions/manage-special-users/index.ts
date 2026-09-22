@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
     const caller = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } });
     const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
     const token = authHeader.slice("Bearer ".length);
-    const { data: { user }, error: authError } = await caller.auth.getUser(token);
+    const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) return respond({ error: "Unauthorized" }, 401);
 
     const { data: allowed } = await caller.rpc("business_permission_allowed", {

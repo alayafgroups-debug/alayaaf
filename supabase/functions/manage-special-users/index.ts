@@ -50,13 +50,31 @@ Deno.serve(async (req: Request) => {
     const { data: role } = await admin.from("user_roles").select("id").eq("id", roleId).eq("status", "فعال").maybeSingle();
     if (!role) return respond({ error: "الدور المحدد غير صالح" }, 400);
 
+    const [{ data: employeeWithEmail }, { data: systemUserWithEmail }] = await Promise.all([
+      admin.from("employees").select("id").ilike("email", email).maybeSingle(),
+      admin.from("system_users").select("id").ilike("email", email).maybeSingle(),
+    ]);
+    if (employeeWithEmail) {
+      return respond({ error: "هذا البريد مرتبط مسبقًا بحساب موظف، استخدم بريدًا مختلفًا للمستخدم الخاص" }, 400);
+    }
+    if (systemUserWithEmail) {
+      return respond({ error: "يوجد مستخدم خاص مسجل مسبقًا بهذا البريد الإلكتروني" }, 400);
+    }
+
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: { full_name: fullName, account_type: "special_system_user" },
     });
-    if (createError || !created.user) return respond({ error: createError?.message ?? "تعذر إنشاء حساب الدخول" }, 400);
+    if (createError || !created.user) {
+      const duplicateEmail = createError?.message.toLowerCase().includes("already") || createError?.message.toLowerCase().includes("registered");
+      return respond({
+        error: duplicateEmail
+          ? "هذا البريد مستخدم بالفعل لحساب دخول في النظام، استخدم بريدًا مختلفًا"
+          : createError?.message ?? "تعذر إنشاء حساب الدخول",
+      }, 400);
+    }
 
     const { data: systemUser, error: insertError } = await admin
       .from("system_users")

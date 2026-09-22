@@ -38,7 +38,7 @@ export default function Login() {
         .from("employees")
         .select("id, emp_id, name, employee_role, permissions")
         .eq("email", email.toLowerCase())
-        .single();
+        .maybeSingle();
 
       let accountName = empData?.name ?? "";
       let accountRole = empData?.employee_role ?? "";

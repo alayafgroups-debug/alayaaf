@@ -39,10 +39,27 @@ export default function HRSpecialUser() {
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke("manage-special-users", { body: form });
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) {
+      setLoading(false);
+      toast.error(t("انتهت جلسة الدخول، يرجى تسجيل الدخول مرة أخرى"));
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke("manage-special-users", {
+      body: form,
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     setLoading(false);
     if (error || data?.error) {
-      toast.error(String(data?.error ?? error?.message ?? t("تعذر إنشاء المستخدم")));
+      let message = String(data?.error ?? error?.message ?? t("تعذر إنشاء المستخدم"));
+      const response = (error as { context?: Response } | null)?.context;
+      if (response) {
+        const errorBody = await response.clone().json().catch(() => null) as { error?: string } | null;
+        if (errorBody?.error) message = errorBody.error;
+      }
+      toast.error(message);
       return;
     }
     setUsers((current) => [data.user as SpecialUser, ...current]);
@@ -62,6 +79,18 @@ export default function HRSpecialUser() {
         </div>
 
         <div className="rounded-xl border bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <span>{t("تحدد صلاحيات المستخدم الخاص من الدور المختار، ويمكن تعديلها من شاشة الأدوار والصلاحيات")}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(form.roleId ? `/hr/permissions/edit-role/${form.roleId}` : "/hr/permissions/roles")}
+              className="border-blue-300 bg-white text-blue-800 hover:bg-blue-100"
+            >
+              {t("إدارة صلاحيات الدور")}
+            </Button>
+          </div>
           <div className="grid gap-5 md:grid-cols-2">
             <div className="space-y-2"><Label>{t("الاسم")}</Label><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div>
             <div className="space-y-2"><Label>{t("البريد الإلكتروني")}</Label><Input type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>

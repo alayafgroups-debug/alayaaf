@@ -61,25 +61,49 @@ Deno.serve(async (req: Request) => {
       return respond({ error: "يوجد مستخدم خاص مسجل مسبقًا بهذا البريد الإلكتروني" }, 400);
     }
 
+    const userMetadata = { full_name: fullName, account_type: "special_system_user" };
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, account_type: "special_system_user" },
+      user_metadata: userMetadata,
     });
-    if (createError || !created.user) {
+
+    let authUser = created.user;
+    let createdNewAuthUser = Boolean(authUser);
+    if (createError || !authUser) {
       const duplicateEmail = createError?.message.toLowerCase().includes("already") || createError?.message.toLowerCase().includes("registered");
-      return respond({
-        error: duplicateEmail
-          ? "هذا البريد مستخدم بالفعل لحساب دخول في النظام، استخدم بريدًا مختلفًا"
-          : createError?.message ?? "تعذر إنشاء حساب الدخول",
-      }, 400);
+      if (!duplicateEmail) {
+        return respond({ error: createError?.message ?? "تعذر إنشاء حساب الدخول" }, 400);
+      }
+
+      let existingAuthUser: { id: string; email?: string } | undefined;
+      for (let page = 1; page <= 10 && !existingAuthUser; page += 1) {
+        const { data: usersPage, error: usersError } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+        if (usersError) return respond({ error: "تعذر التحقق من حساب الدخول السابق" }, 500);
+        existingAuthUser = usersPage.users.find((item) => item.email?.toLowerCase() === email);
+        if (usersPage.users.length < 1000) break;
+      }
+      if (!existingAuthUser) {
+        return respond({ error: "هذا البريد مستخدم بالفعل لحساب دخول في النظام، استخدم بريدًا مختلفًا" }, 400);
+      }
+
+      const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(existingAuthUser.id, {
+        password,
+        email_confirm: true,
+        user_metadata: userMetadata,
+      });
+      if (updateError || !updated.user) {
+        return respond({ error: updateError?.message ?? "تعذر إعادة تفعيل حساب الدخول السابق" }, 400);
+      }
+      authUser = updated.user;
+      createdNewAuthUser = false;
     }
 
     const { data: systemUser, error: insertError } = await admin
       .from("system_users")
       .insert({
-        auth_user_id: created.user.id,
+        auth_user_id: authUser.id,
         full_name: fullName,
         email,
         role_id: roleId,
@@ -90,7 +114,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (insertError) {
-      await admin.auth.admin.deleteUser(created.user.id);
+      if (createdNewAuthUser) await admin.auth.admin.deleteUser(authUser.id);
       return respond({ error: insertError.message }, 400);
     }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
-import { Printer, Plus, Trash2, Edit, Search, RefreshCw } from "lucide-react";
+import { Printer, Plus, Trash2, Edit, Search, RefreshCw, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "react-router-dom";
@@ -93,6 +93,12 @@ export default function HRPermissionsRoles() {
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
+            <Link
+              to="/hr/permissions/special-user"
+              className="inline-flex items-center gap-1 px-4 py-2 border border-[#004e89] text-[#004e89] bg-white rounded-lg text-sm font-medium hover:bg-blue-50 transition"
+            >
+              <UserPlus className="h-4 w-4" /> {t("إضافة مستخدم خاص")}
+            </Link>
             <Link
               to="/hr/permissions/add-role"
               className="inline-flex items-center gap-1 px-4 py-2 bg-[#004e89] text-white rounded-lg text-sm font-medium hover:bg-[#003865] transition"

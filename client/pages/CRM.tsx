@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { checkPerm } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 
 type PartyRow = {
   id: string;
@@ -31,6 +33,9 @@ type PartyRow = {
   paymentTerms: string;
   businessType: string;
   licenseNumber: string;
+  createdAt: string;
+  createdBy: string;
+  creatorName: string;
 };
 
 type PartyForm = {
@@ -94,6 +99,9 @@ const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
   paymentTerms: String(row.payment_terms ?? ""),
   businessType: String(row.business_type ?? ""),
   licenseNumber: String(row.license_number ?? ""),
+  createdAt: String(row.created_at ?? ""),
+  createdBy: String(row.created_by ?? ""),
+  creatorName: "—",
 });
 
 const crmTranslations: Record<string, string> = {
@@ -273,6 +281,8 @@ const emptyForm = (isVendor: boolean): PartyForm => ({
 
 export default function CRM() {
   const { t, direction, formatNumber } = useCrmI18n();
+  const { permissions } = useRolePermissions();
+  const canViewCreator = checkPerm(permissions, "audit.creator_columns");
   const location = useLocation();
   const isVendors = location.pathname.includes("/crm/vendors");
   const isReports = location.pathname.includes("/crm/reports");
@@ -284,6 +294,9 @@ export default function CRM() {
   const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState<PartyForm>(emptyForm(false));
   const [viewModal, setViewModal] = useState<ViewModalData>(null);
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [reportSummary, setReportSummary] = useState({
     totalReceivables: 0,
     recentPayments: 0,
@@ -303,7 +316,16 @@ export default function CRM() {
           .order("id", { ascending: false });
 
         if (!error && data) {
-          setter(data.map((row) => mapPartyRow(row as Record<string, unknown>)));
+          const mapped = data.map((row) => mapPartyRow(row as Record<string, unknown>));
+          if (canViewCreator) {
+            const ids = Array.from(new Set(mapped.map((item) => item.createdBy).filter(Boolean)));
+            if (ids.length > 0) {
+              const { data: labels } = await supabase.rpc("business_user_labels", { p_user_ids: ids });
+              const names = new Map<string, string>((labels ?? []).map((item) => [String(item.user_id), String(item.display_name)] as [string, string]));
+              mapped.forEach((item) => { item.creatorName = names.get(item.createdBy) ?? "—"; });
+            }
+          }
+          setter(mapped);
         } else {
           setter([]);
         }
@@ -316,7 +338,7 @@ export default function CRM() {
       loadTable("customers", setCustomerRows),
       loadTable("vendors", setVendorRows),
     ]);
-  }, []);
+  }, [canViewCreator]);
 
   useEffect(() => {
     if (!isReports) {
@@ -381,7 +403,11 @@ export default function CRM() {
   const actionLabel = t(
     isReports ? "توليد تقرير جديد" : isVendors ? "إضافة مورد جديد" : "إضافة عميل جديد"
   );
-  const tableData = isVendors ? vendorRows : customerRows;
+  const tableData = (isVendors ? vendorRows : customerRows).filter((row) => {
+    const matchesSearch = !search.trim() || `${row.number} ${row.name}`.toLowerCase().includes(search.trim().toLowerCase());
+    const date = row.createdAt.slice(0, 10);
+    return matchesSearch && (!fromDate || date >= fromDate) && (!toDate || date <= toDate);
+  });
   const idLabel = t(isVendors ? "رقم المورد" : "رقم العميل");
   const typeLabel = t(isVendors ? "نوع المورد" : "نوع العميل");
   const searchPlaceholder = t(
@@ -1041,11 +1067,15 @@ export default function CRM() {
               <div className="relative w-full max-w-xs">
                 <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
                   placeholder={searchPlaceholder}
                   className="w-full rounded-lg border border-border bg-background px-9 py-2 text-sm"
                 />
               </div>
               <div className="flex flex-wrap gap-2">
+                <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"><span>{t("من تاريخ")}</span><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
+                <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"><span>{t("إلى تاريخ")}</span><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
                 <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                   <option>{typeLabel}</option>
                   {typeOptions.map((option) => (
@@ -1088,6 +1118,7 @@ export default function CRM() {
                       {t("حد الائتمان")}
                     </th>
                     <th className="px-4 py-3 text-end font-semibold">{t("الحالة")}</th>
+                    {canViewCreator && <th className="px-4 py-3 text-end font-semibold">{t("أنشئ بواسطة")}</th>}
                     <th className="px-4 py-3 text-end font-semibold">{t("الإجراءات")}</th>
                   </tr>
                 </thead>
@@ -1125,6 +1156,7 @@ export default function CRM() {
                           {t(customer.status)}
                         </span>
                       </td>
+                      {canViewCreator && <td className="px-4 py-3 whitespace-nowrap">{customer.creatorName || "—"}</td>}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button

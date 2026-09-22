@@ -66,6 +66,9 @@ export default function Dashboard() {
   const modules = useMemo(() => {
     return ALL_MODULES.filter((m) => checkPerm(livePerms, m.permKey));
   }, [livePerms]);
+  const canViewSales = checkPerm(livePerms, "sales.invoices", "sales.invoices.view", "module.sales");
+  const canViewPurchases = checkPerm(livePerms, "purchases.invoices", "purchases.invoices.view", "module.purchases");
+  const canViewCustomers = checkPerm(livePerms, "crm.customers", "crm.customers.view", "module.crm");
 
   const [kpis, setKpis] = useState<KpiData>({ totalSales: 0, totalPurchases: 0, invoiceCount: 0, activeCustomers: 0 });
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -76,7 +79,9 @@ export default function Dashboard() {
     const load = async () => {
       try {
         // Load sales invoices
-        const { data: salesInv } = await supabase.from("sales_invoices").select("id, date, customer, total, paid, remaining, status").order("date", { ascending: false });
+        const salesInv = canViewSales
+          ? (await supabase.from("sales_invoices").select("id, date, customer, total, paid, remaining, status").order("date", { ascending: false })).data
+          : [];
         const invoiceRows: InvoiceRow[] = (salesInv || []).map((r) => ({
           id: String(r.id),
           customer: String(r.customer ?? ""),
@@ -89,11 +94,11 @@ export default function Dashboard() {
         const totalSales = invoiceRows.reduce((s, i) => s + i.total, 0);
 
         // Load purchase invoices
-        const { data: purchInv } = await supabase.from("purchase_invoices").select("total");
+        const purchInv = canViewPurchases ? (await supabase.from("purchase_invoices").select("total")).data : [];
         const totalPurchases = (purchInv || []).reduce((s, r) => s + Number(String(r.total ?? "0").replace(/[^0-9.]/g, "")), 0);
 
         // Load customers count
-        const { data: custData } = await supabase.from("customers").select("id").eq("status", "نشط");
+        const custData = canViewCustomers ? (await supabase.from("customers").select("id").eq("status", "نشط")).data : [];
         const activeCustomers = custData?.length ?? 0;
 
         setKpis({
@@ -105,7 +110,7 @@ export default function Dashboard() {
 
         // Calculate alerts
         const pendingInvoices = invoiceRows.filter((i) => i.status === "مفتوحة" || i.status === "مدفوعة جزئياً").length;
-        const { data: unpaidPurch } = await supabase.from("purchase_invoices").select("id").eq("status", "مفتوحة");
+        const unpaidPurch = canViewPurchases ? (await supabase.from("purchase_invoices").select("id").eq("status", "مفتوحة")).data : [];
         const { data: pendingLeavesData } = await supabase.from("leave_requests").select("id").eq("status", "معلقة");
 
         setAlerts({
@@ -120,7 +125,7 @@ export default function Dashboard() {
       }
     };
     load();
-  }, []);
+  }, [canViewSales, canViewPurchases, canViewCustomers]);
 
   const kpiCards = [
     {
@@ -155,7 +160,7 @@ export default function Dashboard() {
       gradient: "from-amber-500 to-orange-600",
       shadow: "shadow-amber-500/25",
     },
-  ];
+  ].filter((_, index) => index === 0 || index === 2 ? canViewSales : index === 1 ? canViewPurchases : canViewCustomers);
 
   return (
     <Layout subMenu={null}>
@@ -214,7 +219,7 @@ export default function Dashboard() {
       {/* ── Main Content Grid ── */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Recent Invoices */}
-        <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
+        {canViewSales && <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
           <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-6 py-5 border-b border-border/40">
               <div className="flex items-center gap-3">
@@ -265,7 +270,7 @@ export default function Dashboard() {
               </table>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Sidebar cards */}
         <div className="flex flex-col gap-5 animate-fade-in-up" style={{ animationDelay: "300ms" }}>

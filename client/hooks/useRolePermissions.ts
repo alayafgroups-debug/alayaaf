@@ -23,7 +23,7 @@ export function useRolePermissions(): PermState {
       setState({ permissions: {}, ready: true });
       return;
     }
-    if (["مدير النظام", "مدير عام", "المدير العام"].includes(session.role)) {
+    if (session.accountType !== "special" && ["مدير النظام", "مدير عام", "المدير العام"].includes(session.role)) {
       setState({ permissions: { "*": "manage" }, ready: true });
       return;
     }

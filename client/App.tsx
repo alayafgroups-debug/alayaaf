@@ -113,6 +113,7 @@ import HRSuccessionDevelopmentPlans from "./pages/HRSuccessionDevelopmentPlans";
 import HRSuccessionTrackingReport from "./pages/HRSuccessionTrackingReport";
 import HRPermissionsRoles from "./pages/HRPermissionsRoles";
 import HRPermissionsAddRole from "./pages/HRPermissionsAddRole";
+import HRSpecialUser from "./pages/HRSpecialUser";
 import CRM from "./pages/CRM";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import ChartOfAccounts from "./pages/ChartOfAccounts";
@@ -261,6 +262,7 @@ const App = () => (
           <Route path="/hr/permissions/roles" element={<HRPermissionsRoles />} />
           <Route path="/hr/permissions/add-role" element={<HRPermissionsAddRole />} />
           <Route path="/hr/permissions/edit-role/:roleId" element={<HRPermissionsAddRole />} />
+          <Route path="/hr/permissions/special-user" element={<HRSpecialUser />} />
           <Route path="/hr/deductions-emails" element={<HRDeductionsEmails />} />
           <Route path="/hr/structure" element={<HRDashboard />} />
           <Route path="/hr/certificates" element={<HRCertificates />} />

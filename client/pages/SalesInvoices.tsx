@@ -34,6 +34,8 @@ import ZatcaQrCode from "@/components/ZatcaQrCode";
 import PartyRegistrationDialog from "@/components/PartyRegistrationDialog";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
+import { checkPerm } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 
 const statusColors: Record<string, string> = {
   "مدفوعة بالكامل": "bg-green-600 text-white",
@@ -384,6 +386,8 @@ type Invoice = {
   accountingStatus?: string;
   accountingJournalEntryId?: string;
   notes?: string;
+  issuedBy?: string;
+  issuerName?: string;
 };
 
 export default function SalesInvoices() {
@@ -394,6 +398,8 @@ export default function SalesInvoices() {
   >("list");
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const { permissions } = useRolePermissions();
+  const canViewIssuer = checkPerm(permissions, "audit.creator_columns");
 
   useEffect(() => {
     const loadInvoices = async () => {
@@ -441,13 +447,23 @@ export default function SalesInvoices() {
               localStorage.getItem(`sales-invoice-notes-${row.id}`) ??
               "",
           ),
+          issuedBy: String(row.issued_by ?? row.created_by ?? ""),
+          issuerName: "—",
         }));
+        if (canViewIssuer) {
+          const ids = Array.from(new Set(mapped.map((item) => item.issuedBy).filter(Boolean)));
+          if (ids.length > 0) {
+            const { data: labels } = await supabase.rpc("business_user_labels", { p_user_ids: ids });
+            const names = new Map<string, string>((labels ?? []).map((item) => [String(item.user_id), String(item.display_name)] as [string, string]));
+            mapped.forEach((item) => { item.issuerName = names.get(item.issuedBy ?? "") ?? "—"; });
+          }
+        }
         setInvoices(mapped);
       }
     };
 
     loadInvoices();
-  }, []);
+  }, [canViewIssuer]);
 
   const handleSaved = (invoice: Invoice) => {
     setInvoices((prev) => [invoice, ...prev]);
@@ -791,6 +807,7 @@ export default function SalesInvoices() {
             onDelete={handleDelete}
             onDownloadPdf={handleDownloadPdf}
             invoices={invoices}
+            canViewIssuer={canViewIssuer}
           />
         )}
         {view === "create" && (
@@ -834,6 +851,7 @@ function InvoicesList({
   onDelete,
   onDownloadPdf,
   invoices,
+  canViewIssuer,
 }: {
   onCreateClick: () => void;
   onView: (invoice: Invoice) => void;
@@ -843,8 +861,17 @@ function InvoicesList({
   onDelete: (invoiceId: string) => void;
   onDownloadPdf: (invoice: Invoice) => void;
   invoices: Invoice[];
+  canViewIssuer: boolean;
 }) {
   const { t, direction, formatDate, formatNumber } = useSalesInvoicesI18n();
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const filteredInvoices = invoices.filter((invoice) => {
+    const matchesSearch = !search.trim() || `${invoice.id} ${invoice.customer}`.toLowerCase().includes(search.trim().toLowerCase());
+    return matchesSearch && (!status || invoice.status === status) && (!fromDate || invoice.date >= fromDate) && (!toDate || invoice.date <= toDate);
+  });
   const notifyAction = (title: string, description?: string) => {
     toast({ title, description });
   };
@@ -861,22 +888,11 @@ function InvoicesList({
       />
 
       <FilterBar>
-        <FilterInput
-          label={t("البحث")}
-          placeholder={t("رقم الفاتورة، المرجع، اسم العميل...")}
-          colSpan={2}
-        />
-        <FilterSelect label={t("العميل")} options={[t("الكل")]} />
-        <FilterSelect
-          label={t("الحالة")}
-          options={[
-            t("الكل"),
-            t("مفتوحة"),
-            t("مدفوعة جزئياً"),
-            t("مدفوعة بالكامل"),
-          ]}
-        />
-        <FilterActions />
+        <div className="space-y-1.5 md:col-span-2"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("البحث")}</label><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("رقم الفاتورة، المرجع، اسم العميل...")} className="w-full rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5 text-sm" /></div>
+        <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("من تاريخ")}</label><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm" /></div>
+        <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("إلى تاريخ")}</label><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm" /></div>
+        <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("الحالة")}</label><select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm"><option value="">{t("الكل")}</option><option value="مفتوحة">{t("مفتوحة")}</option><option value="مدفوعة جزئياً">{t("مدفوعة جزئياً")}</option><option value="مدفوعة بالكامل">{t("مدفوعة بالكامل")}</option></select></div>
+        <FilterActions onReset={() => { setSearch(""); setStatus(""); setFromDate(""); setToDate(""); }} />
       </FilterBar>
 
       <DataTable
@@ -884,6 +900,7 @@ function InvoicesList({
           t("الإجراءات"),
           t("حالة ZATCA"),
           t("القيد المحاسبي"),
+          ...(canViewIssuer ? [t("مصدر الفاتورة")] : []),
           t("الحالة"),
           t("المبلغ المتبقي"),
           t("المبلغ المدفوع"),
@@ -895,7 +912,7 @@ function InvoicesList({
         ]}
         gradient="from-[#1e293b] to-[#334155]"
       >
-        {invoices.map((invoice, i) => (
+        {filteredInvoices.map((invoice, i) => (
           <tr
             key={invoice.id}
             className={cn(
@@ -904,7 +921,7 @@ function InvoicesList({
             )}
           >
             <td className="px-5 py-3.5 align-middle">
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex min-w-max items-center gap-1.5 whitespace-nowrap">
                 <ActionBtn
                   icon={Eye}
                   label={t("عرض")}
@@ -1005,6 +1022,7 @@ function InvoicesList({
                 )}
               </span>
             </td>
+            {canViewIssuer && <td className="px-5 py-3.5 align-middle text-start whitespace-nowrap">{invoice.issuerName || "—"}</td>}
             <td className="px-5 py-3.5 align-middle text-start">
               <span
                 className={cn(

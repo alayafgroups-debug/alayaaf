@@ -9,6 +9,7 @@ export type UserSession = {
   role: string;
   permissions: PermissionMap;
   portal: "business" | "employee";
+  accountType?: "employee" | "special";
 };
 
 export function readUserSession(): UserSession | null {
@@ -25,6 +26,7 @@ export function readUserSession(): UserSession | null {
       role: parsed.role ?? "",
       permissions: parsed.permissions ?? {},
       portal: parsed.portal,
+      accountType: parsed.accountType ?? "employee",
     };
   } catch {
     return null;

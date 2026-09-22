@@ -148,6 +148,28 @@ const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
       ],
     },
   ],
+  "البيانات التجارية": [
+    {
+      title: "صلاحيات عرض المبيعات والمشتريات",
+      permissions: [
+        { key: "sales.invoices.view_all", label: "عرض جميع فواتير المبيعات" },
+        { key: "sales.invoices.view_branch", label: "عرض فواتير مبيعات الفرع" },
+        { key: "purchases.invoices.view_all", label: "عرض جميع فواتير المشتريات" },
+        { key: "purchases.invoices.view_branch", label: "عرض فواتير مشتريات الفرع" },
+      ],
+    },
+    {
+      title: "صلاحيات عرض العملاء والموردين",
+      permissions: [
+        { key: "crm.customers.view_all", label: "عرض جميع العملاء" },
+        { key: "crm.customers.view_branch", label: "عرض عملاء الفرع" },
+        { key: "crm.vendors.view_all", label: "عرض جميع الموردين" },
+        { key: "crm.vendors.view_branch", label: "عرض موردي الفرع" },
+        { key: "audit.creator_columns", label: "عرض منشئ السجلات ومصدر الفواتير" },
+        { key: "users.special.manage", label: "إدارة المستخدمين الخاصين" },
+      ],
+    },
+  ],
   "قائمة الموظفين": [
     {
       title: "نطاق عرض الموظفين",

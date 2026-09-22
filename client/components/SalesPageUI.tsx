@@ -150,7 +150,7 @@ export function DataTable({
   return (
     <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: "200ms" }}>
       <div className="overflow-x-auto">
-        <table dir={direction} className="w-full min-w-[1100px] text-sm text-start">
+        <table dir={direction} className="w-full min-w-[1450px] text-sm text-start">
           <thead>
             <tr className={cn("bg-gradient-to-l text-white", direction === "ltr" && "bg-gradient-to-r", gradient)}>
               {headers.map((h) => (

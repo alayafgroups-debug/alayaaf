@@ -21,6 +21,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import PartyRegistrationDialog from "@/components/PartyRegistrationDialog";
+import { checkPerm } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import {
   PageHeader,
   FilterBar,
@@ -68,6 +70,8 @@ type PurchaseInvoice = {
   accountingStatus: string;
   accountingJournalEntryId: string;
   items: InvoiceItem[];
+  issuedBy?: string;
+  issuerName?: string;
 };
 
 const statusColors: Record<string, string> = {
@@ -106,6 +110,8 @@ function mapRow(row: Record<string, unknown>): PurchaseInvoice {
         : ((row.remaining as string) ?? "0.00"),
     accountingStatus: String(row.accounting_status ?? "unposted"),
     accountingJournalEntryId: String(row.accounting_journal_entry_id ?? ""),
+    issuedBy: String(row.issued_by ?? row.created_by ?? ""),
+    issuerName: "—",
     items: Array.isArray(row.items)
       ? (row.items as Record<string, unknown>[]).map((it) => ({
           id: Number(it.id) || 0,
@@ -134,6 +140,8 @@ export default function PurchaseInvoices() {
   const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
   const [selected, setSelected] = useState<PurchaseInvoice | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { permissions } = useRolePermissions();
+  const canViewIssuer = checkPerm(permissions, "audit.creator_columns");
 
   useEffect(() => {
     const load = async () => {
@@ -142,13 +150,24 @@ export default function PurchaseInvoices() {
           .from("purchase_invoices")
           .select("*")
           .order("date", { ascending: false });
-        if (!error && data) setInvoices(data.map(mapRow));
+        if (!error && data) {
+          const mapped = data.map(mapRow);
+          if (canViewIssuer) {
+            const ids = Array.from(new Set(mapped.map((item) => item.issuedBy).filter(Boolean)));
+            if (ids.length > 0) {
+              const { data: labels } = await supabase.rpc("business_user_labels", { p_user_ids: ids });
+              const names = new Map<string, string>((labels ?? []).map((item) => [String(item.user_id), String(item.display_name)] as [string, string]));
+              mapped.forEach((item) => { item.issuerName = names.get(item.issuedBy ?? "") ?? "—"; });
+            }
+          }
+          setInvoices(mapped);
+        }
       } catch (e) {
         console.warn("purchase_invoices table not found or network error:", e);
       }
     };
     load();
-  }, [refreshKey]);
+  }, [refreshKey, canViewIssuer]);
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
@@ -326,6 +345,7 @@ export default function PurchaseInvoices() {
         {view === "list" && (
           <InvoicesList
             invoices={invoices}
+            canViewIssuer={canViewIssuer}
             onCreateClick={() => setView("create")}
             onView={(inv) => {
               setSelected(inv);
@@ -402,6 +422,7 @@ export default function PurchaseInvoices() {
 /* ── List ── */
 function InvoicesList({
   invoices,
+  canViewIssuer,
   onCreateClick,
   onView,
   onEdit,
@@ -410,6 +431,7 @@ function InvoicesList({
   onPrintPdf,
 }: {
   invoices: PurchaseInvoice[];
+  canViewIssuer: boolean;
   onCreateClick: () => void;
   onView: (i: PurchaseInvoice) => void;
   onEdit: (i: PurchaseInvoice) => void;
@@ -425,6 +447,14 @@ function InvoicesList({
     });
   const displayDate = (value: string) =>
     value ? formatDate(value, { dateStyle: "medium" }) : "-";
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const filteredInvoices = invoices.filter((invoice) => {
+    const matchesSearch = !search.trim() || `${invoice.id} ${invoice.referenceNo} ${invoice.vendor}`.toLowerCase().includes(search.trim().toLowerCase());
+    return matchesSearch && (!status || invoice.status === status) && (!fromDate || invoice.date >= fromDate) && (!toDate || invoice.date <= toDate);
+  });
 
   return (
     <div className="space-y-6" dir={direction}>
@@ -438,16 +468,11 @@ function InvoicesList({
       />
 
       <FilterBar>
-        <FilterInput
-          placeholder={`${t("رقم الفاتورة")}، ${t("المرجع")}، ${t("المورد")}...`}
-        />
-        <FilterSelect label={t("المورد")}>
-          <option>{t("الكل")}</option>
-        </FilterSelect>
-        <FilterSelect label={t("الحالة")}>
-          <option>{t("الكل")}</option>
-        </FilterSelect>
-        <FilterActions onReset={() => {}} onSearch={() => {}} />
+        <div className="space-y-1.5 md:col-span-2"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("البحث")}</label><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`${t("رقم الفاتورة")}، ${t("المرجع")}، ${t("المورد")}...`} className="w-full rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5 text-sm" /></div>
+        <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("من تاريخ")}</label><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm" /></div>
+        <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("إلى تاريخ")}</label><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm" /></div>
+        <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("الحالة")}</label><select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm"><option value="">{t("الكل")}</option><option value="مفتوحة">{t("مفتوحة")}</option><option value="مدفوعة جزئياً">{t("مدفوعة جزئياً")}</option><option value="مدفوعة بالكامل">{t("مدفوعة بالكامل")}</option></select></div>
+        <FilterActions onReset={() => { setSearch(""); setStatus(""); setFromDate(""); setToDate(""); }} />
       </FilterBar>
 
       <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-x-auto">
@@ -465,6 +490,7 @@ function InvoicesList({
               <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">
                 {t("الحالة")}
               </th>
+              {canViewIssuer && <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">{t("مصدر الفاتورة")}</th>}
               <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">
                 {t("المتبقي")}
               </th>
@@ -489,13 +515,13 @@ function InvoicesList({
             </tr>
           </thead>
           <tbody>
-            {invoices.map((inv) => (
+            {filteredInvoices.map((inv) => (
               <tr
                 key={inv.id}
                 className="border-b border-border/30 hover:bg-muted/20 transition-colors"
               >
                 <td className="px-4 py-3 align-middle">
-                  <div className="flex items-center gap-1 flex-wrap">
+                  <div className="flex min-w-max items-center gap-1 whitespace-nowrap">
                     <ActionBtn
                       icon={Eye}
                       label={t("عرض")}
@@ -539,6 +565,7 @@ function InvoicesList({
                     {t(inv.status)}
                   </span>
                 </td>
+                {canViewIssuer && <td className="px-4 py-3 align-middle whitespace-nowrap">{inv.issuerName || "—"}</td>}
                 <td className="px-4 py-3 align-middle text-red-600 font-medium whitespace-nowrap">
                   {formatAmount(inv.remaining)} {t("ريال")}
                 </td>
@@ -565,10 +592,10 @@ function InvoicesList({
                 </td>
               </tr>
             ))}
-            {invoices.length === 0 && (
+            {filteredInvoices.length === 0 && (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={canViewIssuer ? 10 : 9}
                   className="px-4 py-12 text-center text-muted-foreground"
                 >
                   {t("لا توجد فواتير مشتريات")}

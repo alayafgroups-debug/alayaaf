@@ -40,21 +40,39 @@ export default function Login() {
         .eq("email", email.toLowerCase())
         .single();
 
+      let accountName = empData?.name ?? "";
+      let accountRole = empData?.employee_role ?? "";
+      let accountRoleId = "";
+      let accountEmpId = empData?.emp_id ?? "";
+      let accountType: "employee" | "special" = "employee";
+
       if (empError || !empData) {
-        toast.error("لم يتم العثور على بيانات الموظف");
-        await supabase.auth.signOut();
-        return;
+        const { data: systemUser, error: systemUserError } = await supabase
+          .from("system_users")
+          .select("full_name, role_id, status")
+          .eq("auth_user_id", authData.user.id)
+          .eq("status", "فعال")
+          .maybeSingle();
+        if (systemUserError || !systemUser) {
+          toast.error("لم يتم العثور على حساب نظام فعال");
+          await supabase.auth.signOut();
+          return;
+        }
+        accountName = String(systemUser.full_name);
+        accountRoleId = String(systemUser.role_id);
+        accountType = "special";
       }
 
       // Resolve role permissions from user_roles if available
       let resolvedPermissions: Record<string, boolean> = {};
-      if (empData.employee_role) {
-        const { data: roleData } = await supabase
+      if (accountRole || accountRoleId) {
+        let roleQuery = supabase
           .from("user_roles")
-          .select("permissions")
-          .eq("name_ar", empData.employee_role)
-          .eq("status", "فعال")
-          .maybeSingle();
+          .select("name_ar, permissions")
+          .eq("status", "فعال");
+        roleQuery = accountRoleId ? roleQuery.eq("id", accountRoleId) : roleQuery.eq("name_ar", accountRole);
+        const { data: roleData } = await roleQuery.maybeSingle();
+        if (!accountRole) accountRole = String(roleData?.name_ar ?? "");
         if (
           roleData?.permissions &&
           typeof roleData.permissions === "object" &&
@@ -67,15 +85,16 @@ export default function Login() {
       const session: UserSession = {
         id: authData.user.id,
         email: authData.user.email ?? email.toLowerCase(),
-        empId: empData.emp_id ?? "",
-        name: empData.name,
-        role: empData.employee_role ?? "",
+        empId: accountEmpId,
+        name: accountName,
+        role: accountRole,
         permissions: resolvedPermissions,
         portal: "business",
+        accountType,
       };
       localStorage.setItem("user_session", JSON.stringify(session));
 
-      toast.success(`مرحباً ${empData.name}`);
+      toast.success(`مرحباً ${accountName}`);
       setTimeout(() => navigate("/"), 400);
     } catch {
       toast.error("حدث خطأ ما");

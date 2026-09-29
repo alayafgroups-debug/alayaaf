@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
+import { SAUDI_VAT_NUMBER_PATTERN } from "@/lib/utils";
 
 type CreatedParty = { id: string; name: string; vatNumber: string; commercialRegistration: string; address: string };
 
@@ -23,7 +24,7 @@ export default function PartyRegistrationDialog({ kind, b2c = false, onCreated, 
 
   const save = async () => {
     if (!form.name.trim()) { setError(t("الاسم مطلوب")); return; }
-    if (!isIndividual && form.taxMode === "registered_sa" && !/^3\d{14}$/.test(form.vat)) { setError(t("أدخل رقم تسجيل ضريبي سعودي صحيح من 15 رقمًا")); return; }
+    if (!isIndividual && form.taxMode === "registered_sa" && !SAUDI_VAT_NUMBER_PATTERN.test(form.vat.trim())) { setError(t("أدخل رقم تسجيل ضريبي سعودي صحيح: 15 رقمًا يبدأ وينتهي بالرقم 3")); return; }
     setSaving(true); setError("");
     const address = [form.building, form.street, form.district, form.city, form.postal].filter(Boolean).join("، ");
     const { data, error: saveError } = await supabase.from(isCustomer ? "customers" : "vendors").insert({

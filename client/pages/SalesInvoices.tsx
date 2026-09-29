@@ -17,7 +17,12 @@ import {
   Loader2,
   Save,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  cn,
+  riyadhDateString,
+  SAUDI_STANDARD_VAT_RATE,
+  SAUDI_VAT_NUMBER_PATTERN,
+} from "@/lib/utils";
 import {
   PageHeader,
   FilterBar,
@@ -57,6 +62,63 @@ const accountingStatusLabels: Record<string, string> = {
   failed: "فشل الترحيل",
   reversed: "قيد معكوس",
 };
+
+type InvoiceLine = {
+  id: number;
+  description: string;
+  accountCode?: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  taxPercent: number;
+};
+
+// بنود الفاتورة كما هي محفوظة في sales_invoices.items (نفس القيم التي رُحّلت وأُرسلت إلى ZATCA)
+const normalizeInvoiceLines = (value: unknown): InvoiceLine[] =>
+  Array.isArray(value)
+    ? value.map((raw, index) => {
+        const item = (raw ?? {}) as Record<string, unknown>;
+        const rawTax = item.taxPercent;
+        const taxPercent = Number(rawTax);
+        return {
+          id: Number(item.id) || index + 1,
+          description: String(item.description ?? item.name ?? "").trim(),
+          accountCode:
+            item.accountCode != null ? String(item.accountCode) : undefined,
+          quantity: Number(item.quantity) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+          discount: Math.max(Number(item.discount) || 0, 0),
+          taxPercent:
+            rawTax === undefined ||
+            rawTax === null ||
+            rawTax === "" ||
+            !Number.isFinite(taxPercent)
+              ? SAUDI_STANDARD_VAT_RATE
+              : taxPercent,
+        };
+      })
+    : [];
+
+// المصدر الأساسي هو قاعدة البيانات؛ نسخة المتصفح القديمة احتياط فقط للفواتير التي لا تحمل بنودًا
+const getInvoiceLines = (invoice: Invoice): InvoiceLine[] => {
+  if (invoice.items?.length) return invoice.items;
+  try {
+    return normalizeInvoiceLines(
+      JSON.parse(
+        localStorage.getItem(`sales-invoice-items-${invoice.id}`) || "null",
+      ),
+    );
+  } catch {
+    return [];
+  }
+};
+
+// رقم بند جديد لا يتكرر حتى بعد حذف بنود سابقة
+const nextLineId = (lines: Array<{ id: number }>) =>
+  lines.reduce((max, line) => Math.max(max, Number(line.id) || 0), 0) + 1;
+
+// الحذف مسموح فقط لفاتورة غير مرحّلة ولم تلمس ZATCA إطلاقًا
+const ZATCA_UNTOUCHED_STATUSES = new Set(["", "pending"]);
 
 const invoiceTranslations: Record<string, string> = {
   "فواتير المبيعات": "Sales invoices",
@@ -175,6 +237,28 @@ const invoiceTranslations: Record<string, string> = {
   "يرجى المحاولة لاحقاً": "Please try again later",
   "تسديد الفاتورة": "Invoice payment",
   "حفظ السداد": "Save payment",
+  "بنود الفاتورة غير مكتملة": "Invoice lines are incomplete",
+  "كل بند يحتاج وصفًا وكمية وسعرًا أكبر من صفر، والخصم لا يتجاوز قيمة البند":
+    "Each line needs a description, quantity and price above zero, and the discount cannot exceed the line value",
+  "تاريخ الاستحقاق غير صحيح": "Invalid due date",
+  "تاريخ الاستحقاق يجب ألا يسبق تاريخ الفاتورة":
+    "The due date cannot be before the invoice date",
+  "الفاتورة المعيارية B2B تتطلب رقم ضريبة العميل: 15 رقمًا يبدأ وينتهي بالرقم 3":
+    "A standard B2B invoice requires the buyer VAT number: 15 digits starting and ending with 3",
+  "ستصدر فاتورة مبسطة": "A simplified invoice will be issued",
+  "العميل مسجل ضريبيًا لكن ينقصه السجل التجاري؛ أكمل بياناته في العملاء لإصدار فاتورة ضريبية يستطيع خصم ضريبتها":
+    "The customer is VAT-registered but has no commercial registration; complete their record to issue a standard tax invoice",
+  "الرقم الضريبي للعميل غير صالح (15 رقمًا يبدأ وينتهي بالرقم 3)؛ صحّحه في بيانات العملاء":
+    "The customer VAT number is invalid (15 digits starting and ending with 3); correct it in the customer record",
+  "هل تريد حذف الفاتورة غير المرحّلة؟ لا يمكن التراجع عن الحذف.":
+    "Delete this unposted invoice? This cannot be undone.",
+  "لم يتم حذف الفاتورة — تحقق من الصلاحيات أو من حالة الفاتورة":
+    "The invoice was not deleted — check permissions or the invoice status",
+  "نسبة ضريبة القيمة المضافة الأساسية": "Standard VAT rate",
+  "تاريخ الإصدار هو تاريخ اليوم ولا يمكن تغييره للفاتورة الإلكترونية":
+    "The issue date is today and cannot be changed for an e-invoice",
+  "اختياري — يظهر في الفاتورة المطبوعة (مثل رقم أمر الشراء أو المشروع)":
+    "Optional — printed on the invoice (e.g. purchase order or project)",
   "معلومات السداد": "Payment information",
   "طريقة السداد": "Payment method",
   "تحويل بنكي": "Bank transfer",
@@ -388,6 +472,9 @@ type Invoice = {
   notes?: string;
   issuedBy?: string;
   issuerName?: string;
+  items?: InvoiceLine[];
+  // الإجمالي الأصلي للفاتورة كما صدرت (قبل أي إشعار دائن/مدين) — يُستخدم في الطباعة
+  originalTotal?: string;
 };
 
 export default function SalesInvoices() {
@@ -423,6 +510,8 @@ export default function SalesInvoices() {
             row.adjusted_total != null
               ? `ريال ${Number(row.adjusted_total).toFixed(2)}`
               : (row.total ?? ""),
+          originalTotal: row.total ?? "",
+          items: normalizeInvoiceLines(row.items),
           paid: row.paid ?? "",
           remaining:
             row.adjusted_remaining != null
@@ -508,10 +597,24 @@ export default function SalesInvoices() {
   };
 
   const handleDelete = async (invoiceId: string) => {
-    const { error } = await supabase
+    if (
+      !window.confirm(
+        t("هل تريد حذف الفاتورة غير المرحّلة؟ لا يمكن التراجع عن الحذف."),
+      )
+    ) {
+      return;
+    }
+    const { data: deletedRows, error: deleteError } = await supabase
       .from("sales_invoices")
       .delete()
-      .eq("id", invoiceId);
+      .eq("id", invoiceId)
+      .select("id");
+    // الحذف الذي تمنعه الصلاحيات لا يُرجع خطأ بل صفرًا من الصفوف؛ نعامله كفشل
+    const error =
+      deleteError ??
+      (!deletedRows?.length
+        ? { message: t("لم يتم حذف الفاتورة — تحقق من الصلاحيات أو من حالة الفاتورة") }
+        : null);
 
     if (!error) {
       setInvoices((prev) => prev.filter((invoice) => invoice.id !== invoiceId));
@@ -544,20 +647,10 @@ export default function SalesInvoices() {
         .replace(/\"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-    const stored = localStorage.getItem(`sales-invoice-items-${invoice.id}`);
-    const parsedItems = stored
-      ? (JSON.parse(stored) as Array<{
-          id: number;
-          description: string;
-          quantity: number;
-          unitPrice: number;
-          discount: number;
-          taxPercent: number;
-        }>)
-      : [];
-
-    const fallbackTotal = parseCurrency(invoice.total);
-    const lineItems =
+    // البنود من قاعدة البيانات (نفس ما رُحّل وأُرسل إلى ZATCA)، والإجمالي الأصلي لا المعدَّل بالإشعارات
+    const parsedItems = getInvoiceLines(invoice);
+    const fallbackTotal = parseCurrency(invoice.originalTotal || invoice.total);
+    const lineItems: InvoiceLine[] =
       parsedItems.length > 0
         ? parsedItems
         : [
@@ -567,7 +660,7 @@ export default function SalesInvoices() {
               quantity: 1,
               unitPrice: fallbackTotal / 1.15,
               discount: 0,
-              taxPercent: 15,
+              taxPercent: SAUDI_STANDARD_VAT_RATE,
             },
           ];
 
@@ -584,6 +677,7 @@ export default function SalesInvoices() {
         description: item.description || "-",
         qty,
         price,
+        discount,
         taxable,
         vat,
         taxPercent,
@@ -609,6 +703,7 @@ export default function SalesInvoices() {
             <td>${escapeHtml(row.description)}</td>
             <td>${formatNumber(row.qty)}</td>
             <td>${formatNumber(row.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${formatNumber(row.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             <td>${formatNumber(row.taxable, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             <td>${formatNumber(row.vat, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<div class="vat-rate">${formatNumber(row.taxPercent)}%</div></td>
             <td>${formatNumber(row.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -725,6 +820,7 @@ export default function SalesInvoices() {
                     <th>${escapeHtml(t("الوصف"))}</th>
                     <th>${escapeHtml(t("الكمية"))}</th>
                     <th>${escapeHtml(t("السعر"))}</th>
+                    <th>${escapeHtml(t("الخصم"))}</th>
                     <th>${escapeHtml(t("المبلغ الخاضع للضريبة"))}</th>
                     <th>${escapeHtml(t("القيمة المضافة"))}</th>
                     <th>${escapeHtml(t("المجموع"))}</th>
@@ -963,12 +1059,16 @@ function InvoicesList({
                     onClick={() => onPostAccounting(invoice)}
                   />
                 )}
-                <ActionBtn
-                  icon={Trash2}
-                  label={t("حذف")}
-                  color="red"
-                  onClick={() => onDelete(invoice.id)}
-                />
+                {/* الفاتورة المرحّلة أو المرسلة إلى ZATCA لا تُحذف؛ تُعكس بإشعار دائن */}
+                {invoice.accountingStatus !== "posted" &&
+                  ZATCA_UNTOUCHED_STATUSES.has(invoice.zatcaStatus ?? "") && (
+                    <ActionBtn
+                      icon={Trash2}
+                      label={t("حذف")}
+                      color="red"
+                      onClick={() => onDelete(invoice.id)}
+                    />
+                  )}
                 <ActionBtn
                   icon={Download}
                   label="PDF"
@@ -1079,6 +1179,8 @@ function InvoiceDetails({
       description: string;
       qty: number;
       price: number;
+      discount: number;
+      taxPercent: number;
       taxable: number;
       vat: number;
       total: number;
@@ -1086,25 +1188,19 @@ function InvoiceDetails({
   >([]);
 
   useEffect(() => {
-    const stored = localStorage.getItem(`sales-invoice-items-${invoice.id}`);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Array<{
-        id: number;
-        description: string;
-        quantity: number;
-        unitPrice: number;
-        discount: number;
-        taxPercent: number;
-      }>;
-
-      const mapped = parsed.map((item) => {
+    // البنود من قاعدة البيانات أولًا، ثم نسخة المتصفح القديمة كاحتياط
+    const parsed = getInvoiceLines(invoice);
+    if (parsed.length > 0) {
+      const mapped = parsed.map((item, index) => {
         const lineSubtotal = item.quantity * item.unitPrice - item.discount;
         const vat = (lineSubtotal * item.taxPercent) / 100;
         return {
-          id: item.id,
+          id: index + 1,
           description: item.description || "-",
           qty: item.quantity,
           price: item.unitPrice,
+          discount: item.discount,
+          taxPercent: item.taxPercent,
           taxable: lineSubtotal,
           vat,
           total: lineSubtotal + vat,
@@ -1112,7 +1208,7 @@ function InvoiceDetails({
       });
       setLineItems(mapped);
     } else {
-      const totalValue = parseCurrency(invoice.total);
+      const totalValue = parseCurrency(invoice.originalTotal || invoice.total);
       const taxableValue = totalValue ? totalValue / 1.15 : 0;
       const vatValue = totalValue ? totalValue - taxableValue : 0;
       setLineItems([
@@ -1121,13 +1217,15 @@ function InvoiceDetails({
           description: "-",
           qty: 1,
           price: taxableValue,
+          discount: 0,
+          taxPercent: SAUDI_STANDARD_VAT_RATE,
           taxable: taxableValue,
           vat: vatValue,
           total: totalValue,
         },
       ]);
     }
-  }, [invoice.id, invoice.total]);
+  }, [invoice.id, invoice.total, invoice.originalTotal, invoice.items]);
 
   const totals = lineItems.reduce(
     (acc, item) => {
@@ -1319,6 +1417,9 @@ function InvoiceDetails({
                       {t("السعر")}
                     </th>
                     <th className="px-3 py-2 border border-slate-200">
+                      {t("الخصم")}
+                    </th>
+                    <th className="px-3 py-2 border border-slate-200">
                       {t("المبلغ الخاضع للضريبة")}
                     </th>
                     <th className="px-3 py-2 border border-slate-200">
@@ -1348,6 +1449,12 @@ function InvoiceDetails({
                         })}
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
+                        {formatNumber(item.discount, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="px-3 py-2 border border-slate-200">
                         {formatNumber(item.taxable, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
@@ -1359,7 +1466,7 @@ function InvoiceDetails({
                           maximumFractionDigits: 2,
                         })}
                         <div className="text-xs text-slate-500">
-                          {formatNumber(15)}%
+                          {formatNumber(item.taxPercent)}%
                         </div>
                       </td>
                       <td className="px-3 py-2 border border-slate-200">
@@ -1494,22 +1601,27 @@ function InvoiceEdit({
     invoice.customerAddress,
   );
   const [status, setStatus] = useState(invoice.status);
-  const [items, setItems] = useState(
-    () =>
-      JSON.parse(
-        localStorage.getItem(`sales-invoice-items-${invoice.id}`) || "null",
-      ) || [
-        {
-          id: 1,
-          description: "",
-          accountCode: "411",
-          quantity: 1,
-          unitPrice: 0,
-          discount: 0,
-          taxPercent: 15,
-        },
-      ],
-  );
+  const [items, setItems] = useState(() => {
+    // بنود الفاتورة من قاعدة البيانات، بأرقام بنود فريدة
+    const stored = getInvoiceLines(invoice);
+    return stored.length > 0
+      ? stored.map((item, index) => ({
+          ...item,
+          id: index + 1,
+          accountCode: item.accountCode || "411",
+        }))
+      : [
+          {
+            id: 1,
+            description: "",
+            accountCode: "411",
+            quantity: 1,
+            unitPrice: 0,
+            discount: 0,
+            taxPercent: SAUDI_STANDARD_VAT_RATE,
+          },
+        ];
+  });
   const [revenueAccounts, setRevenueAccounts] = useState<RevenueAccount[]>([]);
 
   useEffect(() => {
@@ -1552,13 +1664,13 @@ function InvoiceEdit({
     setItems((prev: typeof items) => [
       ...prev,
       {
-        id: prev.length + 1,
+        id: nextLineId(prev),
         description: "",
         accountCode: "411",
         quantity: 1,
         unitPrice: 0,
         discount: 0,
-        taxPercent: 15,
+        taxPercent: SAUDI_STANDARD_VAT_RATE,
       },
     ]);
   };
@@ -1593,7 +1705,38 @@ function InvoiceEdit({
     { subtotal: 0, discount: 0, tax: 0, total: 0 },
   );
 
+  const editInFlight = useRef(false);
   const handleSave = async () => {
+    if (editInFlight.current) return;
+    const invalidLine = items.find(
+      (item: (typeof items)[number]) =>
+        !String(item.description ?? "").trim() ||
+        !(Number(item.quantity) > 0) ||
+        !(Number(item.unitPrice) > 0) ||
+        Number(item.discount) < 0 ||
+        Number(item.discount) >
+          Number(item.quantity) * Number(item.unitPrice) ||
+        Number(item.taxPercent) !== SAUDI_STANDARD_VAT_RATE,
+    );
+    if (invalidLine || !(totals.total > 0)) {
+      toast({
+        title: t("بنود الفاتورة غير مكتملة"),
+        description: t(
+          "كل بند يحتاج وصفًا وكمية وسعرًا أكبر من صفر، والخصم لا يتجاوز قيمة البند",
+        ),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!dueDate || !invoiceDate || dueDate < invoiceDate) {
+      toast({
+        title: t("تاريخ الاستحقاق غير صحيح"),
+        description: t("تاريخ الاستحقاق يجب ألا يسبق تاريخ الفاتورة"),
+        variant: "destructive",
+      });
+      return;
+    }
+    editInFlight.current = true;
     const paidValue = parseCurrency(invoice.paid);
     const totalValue = totals.total;
     const remainingValue = Math.max(totalValue - paidValue, 0);
@@ -1627,6 +1770,8 @@ function InvoiceEdit({
       );
       onUpdated({
         ...invoice,
+        items: normalizeInvoiceLines(data.items ?? items),
+        originalTotal: data.total ?? `ريال ${totalValue.toFixed(2)}`,
         date: invoiceDate,
         dueDate,
         customer,
@@ -1642,6 +1787,7 @@ function InvoiceEdit({
       });
       onBack();
     } else {
+      editInFlight.current = false;
       toast({
         title: t("تعذر تحديث الفاتورة"),
         description: t("يرجى المحاولة لاحقاً"),
@@ -1807,15 +1953,14 @@ function InvoiceEdit({
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
+                        {/* النسبة ثابتة 15%: مسار ZATCA الحالي يدعم الفئة القياسية فقط */}
                         <input
-                          type="number"
-                          value={item.taxPercent}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              taxPercent: Number(event.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          type="text"
+                          value={`${SAUDI_STANDARD_VAT_RATE}%`}
+                          readOnly
+                          disabled
+                          title={t("نسبة ضريبة القيمة المضافة الأساسية")}
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-start outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1975,9 +2120,13 @@ function InvoicePayment({
   const [amount, setAmount] = useState(remainingValue.toFixed(2));
   const [paymentMethod, setPaymentMethod] = useState("تحويل بنكي");
   const [paymentReference, setPaymentReference] = useState("");
+  // يمنع تسجيل سند قبض مكرر عند النقر أكثر من مرة أثناء التنفيذ
+  const paymentInFlight = useRef(false);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const handleSave = async () => {
-    const paymentAmount = Math.max(Number(amount) || 0, 0);
+    if (paymentInFlight.current) return;
+    const paymentAmount = Math.round((Math.max(Number(amount) || 0, 0)) * 100) / 100;
     if (paymentAmount <= 0 || paymentAmount > remainingValue) {
       toast({
         title: t("مبلغ السداد غير صحيح"),
@@ -1987,12 +2136,25 @@ function InvoicePayment({
       return;
     }
 
-    const { data, error } = await supabase.rpc("record_customer_payment", {
-      p_invoice_id: invoice.id,
-      p_amount: paymentAmount,
-      p_payment_method: paymentMethod,
-      p_reference: paymentReference.trim() || null,
-    });
+    paymentInFlight.current = true;
+    setSavingPayment(true);
+    let data: any = null;
+    let error: any = null;
+    try {
+      const response = await supabase.rpc("record_customer_payment", {
+        p_invoice_id: invoice.id,
+        p_amount: paymentAmount,
+        p_payment_method: paymentMethod,
+        p_reference: paymentReference.trim() || null,
+      });
+      data = response.data;
+      error = response.error;
+    } catch (rpcError) {
+      error = rpcError;
+    } finally {
+      paymentInFlight.current = false;
+      setSavingPayment(false);
+    }
     const result = Array.isArray(data) ? data[0] : data;
 
     if (!error && result) {
@@ -2038,8 +2200,10 @@ function InvoicePayment({
         </div>
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
+          disabled={savingPayment}
+          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
+          {savingPayment && <Loader2 className="inline h-4 w-4 animate-spin me-1" />}
           {t("حفظ السداد")}
         </button>
       </div>
@@ -2141,9 +2305,6 @@ function InvoiceForm({
   const [customerId, setCustomerId] = useState("");
   const [customer, setCustomer] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
-  const [purchaseOrder, setPurchaseOrder] = useState("");
-  const [project, setProject] = useState("");
-  const [warehouse, setWarehouse] = useState("");
   const [notes, setNotes] = useState("");
   const [invoiceType, setInvoiceType] = useState<"standard" | "simplified">(
     "simplified",
@@ -2158,12 +2319,9 @@ function InvoiceForm({
 
   useEffect(() => {
     const loadDefaults = async () => {
-      const today = new Date();
-      const due = new Date();
-      due.setDate(today.getDate() + 30);
-
-      setInvoiceDate(today.toISOString().split("T")[0]);
-      setDueDate(due.toISOString().split("T")[0]);
+      // تاريخ الإصدار = اليوم بتوقيت الرياض (نفس التوقيت الذي تستخدمه دالة ZATCA لوقت الإصدار)
+      setInvoiceDate(riyadhDateString());
+      setDueDate(riyadhDateString(30));
 
       const { data: customerRows, error: customerError } = await supabase
         .from("customers")
@@ -2246,17 +2404,41 @@ function InvoiceForm({
     void loadDefaults();
   }, []);
 
+  const selectCustomerOption = (option: CustomerOption) => {
+    setCustomerId(option.id);
+    setCustomer(option.name);
+    setBuyerVat(option.vatNumber);
+    setBuyerCommercialRegistration(option.commercialRegistration);
+    setCustomerAddress(option.address);
+    const validVat = SAUDI_VAT_NUMBER_PATTERN.test(option.vatNumber);
+    const canIssueStandard =
+      validVat && /^\d{10,15}$/.test(option.commercialRegistration);
+    setInvoiceType(canIssueStandard ? "standard" : "simplified");
+    if (option.vatNumber && !canIssueStandard) {
+      // عميل لديه رقم ضريبي لكن بياناته لا تكفي لفاتورة ضريبية (B2B): ننبّه بدل التحويل الصامت
+      toast({
+        title: t("ستصدر فاتورة مبسطة"),
+        description: t(
+          validVat
+            ? "العميل مسجل ضريبيًا لكن ينقصه السجل التجاري؛ أكمل بياناته في العملاء لإصدار فاتورة ضريبية يستطيع خصم ضريبتها"
+            : "الرقم الضريبي للعميل غير صالح (15 رقمًا يبدأ وينتهي بالرقم 3)؛ صحّحه في بيانات العملاء",
+        ),
+      });
+    }
+    setCustomerSelectorOpen(false);
+  };
+
   const handleAddItem = () => {
     setItems((prev) => [
       ...prev,
       {
-        id: prev.length + 1,
+        id: nextLineId(prev),
         description: "",
         accountCode: "411",
         quantity: 1,
         unitPrice: 0,
         discount: 0,
-        taxPercent: 15,
+        taxPercent: SAUDI_STANDARD_VAT_RATE,
       },
     ]);
   };
@@ -2307,11 +2489,41 @@ function InvoiceForm({
       });
       return;
     }
-    if (invoiceType === "standard" && !/^3\d{14}$/.test(buyerVat)) {
+    // نفس شروط دالة ZATCA قبل الإرسال، حتى لا تُرحَّل فاتورة سترفضها الدالة لاحقًا
+    const invalidLine = items.find(
+      (item) =>
+        !String(item.description ?? "").trim() ||
+        !(Number(item.quantity) > 0) ||
+        !(Number(item.unitPrice) > 0) ||
+        Number(item.discount) < 0 ||
+        Number(item.discount) >
+          Number(item.quantity) * Number(item.unitPrice) ||
+        Number(item.taxPercent) !== SAUDI_STANDARD_VAT_RATE,
+    );
+    if (invalidLine || !(totals.total > 0)) {
+      toast({
+        title: t("بنود الفاتورة غير مكتملة"),
+        description: t(
+          "كل بند يحتاج وصفًا وكمية وسعرًا أكبر من صفر، والخصم لا يتجاوز قيمة البند",
+        ),
+        variant: "destructive",
+      });
+      return;
+    }
+    const issueDate = riyadhDateString();
+    if (!dueDate || dueDate < issueDate) {
+      toast({
+        title: t("تاريخ الاستحقاق غير صحيح"),
+        description: t("تاريخ الاستحقاق يجب ألا يسبق تاريخ الفاتورة"),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (invoiceType === "standard" && !SAUDI_VAT_NUMBER_PATTERN.test(buyerVat)) {
       toast({
         title: t("رقم ضريبي مطلوب"),
         description: t(
-          "الفاتورة المعيارية B2B تتطلب رقم ضريبة العميل المكون من 15 رقمًا",
+          "الفاتورة المعيارية B2B تتطلب رقم ضريبة العميل: 15 رقمًا يبدأ وينتهي بالرقم 3",
         ),
         variant: "destructive",
       });
@@ -2366,7 +2578,7 @@ function InvoiceForm({
       const totalValue = totals.total;
       const payload = {
         id: invoiceId,
-        date: invoiceDate,
+        date: issueDate,
         due_date: dueDate,
         customer_id: customerId || null,
         customer,
@@ -2416,18 +2628,7 @@ function InvoiceForm({
       }
 
       if (data) {
-        localStorage.setItem(
-          `sales-invoice-items-${data.id ?? attemptId}`,
-          JSON.stringify(items),
-        );
-        localStorage.setItem(
-          `sales-invoice-address-${data.id ?? attemptId}`,
-          customerAddress,
-        );
-        localStorage.setItem(
-          `sales-invoice-notes-${data.id ?? attemptId}`,
-          notes.trim(),
-        );
+        // البنود والعنوان والملاحظات محفوظة في قاعدة البيانات؛ لا حاجة لنسخة في المتصفح
         const savedInvoiceId = String(data.id ?? attemptId);
         const accounting = await supabase.rpc("post_sales_invoice_accounting", {
           p_invoice_id: savedInvoiceId,
@@ -2449,8 +2650,11 @@ function InvoiceForm({
           : { status: "pending", qrCodeData: "" };
         const savedInvoice: Invoice = {
           id: data.id ?? attemptId,
-          date: data.date ?? invoiceDate,
+          date: data.date ?? issueDate,
           dueDate: data.due_date ?? dueDate,
+          items: normalizeInvoiceLines(data.items ?? items),
+          originalTotal: data.total ?? payload.total,
+          notes: data.notes ?? payload.notes ?? "",
           customer: data.customer ?? customer,
           customerAddress: data.customer_address ?? customerAddress,
           invoiceType: data.invoice_type ?? invoiceType,
@@ -2598,7 +2802,7 @@ function InvoiceForm({
                     <button type="button" onClick={() => setCustomerSelectorOpen((open) => !open)} className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2 text-sm text-start">{customer || t("اختر العميل")}<span className="text-slate-400">⌄</span></button>
                     {customerSelectorOpen && <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                       <button type="button" onClick={() => { setCreatingCustomer(true); setCustomerSelectorOpen(false); }} className="mb-1 w-full rounded bg-emerald-600 px-3 py-2 text-start text-xs font-bold text-white hover:bg-emerald-700">{t("إنشاء عميل جديد +")}</button>
-                      {customerOptions.map((option) => <button type="button" key={option.id} onClick={() => { setCustomerId(option.id); setCustomer(option.name); setBuyerVat(option.vatNumber); setBuyerCommercialRegistration(option.commercialRegistration); setCustomerAddress(option.address); setInvoiceType(/^3\d{14}$/.test(option.vatNumber) && /^\d{10,15}$/.test(option.commercialRegistration) ? "standard" : "simplified"); setCustomerSelectorOpen(false); }} className="w-full rounded px-3 py-2 text-start text-sm text-slate-700 hover:bg-slate-100">{option.name}</button>)}
+                      {customerOptions.map((option) => <button type="button" key={option.id} onClick={() => selectCustomerOption(option)} className="w-full rounded px-3 py-2 text-start text-sm text-slate-700 hover:bg-slate-100">{option.name}</button>)}
                     </div>}
                   </div>
                 </div>
@@ -2676,11 +2880,14 @@ function InvoiceForm({
                   <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                     {t("تاريخ الفاتورة")}
                   </label>
+                  {/* تاريخ الإصدار = اليوم بتوقيت الرياض ولا يُعدَّل: الفاتورة الإلكترونية تصدر بتاريخ ووقت إرسالها */}
                   <input
                     type="date"
                     value={invoiceDate}
-                    onChange={(event) => setInvoiceDate(event.target.value)}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
+                    readOnly
+                    disabled
+                    title={t("تاريخ الإصدار هو تاريخ اليوم ولا يمكن تغييره للفاتورة الإلكترونية")}
+                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-muted/30"
                   />
                 </div>
 
@@ -2691,25 +2898,14 @@ function InvoiceForm({
                   <input
                     type="date"
                     value={dueDate}
+                    min={invoiceDate}
                     onChange={(event) => setDueDate(event.target.value)}
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
-                    {t("أمر الشراء")}
-                  </label>
-                  <input
-                    type="text"
-                    value={purchaseOrder}
-                    onChange={(event) => setPurchaseOrder(event.target.value)}
-                    placeholder={t("اختياري")}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
-                  />
-                </div>
-
-                <div className="space-y-1">
+                {/* أمر الشراء والمشروع والمستودع أُزيلت: لم تكن تُحفظ في أي مكان. تُضاف لاحقًا مع أعمدة في القاعدة */}
+                <div className="space-y-1 md:col-span-2">
                   <label className="text-[12px] font-semibold text-muted-foreground text-start block">
                     {t("الملاحظة")}
                   </label>
@@ -2717,33 +2913,7 @@ function InvoiceForm({
                     type="text"
                     value={notes}
                     onChange={(event) => setNotes(event.target.value)}
-                    placeholder={t("اختياري")}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
-                    {t("المشروع")}
-                  </label>
-                  <input
-                    type="text"
-                    value={project}
-                    onChange={(event) => setProject(event.target.value)}
-                    placeholder={t("اختياري")}
-                    className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
-                  />
-                </div>
-
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-[12px] font-semibold text-muted-foreground text-start block">
-                    {t("المستودع")}
-                  </label>
-                  <input
-                    type="text"
-                    value={warehouse}
-                    onChange={(event) => setWarehouse(event.target.value)}
-                    placeholder={t("اختياري")}
+                    placeholder={t("اختياري — يظهر في الفاتورة المطبوعة (مثل رقم أمر الشراء أو المشروع)")}
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start"
                   />
                 </div>
@@ -2838,15 +3008,14 @@ function InvoiceForm({
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
+                        {/* النسبة ثابتة 15%: مسار ZATCA الحالي يدعم الفئة القياسية فقط */}
                         <input
-                          type="number"
-                          value={item.taxPercent}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              taxPercent: Number(event.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          type="text"
+                          value={`${SAUDI_STANDARD_VAT_RATE}%`}
+                          readOnly
+                          disabled
+                          title={t("نسبة ضريبة القيمة المضافة الأساسية")}
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-start outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -2928,7 +3097,7 @@ function InvoiceForm({
                 })}
               </tbody>
             </table>
-            {creatingCustomer && <PartyRegistrationDialog kind="customer" b2c={invoiceType === "simplified"} onClose={() => setCreatingCustomer(false)} onCreated={(party) => { const option = { id: party.id, name: party.name, vatNumber: party.vatNumber, commercialRegistration: party.commercialRegistration, address: party.address }; setCustomerOptions((current) => [...current, option]); setCustomerId(party.id); setCustomer(party.name); setBuyerVat(party.vatNumber); setBuyerCommercialRegistration(party.commercialRegistration); setCustomerAddress(party.address); setInvoiceType(party.vatNumber && party.commercialRegistration ? "standard" : "simplified"); setCreatingCustomer(false); }} />}
+            {creatingCustomer && <PartyRegistrationDialog kind="customer" b2c={invoiceType === "simplified"} onClose={() => setCreatingCustomer(false)} onCreated={(party) => { const option = { id: party.id, name: party.name, vatNumber: party.vatNumber, commercialRegistration: party.commercialRegistration, address: party.address }; setCustomerOptions((current) => [...current, option]); selectCustomerOption(option); setCreatingCustomer(false); }} />}
 
             {/* Totals */}
             <div className="border-t border-slate-200 pt-4 flex justify-center mt-8">

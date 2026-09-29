@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
 import {
@@ -14,7 +14,7 @@ import {
   Download,
   Save,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, escapeHtml, riyadhDateString } from "@/lib/utils";
 import {
   PageHeader,
   FilterBar,
@@ -54,6 +54,13 @@ const statusColors: Record<string, string> = {
 };
 
 const salesOrderTranslations: Record<string, string> = {
+  "لا يمكن حفظ أمر بإجمالي صفر": "An order cannot be saved with a zero total",
+  "أضف بنود الأمر بأسعارها قبل الحفظ": "Add the order lines with prices before saving",
+  "بنود هذا الأمر غير محفوظة في هذا المتصفح؛ أعد إدخالها كاملة قبل الحفظ":
+    "This order's lines are not stored in this browser; re-enter all lines before saving",
+  "بيانات الأمر غير مكتملة": "Order data is incomplete",
+  "اختر العميل وأضف بندًا واحدًا على الأقل بقيمة أكبر من صفر":
+    "Select a customer and add at least one line with a value above zero",
   "أمر بيع": "Sales order",
   "تفاصيل أمر البيع": "Sales order details",
   "رقم الأمر": "Order number",
@@ -257,7 +264,7 @@ export default function SalesOrders() {
         const lineTotal = lineSubtotal + tax;
         return `<tr>
           <td>${formatNumber(item.id)}</td>
-          <td>${item.description || "-"}</td>
+          <td>${escapeHtml(item.description || "-")}</td>
           <td>${formatNumber(item.quantity)}</td>
           <td>${formatNumber(item.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           <td>${formatNumber(item.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -270,7 +277,7 @@ export default function SalesOrders() {
     printWindow.document.write(`
       <html dir="${direction}" lang="${locale}">
         <head>
-          <title>${t("أمر بيع")} ${order.id}</title>
+          <title>${t("أمر بيع")} ${escapeHtml(order.id)}</title>
           <meta charset="utf-8" />
           <style>
             body { font-family: 'Cairo', Arial, sans-serif; margin:0; padding:24px; color:#0f172a; }
@@ -290,11 +297,11 @@ export default function SalesOrders() {
           <div class="page">
             <div class="header">
               <div class="title">${t("تفاصيل أمر البيع")}</div>
-              <div>${t("رقم الأمر")}: ${order.id}</div>
+              <div>${t("رقم الأمر")}: ${escapeHtml(order.id)}</div>
             </div>
             <div class="meta">
-              <div class="card"><div class="label">${t("العميل")}</div><div class="value">${order.customer || "-"}</div></div>
-              <div class="card"><div class="label">${t("رقم عرض السعر")}</div><div class="value">${order.quotationId || "-"}</div></div>
+              <div class="card"><div class="label">${t("العميل")}</div><div class="value">${escapeHtml(order.customer || "-")}</div></div>
+              <div class="card"><div class="label">${t("رقم عرض السعر")}</div><div class="value">${escapeHtml(order.quotationId || "-")}</div></div>
               <div class="card"><div class="label">${t("تاريخ الأمر")}</div><div class="value">${order.date ? formatDate(order.date) : "-"}</div></div>
               <div class="card"><div class="label">${t("تاريخ التسليم")}</div><div class="value">${order.deliveryDate ? formatDate(order.deliveryDate) : "-"}</div></div>
               <div class="card"><div class="label">${t("الحالة")}</div><div class="value">${getStatusLabel(order.status, t)}</div></div>
@@ -365,6 +372,25 @@ function OrdersList({
   orders: SalesOrder[];
 }) {
   const { t, direction, formatDate, formatNumber } = useSalesOrdersI18n();
+  // فلترة فعلية بدل حقول البحث التي لم تكن موصولة
+  const [search, setSearch] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("الكل");
+  const [statusFilter, setStatusFilter] = useState("");
+  const customerNames = useMemo(
+    () => Array.from(new Set(orders.map((order) => order.customer).filter(Boolean))),
+    [orders],
+  );
+  const filteredOrders = orders.filter((order) => {
+    const term = search.trim().toLowerCase();
+    return (
+      (!term ||
+        `${order.id} ${order.customer} ${order.quotationId ?? ""}`
+          .toLowerCase()
+          .includes(term)) &&
+      (customerFilter === "الكل" || order.customer === customerFilter) &&
+      (!statusFilter || order.status === statusFilter)
+    );
+  });
 
   return (
     <div className="space-y-6" dir={direction}>
@@ -378,17 +404,21 @@ function OrdersList({
       />
 
       <FilterBar>
-        <FilterInput label={t("البحث")} placeholder={t("رقم الأمر، المرجع، اسم العميل...")} colSpan={2} />
-        <FilterSelect label={t("العميل")} options={[t("الكل")]} />
-        <FilterSelect label={t("الحالة")} options={[t("الكل"), t("مؤكد"), t("تم التسليم")]} />
-        <FilterActions />
+        <FilterInput label={t("البحث")} placeholder={t("رقم الأمر، المرجع، اسم العميل...")} colSpan={2} value={search} onChange={setSearch} />
+        <FilterSelect label={t("العميل")} options={["الكل", ...customerNames]} value={customerFilter} onChange={setCustomerFilter} />
+        <FilterSelect label={t("الحالة")} value={statusFilter} onChange={setStatusFilter}>
+          <option value="">الكل</option>
+          <option value="confirmed">مؤكد</option>
+          <option value="delivered">تم التسليم</option>
+        </FilterSelect>
+        <FilterActions onReset={() => { setSearch(""); setCustomerFilter("الكل"); setStatusFilter(""); }} />
       </FilterBar>
 
       <DataTable
         headers={["الإجراءات", "الحالة", "رقم عرض السعر", "الإجمالي", "العميل", "تاريخ التسليم", "تاريخ الأمر", "رقم الأمر"].map(t)}
         gradient="from-[#1e293b] to-[#334155]"
       >
-        {orders.map((order, i) => (
+        {filteredOrders.map((order, i) => (
           <tr key={order.id} className={cn("hover:bg-muted/30 transition-colors", i % 2 !== 0 && "bg-muted/10")}>
             <td className="px-5 py-3.5 align-middle">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -614,8 +644,9 @@ function OrderEdit({
   const [quotationId, setQuotationId] = useState(order.quotationId || "");
   const [warehouse, setWarehouse] = useState("");
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState([
-    {
+  // تحميل بنود الأمر المحفوظة بدل بند فارغ (كان الحفظ يمسح البنود ويجعل الإجمالي صفرًا)
+  const [items, setItems] = useState(() => {
+    const emptyLine = {
       id: 1,
       description: "",
       unitPriceText: "",
@@ -623,14 +654,37 @@ function OrderEdit({
       price: 0,
       discount: 0,
       taxPercent: 15,
-    },
-  ]);
+    };
+    try {
+      const stored = JSON.parse(
+        localStorage.getItem(`sales-order-items-${order.id}`) || "null",
+      );
+      if (Array.isArray(stored) && stored.length > 0) {
+        return stored.map((line: Record<string, unknown>, index: number) => ({
+          id: index + 1,
+          description: String(line.description ?? ""),
+          unitPriceText: String(line.unitPriceText ?? ""),
+          quantity: Number(line.quantity) || 0,
+          price: Number(line.price) || 0,
+          discount: Number(line.discount) || 0,
+          taxPercent: Number(line.taxPercent ?? 15) || 0,
+        }));
+      }
+    } catch {
+      // بيانات متصفح تالفة: نبدأ ببند فارغ ونمنع الحفظ بإجمالي صفر أدناه
+    }
+    return [emptyLine];
+  });
+  const hasStoredLines = Boolean(
+    localStorage.getItem(`sales-order-items-${order.id}`),
+  );
 
   const handleAddItem = () => {
     setItems((prev) => [
       ...prev,
       {
-        id: prev.length + 1,
+        // رقم بند لا يتكرر بعد حذف بنود سابقة
+        id: prev.reduce((max, line) => Math.max(max, Number(line.id) || 0), 0) + 1,
         description: "",
         unitPriceText: "",
         quantity: 1,
@@ -667,6 +721,17 @@ function OrderEdit({
   );
 
   const handleSave = async () => {
+    // حماية مؤقتة حتى تُحفظ بنود الأوامر في قاعدة البيانات: لا نسمح بتصفير إجمالي أمر موجود
+    if (!(totals.total > 0)) {
+      toast({
+        title: t("لا يمكن حفظ أمر بإجمالي صفر"),
+        description: hasStoredLines
+          ? t("أضف بنود الأمر بأسعارها قبل الحفظ")
+          : t("بنود هذا الأمر غير محفوظة في هذا المتصفح؛ أعد إدخالها كاملة قبل الحفظ"),
+        variant: "destructive",
+      });
+      return;
+    }
     const payload = {
       date: orderDate,
       delivery_date: deliveryDate,
@@ -918,10 +983,11 @@ function OrderForm({
   const { t, direction, formatNumber } = useSalesOrdersI18n();
   const [quotationId, setQuotationId] = useState("");
   const [warehouse, setWarehouse] = useState("");
-  const [deliveryDate, setDeliveryDate] = useState("2026-03-12");
-  const [orderDate, setOrderDate] = useState("2026-03-05");
+  const [deliveryDate, setDeliveryDate] = useState(() => riyadhDateString(7));
+  const [orderDate, setOrderDate] = useState(() => riyadhDateString());
   const [customer, setCustomer] = useState("");
   const [notes, setNotes] = useState("");
+  const saveInFlight = useRef(false);
   const [items, setItems] = useState([
     {
       id: 1,
@@ -938,7 +1004,8 @@ function OrderForm({
     setItems((prev) => [
       ...prev,
       {
-        id: prev.length + 1,
+        // رقم بند لا يتكرر بعد حذف بنود سابقة
+        id: prev.reduce((max, line) => Math.max(max, Number(line.id) || 0), 0) + 1,
         description: "",
         unitPriceText: "",
         quantity: 1,
@@ -975,42 +1042,57 @@ function OrderForm({
   );
 
   const handleSave = async () => {
-    const orderId = `SO-${Date.now()}`;
-    const payload = {
-      id: orderId,
-      date: orderDate,
-      delivery_date: deliveryDate,
-      customer,
-      total: `ريال ${totals.total.toFixed(2)}`,
-      quotation_id: quotationId,
-      status: "confirmed",
-    };
-
-    const { data, error } = await supabase
-      .from("sales_orders")
-      .insert(payload)
-      .select()
-      .single();
-
-    if (!error && data) {
-      localStorage.setItem(
-        `sales-order-items-${data.id ?? orderId}`,
-        JSON.stringify(items)
-      );
-      onSaved({
-        id: data.id ?? orderId,
-        date: data.date ?? orderDate,
-        deliveryDate: data.delivery_date ?? deliveryDate,
-        customer: data.customer ?? customer,
-        total: data.total ?? payload.total,
-        quotationId: data.quotation_id ?? quotationId,
-        status: data.status ?? "confirmed",
-        statusColor: statusColors[data.status ?? "confirmed"] ?? "bg-slate-600 text-white",
+    // منع إنشاء أمرين عند النقر المزدوج، ومنع حفظ أمر بلا عميل أو بإجمالي صفر
+    if (saveInFlight.current) return;
+    if (!customer.trim() || !(totals.total > 0)) {
+      toast({
+        title: t("بيانات الأمر غير مكتملة"),
+        description: t("اختر العميل وأضف بندًا واحدًا على الأقل بقيمة أكبر من صفر"),
+        variant: "destructive",
       });
-      toast({ title: t("تم حفظ أمر البيع"), description: `${t("الأمر")}: ${data.id ?? orderId}` });
-      onBack();
-    } else {
-      toast({ title: t("تعذر حفظ أمر البيع"), description: t("يرجى المحاولة لاحقاً") });
+      return;
+    }
+    saveInFlight.current = true;
+    try {
+      const orderId = `SO-${Date.now()}`;
+      const payload = {
+        id: orderId,
+        date: orderDate,
+        delivery_date: deliveryDate,
+        customer,
+        total: `ريال ${totals.total.toFixed(2)}`,
+        quotation_id: quotationId,
+        status: "confirmed",
+      };
+
+      const { data, error } = await supabase
+        .from("sales_orders")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (!error && data) {
+        localStorage.setItem(
+          `sales-order-items-${data.id ?? orderId}`,
+          JSON.stringify(items)
+        );
+        onSaved({
+          id: data.id ?? orderId,
+          date: data.date ?? orderDate,
+          deliveryDate: data.delivery_date ?? deliveryDate,
+          customer: data.customer ?? customer,
+          total: data.total ?? payload.total,
+          quotationId: data.quotation_id ?? quotationId,
+          status: data.status ?? "confirmed",
+          statusColor: statusColors[data.status ?? "confirmed"] ?? "bg-slate-600 text-white",
+        });
+        toast({ title: t("تم حفظ أمر البيع"), description: `${t("الأمر")}: ${data.id ?? orderId}` });
+        onBack();
+      } else {
+        toast({ title: t("تعذر حفظ أمر البيع"), description: t("يرجى المحاولة لاحقاً") });
+      }
+    } finally {
+      saveInFlight.current = false;
     }
   };
 

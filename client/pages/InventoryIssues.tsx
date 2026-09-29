@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Edit3, Loader2, PackageMinus, Plus, Save, Send, Trash2, X } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { riyadhDateString } from "@/lib/utils";
 
 type Product = { id: string; sku: string; name: string; unit: string };
 type Warehouse = { id: string; code: string; name: string };
@@ -28,7 +30,8 @@ type InventoryIssue = {
   lines: IssueLine[];
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// تاريخ اليوم بتوقيت الرياض (toISOString يعطي تاريخ UTC)
+const today = () => riyadhDateString();
 const newLine = (id = Date.now()): IssueLine => ({ id, productId: "", quantity: "1", unitCost: "" });
 const numberValue = (value: string) => Number(value) || 0;
 
@@ -45,7 +48,13 @@ export default function InventoryIssues() {
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null | undefined>(undefined);
   const [date, setDate] = useState(today());
-  const [issueType, setIssueType] = useState<"issue" | "delivery">("issue");
+  // عند الدخول من "إشعار تسليم" (المبيعات أو المخزون) يكون النوع الافتراضي إشعار تسليم لعميل
+  const defaultIssueType: "issue" | "delivery" = useLocation().pathname.includes("delivery-note") ? "delivery" : "issue";
+  const [issueType, setIssueType] = useState<"issue" | "delivery">(defaultIssueType);
+  // نفس الصفحة تخدم مسارين؛ عند التنقل بينهما دون إعادة تحميل نحدّث النوع الافتراضي إن لم يكن هناك مستند مفتوح
+  useEffect(() => {
+    if (editingId === undefined) setIssueType(defaultIssueType);
+  }, [defaultIssueType]); // eslint-disable-line react-hooks/exhaustive-deps
   const [warehouseId, setWarehouseId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [salesInvoiceId, setSalesInvoiceId] = useState("");
@@ -101,7 +110,7 @@ export default function InventoryIssues() {
   const reset = () => {
     setEditingId(undefined);
     setDate(today());
-    setIssueType("issue");
+    setIssueType(defaultIssueType);
     setWarehouseId("");
     setCustomerId("");
     setSalesInvoiceId("");

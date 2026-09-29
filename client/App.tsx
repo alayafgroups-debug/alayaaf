@@ -13,7 +13,6 @@ import Quotations from "./pages/Quotations";
 import SalesOrders from "./pages/SalesOrders";
 import SalesInvoices from "./pages/SalesInvoices";
 import SalesCreditNote from "./pages/SalesCreditNote";
-import SalesDeliveryNote from "./pages/SalesDeliveryNote";
 import Purchases from "./pages/Purchases";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import PurchaseInvoices from "./pages/PurchaseInvoices";
@@ -168,7 +167,8 @@ const App = () => (
           <Route path="/sales/orders" element={<SalesOrders />} />
           <Route path="/sales/invoices" element={<SalesInvoices />} />
           <Route path="/sales/credit-note" element={<SalesCreditNote />} />
-          <Route path="/sales/delivery-note" element={<SalesDeliveryNote />} />
+          {/* إشعار التسليم الفعلي هو سند الصرف في المخزون (يخصم الكمية ويقيّد التكلفة)؛ الصفحة القديمة كانت تحفظ في المتصفح فقط */}
+          <Route path="/sales/delivery-note" element={<Navigate to="/inventory/delivery-notes" replace />} />
           <Route path="/purchases" element={<Navigate to="/purchases/invoices" replace />} />
           <Route path="/purchases/orders" element={<PurchaseOrders />} />
           <Route path="/purchases/invoices" element={<PurchaseInvoices />} />

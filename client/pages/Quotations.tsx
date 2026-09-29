@@ -13,7 +13,7 @@ import {
   Loader2,
   Send,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, escapeHtml, riyadhDateString } from "@/lib/utils";
 import {
   PageHeader,
   FilterBar,
@@ -223,8 +223,8 @@ export default function Quotations() {
         const lineTotal = subtotal + taxVal;
         return `
           <tr>
-            <td>${item.itemLabel || "-"}</td>
-            <td>${item.description || "-"}</td>
+            <td>${escapeHtml(item.itemLabel || "-")}</td>
+            <td>${escapeHtml(item.description || "-")}</td>
             <td>${formatNumber(item.unitPrice, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             <td>${formatNumber(item.quantity)}</td>
             <td>${formatNumber(item.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -241,7 +241,7 @@ export default function Quotations() {
       <html dir="${direction}" lang="${locale}">
         <head>
           <meta charset="utf-8" />
-          <title>${t("عرض سعر")} ${quotation.id}</title>
+          <title>${t("عرض سعر")} ${escapeHtml(quotation.id)}</title>
           <style>
             @page{size:A4 landscape;margin:10mm}
             *{box-sizing:border-box}
@@ -268,7 +268,7 @@ export default function Quotations() {
             <div class="top">
               <div>
                 <h1 class="title">${t("عرض سعر")}</h1>
-                <div class="meta">${t("الرقم")} ${quotation.id}<br/>${t("التاريخ")} ${quotation.date ? formatDate(quotation.date) : "-"}</div>
+                <div class="meta">${t("الرقم")} ${escapeHtml(quotation.id)}<br/>${t("التاريخ")} ${quotation.date ? formatDate(quotation.date) : "-"}</div>
               </div>
               <div class="meta" style="text-align:center">
                 <div style="font-size:28px;font-weight:700">${t(COMPANY_INFO.nameAr)}</div>
@@ -283,9 +283,9 @@ export default function Quotations() {
             </div>
 
             <div class="customer">
-              ${t("العميل")}: ${quotation.customer || "-"}<br/>
-              ${t("الرقم الضريبي")}: ${quotation.customerVat || "-"}<br/>
-              ${t("العنوان")}: ${quotation.customerAddress || "-"}
+              ${t("العميل")}: ${escapeHtml(quotation.customer || "-")}<br/>
+              ${t("الرقم الضريبي")}: ${escapeHtml(quotation.customerVat || "-")}<br/>
+              ${t("العنوان")}: ${escapeHtml(quotation.customerAddress || "-")}
             </div>
 
             <table>
@@ -414,6 +414,25 @@ function QuotationsList({
   onDownloadPdf: (quotation: QuotationRow) => void;
 }) {
   const { t, direction, formatDate, formatNumber } = useI18n();
+  // فلترة فعلية بدل حقول البحث التي لم تكن موصولة
+  const [search, setSearch] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("الكل");
+  const [statusFilter, setStatusFilter] = useState("الكل");
+  const customerNames = useMemo(
+    () =>
+      Array.from(
+        new Set(quotations.map((row) => row.customer).filter(Boolean)),
+      ),
+    [quotations],
+  );
+  const filteredQuotations = quotations.filter((row) => {
+    const term = search.trim().toLowerCase();
+    return (
+      (!term || `${row.id} ${row.customer}`.toLowerCase().includes(term)) &&
+      (customerFilter === "الكل" || row.customer === customerFilter) &&
+      (statusFilter === "الكل" || row.status === statusFilter)
+    );
+  });
 
   return (
     <div className="space-y-6" dir={direction}>
@@ -431,13 +450,28 @@ function QuotationsList({
           label={t("البحث")}
           placeholder={t("رقم العرض، العميل...")}
           colSpan={2}
+          value={search}
+          onChange={setSearch}
         />
-        <FilterSelect label={t("العميل")} options={[t("الكل")]} />
+        <FilterSelect
+          label={t("العميل")}
+          options={["الكل", ...customerNames]}
+          value={customerFilter}
+          onChange={setCustomerFilter}
+        />
         <FilterSelect
           label={t("الحالة")}
-          options={[t("الكل"), t("مفتوح"), t("مرسل"), t("مغلق")]}
+          options={["الكل", "مفتوح", "مرسل", "مغلق"]}
+          value={statusFilter}
+          onChange={setStatusFilter}
         />
-        <FilterActions />
+        <FilterActions
+          onReset={() => {
+            setSearch("");
+            setCustomerFilter("الكل");
+            setStatusFilter("الكل");
+          }}
+        />
       </FilterBar>
 
       <DataTable
@@ -452,7 +486,7 @@ function QuotationsList({
         ]}
         gradient="from-[#1e293b] to-[#334155]"
       >
-        {quotations.map((row, idx) => (
+        {filteredQuotations.map((row, idx) => (
           <tr
             key={row.id}
             className={cn("hover:bg-muted/30", idx % 2 !== 0 && "bg-muted/10")}
@@ -555,13 +589,9 @@ function QuotationEditor({
 
   useEffect(() => {
     const loadDefaults = async () => {
-      const today = new Date();
-      const afterMonth = new Date(today);
-      afterMonth.setDate(today.getDate() + 30);
-
       if (!initialData) {
-        setDate(today.toISOString().split("T")[0]);
-        setValidity(afterMonth.toISOString().split("T")[0]);
+        setDate(riyadhDateString());
+        setValidity(riyadhDateString(30));
 
         const { data } = await supabase
           .from("sales_quotations")
@@ -643,14 +673,33 @@ function QuotationEditor({
         ? supabase.from("sales_quotations").insert([payload]).select().single()
         : supabase
             .from("sales_quotations")
-            .update(payload)
-            .eq("id", quotationId)
+            .update({ ...payload, id: initialData?.id ?? quotationId })
+            // التحديث بالرقم الأصلي للعرض، لا بالرقم المعروض (كان تغيير الرقم يكتب فوق عرض آخر)
+            .eq("id", initialData?.id ?? quotationId)
             .select()
             .single();
 
     const { data, error } = await query;
     setSaving(false);
 
+    if (error?.code === "23505" && mode === "create") {
+      // رقم العرض استُخدم من مستخدم آخر: نجلب الرقم التالي المتاح ليحفظ المستخدم مرة أخرى
+      const { data: latest } = await supabase
+        .from("sales_quotations")
+        .select("id")
+        .like("id", "QUO-%")
+        .order("id", { ascending: false })
+        .limit(1);
+      const latestNumber = Number(
+        String(latest?.[0]?.id ?? quotationId).split("-")[1] ?? "99",
+      );
+      setQuotationId(`QUO-${String(latestNumber + 1).padStart(6, "0")}`);
+      toast({
+        title: t("رقم العرض مستخدم"),
+        description: t("تم تحديث رقم العرض تلقائيًا، اضغط حفظ مرة أخرى"),
+      });
+      return;
+    }
     if (error || !data) {
       toast({
         title: t("تعذر حفظ عرض السعر"),
@@ -727,7 +776,8 @@ function QuotationEditor({
             <Field label={t("رقم عرض السعر")}>
               <input
                 value={quotationId}
-                onChange={(e) => setQuotationId(e.target.value)}
+                /* الرقم يُولَّد تلقائيًا ولا يُعدَّل */
+                readOnly
                 className={INPUT_CLASS}
               />
             </Field>

@@ -72,7 +72,7 @@ const navSubMenus: Record<
     { label: "أوامر البيع", href: "/sales/orders" },
     { label: "فواتير المبيعات", href: "/sales/invoices" },
     { label: "إشعار دائن", href: "/sales/credit-note" },
-    { label: "إشعار تسليم", href: "/sales/delivery-note" },
+    { label: "إشعار تسليم", href: "/inventory/delivery-notes" },
     { label: "سندات القبض والصرف", href: "/expenses/petty-cash" },
   ],
   "/purchases": [

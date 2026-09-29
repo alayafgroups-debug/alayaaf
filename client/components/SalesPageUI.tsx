@@ -76,7 +76,8 @@ export function FilterBar({ children }: { children: ReactNode }) {
   );
 }
 
-export function FilterInput({ label, placeholder, colSpan }: { label?: string; placeholder: string; colSpan?: number }) {
+// value/onChange اختياريان: الصفحات القديمة تبقى كما هي، والصفحات التي تمررهما تحصل على فلترة فعلية
+export function FilterInput({ label, placeholder, colSpan, value, onChange }: { label?: string; placeholder: string; colSpan?: number; value?: string; onChange?: (value: string) => void }) {
   const { t, direction } = useI18n();
 
   return (
@@ -86,6 +87,7 @@ export function FilterInput({ label, placeholder, colSpan }: { label?: string; p
         <input
           type="text"
           placeholder={t(placeholder)}
+          {...(onChange ? { value: value ?? "", onChange: (event: { target: { value: string } }) => onChange(event.target.value) } : {})}
           className="w-full px-4 py-2.5 ps-10 border border-border/60 rounded-xl bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm text-start transition-all"
           dir={direction}
         />
@@ -95,13 +97,13 @@ export function FilterInput({ label, placeholder, colSpan }: { label?: string; p
   );
 }
 
-export function FilterSelect({ label, options, children }: { label: string; options?: string[]; children?: ReactNode }) {
+export function FilterSelect({ label, options, children, value, onChange }: { label: string; options?: string[]; children?: ReactNode; value?: string; onChange?: (value: string) => void }) {
   const { t, direction } = useI18n();
 
   return (
     <div className="space-y-1.5">
       <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t(label)}</label>
-      <select dir={direction} className="w-full px-4 py-2.5 border border-border/60 rounded-xl bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm text-start appearance-none text-foreground transition-all">
+      <select dir={direction} {...(onChange ? { value: value ?? "", onChange: (event: { target: { value: string } }) => onChange(event.target.value) } : {})} className="w-full px-4 py-2.5 border border-border/60 rounded-xl bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm text-start appearance-none text-foreground transition-all">
         {options
           ? options.map((opt) => <option key={opt} value={opt}>{t(opt)}</option>)
           : Children.map(children, (child) =>

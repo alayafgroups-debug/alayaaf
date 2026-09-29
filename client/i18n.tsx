@@ -18,6 +18,9 @@ type I18nContextValue = {
 };
 
 const translations: Record<string, string> = {
+  "رقم العرض مستخدم": "Quotation number already used",
+  "تم تحديث رقم العرض تلقائيًا، اضغط حفظ مرة أخرى":
+    "The quotation number was updated automatically; press save again",
   "نظام إدارة العياف": "Idarat Al Ayaf Management System",
   "شركة إدارة العياف للمقاولات": "Company Idarat Al Ayaf For Contracting",
   "القائمة الرئيسية": "Main menu",

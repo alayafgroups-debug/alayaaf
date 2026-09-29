@@ -1,4 +1,5 @@
 import PlaceholderModule from "@/components/PlaceholderModule";
+import { SAUDI_VAT_NUMBER_PATTERN } from "@/lib/utils";
 import Layout from "@/components/Layout";
 import { Plus, Search, Filter, Eye, Pencil, Trash2, Save, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
@@ -133,8 +134,8 @@ const crmTranslations: Record<string, string> = {
   "تنبيه": "Alert",
   "أدخل الاسم": "Enter a name",
   "رقم ضريبي غير صالح": "Invalid VAT number",
-  "الرقم الضريبي السعودي يجب أن يبدأ بـ3 ويتكون من 15 رقمًا":
-    "The Saudi VAT number must start with 3 and contain 15 digits",
+  "الرقم الضريبي السعودي 15 رقمًا يبدأ وينتهي بالرقم 3":
+    "The Saudi VAT number has 15 digits and starts and ends with 3",
   "سجل تجاري غير صالح": "Invalid commercial registration",
   "السجل التجاري يجب أن يتكون من 10 إلى 15 رقمًا":
     "The commercial registration must contain 10 to 15 digits",
@@ -440,11 +441,11 @@ export default function CRM() {
     }
     if (
       form.taxRegistrationMode === "registered_sa" &&
-      !/^3\d{14}$/.test(form.taxNumber.trim())
+      !SAUDI_VAT_NUMBER_PATTERN.test(form.taxNumber.trim())
     ) {
       toast({
         title: t("رقم ضريبي غير صالح"),
-        description: t("الرقم الضريبي السعودي يجب أن يبدأ بـ3 ويتكون من 15 رقمًا"),
+        description: t("الرقم الضريبي السعودي 15 رقمًا يبدأ وينتهي بالرقم 3"),
         variant: "destructive",
       });
       return;

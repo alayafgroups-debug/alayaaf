@@ -14,7 +14,7 @@ import {
   Save,
   Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, escapeHtml } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
@@ -140,8 +140,8 @@ export default function PurchaseOrders() {
       const sub = item.quantity * item.price - item.discount;
       const tax = (sub * item.taxPercent) / 100;
       return `<tr>
-        <td>${item.description || "-"}</td>
-        <td>${item.unit || "-"}</td>
+        <td>${escapeHtml(item.description || "-")}</td>
+        <td>${escapeHtml(item.unit || "-")}</td>
         <td>${formatNumber(item.quantity)}</td>
         <td>${formatCurrency(item.price, formatNumber, t)}</td>
         <td>${formatCurrency(item.discount, formatNumber, t)}</td>
@@ -153,7 +153,7 @@ export default function PurchaseOrders() {
     printWindow.document.write(`
       <html dir="${direction}" lang="${locale}">
         <head>
-          <title>${t("أمر شراء")} ${order.id}</title>
+          <title>${t("أمر شراء")} ${escapeHtml(order.id)}</title>
           <meta charset="utf-8"/>
           <style>
             body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#0f172a}
@@ -171,21 +171,21 @@ export default function PurchaseOrders() {
         <body>
           <div class="header">
             <div class="title">${t("أمر الشراء")}</div>
-            <div>${t("رقم الأمر")}: <strong>${order.id}</strong></div>
+            <div>${t("رقم الأمر")}: <strong>${escapeHtml(order.id)}</strong></div>
           </div>
           <div class="grid">
-            <div class="card"><div class="label">${t("المورد")}</div><div class="value">${order.vendor || "-"}</div></div>
+            <div class="card"><div class="label">${t("المورد")}</div><div class="value">${escapeHtml(order.vendor || "-")}</div></div>
             <div class="card"><div class="label">${t("تاريخ الأمر")}</div><div class="value">${formatOrderDate(order.date, formatDate)}</div></div>
             <div class="card"><div class="label">${t("تاريخ الاستلام المتوقع")}</div><div class="value">${order.expectedDate ? formatOrderDate(order.expectedDate, formatDate) : "-"}</div></div>
-            <div class="card"><div class="label">${t("مرجع الأمر")}</div><div class="value">${order.referenceNo || "-"}</div></div>
-            <div class="card"><div class="label">${t("مركز التكلفة")}</div><div class="value">${order.costCenter ? t(order.costCenter) : "-"}</div></div>
+            <div class="card"><div class="label">${t("مرجع الأمر")}</div><div class="value">${escapeHtml(order.referenceNo || "-")}</div></div>
+            <div class="card"><div class="label">${t("مركز التكلفة")}</div><div class="value">${escapeHtml(order.costCenter ? t(order.costCenter) : "-")}</div></div>
             <div class="card"><div class="label">${t("الإجمالي")}</div><div class="value">${formatCurrency(Number(order.total) || 0, formatNumber, t)}</div></div>
           </div>
           <table>
             <thead><tr><th>${t("وصف البند")}</th><th>${t("الوحدة")}</th><th>${t("الكمية")}</th><th>${t("السعر")}</th><th>${t("الخصم")}</th><th>${t("الضريبة")}</th><th>${t("الإجمالي")}</th></tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
-          ${order.notes ? `<p style="margin-top:16px;font-size:13px"><strong>${t("ملاحظات")}:</strong> ${order.notes}</p>` : ""}
+          ${order.notes ? `<p style="margin-top:16px;font-size:13px"><strong>${t("ملاحظات")}:</strong> ${escapeHtml(order.notes)}</p>` : ""}
         </body>
       </html>
     `);
@@ -521,6 +521,12 @@ function OrderEdit({
   );
 
   const handleSave = async () => {
+    if (saving) return;
+    // حماية: أمر قديم بلا بنود كان يُحفظ بإجمالي صفر فيمسح قيمته
+    if (!(totals.total > 0) || items.some((item) => !String(item.description ?? "").trim() || !(Number(item.quantity) > 0) || Number(item.price) < 0 || Number(item.discount) < 0)) {
+      setError(t("أدخل بنود الأمر بوصف وكمية وسعر صحيحة قبل الحفظ (لا يُحفظ أمر بإجمالي صفر)"));
+      return;
+    }
     setSaving(true);
     setError(null);
     const { error: updateError } = await supabase

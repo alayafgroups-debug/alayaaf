@@ -77,7 +77,6 @@ const navSubMenus: Record<
   ],
   "/purchases": [
     { label: "فواتير المشتريات", href: "/purchases/invoices" },
-    { label: "مصروفات نقدية", href: "/purchases/cash-expenses" },
     { label: "إشعارات مدينة", href: "/purchases/debit-notes" },
     { label: "إشعارات دائنة", href: "/purchases/credit-notes" },
     { label: "أوامر الشراء", href: "/purchases/orders" },

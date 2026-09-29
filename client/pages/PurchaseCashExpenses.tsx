@@ -1,7 +1,8 @@
 import Layout from "@/components/Layout";
 import { purchasesFeatures } from "./Purchases";
-import { ArrowRight, Plus, Save, UploadCloud } from "lucide-react";
+import { ArrowRight, Plus, Save, UploadCloud, AlertTriangle } from "lucide-react";
 import { ChangeEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 
@@ -48,7 +49,79 @@ const getEmptyForm = (num: number): ExpenseForm => ({
   attachmentName: "",
 });
 
+/**
+ * الشاشة معطّلة: كانت تحفظ في ذاكرة المتصفح فقط وبلا مبلغ ولا قيد، فلا يصل أي مصروف إلى الدفاتر.
+ * المصروف النقدي يُسجَّل الآن كفاتورة مشتريات ثم سداد نقدي (قيد صحيح + ضريبة مدخلات عند توفر فاتورة ضريبية).
+ * نعرض ما حُفظ سابقًا في هذا المتصفح للقراءة فقط حتى يُعاد تسجيله بالطريقة الصحيحة.
+ */
 export default function PurchaseCashExpenses() {
+  const { t, direction, formatDate } = useI18n();
+  const [legacyRows, setLegacyRows] = useState<CashExpense[]>([]);
+
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      setLegacyRows(Array.isArray(parsed) ? (parsed as CashExpense[]) : []);
+    } catch {
+      setLegacyRows([]);
+    }
+  }, []);
+
+  return (
+    <Layout subMenu={{ title: t("المشتريات"), items: purchasesFeatures }}>
+      <div dir={direction} className="mx-auto max-w-4xl space-y-6">
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-6 space-y-3">
+          <div className="flex items-center gap-2 text-amber-800">
+            <AlertTriangle className="h-5 w-5" />
+            <h1 className="text-xl font-bold">{t("شاشة المصروفات النقدية متوقفة مؤقتًا")}</h1>
+          </div>
+          <p className="text-sm text-amber-900 leading-7">
+            {t("كانت هذه الشاشة تحفظ المصروفات في المتصفح فقط وبلا مبلغ، فلا تصل إلى الدفاتر ولا إلى الإقرار الضريبي. لتسجيل مصروف نقدي: أنشئ فاتورة مشتريات للمورد (برقم فاتورته)، ثم سجّل سدادها نقدًا.")}
+          </p>
+          <Link
+            to="/purchases/invoices"
+            className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
+          >
+            {t("الذهاب إلى فواتير المشتريات")}
+          </Link>
+        </div>
+
+        {legacyRows.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">
+              {t("مصروفات محفوظة سابقًا في هذا المتصفح فقط (غير مسجلة في الدفاتر) — أعد تسجيلها كفواتير مشتريات")}
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="px-3 py-2 text-start">{t("الرقم")}</th>
+                    <th className="px-3 py-2 text-start">{t("التاريخ")}</th>
+                    <th className="px-3 py-2 text-start">{t("المورد")}</th>
+                    <th className="px-3 py-2 text-start">{t("الوصف")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {legacyRows.map((row) => (
+                    <tr key={row.id} className="border-t border-border">
+                      <td className="px-3 py-2">{row.expenseNumber}</td>
+                      <td className="px-3 py-2">{row.date ? formatDate(row.date) : "-"}</td>
+                      <td className="px-3 py-2">{row.vendor || "-"}</td>
+                      <td className="px-3 py-2">{row.description || row.notes || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}
+
+// الشاشة القديمة محفوظة كمرجع فقط وغير مستخدمة
+export function LegacyPurchaseCashExpenses() {
   const { t, direction, formatDate, formatNumber } = useI18n();
   const [mode, setMode] = useState<"list" | "create">("list");
   const [rows, setRows] = useState<CashExpense[]>([]);

@@ -111,7 +111,8 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     setLoading(true);
     setError("");
     const [invoiceResult, noteResult, vendorResult, paymentResult] = await Promise.all([
-      supabase.from("purchase_invoices").select("*").order("date", { ascending: true }),
+      // الفواتير المرحّلة فقط (هي ما يطابق دفتر الموردين)
+      supabase.from("purchase_invoices").select("*").eq("accounting_status", "posted").order("date", { ascending: true }),
       supabase.from("invoice_adjustment_notes").select("id, note_number, note_type, issue_date, counterparty, total, original_invoice_id").in("note_type", ["purchase_debit", "purchase_credit"]).eq("status", "posted").eq("accounting_status", "posted").order("issue_date", { ascending: true }),
       supabase.from("vendors").select("id, name, currency, opening_balance"),
       supabase.from("purchase_payments").select("id, invoice_id, vendor_id, amount, payment_date").order("payment_date", { ascending: true }),
@@ -168,8 +169,9 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
       invoiceRows.forEach((invoice) => invoice.items.forEach((item) => {
         const key = item.description || t("بند غير محدد");
         const current = grouped.get(key) ?? { quantity: 0, subtotal: 0, tax: 0, total: 0, vendors: new Set<string>() };
-        const subtotal = item.quantity * item.unitPrice * (1 - item.discount / 100);
-        const tax = subtotal * item.taxPercent / 100;
+        // الخصم في فواتير المشتريات مبلغ لا نسبة، والتقريب لكل بند كما في القاعدة
+        const subtotal = Math.round((item.quantity * item.unitPrice - item.discount) * 100) / 100;
+        const tax = Math.round((subtotal * item.taxPercent / 100) * 100) / 100;
         current.quantity += item.quantity;
         current.subtotal += subtotal;
         current.tax += tax;

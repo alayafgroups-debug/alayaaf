@@ -3,7 +3,7 @@ import { ShoppingCart } from "lucide-react";
 
 export const purchasesFeatures = [
   { label: "فواتير المشتريات", href: "/purchases/invoices" },
-  { label: "مصروفات نقدية", href: "/purchases/cash-expenses" },
+  // "مصروفات نقدية" أُخفيت: كانت لا تسجل في الدفاتر (المسار يعرض تنبيهًا فقط)
   { label: "إشعارات مدينة", href: "/purchases/debit-notes" },
   { label: "إشعارات دائنة", href: "/purchases/credit-notes" },
   { label: "أوامر الشراء", href: "/purchases/orders" },

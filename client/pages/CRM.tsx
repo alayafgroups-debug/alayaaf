@@ -488,7 +488,9 @@ export default function CRM() {
         status: form.status,
         country: form.country,
         tax_registration_mode: form.taxRegistrationMode,
-        tax_number: form.taxNumber.trim(),
+        // الرقم الضريبي يُحفظ فقط لمن هو مسجل ضريبيًا (لا تُبنى عليه فواتير ضريبية لغير المسجل)
+        tax_number:
+          form.taxRegistrationMode === "registered_sa" ? form.taxNumber.trim() : "",
         commercial_registration: form.commercialRegistration.trim(),
         city: form.city.trim(),
         street: form.street.trim(),
@@ -507,9 +509,12 @@ export default function CRM() {
         const res = await supabase
           .from(tableName)
           .update(payload)
-          .eq("id", form.id);
+          .eq("id", form.id)
+          .select("id");
         result = { ...res, failed: false };
         if (res.error) result.error = res.error;
+        // التحديث الذي تمنعه الصلاحيات يعود بلا خطأ وبلا صفوف: نعامله كفشل لا كنجاح
+        else if (!res.data?.length) result.error = new Error(t("لم يتم الحفظ — تحقق من الصلاحيات"));
       } catch (e) {
         result = { error: new Error("fetch_failed"), failed: true };
       }
@@ -553,7 +558,9 @@ export default function CRM() {
         status: form.status,
         country: form.country,
         tax_registration_mode: form.taxRegistrationMode,
-        tax_number: form.taxNumber.trim(),
+        // الرقم الضريبي يُحفظ فقط لمن هو مسجل ضريبيًا (لا تُبنى عليه فواتير ضريبية لغير المسجل)
+        tax_number:
+          form.taxRegistrationMode === "registered_sa" ? form.taxNumber.trim() : "",
         commercial_registration: form.commercialRegistration.trim(),
         city: form.city.trim(),
         street: form.street.trim(),
@@ -652,11 +659,12 @@ export default function CRM() {
     const tableName = isVendors ? "vendors" : "customers";
     setDeleting(true);
 
-    if (!isVendors) {
+    // العميل أو المورد المرتبط بفواتير لا يُحذف بل يُعطَّل (حفاظًا على المستندات والقيود)
+    {
       const { count, error: invoiceLookupError } = await supabase
-        .from("sales_invoices")
+        .from(isVendors ? "purchase_invoices" : "sales_invoices")
         .select("id", { count: "exact", head: true })
-        .eq("customer_id", id);
+        .eq(isVendors ? "vendor_id" : "customer_id", id);
       if (invoiceLookupError) {
         toast({
           title: t("فشل الحذف"),
@@ -667,21 +675,34 @@ export default function CRM() {
         return;
       }
       if ((count ?? 0) > 0) {
-        const { error: deactivateError } = await supabase
-          .from("customers")
+        const { data: deactivatedRows, error: deactivateError } = await supabase
+          .from(tableName)
           .update({ status: "غير نشط" })
-          .eq("id", id);
-        if (!deactivateError) {
-          setCustomerRows((prev) =>
-            prev.map((row) =>
+          .eq("id", id)
+          .select("id");
+        if (!deactivateError && deactivatedRows?.length) {
+          const markInactive = (rows: any[]) =>
+            rows.map((row) =>
               row.id === id ? { ...row, status: "غير نشط" } : row,
-            ),
-          );
+            );
+          if (isVendors) {
+            setVendorRows((prev) => markInactive(prev));
+          } else {
+            setCustomerRows((prev) => markInactive(prev));
+          }
           toast({
-            title: t("تم تعطيل العميل"),
+            title: t(isVendors ? "تم تعطيل المورد" : "تم تعطيل العميل"),
             description: t(
-              "لا يمكن حذف عميل مرتبط بفواتير، لذلك تم تحويله إلى غير نشط",
+              isVendors
+                ? "لا يمكن حذف مورد مرتبط بفواتير، لذلك تم تحويله إلى غير نشط"
+                : "لا يمكن حذف عميل مرتبط بفواتير، لذلك تم تحويله إلى غير نشط",
             ),
+          });
+        } else if (!deactivateError) {
+          toast({
+            title: t("فشل الحذف"),
+            description: t("لم يتم التعديل — تحقق من الصلاحيات"),
+            variant: "destructive",
           });
         } else {
           toast({
@@ -700,9 +721,12 @@ export default function CRM() {
       const res = await supabase
         .from(tableName)
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       result = { ...res, failed: false };
       if (res.error) result.error = res.error;
+      // الحذف الذي تمنعه الصلاحيات يعود بلا خطأ وبلا صفوف: نعامله كفشل لا كنجاح
+      else if (!res.data?.length) result.error = new Error(t("لم يتم الحذف — تحقق من الصلاحيات"));
     } catch (e) {
       result = { error: new Error("fetch_failed"), failed: true };
     }

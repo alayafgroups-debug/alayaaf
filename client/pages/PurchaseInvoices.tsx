@@ -15,7 +15,12 @@ import {
   CreditCard,
   Printer,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  cn,
+  riyadhDateString,
+  SAUDI_STANDARD_VAT_RATE,
+  SAUDI_VAT_NUMBER_PATTERN,
+} from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
@@ -49,7 +54,43 @@ type InvoiceItem = {
 };
 
 type PurchaseExpenseAccount = { code: string; name_ar: string; parent_code: string | null };
-type VendorOption = { id: string; name: string; vendor_number: string | null };
+type VendorOption = {
+  id: string;
+  name: string;
+  vendor_number: string | null;
+  tax_registration_mode?: string | null;
+  tax_number?: string | null;
+};
+
+// حالة تسجيل المورد ضريبيًا: "yes" مسجل برقم صحيح، "no" غير مسجل، "" غير معروفة (فواتير قديمة)
+type VendorVatState = "yes" | "no" | "";
+
+const vendorVatState = (vendor?: {
+  tax_registration_mode?: string | null;
+  tax_number?: string | null;
+}): VendorVatState =>
+  vendor
+    ? vendor.tax_registration_mode === "registered_sa" &&
+      SAUDI_VAT_NUMBER_PATTERN.test(String(vendor.tax_number ?? "").trim())
+      ? "yes"
+      : "no"
+    : "";
+
+// نفس تقريب القاعدة: صافي كل بند وضريبته يُقرّبان لخانتين
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const lineAmounts = (item: {
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  taxPercent: number;
+}) => {
+  const net = round2(
+    (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) -
+      (Number(item.discount) || 0),
+  );
+  const tax = round2((net * (Number(item.taxPercent) || 0)) / 100);
+  return { net, tax, total: round2(net + tax) };
+};
 
 type PurchaseInvoice = {
   id: string;
@@ -227,34 +268,39 @@ export default function PurchaseInvoices() {
         const price = Number(item.unitPrice) || 0;
         const disc = Number(item.discount) || 0;
         const taxPct = Number(item.taxPercent) || 0;
-        const sub = qty * price - disc;
-        const tax = (sub * taxPct) / 100;
+        const line = lineAmounts({ quantity: qty, unitPrice: price, discount: disc, taxPercent: taxPct });
         return `<tr>
         <td>${escapeHtml(item.description || "-")}</td>
         <td>${escapeHtml(item.unit || "-")}</td>
         <td>${formatNumber(qty)}</td>
         <td>${formatAmount(price)}</td>
         <td>${formatAmount(disc)}</td>
-        <td>${formatNumber(taxPct)}%</td>
-        <td>${formatAmount(sub + tax)}</td>
+        <td>${formatAmount(line.tax)}<br><small>${formatNumber(taxPct)}%</small></td>
+        <td>${formatAmount(line.total)}</td>
       </tr>`;
       })
       .join("");
 
-    const total = items.reduce((s, item) => {
-      const qty = Number(item.quantity) || 0;
-      const price = Number(item.unitPrice) || 0;
-      const disc = Number(item.discount) || 0;
-      const taxPct = Number(item.taxPercent) || 0;
-      const sub = qty * price - disc;
-      const tax = (sub * taxPct) / 100;
-      return s + sub + tax;
-    }, 0);
+    // الإجماليات بنفس تقريب القاعدة (لكل بند)، ثم أثر الإشعارات إن وجدت
+    const printTotals = items.reduce(
+      (acc, item) => {
+        const line = lineAmounts(item);
+        return {
+          net: round2(acc.net + line.net),
+          tax: round2(acc.tax + line.tax),
+          total: round2(acc.total + line.total),
+        };
+      },
+      { net: 0, tax: 0, total: 0 },
+    );
+    const total = printTotals.total;
+    const adjustedTotal = parseCurrency(invoice.total);
+    const adjustments = round2(adjustedTotal - total);
 
     printWindow.document.write(`
       <html dir="${direction}" lang="${locale}">
         <head>
-          <title>${escapeHtml(t("فاتورة مشتريات"))} ${invoice.id}</title>
+          <title>${escapeHtml(t("فاتورة مشتريات"))} ${escapeHtml(invoice.id)}</title>
           <meta charset="utf-8"/>
           <style>
             @page{size:A4 portrait;margin:10mm}
@@ -298,7 +344,7 @@ export default function PurchaseInvoices() {
               <div class="card"><span class="label">${escapeHtml(t("تاريخ الفاتورة"))}</span><span class="value">${escapeHtml(displayDate(invoice.date))}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("تاريخ الاستحقاق"))}</span><span class="value">${escapeHtml(displayDate(invoice.dueDate))}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("رقم أمر الشراء"))}</span><span class="value">${escapeHtml(invoice.poNumber || "-")}</span></div>
-              <div class="card"><span class="label">${escapeHtml(t("رقم المرجع"))}</span><span class="value">${escapeHtml(invoice.referenceNo || "-")}</span></div>
+              <div class="card"><span class="label">${escapeHtml(t("رقم فاتورة المورد"))}</span><span class="value">${escapeHtml(invoice.referenceNo || "-")}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("مركز التكلفة"))}</span><span class="value">${escapeHtml(invoice.costCenterName || invoice.costCenter || "-")}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("الحالة"))} / Status</span><span class="value">${escapeHtml(t(invoice.status))}</span></div>
             </div></section>
@@ -307,9 +353,12 @@ export default function PurchaseInvoices() {
               <tbody>${rowsHtml}</tbody>
             </table>
             <div class="bottom">
-              <div class="notes"><strong>${escapeHtml(t("الملاحظة"))} / Note</strong><br>${escapeHtml(invoice.notes || t("لا توجد ملاحظات"))}<br><br><strong>${escapeHtml(t("بيانات الحساب البنكي"))}</strong><br>${escapeHtml(t("اسم المستفيد"))}: ${escapeHtml(COMPANY_PROFILE.bank.beneficiaryAr)}<br>${escapeHtml(t("رقم الحساب"))}: ${COMPANY_PROFILE.bank.accountNumber}<br>${escapeHtml(t("اسم البنك"))}: ${escapeHtml(COMPANY_PROFILE.bank.nameAr)} (ANB)<br>${escapeHtml(t("رقم الآيبان"))}: ${COMPANY_PROFILE.bank.iban}</div>
+              <div class="notes"><strong>${escapeHtml(t("الملاحظة"))} / Note</strong><br>${escapeHtml(invoice.notes || t("لا توجد ملاحظات"))}</div>
               <div class="totals">
+                <div class="totals-row"><span>${escapeHtml(t("الإجمالي قبل الضريبة"))}</span><strong>${formatAmount(printTotals.net)} ${escapeHtml(t("ريال"))}</strong></div>
+                <div class="totals-row"><span>${escapeHtml(t("ضريبة القيمة المضافة"))}</span><strong>${formatAmount(printTotals.tax)} ${escapeHtml(t("ريال"))}</strong></div>
                 <div class="totals-row"><span>${escapeHtml(t("الإجمالي الكلي"))}</span><strong>${formatAmount(total)} ${escapeHtml(t("ريال"))}</strong></div>
+                ${Math.abs(adjustments) >= 0.01 ? `<div class="totals-row"><span>${escapeHtml(t("أثر الإشعارات"))}</span><strong>${formatAmount(adjustments)} ${escapeHtml(t("ريال"))}</strong></div><div class="totals-row"><span>${escapeHtml(t("الإجمالي بعد الإشعارات"))}</span><strong>${formatAmount(adjustedTotal)} ${escapeHtml(t("ريال"))}</strong></div>` : ""}
                 <div class="totals-row"><span>${escapeHtml(t("المدفوع"))}</span><strong>${escapeHtml(invoice.paid)} ${escapeHtml(t("ريال"))}</strong></div>
                 <div class="totals-row final"><span>${escapeHtml(t("المتبقي"))}</span><strong>${escapeHtml(invoice.remaining)} ${escapeHtml(t("ريال"))}</strong></div>
               </div>
@@ -588,7 +637,7 @@ function InvoicesList({
                   className="px-4 py-3 align-middle font-semibold text-purple-600 hover:underline cursor-pointer whitespace-nowrap"
                   onClick={() => onView(inv)}
                 >
-                  {inv.id.slice(0, 8)}...
+                  {inv.id}
                 </td>
               </tr>
             ))}
@@ -909,14 +958,18 @@ function ItemsTable({
   onUpdate,
   onRemove,
   accentClass = "focus:border-blue-500 focus:ring-blue-500",
+  vendorVat = "",
 }: {
   items: InvoiceItem[];
   onAdd: () => void;
   onUpdate: (id: number, changes: Partial<InvoiceItem>) => void;
   onRemove: (id: number) => void;
   accentClass?: string;
+  // "no": المورد غير مسجل ضريبيًا فلا تُطالَب ضريبة مدخلات (0% فقط)
+  vendorVat?: VendorVatState;
 }) {
   const { t, direction, formatNumber } = useI18n();
+  const vatLocked = vendorVat === "no";
   const [expenseAccounts, setExpenseAccounts] = useState<PurchaseExpenseAccount[]>([]);
   useEffect(() => {
     const loadAccounts = async () => {
@@ -928,15 +981,15 @@ function ItemsTable({
   }, []);
   const formatAmount = (value: number) =>
     formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // نفس تقريب القاعدة لكل بند، فيطابق المعروض ما سيُرحَّل
   const totals = items.reduce(
     (acc, item) => {
-      const sub = item.quantity * item.unitPrice - item.discount;
-      const tax = (sub * item.taxPercent) / 100;
+      const line = lineAmounts(item);
       return {
-        subtotal: acc.subtotal + sub,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + sub + tax,
+        subtotal: round2(acc.subtotal + line.net),
+        discount: round2(acc.discount + (Number(item.discount) || 0)),
+        tax: round2(acc.tax + line.tax),
+        total: round2(acc.total + line.total),
       };
     },
     { subtotal: 0, discount: 0, tax: 0, total: 0 },
@@ -958,14 +1011,14 @@ function ItemsTable({
         </button>
       </div>
       <div className="p-4 overflow-x-auto">
-        <div className="mb-3 text-sm text-slate-600 flex justify-end gap-6">
-          <label className="inline-flex items-center gap-2">
-            <input type="radio" name="tax-mode" defaultChecked />{" "}
-            {t("خالٍ من الضريبة")}
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input type="radio" name="tax-mode" /> {t("شامل الضريبة")}
-          </label>
+        {/* خيارا "خالٍ من الضريبة / شامل الضريبة" أُزيلا: لم يكونا يؤثران على الحساب */}
+        <div className="mb-3 text-sm text-slate-600 text-right space-y-1">
+          <p>{t("الأسعار غير شاملة الضريبة — تُحسب الضريبة لكل بند حسب النسبة المختارة")}</p>
+          {vatLocked && (
+            <p className="text-amber-700">
+              {t("المورد غير مسجل ضريبيًا: لا تُطالَب ضريبة مدخلات على فواتيره (النسبة 0%)")}
+            </p>
+          )}
         </div>
         {items.length === 0 ? (
           <div className="h-20 border border-dashed border-slate-300 rounded flex items-center justify-center text-slate-400 text-sm">
@@ -977,6 +1030,7 @@ function ItemsTable({
               <tr className="text-slate-600 border-b border-slate-200">
                 <th className="pb-2 font-medium w-10 text-center"></th>
                 <th className="pb-2 font-medium w-24">{t("المجموع")}</th>
+                <th className="pb-2 font-medium w-20">{t("الضريبة")}</th>
                 <th className="pb-2 font-medium w-20">{t("الخصم")}</th>
                 <th className="pb-2 font-medium w-24">{t("المبلغ")} *</th>
                 <th className="pb-2 font-medium w-20">{t("الكمية")} *</th>
@@ -988,9 +1042,7 @@ function ItemsTable({
             </thead>
             <tbody>
               {items.map((item, idx) => {
-                const sub = item.quantity * item.unitPrice - item.discount;
-                const tax = (sub * item.taxPercent) / 100;
-                const lineTotal = sub + tax;
+                const lineTotal = lineAmounts(item).total;
                 const inputClass = `w-full px-2 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none h-10`;
                 return (
                   <tr key={`item-${idx}`}>
@@ -1015,6 +1067,23 @@ function ItemsTable({
                         aria-label={t("المجموع")}
                         className="w-full px-2 py-2 border border-slate-200 bg-slate-100 rounded text-sm text-right outline-none h-10"
                       />
+                    </td>
+                    <td className="pt-3 px-1 align-top">
+                      {/* 15% لمورد مسجل بفاتورة ضريبية، 0% لغير الخاضع؛ المورد غير المسجل 0% فقط */}
+                      <select
+                        value={String(vatLocked ? 0 : item.taxPercent)}
+                        disabled={vatLocked}
+                        onChange={(e) =>
+                          onUpdate(item.id, {
+                            taxPercent: Number(e.target.value) === SAUDI_STANDARD_VAT_RATE ? SAUDI_STANDARD_VAT_RATE : 0,
+                          })
+                        }
+                        aria-label={t("الضريبة")}
+                        className={`${inputClass} disabled:bg-slate-100`}
+                      >
+                        <option value={String(SAUDI_STANDARD_VAT_RATE)}>{SAUDI_STANDARD_VAT_RATE}%</option>
+                        <option value="0">0%</option>
+                      </select>
                     </td>
                     <td className="pt-3 px-1 align-top">
                       <input
@@ -1114,12 +1183,15 @@ function ItemsTable({
 
 /* ── Shared form hook ── */
 function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
-  const today = new Date().toISOString().split("T")[0];
-  const due = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+  // التواريخ الافتراضية بتوقيت الرياض (toISOString يعطي تاريخ UTC)
+  const today = riyadhDateString();
+  const due = riyadhDateString(30);
 
   const [form, setForm] = useState({
     vendor: initial?.vendor ?? "",
     vendorId: initial?.vendorId ?? "",
+    // حالة تسجيل المورد ضريبيًا تُعبّأ عند اختيار المورد (FormFields)
+    vendorVat: "" as VendorVatState,
     date: initial?.date ?? today,
     dueDate: initial?.dueDate ?? due,
     poNumber: initial?.poNumber ?? "",
@@ -1150,6 +1222,20 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
   const setField = (field: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
+  // عند اختيار مورد غير مسجل ضريبيًا تصبح كل البنود 0% (لا ضريبة مدخلات بلا فاتورة ضريبية)
+  const setVendorVat = (state: VendorVatState) => {
+    const previous = form.vendorVat;
+    setForm((prev) => ({ ...prev, vendorVat: state }));
+    if (state === "no") {
+      setItems((prev) => prev.map((item) => ({ ...item, taxPercent: 0 })));
+    } else if (state === "yes" && previous === "no") {
+      // الصفر كان مفروضًا بسبب المورد السابق، فنعيد النسبة الأساسية عند اختيار مورد مسجل
+      setItems((prev) =>
+        prev.map((item) => ({ ...item, taxPercent: SAUDI_STANDARD_VAT_RATE })),
+      );
+    }
+  };
+
   const addItem = () =>
     setItems((prev) => [
       ...prev,
@@ -1161,7 +1247,7 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
         quantity: 1,
         unitPrice: 0,
         discount: 0,
-        taxPercent: 15,
+        taxPercent: form.vendorVat === "no" ? 0 : SAUDI_STANDARD_VAT_RATE,
       },
     ]);
 
@@ -1173,33 +1259,44 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
   const removeItem = (id: number) =>
     setItems((prev) => prev.filter((item) => item.id !== id));
 
+  // نفس تقريب القاعدة لكل بند
   const totals = items.reduce(
     (acc, item) => {
-      const sub = item.quantity * item.unitPrice - item.discount;
-      const tax = (sub * item.taxPercent) / 100;
+      const line = lineAmounts(item);
       return {
-        subtotal: acc.subtotal + sub,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + sub + tax,
+        subtotal: round2(acc.subtotal + line.net),
+        discount: round2(acc.discount + (Number(item.discount) || 0)),
+        tax: round2(acc.tax + line.tax),
+        total: round2(acc.total + line.total),
       };
     },
     { subtotal: 0, discount: 0, tax: 0, total: 0 },
   );
 
-  return { form, setField, items, addItem, updateItem, removeItem, totals };
+  return {
+    form,
+    setField,
+    setVendorVat,
+    items,
+    addItem,
+    updateItem,
+    removeItem,
+    totals,
+  };
 }
 
 /* ── Shared form fields ── */
 function FormFields({
   form,
   setField,
+  setVendorVat,
   invoiceNumber,
   accentClass = "focus:border-blue-500 focus:ring-blue-500",
   onCreateVendor,
 }: {
   form: ReturnType<typeof useInvoiceForm>["form"];
   setField: ReturnType<typeof useInvoiceForm>["setField"];
+  setVendorVat?: ReturnType<typeof useInvoiceForm>["setVendorVat"];
   invoiceNumber?: string;
   accentClass?: string;
   onCreateVendor?: () => void;
@@ -1208,11 +1305,19 @@ function FormFields({
   const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
   useEffect(() => {
     const loadVendors = async () => {
-      const { data } = await supabase.from("vendors").select("id, name, vendor_number").eq("status", "نشط").order("name");
+      const { data } = await supabase.from("vendors").select("id, name, vendor_number, tax_registration_mode, tax_number").eq("status", "نشط").order("name");
       setVendorOptions((data ?? []) as VendorOption[]);
     };
     void loadVendors();
   }, []);
+  // حالة المورد المختار ضريبيًا (تشمل المورد المحفوظ على فاتورة يجري تعديلها)
+  useEffect(() => {
+    if (!setVendorVat || !form.vendorId) return;
+    const vendor = vendorOptions.find((option) => option.id === form.vendorId);
+    if (vendor) setVendorVat(vendorVatState(vendor));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.vendorId, vendorOptions]);
+  const today = riyadhDateString();
   const inputClass = `w-full h-10 px-3 py-2 border border-slate-300 rounded text-sm text-right ${accentClass} focus:ring-1 outline-none`;
 
   return (
@@ -1247,9 +1352,11 @@ function FormFields({
       <label className="text-sm font-medium text-slate-700">
         {t("التاريخ")}*
       </label>
+      {/* تاريخ فاتورة المورد: لا يكون مستقبليًا */}
       <input
         type="date"
         value={form.date}
+        max={today}
         onChange={(e) => setField("date", e.target.value)}
         className={inputClass}
       />
@@ -1260,6 +1367,7 @@ function FormFields({
       <input
         type="date"
         value={form.dueDate}
+        min={form.date || undefined}
         onChange={(e) => setField("dueDate", e.target.value)}
         className={inputClass}
       />
@@ -1274,20 +1382,22 @@ function FormFields({
         className={inputClass}
       />
 
+      {/* رقم فاتورة المورد إلزامي ويُفحص تكراره لنفس المورد عند الحفظ */}
       <label className="text-sm font-medium text-slate-700">
-        {t("المرجع")}
+        {t("رقم فاتورة المورد")}*
       </label>
       <input
         value={form.referenceNo}
         onChange={(e) => setField("referenceNo", e.target.value)}
-        placeholder={t("اختياري")}
+        placeholder={t("كما هو مطبوع على فاتورة المورد")}
         className={inputClass}
       />
 
-      <label className="text-sm font-medium text-slate-700">{t("فرع")}</label>
+      {/* حقل "فرع" أُزيل: كان مربوطًا خطأً بحالة الفاتورة ولا يُحفظ */}
+      <label className="text-sm font-medium text-slate-700">{t("الملاحظة")}</label>
       <input
-        value={form.status}
-        onChange={(e) => setField("status", e.target.value)}
+        value={form.notes}
+        onChange={(e) => setField("notes", e.target.value)}
         placeholder={t("اختياري")}
         className={inputClass}
       />
@@ -1314,8 +1424,16 @@ function InvoiceForm({
   onSaved: (i: PurchaseInvoice) => void;
 }) {
   const { t, direction } = useI18n();
-  const { form, setField, items, addItem, updateItem, removeItem, totals } =
-    useInvoiceForm();
+  const {
+    form,
+    setField,
+    setVendorVat,
+    items,
+    addItem,
+    updateItem,
+    removeItem,
+    totals,
+  } = useInvoiceForm();
   const [saving, setSaving] = useState(false);
   const saveInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -1353,12 +1471,54 @@ function InvoiceForm({
       setError(t("يرجى إكمال بنود الفاتورة والتأكد من الحساب والكميات والأسعار والخصومات"));
       return;
     }
+    // التواريخ: لا فاتورة بتاريخ مستقبلي، والاستحقاق لا يسبق الفاتورة
+    if (form.date > riyadhDateString()) {
+      setError(t("تاريخ الفاتورة لا يمكن أن يكون في المستقبل"));
+      return;
+    }
+    if (form.dueDate && form.dueDate < form.date) {
+      setError(t("تاريخ الاستحقاق يجب ألا يسبق تاريخ الفاتورة"));
+      return;
+    }
+    // ضريبة المدخلات تُطالَب فقط من مورد مسجل ضريبيًا برقم صحيح
+    if (form.vendorVat !== "yes" && items.some((item) => Number(item.taxPercent) > 0)) {
+      setError(t("المورد غير مسجل ضريبيًا أو رقمه الضريبي غير صحيح: اجعل ضريبة البنود 0% أو صحّح بيانات المورد"));
+      return;
+    }
+    if (items.some((item) => ![0, SAUDI_STANDARD_VAT_RATE].includes(Number(item.taxPercent)))) {
+      setError(t("نسبة الضريبة يجب أن تكون 15% أو 0%"));
+      return;
+    }
+    // رقم فاتورة المورد إلزامي ولا يتكرر لنفس المورد (منع تسجيل الفاتورة مرتين)
+    const supplierInvoiceNo = form.referenceNo.trim();
+    if (!supplierInvoiceNo) {
+      setError(t("يرجى إدخال رقم فاتورة المورد كما هو مطبوع عليها"));
+      return;
+    }
 
     saveInFlight.current = true;
     setSaving(true);
     setError(null);
 
     try {
+      const normalizeRef = (value: unknown) =>
+        String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+      const { data: vendorInvoices, error: duplicateError } = await supabase
+        .from("purchase_invoices")
+        .select("id, reference_no")
+        .eq("vendor_id", form.vendorId)
+        .not("reference_no", "is", null);
+      const duplicate = duplicateError
+        ? undefined
+        : (vendorInvoices ?? []).find(
+            (row) => normalizeRef(row.reference_no) === normalizeRef(supplierInvoiceNo),
+          );
+      if (duplicate) {
+        setError(
+          `${t("فاتورة المورد هذه مسجلة مسبقًا برقم")} ${duplicate.id}. ${t("لا تُسجَّل الفاتورة مرتين")}`,
+        );
+        return;
+      }
       const totalStr = totals.total.toFixed(2);
       let savedId = invoiceNumber || `PIN-${Date.now()}`;
       let postError: { code?: string; message?: string } | null = null;
@@ -1370,7 +1530,7 @@ function InvoiceForm({
             date: form.date,
             dueDate: form.dueDate,
             poNumber: form.poNumber,
-            referenceNo: form.referenceNo,
+            referenceNo: supplierInvoiceNo,
             notes: form.notes,
             costCenter: form.costCenter,
             costCenterName: form.costCenterName,
@@ -1401,9 +1561,11 @@ function InvoiceForm({
         return;
       }
 
+      const { vendorVat: _vendorVat, ...savedFields } = form;
       onSaved({
         id: savedId,
-        ...form,
+        ...savedFields,
+        referenceNo: supplierInvoiceNo,
         status: "مفتوحة",
         total: totalStr,
         paid: "0.00",
@@ -1460,17 +1622,19 @@ function InvoiceForm({
         <FormFields
           form={form}
           setField={setField}
+          setVendorVat={setVendorVat}
           invoiceNumber={invoiceNumber}
           onCreateVendor={() => setCreatingVendor(true)}
         />
       </div>
-      {creatingVendor && <PartyRegistrationDialog kind="vendor" onClose={() => setCreatingVendor(false)} onCreated={(party) => { setField("vendorId", party.id); setField("vendor", party.name); setCreatingVendor(false); }} />}
+      {creatingVendor && <PartyRegistrationDialog kind="vendor" onClose={() => setCreatingVendor(false)} onCreated={(party) => { setField("vendorId", party.id); setField("vendor", party.name); setVendorVat(SAUDI_VAT_NUMBER_PATTERN.test(String(party.vatNumber ?? "").trim()) ? "yes" : "no"); setCreatingVendor(false); }} />}
 
       <ItemsTable
         items={items}
         onAdd={addItem}
         onUpdate={updateItem}
         onRemove={removeItem}
+        vendorVat={form.vendorVat}
       />
 
       <div className="flex justify-center gap-4 pt-2">
@@ -1509,8 +1673,16 @@ function InvoiceEdit({
   onUpdated: (i: PurchaseInvoice) => void;
 }) {
   const { t, direction } = useI18n();
-  const { form, setField, items, addItem, updateItem, removeItem, totals } =
-    useInvoiceForm(invoice);
+  const {
+    form,
+    setField,
+    setVendorVat,
+    items,
+    addItem,
+    updateItem,
+    removeItem,
+    totals,
+  } = useInvoiceForm(invoice);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1519,8 +1691,17 @@ function InvoiceEdit({
       setError(t("لا يمكن تعديل فاتورة مشتريات مرحلة محاسبيًا"));
       return;
     }
+    if (saving) return;
     if (!form.vendorId || items.length === 0 || items.some((item) => !item.description.trim() || !item.accountCode || item.quantity <= 0 || item.unitPrice < 0 || item.discount < 0 || item.discount > item.quantity * item.unitPrice)) {
       setError(t("يرجى اختيار المورد وإكمال بنود الفاتورة بصورة صحيحة"));
+      return;
+    }
+    if (form.date > riyadhDateString() || (form.dueDate && form.dueDate < form.date)) {
+      setError(t("تاريخ الفاتورة لا يكون مستقبليًا، والاستحقاق لا يسبق تاريخ الفاتورة"));
+      return;
+    }
+    if (form.vendorVat === "no" && items.some((item) => Number(item.taxPercent) > 0)) {
+      setError(t("المورد غير مسجل ضريبيًا أو رقمه الضريبي غير صحيح: اجعل ضريبة البنود 0% أو صحّح بيانات المورد"));
       return;
     }
     setSaving(true);
@@ -1557,9 +1738,10 @@ function InvoiceEdit({
 
     setSaving(false);
     if (!updateError) {
+      const { vendorVat: _vendorVat, ...updatedFields } = form;
       onUpdated({
         ...invoice,
-        ...form,
+        ...updatedFields,
         total: totalStr,
         remaining: remainingStr,
         statusColor: statusColors[form.status] ?? "bg-slate-500 text-white",
@@ -1623,6 +1805,7 @@ function InvoiceEdit({
           <FormFields
             form={form}
             setField={setField}
+            setVendorVat={setVendorVat}
             accentClass="focus:border-emerald-500 focus:ring-emerald-500"
           />
         </div>
@@ -1631,6 +1814,7 @@ function InvoiceEdit({
           onAdd={addItem}
           onUpdate={updateItem}
           onRemove={removeItem}
+          vendorVat={form.vendorVat}
           accentClass="focus:border-emerald-500 focus:ring-emerald-500"
         />
         <div className="flex justify-center gap-4 pt-2">
@@ -1678,11 +1862,14 @@ function InvoicePayment({
   const [amount, setAmount] = useState(remainingValue.toFixed(2));
   const [paymentMethod, setPaymentMethod] = useState("تحويل بنكي");
   const [paymentRef, setPaymentRef] = useState("");
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentDate, setPaymentDate] = useState(riyadhDateString());
   const [saving, setSaving] = useState(false);
+  // يمنع تسجيل سداد مكرر عند النقر المتتابع قبل أن يُعطَّل الزر
+  const paymentInFlight = useRef(false);
 
   const handleSave = async () => {
-    const payAmount = Number(amount);
+    if (paymentInFlight.current) return;
+    const payAmount = round2(Number(amount));
     if (!Number.isFinite(payAmount) || payAmount <= 0 || payAmount > remainingValue + 0.01) {
       toast({ title: t("مبلغ السداد غير صحيح"), description: t("يجب أن يكون المبلغ موجبًا ولا يتجاوز المتبقي") });
       return;
@@ -1691,16 +1878,33 @@ function InvoicePayment({
       toast({ title: t("يرجى إدخال تاريخ السداد") });
       return;
     }
+    // لا سداد بتاريخ مستقبلي ولا قبل تاريخ الفاتورة
+    if (paymentDate > riyadhDateString() || (invoice.date && paymentDate < invoice.date)) {
+      toast({
+        title: t("تاريخ السداد غير صحيح"),
+        description: t("تاريخ السداد لا يكون في المستقبل ولا قبل تاريخ الفاتورة"),
+      });
+      return;
+    }
 
+    paymentInFlight.current = true;
     setSaving(true);
-    const { error } = await supabase.rpc("record_purchase_payment", {
-      p_invoice_id: invoice.id,
-      p_amount: payAmount,
-      p_payment_method: paymentMethod,
-      p_reference: paymentRef || null,
-      p_payment_date: paymentDate,
-    });
-    setSaving(false);
+    let error: { message?: string } | null = null;
+    try {
+      const response = await supabase.rpc("record_purchase_payment", {
+        p_invoice_id: invoice.id,
+        p_amount: payAmount,
+        p_payment_method: paymentMethod,
+        p_reference: paymentRef || null,
+        p_payment_date: paymentDate,
+      });
+      error = response.error;
+    } catch (rpcError) {
+      error = { message: rpcError instanceof Error ? rpcError.message : String(rpcError) };
+    } finally {
+      paymentInFlight.current = false;
+      setSaving(false);
+    }
 
     if (!error) {
       const nextPaid = (paidValue + payAmount).toFixed(2);
@@ -1811,11 +2015,14 @@ function InvoicePayment({
                 onChange={(e) => setPaymentMethod(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none appearance-none bg-white"
               >
-                <option value="تحويل بنكي">{t("تحويل بنكي")}</option>
-                <option value="شيك">{t("شيك")}</option>
+                <option value="تحويل بنكي">{t("تحويل بنكي / شيك صادر")}</option>
                 <option value="نقدي">{t("نقداً")}</option>
                 <option value="بطاقة ائتمانية">{t("بطاقة ائتمانية")}</option>
               </select>
+              {/* خيار "شيك" أُزيل مؤقتًا: القاعدة تقيّده على 1112 "شيكات تحت التحصيل" (شيكات العملاء) بدل البنك */}
+              <p className="text-xs text-slate-500 text-right">
+                {t("للدفع بشيك: اختر «تحويل بنكي / شيك صادر» واكتب رقم الشيك في المرجع، فيُخصم من الحساب البنكي")}
+              </p>
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700 text-right block">
@@ -1835,6 +2042,8 @@ function InvoicePayment({
               <input
                 type="date"
                 value={paymentDate}
+                min={invoice.date || undefined}
+                max={riyadhDateString()}
                 onChange={(e) => setPaymentDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
               />

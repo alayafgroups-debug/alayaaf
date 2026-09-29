@@ -145,6 +145,16 @@ const sections: ReportSection[] = [
   },
 ];
 
+/* ── التقارير المنفّذة في PurchaseReportDetails ── */
+const IMPLEMENTED_REPORTS = new Set([
+  "ملخص أرصدة الموردين",
+  "كشف حساب مورد",
+  "تفاصيل حساب المورد",
+  "المشتريات بحسب المنتج أو الخدمة",
+  "المشتريات بحسب مورد",
+  "المشتريات بحسب العملة",
+]);
+
 /* ── General features ── */
 const generalFeatures = [
   { label: "التصفية حسب الفترة", icon: <Calendar className="h-5 w-5 text-blue-500" />, bg: "bg-blue-50" },
@@ -323,17 +333,19 @@ export default function PurchaseReports() {
   const [search, setSearch] = useState("");
   const [activeReport, setActiveReport] = useState<ReportItem | null>(null);
 
+  // تُعرض فقط التقارير المنفّذة فعلًا؛ البطاقات الأخرى كانت تفتح نفس كشف الحساب بعناوين مختلفة
   const filteredSections = sections.map((section) => ({
     ...section,
     reports: section.reports.filter(
       (r) =>
-        search === "" ||
-        r.label.includes(search) ||
-        r.desc.includes(search) ||
-        t(r.label).includes(search) ||
-        t(r.desc).includes(search)
+        IMPLEMENTED_REPORTS.has(r.label) &&
+        (search === "" ||
+          r.label.includes(search) ||
+          r.desc.includes(search) ||
+          t(r.label).includes(search) ||
+          t(r.desc).includes(search))
     ),
-  })).filter((s) => s.reports.length > 0 || search === "");
+  })).filter((s) => s.reports.length > 0);
 
   return (
     <Layout subMenu={{ title: t("المشتريات"), items: purchasesFeatures }}>

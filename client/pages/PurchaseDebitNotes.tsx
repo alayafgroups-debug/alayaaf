@@ -1,11 +1,15 @@
 import Layout from "@/components/Layout";
 import { purchasesFeatures } from "./Purchases";
 import { ArrowRight, Plus, Save, Trash2 } from "lucide-react";
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
+import { riyadhDateString, SAUDI_STANDARD_VAT_RATE } from "@/lib/utils";
+
+// نفس تقريب القاعدة: صافي كل بند يُقرَّب لخانتين
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 type DebitNoteItem = {
   id: string;
@@ -43,6 +47,9 @@ type PurchaseInvoiceOption = {
   supplier: string;
   purchaseOrder: string;
   adjustedTotal: number;
+  // لإشعار صحيح ضريبيًا: الضريبة تتبع نسبة الفاتورة الأصلية ولا تتجاوز ضريبتها
+  date: string;
+  totalTax: number;
 };
 
 type DebitNoteForm = Omit<
@@ -76,7 +83,7 @@ const createEmptyForm = (
   originalInvoiceId: "",
   supplier: "",
   currency: "SAR",
-  date: new Date().toISOString().split("T")[0],
+  date: riyadhDateString(),
   orderRef: "",
   project: "",
   items: [emptyItem()],
@@ -107,6 +114,9 @@ export default function PurchaseDebitNotes({
   const [form, setForm] = useState<DebitNoteForm>(() =>
     createEmptyForm(START_NUMBER, noteType),
   );
+  // يمنع ترحيل الإشعار مرتين عند النقر المتكرر
+  const saveInFlight = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -119,9 +129,11 @@ export default function PurchaseDebitNotes({
             )
             .eq("note_type", noteType)
             .order("created_at", { ascending: false }),
+          // الإشعار يُنشأ على فاتورة مرحّلة فقط (القاعدة ترفض غيرها)
           supabase
             .from("purchase_invoices")
-            .select("id, vendor, po_number, total, adjusted_total")
+            .select("id, vendor, po_number, total, adjusted_total, total_tax, date, accounting_status")
+            .eq("accounting_status", "posted")
             .order("date", { ascending: false }),
           supabase
             .from("accounting_accounts")
@@ -173,6 +185,8 @@ export default function PurchaseDebitNotes({
                 row.adjusted_total ??
                   String(row.total || "0").replace(/[^0-9.-]/g, ""),
               ) || 0,
+            date: String(row.date || ""),
+            totalTax: Number(row.total_tax) || 0,
           })),
         );
       }
@@ -207,13 +221,27 @@ export default function PurchaseDebitNotes({
     load();
   }, [noteType]);
 
+  const selectedInvoice = invoices.find(
+    (item) => item.id === form.originalInvoiceId,
+  );
+  // نسبة ضريبة الإشعار من الفاتورة الأصلية: فاتورة بلا ضريبة ⇐ إشعار بلا ضريبة
+  const noteTaxRate =
+    selectedInvoice && selectedInvoice.totalTax <= 0 ? 0 : SAUDI_STANDARD_VAT_RATE;
   const subtotal = useMemo(
     () =>
-      form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+      round2(
+        form.items.reduce(
+          (sum, item) => sum + round2(item.quantity * item.unitPrice),
+          0,
+        ),
+      ),
     [form.items],
   );
-  const tax = useMemo(() => subtotal * 0.15, [subtotal]);
-  const total = useMemo(() => subtotal + tax, [subtotal, tax]);
+  const tax = useMemo(
+    () => round2((subtotal * noteTaxRate) / 100),
+    [subtotal, noteTaxRate],
+  );
+  const total = useMemo(() => round2(subtotal + tax), [subtotal, tax]);
 
   const updateItem = (
     id: string,
@@ -289,23 +317,72 @@ export default function PurchaseDebitNotes({
       });
       return;
     }
+    if (
+      form.items.some(
+        (item) =>
+          !item.description.trim() ||
+          !(Number(item.quantity) > 0) ||
+          !(Number(item.unitPrice) > 0),
+      )
+    ) {
+      toast({
+        title: t("بنود الإشعار غير مكتملة"),
+        description: t("كل بند يحتاج وصفًا وكمية وسعرًا أكبر من صفر"),
+      });
+      return;
+    }
+    // تاريخ الإشعار: لا يسبق الفاتورة الأصلية ولا يكون في المستقبل
+    if (
+      !form.date ||
+      form.date > riyadhDateString() ||
+      (selectedInvoice?.date && form.date < selectedInvoice.date)
+    ) {
+      toast({
+        title: t("تاريخ الإشعار غير صحيح"),
+        description: t("تاريخ الإشعار لا يسبق تاريخ الفاتورة الأصلية ولا يكون في المستقبل"),
+      });
+      return;
+    }
+    // الضريبة المعكوسة لا تتجاوز ضريبة الفاتورة الأصلية
+    if (selectedInvoice && tax > selectedInvoice.totalTax + 0.01) {
+      toast({
+        title: t("ضريبة الإشعار أكبر من ضريبة الفاتورة"),
+        description: t("لا يمكن عكس ضريبة مدخلات أكثر مما سُجّل في الفاتورة الأصلية"),
+      });
+      return;
+    }
+    if (saveInFlight.current) return;
 
-    const cleanedItems = form.items.filter(
-      (item) =>
-        item.description.trim() || item.account.trim() || item.unitPrice > 0,
-    );
-    const { data, error } = await supabase.rpc("post_invoice_adjustment_note", {
-      p_note_number: form.noteNumber,
-      p_note_type: noteType,
-      p_original_invoice_id: form.originalInvoiceId,
-      p_counterparty: form.supplier,
-      p_currency: form.currency,
-      p_issue_date: form.date,
-      p_subtotal: subtotal,
-      p_tax: tax,
-      p_total: total,
-      p_items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
-    });
+    // البنود بنفس نسبة ضريبة الإشعار (للتوثيق داخل الإشعار)
+    const cleanedItems = form.items.map((item) => ({
+      ...item,
+      taxPercent: noteTaxRate,
+    }));
+    saveInFlight.current = true;
+    setSaving(true);
+    let data: unknown = null;
+    let error: { message?: string } | null = null;
+    try {
+      const response = await supabase.rpc("post_invoice_adjustment_note", {
+        p_note_number: form.noteNumber,
+        p_note_type: noteType,
+        p_original_invoice_id: form.originalInvoiceId,
+        p_counterparty: form.supplier,
+        p_currency: "SAR",
+        p_issue_date: form.date,
+        p_subtotal: subtotal,
+        p_tax: tax,
+        p_total: total,
+        p_items: cleanedItems,
+      });
+      data = response.data;
+      error = response.error;
+    } catch (rpcError) {
+      error = { message: rpcError instanceof Error ? rpcError.message : String(rpcError) };
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
+    }
     if (error) {
       toast({
         title: t("تعذر ترحيل الإشعار"),
@@ -321,12 +398,13 @@ export default function PurchaseDebitNotes({
     const payload: DebitNote = {
       id: String(data),
       ...form,
+      currency: "SAR",
       subtotal,
       tax,
       total,
       balanceBefore: invoice.adjustedTotal,
       balanceAfter: invoice.adjustedTotal - total,
-      items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
+      items: cleanedItems,
     };
     setRows((current) => [payload, ...current]);
     setInvoices((current) =>
@@ -387,7 +465,8 @@ export default function PurchaseDebitNotes({
                 </button>
                 <button
                   onClick={handleSave}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Save className="h-4 w-4" />
                   {t(isCredit ? "حفظ إشعار دائن المشتريات" : "حفظ إشعار المدين")}
@@ -518,19 +597,21 @@ export default function PurchaseDebitNotes({
                   />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
+                  {/* القيد بالريال دائمًا، فالعملة للعرض فقط */}
                   <Field label={t("العملة*")}>
                     <input
-                      value={form.currency}
-                      onChange={(e) =>
-                        setForm({ ...form, currency: e.target.value })
-                      }
-                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                      value="SAR"
+                      readOnly
+                      disabled
+                      className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                     />
                   </Field>
                   <Field label={t("التاريخ*")}>
                     <input
                       type="date"
                       value={form.date}
+                      min={selectedInvoice?.date || undefined}
+                      max={riyadhDateString()}
                       onChange={(e) =>
                         setForm({ ...form, date: e.target.value })
                       }
@@ -538,32 +619,15 @@ export default function PurchaseDebitNotes({
                     />
                   </Field>
                 </div>
-                <Field label={t("أمر الشراء")}>
-                  <input
-                    value={form.orderRef}
-                    onChange={(e) =>
-                      setForm({ ...form, orderRef: e.target.value })
-                    }
-                    placeholder={t("اختياري")}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  />
-                </Field>
-                <Field label={t("المشروع")}>
-                  <input
-                    value={form.project}
-                    onChange={(e) =>
-                      setForm({ ...form, project: e.target.value })
-                    }
-                    placeholder={t("اختياري")}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  />
-                </Field>
+                {/* أمر الشراء والمشروع أُزيلا: لم يكونا يُحفظان */}
               </div>
             </div>
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
               <p className="text-sm font-semibold text-foreground">
-                {t("السعر شامل من الضريبة")}
+                {noteTaxRate > 0
+                  ? t("الأسعار غير شاملة الضريبة — تُضاف ضريبة القيمة المضافة 15% تلقائيًا")
+                  : t("الفاتورة الأصلية بلا ضريبة، فالإشعار بلا ضريبة (0%)")}
               </p>
               <div className="overflow-x-auto">
                 <table

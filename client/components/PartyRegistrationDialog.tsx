@@ -4,6 +4,7 @@ import { ChevronDown, X } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { SAUDI_VAT_NUMBER_PATTERN } from "@/lib/utils";
+import { partyErrorText } from "@/lib/partyErrors";
 
 type CreatedParty = { id: string; name: string; vatNumber: string; commercialRegistration: string; address: string };
 
@@ -19,19 +20,24 @@ export default function PartyRegistrationDialog({ kind, b2c = false, onCreated, 
   const update = (key: keyof typeof form) => (value: string) => setForm((current) => ({ ...current, [key]: value }));
   const field = (label: string, key: keyof typeof form, required = false, type = "text") => <label className="space-y-1 text-xs text-slate-600"><span>{t(label)}{required ? " *" : ""}</span><input type={type} value={form[key]} onChange={(event) => update(key)(event.target.value)} placeholder={required ? t("مطلوب") : t("اختياري")} className="block h-10 w-full rounded border border-slate-200 px-3 text-sm text-slate-800" /></label>;
   const section = (title: string, children: ReactNode, open = false) => <details open={open} className="col-span-full rounded border border-slate-100"><summary className="flex cursor-pointer list-none items-center justify-between bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">{t(title)}<ChevronDown className="h-4 w-4" /></summary><div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">{children}</div></details>;
-  const addressSection = section("العنوان اختياري", <>{field("المدينة", "city")}{field("الشارع", "street")}{field("رقم المبنى", "building")}{field("الحي", "district")}{field("الرمز البريدي", "postal")}</>);
+  // العميل (منشأة) المسجل ضريبيًا أو المنشأ لفاتورة قياسية يحتاج العنوان الوطني كاملًا (شرط الفاتورة الضريبية القياسية)
+  const addressRequired = isCustomer && !isIndividual && (form.taxMode === "registered_sa" || !b2c);
+  const addressSection = section(addressRequired ? "العنوان الوطني (مطلوب للفاتورة القياسية)" : "العنوان اختياري", <>{field("المدينة", "city")}{field("الشارع", "street")}{field("رقم المبنى", "building")}{field("الحي", "district")}{field("الرمز البريدي", "postal")}</>, addressRequired);
   const billingSection = section("بيانات الفوترة اختياري", <>{field("المعرّف", "invoiceRef")}<label className="space-y-1 text-xs text-slate-600"><span>{t("شروط الدفع")}</span><select value={form.paymentTerms} onChange={(event) => update("paymentTerms")(event.target.value)} className="block h-10 w-full rounded border border-slate-200 bg-white px-3 text-sm"><option value="">{t("تحديد")}</option><option value="فوري">{t("فوري")}</option><option value="30 يوم">{t("30 يوم")}</option></select></label>{field("رقم الترخيص", "license")}<label className="space-y-1 text-xs text-slate-600"><span>{t("نوع ترخيص جهة الاتصال")}</span><select value={form.licenseType} onChange={(event) => update("licenseType")(event.target.value)} className="block h-10 w-full rounded border border-slate-200 bg-white px-3 text-sm"><option value="">{t("تحديد")}</option><option value="شركة">{t("شركة")}</option><option value="فرد">{t("فرد")}</option></select></label></>);
 
   const save = async () => {
     if (!form.name.trim()) { setError(t("الاسم مطلوب")); return; }
     if (!isIndividual && form.taxMode === "registered_sa" && !SAUDI_VAT_NUMBER_PATTERN.test(form.vat.trim())) { setError(t("أدخل رقم تسجيل ضريبي سعودي صحيح: 15 رقمًا يبدأ وينتهي بالرقم 3")); return; }
+    if (!isIndividual && form.cr.trim() && !/^\d{10,15}$/.test(form.cr.trim())) { setError(t("السجل التجاري يجب أن يتكون من 10 إلى 15 رقمًا")); return; }
+    if ((form.building.trim() && !/^\d{4}$/.test(form.building.trim())) || (form.postal.trim() && !/^\d{5}$/.test(form.postal.trim()))) { setError(t("رقم المبنى 4 أرقام والرمز البريدي 5 أرقام")); return; }
+    if (addressRequired && [form.building, form.street, form.district, form.city, form.postal].some((value) => !value.trim())) { setError(t("أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي؛ الفاتورة الضريبية القياسية لا تصدر بدونها.")); return; }
     setSaving(true); setError("");
     const address = [form.building, form.street, form.district, form.city, form.postal].filter(Boolean).join("، ");
     const { data, error: saveError } = await supabase.from(isCustomer ? "customers" : "vendors").insert({
       id: crypto.randomUUID(), name: form.name.trim(), type: isIndividual ? "فرد" : isCustomer ? "شركة" : "مورد محلي", email: form.email.trim(), phone: form.phone.trim(), status: "نشط", opening_balance: "0", credit_limit: "0", country: isIndividual ? "" : form.country, tax_registration_mode: isIndividual ? "not_registered" : form.taxMode, tax_number: !isIndividual && form.taxMode === "registered_sa" ? form.vat.trim() : null, commercial_registration: !isIndividual ? form.cr.trim() || null : null, building_number: form.building.trim(), street: form.street.trim(), district: form.district.trim(), city: form.city.trim(), postal_code: form.postal.trim(), invoice_ref: form.invoiceRef.trim(), currency: "SAR", payment_terms: form.paymentTerms, license_number: form.license.trim(), business_type: form.licenseType,
     }).select("id, name, tax_number, commercial_registration, building_number, street, district, city, postal_code").single();
     setSaving(false);
-    if (saveError || !data) { setError(saveError?.message ?? t("تعذر حفظ البيانات")); return; }
+    if (saveError || !data) { setError(saveError ? t(partyErrorText(saveError.message, !isCustomer)) : t("تعذر حفظ البيانات")); return; }
     onCreated({ id: String(data.id), name: String(data.name), vatNumber: String(data.tax_number ?? ""), commercialRegistration: String(data.commercial_registration ?? ""), address: [data.building_number, data.street, data.district, data.city, data.postal_code].map((value) => String(value ?? "")).filter(Boolean).join("، ") || address });
   };
 

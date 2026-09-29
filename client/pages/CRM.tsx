@@ -1,10 +1,12 @@
-import PlaceholderModule from "@/components/PlaceholderModule";
-import { SAUDI_VAT_NUMBER_PATTERN, riyadhDateString } from "@/lib/utils";
+import { SAUDI_VAT_NUMBER_PATTERN } from "@/lib/utils";
 import Layout from "@/components/Layout";
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Save, X } from "lucide-react";
+import CrmReports from "@/components/crm/CrmReports";
+import { Plus, Search, RotateCcw, Eye, Pencil, Trash2, Save, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { selectAllRows } from "@/lib/ledgerData";
+import { normalizePartyName, partyErrorText } from "@/lib/partyErrors";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { checkPerm } from "@/lib/authSession";
@@ -104,6 +106,7 @@ const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
   createdBy: String(row.created_by ?? ""),
   creatorName: "—",
 });
+
 
 const crmTranslations: Record<string, string> = {
   "العملاء والموردين": "Customers and vendors",
@@ -242,6 +245,47 @@ const crmTranslations: Record<string, string> = {
   "تفاصيل العميل": "Customer details",
   "الرقم": "Number",
   "إغلاق": "Close",
+  "لا يمكن تغيير اسم المورد لأن له فواتير أو سندات أو قيودًا؛ الاسم مرتبط بكشف حسابه في الدفاتر.":
+    "The vendor name cannot be changed because it has invoices, payments or journal entries; the name links its ledger statement.",
+  "لا يمكن تغيير اسم العميل لأن له فواتير أو سندات أو قيودًا؛ الاسم مرتبط بكشف حسابه في الدفاتر.":
+    "The customer name cannot be changed because it has invoices, receipts or journal entries; the name links its ledger statement.",
+  "يوجد مورد آخر بنفس الاسم.": "Another vendor has the same name.",
+  "يوجد عميل آخر بنفس الاسم.": "Another customer has the same name.",
+  "الرقم الضريبي مسجل لمورد آخر. هل هو فرع أو جهة من نفس المجموعة الضريبية وتريد المتابعة؟":
+    "This VAT number is registered to another vendor. Is it a branch or a member of the same VAT group, and do you want to continue?",
+  "الرقم الضريبي مسجل لعميل آخر. هل هو فرع أو جهة من نفس المجموعة الضريبية وتريد المتابعة؟":
+    "This VAT number is registered to another customer. Is it a branch or a member of the same VAT group, and do you want to continue?",
+  "لا تملك صلاحية تنفيذ هذا الإجراء.": "You do not have permission to perform this action.",
+  "العنوان الوطني مطلوب للعميل المسجل ضريبيًا": "National address is required for a VAT-registered customer",
+  "أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي؛ الفاتورة الضريبية القياسية لا تصدر بدونها.":
+    "Complete the building number, street, district, city and postal code; a standard tax invoice cannot be issued without them.",
+  "العنوان الوطني (مطلوب للعميل المسجل ضريبيًا)": "National address (required for a VAT-registered customer)",
+  "الرصيد الافتتاحي لا يُعدَّل من هنا: الأرصدة الافتتاحية للعملاء والموردين تُسجَّل بقيد محاسبي حتى تظهر في الدفاتر وكشوف الحساب.":
+    "The opening balance is not edited here: customer and vendor opening balances are recorded with a journal entry so they appear in the books and statements.",
+  "حد الائتمان (للعلم فقط)": "Credit limit (for reference only)",
+  "لا يمنع الفوترة عند تجاوزه.": "It does not block invoicing when exceeded.",
+  "يُثبَّت الاسم بعد أول فاتورة أو سند لأنه مرتبط بكشف الحساب.": "The name is locked after the first invoice or payment because it links the account statement.",
+  "الرقم الضريبي": "VAT number",
+  "كل الأنواع": "All types",
+  "كل المدن": "All cities",
+  "كل الحالات": "All statuses",
+  "إعادة ضبط": "Reset",
+  "غير مسجل في الدفاتر": "Not recorded in the books",
+  "العنوان الوطني": "National address",
+  "تم تعطيل المورد": "Vendor deactivated",
+  "لا يمكن حذف مورد مرتبط بفواتير، لذلك تم تحويله إلى غير نشط":
+    "A vendor linked to invoices cannot be deleted, so it was marked inactive",
+  "لا يمكن حذف مورد مرتبط بمستندات، لذلك تم تحويله إلى غير نشط":
+    "A vendor linked to documents cannot be deleted, so it was marked inactive",
+  "لا يمكن حذف عميل مرتبط بمستندات، لذلك تم تحويله إلى غير نشط":
+    "A customer linked to documents cannot be deleted, so it was marked inactive",
+  "لم يتم الحفظ — تحقق من الصلاحيات": "Not saved — check your permissions",
+  "لم يتم الحذف — تحقق من الصلاحيات": "Not deleted — check your permissions",
+  "لم يتم التعديل — تحقق من الصلاحيات": "Not updated — check your permissions",
+  "أنشئ بواسطة": "Created by",
+  "حد الائتمان يجب أن يكون رقمًا موجبًا": "The credit limit must be a positive number",
+  "من تاريخ": "From date",
+  "إلى تاريخ": "To date",
 };
 
 function useCrmI18n() {
@@ -298,12 +342,9 @@ export default function CRM() {
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [reportSummary, setReportSummary] = useState({
-    totalReceivables: 0,
-    recentPayments: 0,
-    overdueReceivables: 0,
-    alerts: 0,
-  });
+  const [typeFilter, setTypeFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     const loadTable = async (
@@ -311,10 +352,16 @@ export default function CRM() {
       setter: (rows: PartyRow[]) => void
     ) => {
       try {
-        const { data, error } = await supabase
-          .from(tableName)
-          .select("*")
-          .order("id", { ascending: false });
+        // كل الصفوف بترقيم صفحات (بدون حد 1000)، الأحدث أولًا حسب رقم العميل/المورد
+        const numberColumn = tableName === "customers" ? "customer_number" : "vendor_number";
+        const { data, error } = await selectAllRows((from, to) =>
+          supabase
+            .from(tableName)
+            .select("*")
+            .order(numberColumn, { ascending: false })
+            .order("id")
+            .range(from, to),
+        );
 
         if (!error && data) {
           const mapped = data.map((row) => mapPartyRow(row as Record<string, unknown>));
@@ -342,59 +389,15 @@ export default function CRM() {
   }, [canViewCreator]);
 
   useEffect(() => {
-    if (!isReports) {
-      setForm(emptyForm(isVendors));
-      setIsFormOpen(false);
-      return;
-    }
-
-    const loadReportSummary = async () => {
-      const { data, error } = await supabase
-        .from("sales_invoices")
-        .select("total, paid, remaining, adjusted_remaining, due_date, accounting_status")
-        .eq("accounting_status", "posted");
-      if (error) {
-        setReportSummary({
-          totalReceivables: 0,
-          recentPayments: 0,
-          overdueReceivables: 0,
-          alerts: 0,
-        });
-        return;
-      }
-
-      const amount = (value: unknown) =>
-        Number(String(value ?? "0").replace(/[^0-9.-]/g, "")) || 0;
-      // المتبقي بعد الإشعارات الدائنة/المدينة إن وُجدت، وإلا المتبقي الأصلي.
-      const outstanding = (invoice: { remaining?: unknown; adjusted_remaining?: unknown }) =>
-        invoice.adjusted_remaining === null || invoice.adjusted_remaining === undefined
-          ? amount(invoice.remaining)
-          : amount(invoice.adjusted_remaining);
-      const todayText = riyadhDateString();
-      const invoices = data ?? [];
-      const overdue = invoices.filter((invoice) => {
-        const dueDate = String(invoice.due_date ?? "").slice(0, 10);
-        return outstanding(invoice) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(dueDate) && dueDate < todayText;
-      });
-
-      setReportSummary({
-        totalReceivables: invoices.reduce(
-          (sum, invoice) => sum + outstanding(invoice),
-          0,
-        ),
-        recentPayments: invoices.reduce(
-          (sum, invoice) => sum + amount(invoice.paid),
-          0,
-        ),
-        overdueReceivables: overdue.reduce(
-          (sum, invoice) => sum + outstanding(invoice),
-          0,
-        ),
-        alerts: overdue.length,
-      });
-    };
-
-    void loadReportSummary();
+    // عند التنقل بين العملاء والموردين والتقارير يُغلق النموذج وتُصفّر الفلاتر
+    setForm(emptyForm(isVendors));
+    setIsFormOpen(false);
+    setSearch("");
+    setFromDate("");
+    setToDate("");
+    setTypeFilter("");
+    setCityFilter("");
+    setStatusFilter("");
   }, [isVendors, isReports]);
 
   const title = t(isReports ? "التقارير" : isVendors ? "الموردين" : "العملاء");
@@ -408,11 +411,25 @@ export default function CRM() {
   const actionLabel = t(
     isReports ? "توليد تقرير جديد" : isVendors ? "إضافة مورد جديد" : "إضافة عميل جديد"
   );
-  const tableData = (isVendors ? vendorRows : customerRows).filter((row) => {
-    const matchesSearch = !search.trim() || `${row.number} ${row.name}`.toLowerCase().includes(search.trim().toLowerCase());
+  const currentRows = isVendors ? vendorRows : customerRows;
+  const tableData = currentRows.filter((row) => {
+    const matchesSearch = !search.trim() || `${row.number} ${row.name} ${row.taxNumber}`.toLowerCase().includes(search.trim().toLowerCase());
     const date = row.createdAt.slice(0, 10);
-    return matchesSearch && (!fromDate || date >= fromDate) && (!toDate || date <= toDate);
+    return matchesSearch
+      && (!fromDate || date >= fromDate) && (!toDate || date <= toDate)
+      && (!typeFilter || row.type === typeFilter)
+      && (!cityFilter || row.city.trim() === cityFilter)
+      && (!statusFilter || row.status === statusFilter);
   });
+  const cityOptions = Array.from(new Set(currentRows.map((row) => row.city.trim()).filter(Boolean))).sort((first, second) => first.localeCompare(second));
+  const resetFilters = () => {
+    setSearch("");
+    setFromDate("");
+    setToDate("");
+    setTypeFilter("");
+    setCityFilter("");
+    setStatusFilter("");
+  };
   const idLabel = t(isVendors ? "رقم المورد" : "رقم العميل");
   const typeLabel = t(isVendors ? "نوع المورد" : "نوع العميل");
   const searchPlaceholder = t(
@@ -439,6 +456,7 @@ export default function CRM() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.name.trim()) {
       toast({ title: t("تنبيه"), description: t("أدخل الاسم"), variant: "destructive" });
       return;
@@ -466,8 +484,8 @@ export default function CRM() {
       return;
     }
     if (
-      (form.buildingNumber && !/^\d{4}$/.test(form.buildingNumber)) ||
-      (form.postalCode && !/^\d{5}$/.test(form.postalCode))
+      (form.buildingNumber.trim() && !/^\d{4}$/.test(form.buildingNumber.trim())) ||
+      (form.postalCode.trim() && !/^\d{5}$/.test(form.postalCode.trim()))
     ) {
       toast({
         title: t("العنوان الوطني غير صالح"),
@@ -476,18 +494,70 @@ export default function CRM() {
       });
       return;
     }
+    if (form.creditLimit && !(Number(form.creditLimit) >= 0)) {
+      toast({ title: t("فشل الحفظ"), description: t("حد الائتمان يجب أن يكون رقمًا موجبًا"), variant: "destructive" });
+      return;
+    }
+    // العميل المسجل ضريبيًا تصدر له فاتورة قياسية، وهي تتطلب العنوان الوطني كاملًا
+    if (
+      !isVendors &&
+      form.taxRegistrationMode === "registered_sa" &&
+      [form.buildingNumber, form.street, form.district, form.city, form.postalCode].some((value) => !value.trim())
+    ) {
+      toast({
+        title: t("العنوان الوطني مطلوب للعميل المسجل ضريبيًا"),
+        description: t("أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي؛ الفاتورة الضريبية القياسية لا تصدر بدونها."),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // منع التكرار قبل الإرسال (القاعدة تفرضه أيضًا): الاسم بعد توحيد المسافات وحالة الأحرف، والرقم الضريبي
+    const normalizedName = normalizePartyName(form.name);
+    const taxNumber = form.taxRegistrationMode === "registered_sa" ? form.taxNumber.trim() : "";
+    const others = currentRows.filter((row) => row.id !== form.id);
+    if (others.some((row) => normalizePartyName(row.name) === normalizedName)) {
+      toast({ title: t("فشل الحفظ"), description: t(isVendors ? "يوجد مورد آخر بنفس الاسم." : "يوجد عميل آخر بنفس الاسم."), variant: "destructive" });
+      return;
+    }
+    // الرقم الضريبي المكرر مسموح (فروع المنشأة ومجموعات الضريبة) لكن بتأكيد صريح
+    if (
+      taxNumber &&
+      others.some((row) => row.taxNumber.trim() === taxNumber) &&
+      !confirm(t(isVendors
+        ? "الرقم الضريبي مسجل لمورد آخر. هل هو فرع أو جهة من نفس المجموعة الضريبية وتريد المتابعة؟"
+        : "الرقم الضريبي مسجل لعميل آخر. هل هو فرع أو جهة من نفس المجموعة الضريبية وتريد المتابعة؟"))
+    ) {
+      return;
+    }
 
     const tableName = isVendors ? "vendors" : "customers";
+
+    // الاسم مفتاح كشف الحساب في القيود: لا يتغير بعد أول فاتورة (القاعدة تفرض ذلك على كل المستندات والقيود)
+    const original = form.id ? currentRows.find((row) => row.id === form.id) : undefined;
+    // إن لم يتغير الاسم فعليًا (فرق مسافات طرفية فقط) نرسله كما هو محفوظ حتى لا يُعد تغييرًا
+    const nameToSave = original && original.name.trim() === form.name.trim() ? original.name : form.name.trim();
+    // يبدأ الحفظ قبل أي انتظار حتى لا يُرسل النموذج مرتين عند النقر المزدوج
     setSaving(true);
+    if (original && original.name !== nameToSave) {
+      const { count } = await supabase
+        .from(isVendors ? "purchase_invoices" : "sales_invoices")
+        .select("id", { count: "exact", head: true })
+        .eq(isVendors ? "vendor_id" : "customer_id", form.id);
+      if ((count ?? 0) > 0) {
+        toast({ title: t("فشل التحديث"), description: t(partyErrorText("PARTY_RENAME_BLOCKED", isVendors)), variant: "destructive" });
+        setSaving(false);
+        return;
+      }
+    }
 
     if (form.id) {
-      // Update existing
+      // Update existing — الرصيد الافتتاحي لا يُرسل (لا يُعدَّل من هذه الشاشة)
       const payload = {
-        name: form.name.trim(),
+        name: nameToSave,
         type: form.type,
-        email: (form.invoiceEmail || form.email).trim(),
-        phone: (form.invoicePhone || form.phone).trim(),
-        opening_balance: form.openingBalance || "0",
+        email: form.invoiceEmail.trim(),
+        phone: form.invoicePhone.trim(),
         credit_limit: form.creditLimit || "0",
         status: form.status,
         country: form.country,
@@ -514,7 +584,7 @@ export default function CRM() {
           .from(tableName)
           .update(payload)
           .eq("id", form.id)
-          .select("id");
+          .select("*");
         result = { ...res, failed: false };
         if (res.error) result.error = res.error;
         // التحديث الذي تمنعه الصلاحيات يعود بلا خطأ وبلا صفوف: نعامله كفشل لا كنجاح
@@ -524,7 +594,11 @@ export default function CRM() {
       }
 
       if (!result.error) {
-        const updatedRow = mapPartyRow({ id: form.id, ...payload } as Record<string, unknown>);
+        // الصف كما حفظته القاعدة (يحافظ على الرقم وتاريخ الإنشاء واسم المنشئ)
+        const updatedRow = {
+          ...mapPartyRow(result.data[0] as Record<string, unknown>),
+          creatorName: original?.creatorName ?? "—",
+        };
         if (isVendors) {
           setVendorRows((prev) =>
             prev.map((row) => (row.id === form.id ? updatedRow : row))
@@ -544,7 +618,9 @@ export default function CRM() {
         toast({
           title: t("فشل التحديث"),
           description: t(
-            result.failed ? "تعذر الاتصال بقاعدة البيانات" : "تعذر تحديث البيانات"
+            result.failed
+              ? "تعذر الاتصال بقاعدة البيانات"
+              : partyErrorText(result.error?.message ?? "", isVendors) || "تعذر تحديث البيانات"
           ),
           variant: "destructive",
         });
@@ -555,9 +631,10 @@ export default function CRM() {
         id: crypto.randomUUID(),
         name: form.name.trim(),
         type: form.type,
-        email: (form.invoiceEmail || form.email).trim(),
-        phone: (form.invoicePhone || form.phone).trim(),
-        opening_balance: form.openingBalance || "0",
+        email: form.invoiceEmail.trim(),
+        phone: form.invoicePhone.trim(),
+        // الأرصدة الافتتاحية للأطراف تُسجَّل بقيد محاسبي، لا من هذه الشاشة
+        opening_balance: "0",
         credit_limit: form.creditLimit || "0",
         status: form.status,
         country: form.country,
@@ -612,7 +689,7 @@ export default function CRM() {
           description: t(
             result.failed
               ? "تعذر الاتصال بقاعدة البيانات، تحقق من الاتصال"
-              : "تعذر حفظ البيانات"
+              : partyErrorText(result.error?.message ?? "", isVendors) || "تعذر حفظ البيانات"
           ),
           variant: "destructive",
         });
@@ -634,6 +711,9 @@ export default function CRM() {
       type: row.type,
       email: row.email,
       phone: row.phone,
+      // حقلا البريد والهاتف الظاهران في النموذج هما حقلا الفوترة
+      invoiceEmail: row.email,
+      invoicePhone: row.phone,
       openingBalance: row.openingBalance,
       creditLimit: row.creditLimit,
       status: row.status,
@@ -663,61 +743,46 @@ export default function CRM() {
     const tableName = isVendors ? "vendors" : "customers";
     setDeleting(true);
 
-    // العميل أو المورد المرتبط بفواتير لا يُحذف بل يُعطَّل (حفاظًا على المستندات والقيود)
-    {
-      const { count, error: invoiceLookupError } = await supabase
-        .from(isVendors ? "purchase_invoices" : "sales_invoices")
-        .select("id", { count: "exact", head: true })
-        .eq(isVendors ? "vendor_id" : "customer_id", id);
-      if (invoiceLookupError) {
+    // العميل أو المورد المرتبط بمستندات لا يُحذف بل يُعطَّل (حفاظًا على المستندات والقيود)
+    const deactivate = async (message: string) => {
+      const { data: deactivatedRows, error: deactivateError } = await supabase
+        .from(tableName)
+        .update({ status: "غير نشط" })
+        .eq("id", id)
+        .select("id");
+      if (!deactivateError && deactivatedRows?.length) {
+        const markInactive = (rows: PartyRow[]) =>
+          rows.map((row) => (row.id === id ? { ...row, status: "غير نشط" } : row));
+        if (isVendors) {
+          setVendorRows((prev) => markInactive(prev));
+        } else {
+          setCustomerRows((prev) => markInactive(prev));
+        }
+        toast({ title: t(isVendors ? "تم تعطيل المورد" : "تم تعطيل العميل"), description: t(message) });
+      } else {
         toast({
           title: t("فشل الحذف"),
-          description: invoiceLookupError.message,
+          description: t(deactivateError ? partyErrorText(deactivateError.message, isVendors) : "لم يتم التعديل — تحقق من الصلاحيات"),
           variant: "destructive",
         });
-        setDeleting(false);
-        return;
       }
-      if ((count ?? 0) > 0) {
-        const { data: deactivatedRows, error: deactivateError } = await supabase
-          .from(tableName)
-          .update({ status: "غير نشط" })
-          .eq("id", id)
-          .select("id");
-        if (!deactivateError && deactivatedRows?.length) {
-          const markInactive = (rows: any[]) =>
-            rows.map((row) =>
-              row.id === id ? { ...row, status: "غير نشط" } : row,
-            );
-          if (isVendors) {
-            setVendorRows((prev) => markInactive(prev));
-          } else {
-            setCustomerRows((prev) => markInactive(prev));
-          }
-          toast({
-            title: t(isVendors ? "تم تعطيل المورد" : "تم تعطيل العميل"),
-            description: t(
-              isVendors
-                ? "لا يمكن حذف مورد مرتبط بفواتير، لذلك تم تحويله إلى غير نشط"
-                : "لا يمكن حذف عميل مرتبط بفواتير، لذلك تم تحويله إلى غير نشط",
-            ),
-          });
-        } else if (!deactivateError) {
-          toast({
-            title: t("فشل الحذف"),
-            description: t("لم يتم التعديل — تحقق من الصلاحيات"),
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: t("فشل الحذف"),
-            description: deactivateError.message,
-            variant: "destructive",
-          });
-        }
-        setDeleting(false);
-        return;
-      }
+    };
+
+    const { count, error: invoiceLookupError } = await supabase
+      .from(isVendors ? "purchase_invoices" : "sales_invoices")
+      .select("id", { count: "exact", head: true })
+      .eq(isVendors ? "vendor_id" : "customer_id", id);
+    if (invoiceLookupError) {
+      toast({ title: t("فشل الحذف"), description: t(partyErrorText(invoiceLookupError.message, isVendors)), variant: "destructive" });
+      setDeleting(false);
+      return;
+    }
+    if ((count ?? 0) > 0) {
+      await deactivate(isVendors
+        ? "لا يمكن حذف مورد مرتبط بفواتير، لذلك تم تحويله إلى غير نشط"
+        : "لا يمكن حذف عميل مرتبط بفواتير، لذلك تم تحويله إلى غير نشط");
+      setDeleting(false);
+      return;
     }
 
     let result: any = { error: null, failed: false };
@@ -730,7 +795,7 @@ export default function CRM() {
       result = { ...res, failed: false };
       if (res.error) result.error = res.error;
       // الحذف الذي تمنعه الصلاحيات يعود بلا خطأ وبلا صفوف: نعامله كفشل لا كنجاح
-      else if (!res.data?.length) result.error = new Error(t("لم يتم الحذف — تحقق من الصلاحيات"));
+      else if (!res.data?.length) result.error = new Error("لم يتم الحذف — تحقق من الصلاحيات");
     } catch (e) {
       result = { error: new Error("fetch_failed"), failed: true };
     }
@@ -745,11 +810,16 @@ export default function CRM() {
         title: t("تم الحذف"),
         description: t(isVendors ? "تم حذف المورد" : "تم حذف العميل"),
       });
+    } else if (result.error?.code === "23503") {
+      // مرتبط بمستندات أخرى (سندات قبض أو صرف، استلام أو تسليم مخزون) لا تظهر في فحص الفواتير
+      await deactivate(isVendors
+        ? "لا يمكن حذف مورد مرتبط بمستندات، لذلك تم تحويله إلى غير نشط"
+        : "لا يمكن حذف عميل مرتبط بمستندات، لذلك تم تحويله إلى غير نشط");
     } else {
       toast({
         title: t("فشل الحذف"),
         description: t(
-          result.failed ? "تعذر الاتصال بقاعدة البيانات" : "تعذر حذف البيانات"
+          result.failed ? "تعذر الاتصال بقاعدة البيانات" : partyErrorText(result.error?.message ?? "", isVendors) || "تعذر حذف البيانات"
         ),
         variant: "destructive",
       });
@@ -813,6 +883,9 @@ export default function CRM() {
                 />
                 <label className="text-sm font-medium text-slate-700 text-end">{t("اسم المنشأة *")}</label>
               </div>
+              {form.id && (
+                <p className="text-xs text-slate-500 text-end">{t("يُثبَّت الاسم بعد أول فاتورة أو سند لأنه مرتبط بكشف الحساب.")}</p>
+              )}
 
               <div className="grid gap-4 md:grid-cols-2 items-center">
                 <select
@@ -881,7 +954,7 @@ export default function CRM() {
               </div>
 
               <details open className="space-y-3">
-                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-end">{t("العنوان اختياري")}</summary>
+                <summary className="cursor-pointer rounded-md bg-slate-100 px-4 py-2 text-sm text-slate-700 text-end">{t(!isVendors && form.taxRegistrationMode === "registered_sa" ? "العنوان الوطني (مطلوب للعميل المسجل ضريبيًا)" : "العنوان اختياري")}</summary>
                 <div className="space-y-3 pt-2">
                   <div className="grid gap-4 md:grid-cols-2 items-center">
                     <input value={form.city ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" placeholder={t("اختياري")} />
@@ -961,11 +1034,13 @@ export default function CRM() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-slate-700 text-end block">{t("الرصيد الافتتاحي")}</label>
-                  <input type="number" value={form.openingBalance ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, openingBalance: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" />
+                  <input type="text" value={form.openingBalance || "0"} disabled readOnly className="mt-1 w-full h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-end text-slate-500" />
+                  <p className="mt-1 text-[11px] text-slate-500 text-end">{t("الرصيد الافتتاحي لا يُعدَّل من هنا: الأرصدة الافتتاحية للعملاء والموردين تُسجَّل بقيد محاسبي حتى تظهر في الدفاتر وكشوف الحساب.")}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-700 text-end block">{t("حد الائتمان")}</label>
-                  <input type="number" value={form.creditLimit ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" />
+                  <label className="text-sm font-medium text-slate-700 text-end block">{t("حد الائتمان (للعلم فقط)")}</label>
+                  <input type="number" min="0" step="0.01" value={form.creditLimit ?? "0"} onChange={(e) => setForm((prev) => ({ ...prev, creditLimit: e.target.value }))} className="mt-1 w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end" />
+                  <p className="mt-1 text-[11px] text-slate-500 text-end">{t("لا يمنع الفوترة عند تجاوزه.")}</p>
                 </div>
               </div>
             </div>
@@ -992,104 +1067,7 @@ export default function CRM() {
         ) : null}
 
         {isReports ? (
-          <div className="space-y-6">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
-                <div className="flex items-center justify-between bg-rose-600 px-4 py-3 text-sm font-semibold text-white">
-                  <span>{t("التدقيق والمتابعة")}</span>
-                  <span className="text-xs">{t("تحكم")}</span>
-                </div>
-                <div className="space-y-3 p-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    {t("إعدادات نُظم الضريبة")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    {t("فواتير المبيعات المستحقة")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    {t("تقارير أعمار المديونية")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-rose-500" />
-                    {t("مؤشرات الأداء (KPIs)")}
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
-                <div className="flex items-center justify-between bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">
-                  <span>{t("تقارير الموردين (AP)")}</span>
-                  <span className="text-xs">{t("قيد التطوير")}</span>
-                </div>
-                <div className="space-y-3 p-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    {t("تقرير أعمار الموردين")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    {t("تقرير أرصدة الموردين (AP Aging)")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    {t("تقييمات المستحقات المتأخرة")}
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
-                <div className="flex items-center justify-between bg-sky-600 px-4 py-3 text-sm font-semibold text-white">
-                  <span>{t("تقارير العملاء (AR)")}</span>
-                  <span className="text-xs">{t("نشطة")}</span>
-                </div>
-                <div className="space-y-3 p-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    {t("تقرير أعمار العملاء")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    {t("تقرير أرصدة العملاء (AR Aging)")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    {t("حالات التحصيل")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    {t("تنبيهات التأخر في الدفع")}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
-              <div className="bg-slate-700 px-4 py-3 text-sm font-semibold text-white">
-                {t("ملخصات عامة للتقارير")}
-              </div>
-              <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("إجمالي المديونية")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.totalReceivables))}</p>
-                </div>
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("إجمالي المحصّل من الفواتير")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.recentPayments))}</p>
-                </div>
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("المستحقات المتأخرة")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.overdueReceivables))}</p>
-                </div>
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("تنبيهات المتابعة")}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{formatNumber(reportSummary.alerts)} {t("تنبيهات")}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <CrmReports />
         ) : (
           <div className="erp-card">
             <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -1105,26 +1083,26 @@ export default function CRM() {
               <div className="flex flex-wrap gap-2">
                 <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"><span>{t("من تاريخ")}</span><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
                 <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"><span>{t("إلى تاريخ")}</span><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
-                <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>{typeLabel}</option>
+                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                  <option value="">{t("كل الأنواع")}</option>
                   {typeOptions.map((option) => (
                     <option key={option} value={option}>{t(option)}</option>
                   ))}
                 </select>
-                <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>{t("المدينة")}</option>
-                  <option value="الرياض">{t("الرياض")}</option>
-                  <option value="جدة">{t("جدة")}</option>
-                  <option value="الدمام">{t("الدمام")}</option>
+                <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                  <option value="">{t("كل المدن")}</option>
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
                 </select>
-                <select className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>{t("الحالة")}</option>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                  <option value="">{t("كل الحالات")}</option>
                   <option value="نشط">{t("نشط")}</option>
                   <option value="غير نشط">{t("غير نشط")}</option>
                 </select>
-                <button className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground">
-                  <Filter className="h-4 w-4" />
-                  {t("تصفية متقدمة")}
+                <button onClick={resetFilters} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground">
+                  <RotateCcw className="h-4 w-4" />
+                  {t("إعادة ضبط")}
                 </button>
               </div>
             </div>
@@ -1141,7 +1119,7 @@ export default function CRM() {
                     </th>
                     <th className="px-4 py-3 text-end font-semibold">{t("الهاتف")}</th>
                     <th className="px-4 py-3 text-end font-semibold">
-                      {t("الرصيد الافتتاحي")}
+                      {t("الرقم الضريبي")}
                     </th>
                     <th className="px-4 py-3 text-end font-semibold">
                       {t("حد الائتمان")}
@@ -1174,14 +1152,14 @@ export default function CRM() {
                       <td className="px-4 py-3 text-muted-foreground">
                         {customer.phone}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {formatAmount(customer.openingBalance)}
+                      <td className="px-4 py-3 text-muted-foreground font-mono">
+                        {customer.taxNumber || "—"}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {formatAmount(customer.creditLimit)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${customer.status === "نشط" ? "bg-success/10 text-success" : "bg-slate-100 text-slate-500"}`}>
                           {t(customer.status)}
                         </span>
                       </td>
@@ -1250,23 +1228,37 @@ export default function CRM() {
 
                 <div>
                   <p className="text-xs text-muted-foreground">{t("الهاتف")}</p>
-                  <p className="text-sm font-medium text-foreground">{viewModal.phone}</p>
+                  <p className="text-sm font-medium text-foreground">{viewModal.phone || "—"}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">{t("الرصيد الافتتاحي")}</p>
-                  <p className="text-sm font-medium text-foreground">{formatAmount(viewModal.openingBalance)}</p>
+                  <p className="text-xs text-muted-foreground">{t("الرقم الضريبي")}</p>
+                  <p className="text-sm font-medium text-foreground font-mono">{viewModal.taxNumber || "—"}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">{t("حد الائتمان")}</p>
+                  <p className="text-xs text-muted-foreground">{t("العنوان الوطني")}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {[viewModal.buildingNumber, viewModal.street, viewModal.district, viewModal.city, viewModal.postalCode].map((value) => value.trim()).filter(Boolean).join("، ") || "—"}
+                  </p>
+                </div>
+
+                {(Number.parseFloat(viewModal.openingBalance) || 0) !== 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("الرصيد الافتتاحي")} ({t("غير مسجل في الدفاتر")})</p>
+                    <p className="text-sm font-medium text-foreground">{formatAmount(viewModal.openingBalance)}</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("حد الائتمان (للعلم فقط)")}</p>
                   <p className="text-sm font-medium text-foreground">{formatAmount(viewModal.creditLimit)}</p>
                 </div>
 
                 <div>
                   <p className="text-xs text-muted-foreground">{t("الحالة")}</p>
                   <p className="text-sm">
-                    <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${viewModal.status === "نشط" ? "bg-success/10 text-success" : "bg-slate-100 text-slate-500"}`}>
                       {t(viewModal.status)}
                     </span>
                   </p>

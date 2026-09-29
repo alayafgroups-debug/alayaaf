@@ -2,6 +2,8 @@ import { Download, Printer, RefreshCw, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
+import { selectAllRows } from "@/lib/ledgerData";
+import { riyadhDateString } from "@/lib/utils";
 import { COMPANY_REPORT_BRAND, exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
 
 type PurchaseItem = {
@@ -37,8 +39,9 @@ type DebitNote = {
   total: number;
 };
 
-type Vendor = { id: string; name: string; currency: string; openingBalance: number };
-type PurchasePayment = { id: string; invoiceId: string; vendorId: string; amount: number; date: string };
+// الرصيد الافتتاحي المحفوظ في بطاقة المورد غير مسجل في الدفاتر، فلا يدخل الكشوف (رصيد أول المدة = حركات ما قبل الفترة)
+type Vendor = { id: string; name: string; currency: string };
+type PurchasePayment = { id: string; number: string; invoiceId: string; vendorId: string; amount: number; date: string };
 type ReportRow = Record<string, string | number>;
 
 const REPORT_TYPES = {
@@ -96,7 +99,7 @@ function inPeriod(date: string, from: string, to: string) {
 export default function PurchaseReportDetails({ report, onClose }: { report: string; onClose: () => void }) {
   const { t, direction, formatNumber } = useI18n();
   const type = reportType(report);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = riyadhDateString();
   const [dateFrom, setDateFrom] = useState(() => `${today.slice(0, 4)}-01-01`);
   const [dateTo, setDateTo] = useState(today);
   const [selectedVendor, setSelectedVendor] = useState("");
@@ -112,10 +115,10 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     setError("");
     const [invoiceResult, noteResult, vendorResult, paymentResult] = await Promise.all([
       // الفواتير المرحّلة فقط (هي ما يطابق دفتر الموردين)
-      supabase.from("purchase_invoices").select("*").eq("accounting_status", "posted").order("date", { ascending: true }),
-      supabase.from("invoice_adjustment_notes").select("id, note_number, note_type, issue_date, counterparty, total, original_invoice_id").in("note_type", ["purchase_debit", "purchase_credit"]).eq("status", "posted").eq("accounting_status", "posted").order("issue_date", { ascending: true }),
-      supabase.from("vendors").select("id, name, currency, opening_balance"),
-      supabase.from("purchase_payments").select("id, invoice_id, vendor_id, amount, payment_date").order("payment_date", { ascending: true }),
+      selectAllRows((from, to) => supabase.from("purchase_invoices").select("*").eq("accounting_status", "posted").order("date", { ascending: true }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("invoice_adjustment_notes").select("id, note_number, note_type, issue_date, counterparty, total, original_invoice_id").in("note_type", ["purchase_debit", "purchase_credit"]).eq("status", "posted").eq("accounting_status", "posted").order("issue_date", { ascending: true }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("vendors").select("id, name, currency").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("purchase_payments").select("id, payment_number, invoice_id, vendor_id, amount, payment_date").order("payment_date", { ascending: true }).order("id").range(from, to)),
     ]);
 
     const firstError = invoiceResult.error ?? noteResult.error ?? vendorResult.error ?? paymentResult.error;
@@ -129,7 +132,6 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
       id: String(row.id),
       name: String(row.name ?? ""),
       currency: String(row.currency ?? "SAR") || "SAR",
-      openingBalance: number(row.opening_balance),
     }));
     const vendorIdByUniqueName = new Map<string, string>();
     loadedVendors.forEach((vendor) => {
@@ -144,7 +146,8 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
       return { id: String(row.id), number: String(row.note_number ?? row.id), type: row.note_type as PurchaseAdjustmentNoteType, date: String(row.issue_date ?? ""), vendor, vendorId: originalInvoice?.vendorId || vendorIdByUniqueName.get(vendor) || "", total: number(row.total) };
     }));
     setVendors(loadedVendors);
-    setPayments((paymentResult.data ?? []).map((row) => ({ id: String(row.id), invoiceId: String(row.invoice_id), vendorId: String(row.vendor_id), amount: number(row.amount), date: String(row.payment_date ?? "") })));
+    // السداد مرتبط دائمًا بفاتورة؛ نأخذ سداد الفواتير الظاهرة للمستخدم فقط حتى لا يختل الرصيد
+    setPayments((paymentResult.data ?? []).filter((row) => invoiceById.has(String(row.invoice_id ?? ""))).map((row) => ({ id: String(row.id), number: String(row.payment_number ?? row.id), invoiceId: String(row.invoice_id), vendorId: String(row.vendor_id), amount: number(row.amount), date: String(row.payment_date ?? "") })));
     setLoading(false);
   };
 
@@ -158,7 +161,17 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     const paymentRows = payments.filter((payment) => inPeriod(payment.date, dateFrom, dateTo) && (!selectedVendor || payment.vendorId === selectedVendor));
     const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
     const currencyByVendor = new Map(vendors.map((vendor) => [vendor.id, vendor.currency]));
-    const openingByVendor = new Map(vendors.map((vendor) => [vendor.id, vendor.openingBalance]));
+    // رصيد أول المدة لكل مورد = الفواتير − الإشعارات − المدفوعات قبل "من تاريخ"
+    const beforePeriod = (date: string) => Boolean(date && date < dateFrom);
+    // أسماء الفواتير والإشعارات غير المربوطة بمورد مسجل (للعرض بدل "مورد غير مربوط")
+    const legacyNames = new Map<string, string>();
+    invoices.forEach((invoice) => { if (!invoice.vendorId) legacyNames.set(`legacy-invoice:${invoice.id}`, invoice.vendor); });
+    notes.forEach((note) => { if (!note.vendorId) legacyNames.set(`legacy-note:${note.id}`, note.vendor); });
+    const openingByVendor = new Map<string, number>();
+    const addOpening = (key: string, value: number) => openingByVendor.set(key, (openingByVendor.get(key) ?? 0) + value);
+    invoices.filter((invoice) => beforePeriod(invoice.date)).forEach((invoice) => addOpening(invoice.vendorId || `legacy-invoice:${invoice.id}`, invoice.total));
+    notes.filter((note) => beforePeriod(note.date)).forEach((note) => addOpening(note.vendorId || `legacy-note:${note.id}`, -note.total));
+    payments.filter((payment) => beforePeriod(payment.date)).forEach((payment) => addOpening(payment.vendorId, -payment.amount));
     const vendorName = (vendorId: string, fallback = "") => vendorById.get(vendorId)?.name || fallback || t("مورد غير مربوط");
     const money = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const totalInvoices = invoiceRows.reduce((sum, invoice) => sum + invoice.total, 0);
@@ -210,18 +223,24 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
         current.notes += note.total;
         grouped.set(key, current);
       });
+      // موردون لهم رصيد سابق دون حركة في الفترة
+      openingByVendor.forEach((opening, key) => {
+        if (Math.abs(opening) < 0.005 || grouped.has(key) || (selectedVendor && key !== selectedVendor)) return;
+        grouped.set(key, { name: vendorName(key, legacyNames.get(key)), invoices: 0, purchases: 0, paid: 0, notes: 0 });
+      });
+      const totalOpening = [...grouped.keys()].reduce((sum, key) => sum + (openingByVendor.get(key) ?? 0), 0);
       return {
         columns: [
-          { key: "vendor", label: t("المورد") }, { key: "currency", label: t("العملة") }, { key: "invoices", label: t("عدد الفواتير") },
+          { key: "vendor", label: t("المورد") }, { key: "currency", label: t("العملة") }, { key: "opening", label: t("رصيد أول المدة") }, { key: "invoices", label: t("عدد الفواتير") },
           { key: "purchases", label: t("إجمالي المشتريات") }, { key: "paid", label: t("المدفوع") },
           { key: "notes", label: t("إشعارات التعديل") }, { key: "balance", label: t("الرصيد المستحق") },
         ],
         rows: [...grouped.entries()].map(([vendorId, value]) => ({
-          vendor: value.name, currency: currencyByVendor.get(vendorId) ?? "SAR", invoices: value.invoices,
+          vendor: value.name, currency: currencyByVendor.get(vendorId) ?? "SAR", opening: money(openingByVendor.get(vendorId) ?? 0), invoices: value.invoices,
           purchases: money(value.purchases), paid: money(value.paid), notes: money(value.notes),
           balance: money((openingByVendor.get(vendorId) ?? 0) + value.purchases - value.notes - value.paid),
         })),
-        summary: [{ label: t("إجمالي الرصيد المستحق"), value: money(totalInvoices - noteRows.reduce((sum, note) => sum + note.total, 0) - totalPayments) }],
+        summary: [{ label: t("إجمالي الرصيد المستحق"), value: money(totalOpening + totalInvoices - noteRows.reduce((sum, note) => sum + note.total, 0) - totalPayments) }],
       };
     }
 
@@ -240,9 +259,16 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
         current.paid += payment.amount;
         grouped.set(currency, current);
       });
+      // الإشعارات (دائنة ومدينة) تخفض المستحق للمورد كما في القيود
+      noteRows.forEach((note) => {
+        const currency = currencyByVendor.get(note.vendorId) ?? "SAR";
+        const current = grouped.get(currency) ?? { invoices: 0, purchases: 0, paid: 0, remaining: 0 };
+        current.remaining += note.total;
+        grouped.set(currency, current);
+      });
       return {
-        columns: [{ key: "currency", label: t("العملة") }, { key: "invoices", label: t("عدد الفواتير") }, { key: "purchases", label: t("إجمالي المشتريات") }, { key: "paid", label: t("المدفوع") }, { key: "remaining", label: t("الرصيد المستحق") }],
-        rows: [...grouped.entries()].map(([currency, value]) => ({ currency, invoices: value.invoices, purchases: money(value.purchases), paid: money(value.paid), remaining: money(value.purchases - value.paid) })),
+        columns: [{ key: "currency", label: t("العملة") }, { key: "invoices", label: t("عدد الفواتير") }, { key: "purchases", label: t("إجمالي المشتريات") }, { key: "paid", label: t("المدفوع") }, { key: "notes", label: t("إشعارات التعديل") }, { key: "remaining", label: t("صافي حركة الفترة") }],
+        rows: [...grouped.entries()].map(([currency, value]) => ({ currency, invoices: value.invoices, purchases: money(value.purchases), paid: money(value.paid), notes: money(value.remaining), remaining: money(value.purchases - value.paid - value.remaining) })),
         summary: [{ label: t("إجمالي المشتريات"), value: money(totalInvoices) }],
       };
     }
@@ -250,17 +276,24 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     const movements = [
       ...invoiceRows.map((invoice) => ({ date: invoice.date, reference: invoice.id, vendor: vendorName(invoice.vendorId, invoice.vendor), movement: t("فاتورة مشتريات"), debit: 0, credit: invoice.total, balanceEffect: invoice.total })),
       ...noteRows.map((note) => ({ date: note.date, reference: note.number, vendor: vendorName(note.vendorId, note.vendor), movement: t(note.type === "purchase_credit" ? "إشعار دائن مشتريات" : "إشعار مدين مشتريات"), debit: note.total, credit: 0, balanceEffect: -note.total })),
-      ...paymentRows.map((payment) => ({ date: payment.date, reference: payment.id, vendor: vendorName(payment.vendorId), movement: t("سداد مورد"), debit: payment.amount, credit: 0, balanceEffect: -payment.amount })),
+      ...paymentRows.map((payment) => ({ date: payment.date, reference: payment.number, vendor: vendorName(payment.vendorId), movement: t("سداد مورد"), debit: payment.amount, credit: 0, balanceEffect: -payment.amount })),
     ].sort((a, b) => a.date.localeCompare(b.date) || a.reference.localeCompare(b.reference));
-    let running = selectedVendor ? (openingByVendor.get(selectedVendor) ?? 0) : 0;
-    const movementRows = movements.map((movement) => {
-      running += movement.balanceEffect;
-      return { vendor: movement.vendor, date: movement.date, reference: movement.reference, movement: movement.movement, debit: money(movement.debit), credit: money(movement.credit), balance: money(running) };
-    });
+    // رصيد أول المدة: للمورد المختار، أو لكل الموردين معًا
+    const opening = selectedVendor
+      ? (openingByVendor.get(selectedVendor) ?? 0)
+      : [...openingByVendor.values()].reduce((sum, value) => sum + value, 0);
+    let running = opening;
+    const movementRows = [
+      { vendor: selectedVendor ? vendorName(selectedVendor) : t("كل الموردين"), date: dateFrom, reference: "—", movement: t("رصيد أول المدة"), debit: "", credit: "", balance: money(opening) },
+      ...movements.map((movement) => {
+        running += movement.balanceEffect;
+        return { vendor: movement.vendor, date: movement.date, reference: movement.reference, movement: movement.movement, debit: money(movement.debit), credit: money(movement.credit), balance: money(running) };
+      }),
+    ];
     return {
       columns: [{ key: "vendor", label: t("المورد") }, { key: "date", label: t("التاريخ") }, { key: "reference", label: t("الرقم") }, { key: "movement", label: t("الحركة") }, { key: "debit", label: t("مدين") }, { key: "credit", label: t("دائن") }, { key: "balance", label: t("الرصيد") }],
       rows: movementRows,
-      summary: [{ label: t("الرصيد الختامي"), value: money(running) }],
+      summary: [{ label: t("رصيد أول المدة"), value: money(opening) }, { label: t("الرصيد الختامي"), value: money(running) }],
     };
   }, [dateFrom, dateTo, formatNumber, invoices, notes, payments, selectedVendor, t, type, vendors]);
 

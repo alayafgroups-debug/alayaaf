@@ -4,6 +4,8 @@ import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { selectAllRows } from "@/lib/ledgerData";
+import { inventoryErrorText } from "@/lib/inventoryErrors";
 
 type Product = { id: string; sku: string; name: string; unit: string };
 type Warehouse = { id: string; code: string; name: string };
@@ -47,14 +49,14 @@ export default function InventoryCounts() {
     setLoading(true);
     setError("");
     const [countResult, lineResult, productResult, warehouseResult] = await Promise.all([
-      supabase.from("inventory_counts").select("id, count_number, count_date, warehouse_id, snapshot_at, notes, status").order("created_at", { ascending: false }),
-      supabase.from("inventory_count_lines").select("id, count_id, product_id, system_quantity, system_value, unit_cost, counted_quantity, variance_quantity, variance_value, notes").order("created_at"),
-      supabase.from("inventory_products").select("id, sku, name_ar, unit").eq("item_type", "product").eq("active", true).order("sku"),
-      supabase.from("inventory_warehouses").select("id, code, name_ar").eq("active", true).order("code"),
+      selectAllRows((from, to) => supabase.from("inventory_counts").select("id, count_number, count_date, warehouse_id, snapshot_at, notes, status").order("created_at", { ascending: false }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_count_lines").select("id, count_id, product_id, system_quantity, system_value, unit_cost, counted_quantity, variance_quantity, variance_value, notes").order("created_at").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_products").select("id, sku, name_ar, unit").eq("item_type", "product").eq("active", true).order("sku").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_warehouses").select("id, code, name_ar").eq("active", true).order("code").order("id").range(from, to)),
     ]);
     const firstError = countResult.error ?? lineResult.error ?? productResult.error ?? warehouseResult.error;
     if (firstError) {
-      setError(firstError.message);
+      setError(inventoryErrorText(firstError.message, t));
       setLoading(false);
       return;
     }
@@ -91,7 +93,7 @@ export default function InventoryCounts() {
     setError("");
     const { error: startError } = await supabase.rpc("start_inventory_count", { p_warehouse_id: newWarehouseId, p_notes: "" });
     setBusy(false);
-    if (startError) { setError(startError.message); return; }
+    if (startError) { setError(inventoryErrorText(startError.message, t)); return; }
     toast({ title: t("تم إنشاء مسودة الجرد وتثبيت الرصيد الدفتري") });
     setShowNew(false);
     setNewWarehouseId("");
@@ -124,7 +126,7 @@ export default function InventoryCounts() {
       },
     });
     setBusy(false);
-    if (saveError) { setError(saveError.message); return false; }
+    if (saveError) { setError(inventoryErrorText(saveError.message, t)); return false; }
     toast({ title: t("تم حفظ كميات الجرد") });
     if (closeAfter) setEditing(null);
     await load();
@@ -143,7 +145,7 @@ export default function InventoryCounts() {
     const { error: finalizeError } = await supabase.rpc("finalize_inventory_count", { p_id: editing.id });
     setBusy(false);
     if (finalizeError) {
-      toast({ title: t("تعذر اعتماد الجرد"), description: finalizeError.message, variant: "destructive" });
+      toast({ title: t("تعذر اعتماد الجرد"), description: inventoryErrorText(finalizeError.message, t), variant: "destructive" });
       return;
     }
     toast({ title: t("تم اعتماد الجرد وتثبيت الفروقات") });
@@ -157,7 +159,7 @@ export default function InventoryCounts() {
     const { error: deleteError } = await supabase.rpc("delete_inventory_count_draft", { p_id: count.id });
     setBusy(false);
     if (deleteError) {
-      toast({ title: t("تعذر حذف الجرد"), description: deleteError.message, variant: "destructive" });
+      toast({ title: t("تعذر حذف الجرد"), description: inventoryErrorText(deleteError.message, t), variant: "destructive" });
       return;
     }
     toast({ title: t("تم حذف مسودة الجرد") });

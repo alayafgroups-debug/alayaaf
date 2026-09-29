@@ -43,6 +43,20 @@ async function fetchAllPages<T>(
   return rows;
 }
 
+/**
+ * نفس fetchAllPages لكن بشكل نتيجة Supabase المعتاد { data, error } حتى تبقى الشاشات كما هي.
+ * الاستعلام يجب أن يكون مرتبًا ترتيبًا ثابتًا (مثلًا ينتهي بـ .order("id")) ثم .range(from, to).
+ */
+export async function selectAllRows<T = any>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  try {
+    return { data: await fetchAllPages<T>(build), error: null };
+  } catch (loadError) {
+    return { data: [], error: { message: loadError instanceof Error ? loadError.message : String(loadError) } };
+  }
+}
+
 export async function fetchPostedLedger(dateTo: string) {
   const accounts = await fetchAllPages<LedgerAccount>((from, to) =>
     supabase

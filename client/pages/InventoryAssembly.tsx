@@ -4,6 +4,9 @@ import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { riyadhDateString } from "@/lib/utils";
+import { selectAllRows } from "@/lib/ledgerData";
+import { inventoryErrorText } from "@/lib/inventoryErrors";
 
 type Product = { id: string; sku: string; name: string; unit: string };
 type Warehouse = { id: string; code: string; name: string };
@@ -14,7 +17,7 @@ type OrderLine = { productId: string; quantity: number; unitCost: number; amount
 type AssemblyOrder = { id: string; number: string; date: string; bomId: string; finishedProductId: string; warehouseId: string; quantity: string; reference: string; notes: string; status: "draft" | "posted"; accountingStatus: string; totalCost: number; lines: OrderLine[] };
 type FormMode = "bom" | "order" | null;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => riyadhDateString();
 const numberValue = (value: string) => Number(value) || 0;
 const newBomLine = (id = Date.now()): BomLine => ({ id, productId: "", quantity: "1" });
 
@@ -48,16 +51,16 @@ export default function InventoryAssembly() {
     setLoading(true);
     setError("");
     const [productResult, warehouseResult, balanceResult, bomResult, bomLineResult, orderResult, orderLineResult] = await Promise.all([
-      supabase.from("inventory_products").select("id, sku, name_ar, unit").eq("item_type", "product").eq("track_inventory", true).eq("active", true).order("sku"),
-      supabase.from("inventory_warehouses").select("id, code, name_ar").eq("active", true).order("code"),
+      selectAllRows((from, to) => supabase.from("inventory_products").select("id, sku, name_ar, unit").eq("item_type", "product").eq("track_inventory", true).eq("active", true).order("sku").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_warehouses").select("id, code, name_ar").eq("active", true).order("code").order("id").range(from, to)),
       supabase.rpc("list_inventory_balances"),
-      supabase.from("inventory_assembly_boms").select("id, bom_number, finished_product_id, output_quantity, notes, active").order("created_at", { ascending: false }),
-      supabase.from("inventory_assembly_bom_lines").select("id, bom_id, component_product_id, quantity").order("created_at"),
-      supabase.from("inventory_assembly_orders").select("id, order_number, order_date, bom_id, finished_product_id, warehouse_id, quantity, reference, notes, status, accounting_status, total_cost").order("created_at", { ascending: false }),
-      supabase.from("inventory_assembly_order_lines").select("id, order_id, component_product_id, quantity, unit_cost, amount").order("created_at"),
+      selectAllRows((from, to) => supabase.from("inventory_assembly_boms").select("id, bom_number, finished_product_id, output_quantity, notes, active").order("created_at", { ascending: false }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_assembly_bom_lines").select("id, bom_id, component_product_id, quantity").order("created_at").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_assembly_orders").select("id, order_number, order_date, bom_id, finished_product_id, warehouse_id, quantity, reference, notes, status, accounting_status, total_cost").order("created_at", { ascending: false }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_assembly_order_lines").select("id, order_id, component_product_id, quantity, unit_cost, amount").order("created_at").order("id").range(from, to)),
     ]);
     const firstError = productResult.error ?? warehouseResult.error ?? balanceResult.error ?? bomResult.error ?? bomLineResult.error ?? orderResult.error ?? orderLineResult.error;
-    if (firstError) { setError(firstError.message); setLoading(false); return; }
+    if (firstError) { setError(inventoryErrorText(firstError.message, t)); setLoading(false); return; }
     setProducts((productResult.data ?? []).map((row) => ({ id: String(row.id), sku: String(row.sku), name: String(row.name_ar), unit: String(row.unit ?? "") })));
     setWarehouses((warehouseResult.data ?? []).map((row) => ({ id: String(row.id), code: String(row.code), name: String(row.name_ar) })));
     setBalances((balanceResult.data ?? []).map((row) => ({ productId: String(row.product_id), warehouseId: String(row.warehouse_id), quantity: Number(row.quantity) || 0, value: Number(row.inventory_value) || 0 })));
@@ -101,7 +104,7 @@ export default function InventoryAssembly() {
     setBusy(true); setError("");
     const { error: saveError } = await supabase.rpc("save_inventory_assembly_bom", { p_id: editingId, p_bom: { finishedProductId, outputQuantity: numberValue(outputQuantity), notes: bomNotes.trim(), active: bomActive, lines: bomLines.map((line) => ({ productId: line.productId, quantity: numberValue(line.quantity) })) } });
     setBusy(false);
-    if (saveError) { setError(saveError.message); return; }
+    if (saveError) { setError(inventoryErrorText(saveError.message, t)); return; }
     toast({ title: t("تم حفظ قائمة المكونات") }); closeForm(); await load();
   };
 
@@ -110,7 +113,7 @@ export default function InventoryAssembly() {
     setBusy(true); setError("");
     const { error: saveError } = await supabase.rpc("save_inventory_assembly_order", { p_id: editingId, p_order: { orderDate, bomId, warehouseId, quantity: numberValue(orderQuantity), reference: reference.trim(), notes: orderNotes.trim() } });
     setBusy(false);
-    if (saveError) { setError(saveError.message); return; }
+    if (saveError) { setError(inventoryErrorText(saveError.message, t)); return; }
     toast({ title: t("تم حفظ أمر التركيب كمسودة") }); closeForm(); await load();
   };
 
@@ -119,7 +122,7 @@ export default function InventoryAssembly() {
     setBusy(true);
     const { error: postError } = await supabase.rpc("post_inventory_assembly_order", { p_id: order.id });
     setBusy(false);
-    if (postError) { toast({ title: t("تعذر ترحيل أمر التركيب"), description: postError.message, variant: "destructive" }); return; }
+    if (postError) { toast({ title: t("تعذر ترحيل أمر التركيب"), description: inventoryErrorText(postError.message, t), variant: "destructive" }); return; }
     toast({ title: t("تم ترحيل أمر التركيب والمخزون والمحاسبة") }); await load();
   };
 
@@ -128,7 +131,7 @@ export default function InventoryAssembly() {
     setBusy(true);
     const { error: deleteError } = await supabase.rpc("delete_inventory_assembly_order_draft", { p_id: order.id });
     setBusy(false);
-    if (deleteError) { toast({ title: t("تعذر حذف أمر التركيب"), description: deleteError.message, variant: "destructive" }); return; }
+    if (deleteError) { toast({ title: t("تعذر حذف أمر التركيب"), description: inventoryErrorText(deleteError.message, t), variant: "destructive" }); return; }
     toast({ title: t("تم حذف المسودة") }); await load();
   };
 

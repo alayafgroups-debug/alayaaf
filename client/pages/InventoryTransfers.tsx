@@ -4,6 +4,9 @@ import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { riyadhDateString } from "@/lib/utils";
+import { selectAllRows } from "@/lib/ledgerData";
+import { inventoryErrorText } from "@/lib/inventoryErrors";
 
 type Product = { id: string; sku: string; name: string; unit: string };
 type Warehouse = { id: string; code: string; name: string };
@@ -21,7 +24,7 @@ type InventoryTransfer = {
   lines: TransferLine[];
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => riyadhDateString();
 const newLine = (id = Date.now()): TransferLine => ({ id, productId: "", quantity: "1", unitCost: "" });
 const numberValue = (value: string) => Number(value) || 0;
 
@@ -46,15 +49,15 @@ export default function InventoryTransfers() {
     setLoading(true);
     setError("");
     const [transferResult, lineResult, productResult, warehouseResult, balanceResult] = await Promise.all([
-      supabase.from("inventory_transfers").select("id, transfer_number, transfer_date, source_warehouse_id, destination_warehouse_id, reference, notes, status").order("created_at", { ascending: false }),
-      supabase.from("inventory_transfer_lines").select("id, transfer_id, product_id, quantity, unit_cost").order("created_at"),
-      supabase.from("inventory_products").select("id, sku, name_ar, unit").eq("item_type", "product").eq("active", true).order("sku"),
-      supabase.from("inventory_warehouses").select("id, code, name_ar").eq("active", true).order("code"),
+      selectAllRows((from, to) => supabase.from("inventory_transfers").select("id, transfer_number, transfer_date, source_warehouse_id, destination_warehouse_id, reference, notes, status").order("created_at", { ascending: false }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_transfer_lines").select("id, transfer_id, product_id, quantity, unit_cost").order("created_at").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_products").select("id, sku, name_ar, unit").eq("item_type", "product").eq("active", true).order("sku").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_warehouses").select("id, code, name_ar").eq("active", true).order("code").order("id").range(from, to)),
       supabase.rpc("list_inventory_balances"),
     ]);
     const firstError = transferResult.error ?? lineResult.error ?? productResult.error ?? warehouseResult.error ?? balanceResult.error;
     if (firstError) {
-      setError(firstError.message);
+      setError(inventoryErrorText(firstError.message, t));
       setLoading(false);
       return;
     }
@@ -132,7 +135,7 @@ export default function InventoryTransfers() {
       },
     });
     setBusy(false);
-    if (saveError) { setError(saveError.message); return; }
+    if (saveError) { setError(inventoryErrorText(saveError.message, t)); return; }
     toast({ title: t("تم حفظ تحويل المخزون كمسودة") });
     reset();
     await load();
@@ -144,7 +147,7 @@ export default function InventoryTransfers() {
     const { error: postError } = await supabase.rpc("post_inventory_transfer", { p_id: transfer.id });
     setBusy(false);
     if (postError) {
-      toast({ title: t("تعذر ترحيل تحويل المخزون"), description: postError.message, variant: "destructive" });
+      toast({ title: t("تعذر ترحيل تحويل المخزون"), description: inventoryErrorText(postError.message, t), variant: "destructive" });
       return;
     }
     toast({ title: t("تم ترحيل التحويل بين المستودعين") });
@@ -157,7 +160,7 @@ export default function InventoryTransfers() {
     const { error: deleteError } = await supabase.rpc("delete_inventory_transfer_draft", { p_id: transfer.id });
     setBusy(false);
     if (deleteError) {
-      toast({ title: t("تعذر حذف التحويل"), description: deleteError.message, variant: "destructive" });
+      toast({ title: t("تعذر حذف التحويل"), description: inventoryErrorText(deleteError.message, t), variant: "destructive" });
       return;
     }
     toast({ title: t("تم حذف المسودة") });

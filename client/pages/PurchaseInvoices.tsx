@@ -973,7 +973,8 @@ function ItemsTable({
   const [expenseAccounts, setExpenseAccounts] = useState<PurchaseExpenseAccount[]>([]);
   useEffect(() => {
     const loadAccounts = async () => {
-      const { data } = await supabase.from("accounting_accounts").select("code, name_ar, parent_code").like("code", "5%").order("code");
+      // حسابات المصروفات (5) + الحساب 2113 لبنود البضاعة المخزنية المستلمة بسند استلام (تسوية GRNI)
+      const { data } = await supabase.from("accounting_accounts").select("code, name_ar, parent_code").or("code.like.5%,code.eq.2113").order("code");
       const rows = (data ?? []) as PurchaseExpenseAccount[];
       setExpenseAccounts(rows.filter((account) => !rows.some((candidate) => candidate.parent_code === account.code)));
     };
@@ -1014,6 +1015,7 @@ function ItemsTable({
         {/* خيارا "خالٍ من الضريبة / شامل الضريبة" أُزيلا: لم يكونا يؤثران على الحساب */}
         <div className="mb-3 text-sm text-slate-600 text-right space-y-1">
           <p>{t("الأسعار غير شاملة الضريبة — تُحسب الضريبة لكل بند حسب النسبة المختارة")}</p>
+          <p>{t("لبنود البضاعة المخزنية التي استُلمت بسند استلام اختر الحساب 2113 بدل حساب المصروف.")}</p>
           {vatLocked && (
             <p className="text-amber-700">
               {t("المورد غير مسجل ضريبيًا: لا تُطالَب ضريبة مدخلات على فواتيره (النسبة 0%)")}
@@ -1124,7 +1126,7 @@ function ItemsTable({
                     <td className="pt-3 px-1 align-top">
                       <select value={item.accountCode} onChange={(e) => onUpdate(item.id, { accountCode: e.target.value })} className={inputClass}>
                         <option value="">{t("اختر حساب المصروف")}</option>
-                        {expenseAccounts.map((account) => <option key={account.code} value={account.code}>{account.code} - {account.name_ar}</option>)}
+                        {expenseAccounts.map((account) => <option key={account.code} value={account.code}>{account.code} - {account.name_ar}{account.code === "2113" ? ` (${t("بضاعة مخزنية مستلمة")})` : ""}</option>)}
                       </select>
                     </td>
                     <td className="pt-3 pl-1 align-top min-w-[260px]">

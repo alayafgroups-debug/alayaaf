@@ -2697,6 +2697,67 @@ Object.assign(translations, {
   "صافي المشتريات (بدون ضريبة)": "Net purchases (excl. VAT)",
 });
 
+// بوابة الموظف: حدود تعديل الملف الشخصي.
+Object.assign(translations, {
+  "يمكنك تعديل الهاتف والحالة الاجتماعية وتاريخ انتهاء الهوية فقط. لتعديل الاسم أو الهوية أو البريد أو بيانات البنك تواصل مع الموارد البشرية.": "You can edit your phone, marital status, and ID expiry date only. To change your name, ID, email, or bank details, contact HR.",
+});
+
+// المخزون: حساب 2113 (بضاعة مستلمة لم تصل فواتيرها)، إشعارات التسليم، رسائل أخطاء المخزون.
+Object.assign(translations, {
+  "أضف سطرًا واحدًا على الأقل إلى المستند.": "Add at least one line to the document.",
+  "إشعار التسليم يتطلب تحديد العميل.": "A delivery note requires a customer.",
+  "إشعار تسليم جديد": "New delivery note",
+  "إشعارات التسليم": "Delivery notes",
+  "اختر المورد": "Select vendor",
+  "اختر المورد: سند الاستلام يُطابق مع فاتورة المورد على الحساب 2113 لكل مورد على حدة.": "Select the vendor: the receipt is matched against the vendor's invoice on account 2113 per vendor.",
+  "استلام إنتاج": "Production receipt",
+  "استلمت البضاعة المذكورة أعلاه بحالة سليمة وبالكميات الموضحة.": "I received the goods listed above in good condition and in the stated quantities.",
+  "التاريخ غير صالح: لا يمكن أن يكون تاريخ المستند في المستقبل. ملاحظة: الخادم يعتمد توقيت UTC، لذلك بين الساعة 00:00 و03:00 بتوقيت الرياض اختر تاريخ الأمس.": "Invalid date: the document date cannot be in the future. Note: the server uses UTC, so between 00:00 and 03:00 Riyadh time choose yesterday's date.",
+  "التسليم الجزئي مسموح؛ تأكد من عدم تكرار تسليم الكميات نفسها.": "Partial deliveries are allowed; make sure the same quantities are not delivered twice.",
+  "الحساب 2113 «بضاعة مستلمة لم تصل فواتيرها» غير موجود أو غير نشط في دليل الحسابات. أضفه قبل ترحيل سند الاستلام.": "Account 2113 \"Goods received not invoiced\" is missing or inactive in the chart of accounts. Add it before posting the receipt.",
+  "الرصيد المتاح في المستودع غير كافٍ لإتمام العملية.": "The available stock in the warehouse is not enough to complete this operation.",
+  "الفترة المالية لهذا التاريخ مقفلة ولا يمكن الترحيل فيها. اختر تاريخًا في فترة مفتوحة أو تواصل مع المحاسب.": "The fiscal period for this date is closed and cannot be posted to. Choose a date in an open period or contact the accountant.",
+  "المتاح": "Available",
+  "المستودع": "Warehouse",
+  "المطلوب": "Required",
+  "بانتظار الفاتورة (قديم)": "Awaiting invoice (legacy)",
+  "بدون قيد": "No journal entry",
+  "بضاعة مخزنية مستلمة": "Received stock goods",
+  "بضاعة مستلمة لم تُسجل فواتيرها بعد": "Goods received, not yet invoiced",
+  "تاريخ الاستلام": "Receipt date",
+  "ترحيل السند يضيف الكميات إلى المخزون ويسجّل قيدًا: مدين حساب المخزون / دائن 2113 «بضاعة مستلمة لم تصل فواتيرها». عند تسجيل فاتورة المورد لهذه البضاعة اختر الحساب 2113 لبنودها.": "Posting the receipt adds the quantities to stock and records an entry: Dr inventory account / Cr 2113 \"Goods received not invoiced\". When recording the vendor invoice for these goods, use account 2113 for their lines.",
+  "تسليم البضاعة للعميل مقابل فاتورة مبيعات مرحّلة، مع خصم المخزون بالمتوسط المرجح وإنشاء قيد تكلفة المبيعات تلقائياً.": "Deliver goods to the customer against a posted sales invoice, deducting stock at weighted average cost and creating the cost of sales entry automatically.",
+  "تعديل مسودة إشعار التسليم": "Edit delivery note draft",
+  "تكلفة الوحدة يجب أن تكون أكبر من صفر: أدخل سعر المورد بدون ضريبة القيمة المضافة لكل صنف.": "Unit cost must be greater than zero: enter the vendor price excluding VAT for each item.",
+  "تنبيه: توجد إشعارات تسليم مرحّلة سابقاً لهذه الفاتورة": "Warning: this invoice already has posted delivery notes",
+  "توقيع المستلم": "Receiver signature",
+  "جهة التسليم أو المشروع": "Delivery destination or project",
+  "حدثت حركات مخزون على المستودع بعد تثبيت رصيد الجرد، فلم يعد الرصيد الدفتري صالحًا. احذف مسودة الجرد وابدأ جردًا جديدًا.": "Stock movements occurred in the warehouse after the count snapshot, so the book balance is no longer valid. Delete the count draft and start a new count.",
+  "حساب 2113: الرصيد الدائن يمثل بضاعة استُلمت بسندات استلام ولم تُسجل فواتير مورديها بعد، والرصيد المدين يمثل فواتير موردين سُجلت على 2113 لبضاعة لم تُستلم بعد.": "Account 2113: a credit balance means goods received on receipts whose vendor invoices are not yet recorded; a debit balance means vendor invoices charged to 2113 for goods not yet received.",
+  "دلالة رصيد 2113": "Meaning of 2113 balance",
+  "رصيد 2113 بضاعة مستلمة لم تصل فواتيرها": "2113 Goods received not invoiced balance",
+  "رمز الصنف": "Item code",
+  "رمز الصنف غير صالح: استخدم أحرفًا إنجليزية كبيرة وأرقامًا والرموز . _ - فقط، أو اتركه فارغًا ليُنشأ تلقائيًا.": "Invalid item code: use uppercase English letters, digits and . _ - only, or leave it empty to generate one automatically.",
+  "عدد الأسطر يتجاوز الحد المسموح به في المستند الواحد؛ وزّع الأصناف على أكثر من مستند.": "The number of lines exceeds the limit for one document; split the items across several documents.",
+  "فاتورة المبيعات": "Sales invoice",
+  "فاتورة المبيعات المختارة تخص عميلًا آخر غير العميل المحدد في السند.": "The selected sales invoice belongs to a different customer than the one on this document.",
+  "فاتورة غير مرحّلة أو لعميل آخر": "Unposted invoice or another customer's invoice",
+  "فواتير مسجلة لبضاعة لم تُستلم بعد": "Invoices recorded for goods not yet received",
+  "قيد الانتظار": "Pending",
+  "لا توجد إشعارات تسليم": "No delivery notes",
+  "لا توجد فترة مالية مفتوحة تغطي هذا التاريخ. أنشئ الفترة المالية من إعدادات المحاسبة أولًا.": "No open fiscal period covers this date. Create the fiscal period in accounting settings first.",
+  "لا يمكن إدخال رصيد افتتاحي لصنف ومستودع توجد لهما حركات مخزون سابقة.": "An opening balance cannot be entered for an item and warehouse that already have stock movements.",
+  "لا يمكن تغيير نوع الصنف أو وحدته أو حساب المخزون أو حساب التكلفة بعد تسجيل حركات مخزون عليه.": "The item type, unit, inventory account or cost account cannot be changed after stock movements are recorded for it.",
+  "لا يمكن تكرار الصنف نفسه في أكثر من سطر؛ اجمع الكمية في سطر واحد.": "The same item cannot appear on more than one line; combine the quantity on a single line.",
+  "لا يمكن ربط إشعار التسليم إلا بفاتورة مبيعات مرحّلة. رحّل الفاتورة أولًا أو احفظ الإشعار دون ربط.": "A delivery note can only be linked to a posted sales invoice. Post the invoice first or save the note without a link.",
+  "لا يوجد رصيد معلق": "No outstanding balance",
+  "لبنود البضاعة المخزنية التي استُلمت بسند استلام اختر الحساب 2113 بدل حساب المصروف.": "For stock goods lines already received on an inventory receipt, choose account 2113 instead of an expense account.",
+  "ليست لديك صلاحية تنفيذ عمليات المخزون. تواصل مع مدير النظام.": "You do not have permission to perform inventory operations. Contact the system administrator.",
+  "مسودة": "Draft",
+  "مُرحّل بقيد": "Posted with entry",
+  "هل تريد ترحيل سند الاستلام؟ سيتم إنشاء حركة المخزون والقيد المحاسبي (مدين حساب المخزون / دائن 2113 بضاعة مستلمة لم تصل فواتيرها)، ولن يمكن تعديل السند بعد ذلك.": "Post this receipt? The stock movement and the journal entry (Dr inventory account / Cr 2113 Goods received not invoiced) will be created, and the receipt cannot be edited afterwards.",
+});
+
 const getInitialLocale = (): Locale => {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("app_language") === "en" ? "en" : "ar";

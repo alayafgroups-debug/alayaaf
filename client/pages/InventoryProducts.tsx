@@ -4,6 +4,8 @@ import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { selectAllRows } from "@/lib/ledgerData";
+import { inventoryErrorText } from "@/lib/inventoryErrors";
 
 type Account = { code: string; name_ar: string; parent_code: string | null };
 type Product = {
@@ -41,12 +43,12 @@ export default function InventoryProducts() {
     setLoading(true);
     setError("");
     const [productResult, accountResult] = await Promise.all([
-      supabase.from("inventory_products").select("id, sku, name_ar, name_en, item_type, unit, inventory_account_code, cogs_account_code, revenue_account_code, active").order("sku"),
-      supabase.from("accounting_accounts").select("code, name_ar, parent_code").order("code"),
+      selectAllRows((from, to) => supabase.from("inventory_products").select("id, sku, name_ar, name_en, item_type, unit, inventory_account_code, cogs_account_code, revenue_account_code, active").order("sku").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("accounting_accounts").select("code, name_ar, parent_code").order("code").range(from, to)),
     ]);
     const firstError = productResult.error ?? accountResult.error;
     if (firstError) {
-      setError(firstError.message);
+      setError(inventoryErrorText(firstError.message, t));
       setLoading(false);
       return;
     }
@@ -103,7 +105,7 @@ export default function InventoryProducts() {
       },
     });
     setBusy(false);
-    if (saveError) { setError(saveError.message); return; }
+    if (saveError) { setError(inventoryErrorText(saveError.message, t)); return; }
     toast({ title: t(editingId ? "تم تحديث الصنف" : "تم إنشاء الصنف") });
     reset(); await load();
   };
@@ -113,7 +115,7 @@ export default function InventoryProducts() {
     setBusy(true);
     const { error: deleteError } = await supabase.rpc("delete_inventory_product", { p_id: product.id });
     setBusy(false);
-    if (deleteError) { toast({ title: t("تعذر حذف الصنف"), description: deleteError.message, variant: "destructive" }); return; }
+    if (deleteError) { toast({ title: t("تعذر حذف الصنف"), description: inventoryErrorText(deleteError.message, t), variant: "destructive" }); return; }
     toast({ title: t("تم حذف الصنف") }); await load();
   };
 
@@ -144,7 +146,7 @@ export default function InventoryProducts() {
         <label className="text-xs text-slate-600">{t("النوع")}<select value={itemType} onChange={(event) => setItemType(event.target.value as Product["itemType"])} className="mt-1 h-10 w-full rounded border px-2"><option value="product">{t("منتج مخزني")}</option><option value="service">{t("خدمة")}</option></select></label>
         <label className="text-xs text-slate-600">{t("وحدة القياس")}<input value={unit} onChange={(event) => setUnit(event.target.value)} className="mt-1 h-10 w-full rounded border px-3" /></label>
         <label className="flex items-center gap-2 self-end rounded border px-3 py-2 text-sm"><input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />{t("نشط")}</label>
-        {itemType === "product" && <><AccountSelect label="حساب أصل المخزون" value={inventoryAccount} onChange={setInventoryAccount} prefix="1" /><AccountSelect label="حساب تكلفة المبيعات" value={cogsAccount} onChange={setCogsAccount} prefix="5" /></>}
+        {itemType === "product" && <><AccountSelect label="حساب أصل المخزون" value={inventoryAccount} onChange={setInventoryAccount} prefix="115" /><AccountSelect label="حساب تكلفة المبيعات" value={cogsAccount} onChange={setCogsAccount} prefix="5" /></>}
         <AccountSelect label="حساب الإيراد" value={revenueAccount} onChange={setRevenueAccount} prefix="4" />
       </div>
       <div className="mt-4 flex justify-end"><button disabled={busy} onClick={() => void save()} className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{t("حفظ")}</button></div>

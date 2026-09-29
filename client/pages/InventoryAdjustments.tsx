@@ -5,6 +5,8 @@ import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { selectAllRows } from "@/lib/ledgerData";
+import { inventoryErrorText } from "@/lib/inventoryErrors";
 
 type Warehouse = { id: string; name: string };
 type Product = { id: string; sku: string; name: string };
@@ -30,15 +32,15 @@ export default function InventoryAdjustments() {
     setLoading(true);
     setError("");
     const [countResult, adjustmentResult, lineResult, warehouseResult, productResult, ruleResult] = await Promise.all([
-      supabase.from("inventory_counts").select("id, count_number, warehouse_id, status").eq("status", "finalized").order("created_at", { ascending: false }),
-      supabase.from("inventory_adjustments").select("id, adjustment_number, count_id, adjustment_date, warehouse_id, status, accounting_status, accounting_journal_entry_id").order("created_at", { ascending: false }),
-      supabase.from("inventory_adjustment_lines").select("id, adjustment_id, product_id, movement_type, quantity, original_unit_cost, unit_cost, amount, cost_override_reason").order("created_at"),
-      supabase.from("inventory_warehouses").select("id, name_ar").order("code"),
-      supabase.from("inventory_products").select("id, sku, name_ar").order("sku"),
+      selectAllRows((from, to) => supabase.from("inventory_counts").select("id, count_number, warehouse_id, status").eq("status", "finalized").order("created_at", { ascending: false }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_adjustments").select("id, adjustment_number, count_id, adjustment_date, warehouse_id, status, accounting_status, accounting_journal_entry_id").order("created_at", { ascending: false }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_adjustment_lines").select("id, adjustment_id, product_id, movement_type, quantity, original_unit_cost, unit_cost, amount, cost_override_reason").order("created_at").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_warehouses").select("id, name_ar").order("code").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("inventory_products").select("id, sku, name_ar").order("sku").order("id").range(from, to)),
       supabase.from("accounting_posting_rules").select("inventory_shortage_account_code, inventory_surplus_account_code").eq("rule_code", "sales_default").eq("active", true).maybeSingle(),
     ]);
     const firstError = countResult.error ?? adjustmentResult.error ?? lineResult.error ?? warehouseResult.error ?? productResult.error ?? ruleResult.error;
-    if (firstError) { setError(firstError.message); setLoading(false); return; }
+    if (firstError) { setError(inventoryErrorText(firstError.message, t)); setLoading(false); return; }
     setWarehouses((warehouseResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name_ar) })));
     setProducts((productResult.data ?? []).map((row) => ({ id: String(row.id), sku: String(row.sku), name: String(row.name_ar) })));
     setRules({ shortage: String(ruleResult.data?.inventory_shortage_account_code ?? ""), surplus: String(ruleResult.data?.inventory_surplus_account_code ?? "") });
@@ -65,7 +67,7 @@ export default function InventoryAdjustments() {
     setBusy(true);
     const { data, error: createError } = await supabase.rpc("create_inventory_adjustment_from_count", { p_count_id: count.id });
     setBusy(false);
-    if (createError) { toast({ title: t("تعذر إنشاء التسوية"), description: createError.message, variant: "destructive" }); return; }
+    if (createError) { toast({ title: t("تعذر إنشاء التسوية"), description: inventoryErrorText(createError.message, t), variant: "destructive" }); return; }
     toast({ title: t("تم إنشاء مسودة تسوية المخزون") });
     const refreshed = await load();
     if (data) setSelected(refreshed?.find((item) => item.id === String(data)) ?? null);
@@ -78,7 +80,7 @@ export default function InventoryAdjustments() {
     setError("");
     const { error: costError } = await supabase.rpc("set_inventory_adjustment_surplus_cost", { p_line_id: line.id, p_unit_cost: Number(input.cost), p_reason: input.reason.trim() });
     setBusy(false);
-    if (costError) { setError(costError.message); return; }
+    if (costError) { setError(inventoryErrorText(costError.message, t)); return; }
     toast({ title: t("تم اعتماد تكلفة فائض الجرد") });
     await load();
   };
@@ -88,7 +90,7 @@ export default function InventoryAdjustments() {
     setBusy(true);
     const { error: postError } = await supabase.rpc("post_inventory_adjustment", { p_id: adjustment.id });
     setBusy(false);
-    if (postError) { toast({ title: t("تعذر ترحيل التسوية"), description: postError.message, variant: "destructive" }); return; }
+    if (postError) { toast({ title: t("تعذر ترحيل التسوية"), description: inventoryErrorText(postError.message, t), variant: "destructive" }); return; }
     toast({ title: t("تم ترحيل المخزون والقيد المحاسبي") });
     setSelected(null);
     await load();
@@ -99,7 +101,7 @@ export default function InventoryAdjustments() {
     setBusy(true);
     const { error: deleteError } = await supabase.rpc("delete_inventory_adjustment_draft", { p_id: adjustment.id });
     setBusy(false);
-    if (deleteError) { toast({ title: t("تعذر حذف التسوية"), description: deleteError.message, variant: "destructive" }); return; }
+    if (deleteError) { toast({ title: t("تعذر حذف التسوية"), description: inventoryErrorText(deleteError.message, t), variant: "destructive" }); return; }
     toast({ title: t("تم حذف مسودة التسوية") });
     setSelected(null);
     await load();

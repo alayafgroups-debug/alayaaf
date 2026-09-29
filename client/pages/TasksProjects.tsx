@@ -302,11 +302,8 @@ export default function TasksProjects() {
         .from("work_tasks")
         .select("*")
         .order("created_at", { ascending: false }),
-      supabase
-        .from("employees")
-        .select("emp_id, name, department")
-        .in("status", ["نشط", "فعال"])
-        .order("name"),
+      // دليل مبسط للموظفين النشطين عبر دالة آمنة (لا يتطلب صلاحية قراءة جدول الموظفين)
+      supabase.rpc("list_employee_directory"),
       supabase
         .from("support_clients")
         .select("*")

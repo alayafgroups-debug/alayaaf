@@ -4,6 +4,8 @@ import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { selectAllRows } from "@/lib/ledgerData";
+import { inventoryErrorText } from "@/lib/inventoryErrors";
 
 type WarehouseRow = { id: string; code: string; name: string; location: string; active: boolean };
 
@@ -21,8 +23,8 @@ export default function InventoryWarehouses() {
 
   const load = async () => {
     setLoading(true); setError("");
-    const { data, error: loadError } = await supabase.from("inventory_warehouses").select("id, code, name_ar, location, active").order("code");
-    if (loadError) { setError(loadError.message); setLoading(false); return; }
+    const { data, error: loadError } = await selectAllRows((from, to) => supabase.from("inventory_warehouses").select("id, code, name_ar, location, active").order("code").order("id").range(from, to));
+    if (loadError) { setError(inventoryErrorText(loadError.message, t)); setLoading(false); return; }
     setWarehouses((data ?? []).map((row) => ({ id: String(row.id), code: String(row.code), name: String(row.name_ar), location: String(row.location ?? ""), active: Boolean(row.active) })));
     setLoading(false);
   };
@@ -37,14 +39,14 @@ export default function InventoryWarehouses() {
     setBusy(true); setError("");
     const { error: saveError } = await supabase.rpc("save_inventory_warehouse", { p_id: editingId || null, p_code: code.trim(), p_name_ar: name.trim(), p_location: location.trim(), p_active: active });
     setBusy(false);
-    if (saveError) { setError(saveError.message); return; }
+    if (saveError) { setError(inventoryErrorText(saveError.message, t)); return; }
     toast({ title: t(editingId ? "تم تحديث المستودع" : "تم إنشاء المستودع") }); reset(); await load();
   };
 
   const remove = async (warehouse: WarehouseRow) => {
     if (!confirm(t("هل تريد حذف المستودع؟ لا يمكن حذف مستودع لديه حركات."))) return;
     setBusy(true); const { error: deleteError } = await supabase.rpc("delete_inventory_warehouse", { p_id: warehouse.id }); setBusy(false);
-    if (deleteError) { toast({ title: t("تعذر حذف المستودع"), description: deleteError.message, variant: "destructive" }); return; }
+    if (deleteError) { toast({ title: t("تعذر حذف المستودع"), description: inventoryErrorText(deleteError.message, t), variant: "destructive" }); return; }
     toast({ title: t("تم حذف المستودع") }); await load();
   };
 

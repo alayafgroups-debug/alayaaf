@@ -9,6 +9,12 @@ type Props = { empId: string; onBack: () => void };
 type EmpData = Record<string, string | null>;
 
 const TABS = ["المعلومات الشخصية", "العقد", "البنك"] as const;
+/**
+ * الحقول التي يعدّلها الموظف بنفسه. بقية البيانات (الاسم، الهوية، البريد، البنك، العقد)
+ * تُعدَّل عبر الموارد البشرية، وتمنع قاعدة البيانات تعديلها من البوابة.
+ */
+const SELF_EDITABLE_FIELDS = ["phone", "marital_status", "id_expiry_date"] as const;
+const isSelfEditable = (key: string) => (SELF_EDITABLE_FIELDS as readonly string[]).includes(key);
 type Tab = typeof TABS[number];
 
 export default function ProfilePage({ empId, onBack }: Props) {
@@ -38,11 +44,18 @@ export default function ProfilePage({ empId, onBack }: Props) {
 
   const save = async () => {
     setSaving(true);
-    const { error } = await supabase.from("employees").update(form).eq("emp_id", empId);
+    // إرسال الحقول المسموح بها فقط بدل السجل كاملًا
+    const payload = Object.fromEntries(
+      SELF_EDITABLE_FIELDS.map((key) => {
+        const value = form[key];
+        return [key, value === undefined || value === "" ? null : value];
+      }),
+    );
+    const { error } = await supabase.from("employees").update(payload).eq("emp_id", empId);
     if (error) toast.error(`${t("تعذر الحفظ")}: ${error.message}`);
     else {
       toast.success(t("تم حفظ البيانات"));
-      setData({ ...form });
+      setData((current) => ({ ...(current ?? {}), ...payload }));
       setEditMode(false);
     }
     setSaving(false);
@@ -121,12 +134,14 @@ export default function ProfilePage({ empId, onBack }: Props) {
         {/* Fields */}
         <div className="p-4 space-y-1">
           <h3 className="font-bold text-gray-800 mb-3">{t(activeTab)}</h3>
+          {editMode && <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("يمكنك تعديل الهاتف والحالة الاجتماعية وتاريخ انتهاء الهوية فقط. لتعديل الاسم أو الهوية أو البريد أو بيانات البنك تواصل مع الموارد البشرية.")}</p>}
           {activeFields.map(({ key, label }) => (
             <div key={key} className="flex items-center justify-between py-3 border-b border-gray-100">
               <span className="text-gray-500 text-sm">{t(label)}</span>
-              {editMode && activeTab !== "العقد" ? (
+              {editMode && isSelfEditable(key) ? (
                 <input
                   value={(form as any)[key] ?? ""}
+                  type={key === "id_expiry_date" ? "date" : "text"}
                   onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
                   className="border-b border-[#004e89] text-start outline-none text-sm text-gray-800 bg-transparent min-w-0 w-40"
                 />

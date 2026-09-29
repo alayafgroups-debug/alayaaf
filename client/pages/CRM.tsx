@@ -1,5 +1,5 @@
 import PlaceholderModule from "@/components/PlaceholderModule";
-import { SAUDI_VAT_NUMBER_PATTERN } from "@/lib/utils";
+import { SAUDI_VAT_NUMBER_PATTERN, riyadhDateString } from "@/lib/utils";
 import Layout from "@/components/Layout";
 import { Plus, Search, Filter, Eye, Pencil, Trash2, Save, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
@@ -351,7 +351,8 @@ export default function CRM() {
     const loadReportSummary = async () => {
       const { data, error } = await supabase
         .from("sales_invoices")
-        .select("total, paid, remaining, due_date");
+        .select("total, paid, remaining, adjusted_remaining, due_date, accounting_status")
+        .eq("accounting_status", "posted");
       if (error) {
         setReportSummary({
           totalReceivables: 0,
@@ -364,18 +365,21 @@ export default function CRM() {
 
       const amount = (value: unknown) =>
         Number(String(value ?? "0").replace(/[^0-9.-]/g, "")) || 0;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // المتبقي بعد الإشعارات الدائنة/المدينة إن وُجدت، وإلا المتبقي الأصلي.
+      const outstanding = (invoice: { remaining?: unknown; adjusted_remaining?: unknown }) =>
+        invoice.adjusted_remaining === null || invoice.adjusted_remaining === undefined
+          ? amount(invoice.remaining)
+          : amount(invoice.adjusted_remaining);
+      const todayText = riyadhDateString();
       const invoices = data ?? [];
       const overdue = invoices.filter((invoice) => {
-        const remaining = amount(invoice.remaining);
-        const dueAt = Date.parse(String(invoice.due_date ?? ""));
-        return remaining > 0 && Number.isFinite(dueAt) && dueAt < today.getTime();
+        const dueDate = String(invoice.due_date ?? "").slice(0, 10);
+        return outstanding(invoice) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(dueDate) && dueDate < todayText;
       });
 
       setReportSummary({
         totalReceivables: invoices.reduce(
-          (sum, invoice) => sum + amount(invoice.remaining),
+          (sum, invoice) => sum + outstanding(invoice),
           0,
         ),
         recentPayments: invoices.reduce(
@@ -383,7 +387,7 @@ export default function CRM() {
           0,
         ),
         overdueReceivables: overdue.reduce(
-          (sum, invoice) => sum + amount(invoice.remaining),
+          (sum, invoice) => sum + outstanding(invoice),
           0,
         ),
         alerts: overdue.length,
@@ -1072,7 +1076,7 @@ export default function CRM() {
                   <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.totalReceivables))}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("المدفوعات الأخيرة")}</p>
+                  <p className="text-xs text-muted-foreground">{t("إجمالي المحصّل من الفواتير")}</p>
                   <p className="mt-2 text-sm font-semibold text-foreground">{formatAmount(String(reportSummary.recentPayments))}</p>
                 </div>
                 <div className="rounded-lg border border-border/70 bg-muted/30 p-3">

@@ -1,14 +1,17 @@
 import Layout from "@/components/Layout";
-import { Download, Printer, RefreshCw, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Download, Printer, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/i18n";
-import { supabase } from "@/lib/supabaseClient";
+import { riyadhDateString } from "@/lib/utils";
+import { COMPANY_REPORT_BRAND, exportReportExcel, printReport, type ReportCell, type ReportColumn } from "@/lib/reportExport";
+import { accountClass, fetchPostedLedger, fiscalYearStart, isIncomeStatementAccount, type LedgerAccount, type LedgerEntry, type LedgerLine } from "@/lib/ledgerData";
 
 type ReportKind = "income" | "comprehensive" | "position";
-type Account = { code: string; name_ar: string; name_en: string | null };
-type Entry = { id: string; entry_date: string };
-type Line = { journal_entry_id: string; account_code: string; debit: number; credit: number };
-type Row = { label: string; values: number[]; total: number };
+type RowKind = "section" | "group" | "account" | "total" | "grand" | "check";
+type StatementRow = { key: string; kind: RowKind; label: string; values: number[] | null };
+type Statement = { headers: string[]; rows: StatementRow[]; warnings: string[]; summary: Array<{ label: string; value: number }> };
+type Translate = (text: string) => string;
 
 const REPORTS: { kind: ReportKind; label: string }[] = [
   { kind: "income", label: "قائمة الدخل" },
@@ -16,125 +19,276 @@ const REPORTS: { kind: ReportKind; label: string }[] = [
   { kind: "position", label: "قائمة المركز المالي" },
 ];
 
-const REPORT_CATALOG = [
-  { title: "ميزان المراجعة", items: ["ميزان المراجعة", "ميزان المراجعة حسب المشروع", "دفتر الأستاذ العام", "دفتر الأستاذ المساعد"] },
-  { title: "سندات", items: ["سندات القبض", "سندات الصرف", "كشف حساب الصندوق", "كشف حساب البنك"] },
-  { title: "المبيعات", items: ["كشف حساب عميل", "تفاصيل حساب العميل", "أعمار الديون", "المبيعات بحسب العميل"] },
-  { title: "مشتريات", items: ["ملخص أرصدة الموردين", "كشف حساب مورد", "أعمار الديون للموردين", "قائمة المدفوعات النقدية"] },
-  { title: "الرواتب", items: ["كشف حساب موظف", "كشف رواتب الموظفين", "تقرير البدلات والاستقطاعات", "تقرير مستحقات نهاية الخدمة"] },
-  { title: "الزكاة والضريبة", items: ["تقرير ضريبة القيمة المضافة", "تقرير الإقرارات الضريبية", "تقرير الزكاة"] },
-  { title: "إضافات", items: ["المصاريف المقدمة", "الأصول الثابتة", "الإهلاك المتراكم", "تكلفة المبيعات", "تقارير الإدارة (PDF)"] },
-] as const;
+/** تقارير فعلية موجودة في النظام بدل القائمة السابقة التي كانت تعرض أصفارًا ثابتة. */
+const REPORT_LINKS: { title: string; items: { label: string; path: string }[] }[] = [
+  { title: "ميزان المراجعة والدفاتر", items: [{ label: "ميزان المراجعة ودفتر الأستاذ وكشف الحساب", path: "/expenses/accountant" }] },
+  { title: "الزكاة والضريبة", items: [{ label: "تقارير ضريبة القيمة المضافة", path: "/expenses/tax-reports" }] },
+  { title: "المشتريات", items: [{ label: "تقارير المشتريات والموردين", path: "/purchases/reports" }] },
+  { title: "المبيعات والعملاء", items: [{ label: "تقارير العملاء والمبيعات", path: "/crm/reports" }] },
+  { title: "الأصول", items: [{ label: "الأصول الثابتة والإهلاك", path: "/expenses/fixed-assets" }] },
+];
 
+const EPSILON = 0.005;
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const isZero = (value: number) => Math.abs(value) < EPSILON;
+
+/** أشهر السنة المالية من يناير حتى شهر تاريخ النهاية. */
 function monthKeys(end: string) {
-  const date = new Date(`${end}T00:00:00`);
-  return Array.from({ length: date.getMonth() + 1 }, (_, index) => `${date.getFullYear()}-${String(index + 1).padStart(2, "0")}`);
+  const year = end.slice(0, 4);
+  const lastMonth = Number(end.slice(5, 7)) || 12;
+  return Array.from({ length: lastMonth }, (_, index) => `${year}-${String(index + 1).padStart(2, "0")}`);
 }
 
 export default function AccountingReports() {
   const { t, direction, locale, formatNumber } = useI18n();
+  const navigate = useNavigate();
   const [active, setActive] = useState<ReportKind>("income");
-  const [selectedCatalogReport, setSelectedCatalogReport] = useState<string | null>(null);
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [lines, setLines] = useState<Line[]>([]);
+  const [endDate, setEndDate] = useState(() => riyadhDateString());
+  const [accounts, setAccounts] = useState<LedgerAccount[]>([]);
+  const [entries, setEntries] = useState<LedgerEntry[]>([]);
+  const [lines, setLines] = useState<LedgerLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(endDate);
+  // يمنع ردًا متأخرًا لتاريخ سابق من الكتابة فوق نتيجة التاريخ الحالي.
+  const requestId = useRef(0);
 
   const load = async () => {
+    const current = ++requestId.current;
+    if (!validDate) { setError(t("اختر تاريخًا صحيحًا")); setLoading(false); return; }
     setLoading(true); setError("");
-    const [{ data: accountData, error: accountError }, { data: entryData, error: entryError }] = await Promise.all([
-      supabase.from("accounting_accounts").select("code, name_ar, name_en").order("code"),
-      supabase.from("accounting_journal_entries").select("id, entry_date").eq("status", "posted").lte("entry_date", endDate).order("entry_date"),
-    ]);
-    if (accountError || entryError) { setError(accountError?.message ?? entryError?.message ?? t("تعذر تحميل التقارير")); setLoading(false); return; }
-    const ids = (entryData ?? []).map((entry) => entry.id);
-    const { data: lineData, error: lineError } = ids.length
-      ? await supabase.from("accounting_journal_lines").select("journal_entry_id, account_code, debit, credit").in("journal_entry_id", ids)
-      : { data: [], error: null };
-    if (lineError) { setError(lineError.message); setLoading(false); return; }
-    setAccounts((accountData ?? []) as Account[]); setEntries((entryData ?? []) as Entry[]); setLines((lineData ?? []) as Line[]); setLoading(false);
+    try {
+      const ledger = await fetchPostedLedger(endDate);
+      if (current !== requestId.current) return;
+      setAccounts(ledger.accounts); setEntries(ledger.entries); setLines(ledger.lines);
+    } catch (loadError) {
+      if (current !== requestId.current) return;
+      setError(loadError instanceof Error ? loadError.message : t("تعذر تحميل التقارير"));
+    } finally {
+      if (current === requestId.current) setLoading(false);
+    }
   };
 
   useEffect(() => { void load(); }, [endDate]);
 
-  const report = useMemo(() => buildReport(active, endDate, accounts, entries, lines, locale), [active, endDate, accounts, entries, lines, locale]);
+  const statement = useMemo<Statement>(() => buildStatement(active, endDate, accounts, entries, lines, locale, t), [active, endDate, accounts, entries, lines, locale, t]);
   const activeLabel = REPORTS.find((report) => report.kind === active)?.label ?? "";
+  const periodText = active === "position"
+    ? `${t("كما في")} ${endDate}`
+    : `${t("من تاريخ")} ${validDate ? fiscalYearStart(endDate) : "—"} ${t("إلى تاريخ")} ${endDate}`;
+  const money = (value: number) => formatNumber(round2(value), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const canExport = !loading && !error && validDate;
+
+  const exportColumns: ReportColumn[] = [{ key: "label", label: t("البند"), width: 44 }, ...statement.headers.map((header, index) => ({ key: `v${index}`, label: header, width: 16 }))];
+  const exportRows = (asNumbers: boolean) => statement.rows.map((row) => {
+    const record: Record<string, ReportCell> = { label: row.kind === "account" ? `    ${row.label}` : row.label };
+    statement.headers.forEach((_, index) => {
+      const value = row.values?.[index];
+      record[`v${index}`] = value === undefined ? "" : asNumbers ? round2(value) : money(value);
+    });
+    return record;
+  });
+  const exportBase = { title: t(activeLabel), subtitle: `${periodText} — ${t("المبالغ بالريال السعودي")}`, columns: exportColumns, fileName: `${t(activeLabel)}-${endDate}`, landscape: statement.headers.length > 3, brand: COMPANY_REPORT_BRAND };
+  const handlePrint = () => {
+    setNotice("");
+    const opened = printReport({ ...exportBase, rows: exportRows(false), summary: statement.summary.map((item) => ({ label: item.label, value: money(item.value) })) });
+    if (!opened) setNotice(t("تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة."));
+  };
+  const handleExport = () => exportReportExcel({ ...exportBase, rows: exportRows(true), summary: statement.summary.map((item) => ({ label: item.label, value: round2(item.value) })) });
 
   return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4">
     <div className="mx-auto max-w-[1600px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
       <header className="border-t-2 border-red-600 px-4 py-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-1">{REPORTS.map((reportItem) => <button key={reportItem.kind} onClick={() => setActive(reportItem.kind)} className={`rounded px-3 py-1.5 text-xs font-semibold ${active === reportItem.kind ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{t(reportItem.label)}</button>)}</div>
-          <div className="flex items-center gap-2"><input value={endDate} onChange={(event) => setEndDate(event.target.value)} type="date" className="rounded border border-slate-200 px-2 py-1 text-xs" /><button onClick={() => void load()} className="rounded border border-slate-200 p-1.5" title={t("تحديث")}><RefreshCw className="h-3.5 w-3.5" /></button><button className="rounded border border-slate-200 p-1.5" title={t("طباعة")}><Printer className="h-3.5 w-3.5" /></button><button className="rounded border border-slate-200 p-1.5" title={t("تصدير")}><Download className="h-3.5 w-3.5" /></button></div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-[11px] text-slate-500">{active === "position" ? t("كما في") : t("حتى تاريخ")}<input value={endDate} onChange={(event) => setEndDate(event.target.value)} type="date" className="rounded border border-slate-200 px-2 py-1 text-xs" /></label>
+            <button onClick={() => void load()} className="rounded border border-slate-200 p-1.5" title={t("تحديث")}><RefreshCw className="h-3.5 w-3.5" /></button>
+            <button onClick={handlePrint} disabled={!canExport} className="rounded border border-slate-200 p-1.5 disabled:opacity-40" title={t("طباعة")}><Printer className="h-3.5 w-3.5" /></button>
+            <button onClick={handleExport} disabled={!canExport} className="rounded border border-slate-200 p-1.5 disabled:opacity-40" title={t("تصدير Excel")}><Download className="h-3.5 w-3.5" /></button>
+          </div>
         </div>
       </header>
       <section className="p-4">
-        <h1 className="text-center text-sm font-bold text-slate-800">{t(activeLabel)}</h1><p className="mt-1 text-center text-[11px] text-slate-400">{t("حتى تاريخ")} {endDate}</p>
-        {loading ? <State text={t("جاري التحميل...")} /> : error ? <State text={error} /> : <ReportTable report={report} headers={active === "position" ? [t("الرصيد")] : report.months.map((month) => month)} formatNumber={formatNumber} />}
+        <h1 className="text-center text-sm font-bold text-slate-800">{t(activeLabel)}</h1>
+        <p className="mt-1 text-center text-[11px] text-slate-400">{periodText} — {t("المبالغ بالريال السعودي")} — {t("القيود المرحّلة فقط")}</p>
+        {notice ? <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{notice}</p> : null}
+        {!loading && !error && statement.warnings.length ? <div className="mt-3 space-y-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{statement.warnings.map((warning) => <p key={warning} className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{warning}</p>)}</div> : null}
+        {loading ? <State text={t("جاري التحميل...")} /> : error ? <State text={error} /> : <StatementTable statement={statement} money={money} />}
 
         <section className="mt-6 border-t border-slate-200 pt-5">
           <h2 className="mb-3 text-sm font-bold text-slate-800">{t("باقي التقارير")}</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {REPORT_CATALOG.map((section) => <div key={section.title} className="overflow-hidden rounded border border-slate-200 bg-white">
+            {REPORT_LINKS.map((section) => <div key={section.title} className="overflow-hidden rounded border border-slate-200 bg-white">
               <h3 className="bg-slate-800 px-3 py-2 text-xs font-bold text-white">{t(section.title)}</h3>
-              <div className="divide-y divide-slate-100">{section.items.map((item) => <button key={item} onClick={() => setSelectedCatalogReport(item)} className="flex w-full items-center justify-between px-3 py-2 text-start text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700"><span>{t(item)}</span><span className="text-slate-300">‹</span></button>)}</div>
+              <div className="divide-y divide-slate-100">{section.items.map((item) => <button key={item.path} onClick={() => navigate(item.path)} className="flex w-full items-center justify-between px-3 py-2 text-start text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700"><span>{t(item.label)}</span><span className="text-slate-300">‹</span></button>)}</div>
             </div>)}
           </div>
         </section>
       </section>
     </div>
-    {selectedCatalogReport ? <ReportDetailsModal report={selectedCatalogReport} endDate={endDate} onClose={() => setSelectedCatalogReport(null)} /> : null}
   </main></Layout>;
 }
 
-function buildReport(kind: ReportKind, endDate: string, accounts: Account[], entries: Entry[], lines: Line[], locale: string) {
-  const accountName = new Map(accounts.map((account) => [account.code, locale === "en" && account.name_en ? account.name_en : account.name_ar]));
-  const entryMonth = new Map(entries.map((entry) => [entry.id, entry.entry_date.slice(0, 7)]));
-  const months = kind === "position" ? [endDate] : monthKeys(endDate);
-  const buckets = new Map<string, number[]>();
+function buildStatement(kind: ReportKind, endDate: string, accounts: LedgerAccount[], entries: LedgerEntry[], lines: LedgerLine[], locale: string, t: Translate): Statement {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { headers: [], rows: [], warnings: [], summary: [] };
+  const nameOf = new Map(accounts.map((account) => [account.code, locale === "en" && account.name_en ? account.name_en : account.name_ar]));
+  const accountLabel = (code: string) => `${code} - ${nameOf.get(code) ?? code}`;
+  const entryDate = new Map(entries.map((entry) => [entry.id, entry.entry_date]));
+  const yearStart = fiscalYearStart(endDate);
+  const warnings: string[] = [];
+
+  const unclassified = new Set<string>();
+  const missingEntries = lines.filter((line) => !entryDate.has(line.journal_entry_id)).length;
+  if (missingEntries) warnings.push(`${t("أسطر قيود بلا قيد مرحّل مطابق ولم تُحتسب")}: ${missingEntries}`);
+
+  /** يبني أقسام الحسابات مجمّعة على المستوى الأول (أول رقمين من الكود). */
+  const buildSection = (classes: string[], sign: (line: LedgerLine) => number, bucketOf: (date: string) => number, width: number, filter: (date: string) => boolean) => {
+    const byAccount = new Map<string, number[]>();
+    for (const line of lines) {
+      const date = entryDate.get(line.journal_entry_id);
+      if (!date || !filter(date)) continue;
+      if (!classes.includes(accountClass(line.account_code))) continue;
+      const index = bucketOf(date);
+      if (index < 0 || index >= width) continue;
+      const values = byAccount.get(line.account_code) ?? Array<number>(width).fill(0);
+      values[index] += sign(line);
+      byAccount.set(line.account_code, values);
+    }
+    const groups = new Map<string, { code: string; accounts: { code: string; values: number[] }[] }>();
+    [...byAccount.entries()].sort(([first], [second]) => first.localeCompare(second)).forEach(([code, values]) => {
+      if (values.every(isZero)) return;
+      const groupCode = code.slice(0, 2);
+      const group = groups.get(groupCode) ?? { code: groupCode, accounts: [] };
+      group.accounts.push({ code, values });
+      groups.set(groupCode, group);
+    });
+    const rows: StatementRow[] = [];
+    const total = Array<number>(width).fill(0);
+    [...groups.values()].forEach((group) => {
+      const subtotal = Array<number>(width).fill(0);
+      group.accounts.forEach((account) => account.values.forEach((value, index) => { subtotal[index] += value; total[index] += value; }));
+      rows.push({ key: `group-${group.code}`, kind: "group", label: accountLabel(group.code), values: subtotal });
+      group.accounts.forEach((account) => rows.push({ key: `account-${account.code}`, kind: "account", label: accountLabel(account.code), values: account.values }));
+    });
+    return { rows, total };
+  };
+
+  const creditNormal = (line: LedgerLine) => line.credit - line.debit;
+  const debitNormal = (line: LedgerLine) => line.debit - line.credit;
+
   for (const line of lines) {
-    const root = line.account_code.charAt(0); const month = entryMonth.get(line.journal_entry_id); const index = months.indexOf(month ?? "");
-    if (index < 0 && kind !== "position") continue;
-    const include = kind === "position" ? ["1", "2", "3"].includes(root) : ["4", "5"].includes(root);
-    if (!include) continue;
-    const normal = root === "4" || root === "2" || root === "3" ? Number(line.credit) - Number(line.debit) : Number(line.debit) - Number(line.credit);
-    const values = buckets.get(line.account_code) ?? Array(months.length).fill(0);
-    if (kind === "position") for (let i = 0; i < values.length; i++) values[i] += normal; else values[index] += normal;
-    buckets.set(line.account_code, values);
+    if (!["1", "2", "3", "4", "5"].includes(accountClass(line.account_code))) unclassified.add(line.account_code);
   }
-  const rows: Row[] = [...buckets.entries()].map(([code, values]) => ({ label: `${code} - ${accountName.get(code) ?? code}`, values, total: values.reduce((sum, value) => sum + value, 0) }));
-  if (kind === "comprehensive") rows.push({ label: locale === "en" ? "Other comprehensive income" : "الدخل الشامل الآخر", values: Array(months.length).fill(0), total: 0 });
-  return { months: kind === "position" ? [endDate] : months, rows };
-}
+  if (unclassified.size) warnings.push(`${t("حسابات عليها حركات خارج تصنيف القوائم (1-5) ولم تظهر في القائمة")}: ${[...unclassified].join("، ")}`);
 
-function ReportTable({ report, headers, formatNumber }: { report: { rows: Row[] }; headers: string[]; formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string }) {
-  const { t } = useI18n();
-  const total = Array(headers.length).fill(0) as number[];
-  report.rows.forEach((row) => row.values.forEach((value, index) => { if (index < total.length) total[index] += value; }));
-  return <div className="mt-4 overflow-x-auto"><table className="min-w-full text-[11px]"><thead className="bg-slate-100 text-slate-600"><tr><th className="min-w-64 border-b px-3 py-2 text-start">{t("البند")}</th>{headers.map((header) => <th key={header} className="min-w-28 border-b px-2 py-2">{header}</th>)}</tr></thead><tbody>{report.rows.map((row) => <tr key={row.label} className="border-b border-slate-100"><td className="px-3 py-2 font-medium">{row.label}</td>{headers.map((_, index) => <td key={index} className="px-2 py-2 text-center text-indigo-600">{formatNumber(row.values[index] ?? row.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>)}</tr>)}</tbody><tfoot className="bg-slate-100 font-bold"><tr><td className="px-3 py-2">{t("الإجمالي")}</td>{total.map((value, index) => <td key={index} className="px-2 py-2 text-center">{formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>)}</tr></tfoot></table></div>;
-}
-function State({ text }: { text: string }) { return <div className="py-16 text-center text-sm text-slate-500">{text}</div>; }
+  if (kind === "income" || kind === "comprehensive") {
+    const months = monthKeys(endDate);
+    const width = months.length + 1;
+    const monthIndex = (date: string) => months.indexOf(date.slice(0, 7));
+    const inPeriod = (date: string) => date >= yearStart && date <= endDate;
+    const withTotal = (values: number[]) => { const copy = values.slice(0, months.length); copy.push(copy.reduce((sum, value) => sum + value, 0)); return copy; };
+    const revenue = buildSection(["4"], creditNormal, monthIndex, months.length, inPeriod);
+    const expenses = buildSection(["5"], debitNormal, monthIndex, months.length, inPeriod);
+    const net = revenue.total.map((value, index) => value - expenses.total[index]);
+    const rows: StatementRow[] = [
+      { key: "section-revenue", kind: "section", label: t("الإيرادات"), values: null },
+      ...revenue.rows.map((row) => ({ ...row, values: row.values ? withTotal(row.values) : null })),
+      { key: "total-revenue", kind: "total", label: t("إجمالي الإيرادات"), values: withTotal(revenue.total) },
+      { key: "section-expenses", kind: "section", label: t("المصروفات والتكاليف"), values: null },
+      ...expenses.rows.map((row) => ({ ...row, values: row.values ? withTotal(row.values) : null })),
+      { key: "total-expenses", kind: "total", label: t("إجمالي المصروفات والتكاليف"), values: withTotal(expenses.total) },
+      { key: "net-profit", kind: "grand", label: t("صافي الربح (الخسارة) للفترة"), values: withTotal(net) },
+    ];
+    const netTotal = withTotal(net)[months.length];
+    const summary = [
+      { label: t("إجمالي الإيرادات"), value: withTotal(revenue.total)[months.length] },
+      { label: t("إجمالي المصروفات والتكاليف"), value: withTotal(expenses.total)[months.length] },
+      { label: t("صافي الربح (الخسارة) للفترة"), value: netTotal },
+    ];
+    if (kind === "comprehensive") {
+      rows.push(
+        { key: "section-oci", kind: "section", label: t("الدخل الشامل الآخر"), values: null },
+        { key: "oci", kind: "account", label: t("بنود الدخل الشامل الآخر"), values: Array<number>(width).fill(0) },
+        { key: "total-comprehensive", kind: "grand", label: t("إجمالي الدخل الشامل للفترة"), values: withTotal(net) },
+      );
+      warnings.push(t("لا توجد في دليل الحسابات حسابات للدخل الشامل الآخر، لذلك يساوي إجمالي الدخل الشامل صافي الربح."));
+      summary.push({ label: t("إجمالي الدخل الشامل للفترة"), value: netTotal });
+    }
+    return { headers: [...months, t("الإجمالي من بداية السنة")], rows, warnings, summary };
+  }
 
-function ReportDetailsModal({ report, endDate, onClose }: { report: string; endDate: string; onClose: () => void }) {
-  const { t, direction, formatNumber } = useI18n();
-  const detailRows = [
-    { counterparty: "", date: "", reference: "", debit: 0, credit: 0, balance: 0 },
+  // قائمة المركز المالي كما في تاريخ النهاية.
+  const asAt = (date: string) => date <= endDate;
+  const single = () => 0;
+  const assets = buildSection(["1"], debitNormal, single, 1, asAt);
+  const liabilities = buildSection(["2"], creditNormal, single, 1, asAt);
+  const equity = buildSection(["3"], creditNormal, single, 1, asAt);
+  let priorYearsResult = 0;
+  let currentPeriodResult = 0;
+  for (const line of lines) {
+    const date = entryDate.get(line.journal_entry_id);
+    if (!date || date > endDate || !isIncomeStatementAccount(line.account_code)) continue;
+    if (date < yearStart) priorYearsResult += creditNormal(line);
+    else currentPeriodResult += creditNormal(line);
+  }
+  const totalAssets = assets.total[0];
+  const totalLiabilities = liabilities.total[0];
+  const totalEquity = equity.total[0] + priorYearsResult + currentPeriodResult;
+  const difference = totalAssets - (totalLiabilities + totalEquity);
+  if (!isZero(priorYearsResult)) warnings.push(t("توجد أرباح/خسائر من سنوات سابقة لم تُقفل في الأرباح المحتجزة؛ عُرضت ضمن حقوق الملكية في سطر مستقل."));
+  if (!isZero(difference)) warnings.push(`${t("قائمة المركز المالي غير متوازنة؛ راجع الحسابات خارج التصنيف أو القيود")}: ${round2(difference)}`);
+  const rows: StatementRow[] = [
+    { key: "section-assets", kind: "section", label: t("الأصول"), values: null },
+    ...assets.rows,
+    { key: "total-assets", kind: "grand", label: t("إجمالي الأصول"), values: [totalAssets] },
+    { key: "section-liabilities", kind: "section", label: t("الخصوم"), values: null },
+    ...liabilities.rows,
+    { key: "total-liabilities", kind: "total", label: t("إجمالي الخصوم"), values: [totalLiabilities] },
+    { key: "section-equity", kind: "section", label: t("حقوق الملكية"), values: null },
+    ...equity.rows,
+    ...(!isZero(priorYearsResult) ? [{ key: "prior-years", kind: "account" as const, label: t("أرباح (خسائر) سنوات سابقة غير مقفلة"), values: [priorYearsResult] }] : []),
+    { key: "current-result", kind: "account", label: t("صافي ربح (خسارة) الفترة الحالية"), values: [currentPeriodResult] },
+    { key: "total-equity", kind: "total", label: t("إجمالي حقوق الملكية"), values: [totalEquity] },
+    { key: "total-liabilities-equity", kind: "grand", label: t("إجمالي الخصوم وحقوق الملكية"), values: [totalLiabilities + totalEquity] },
+    { key: "check", kind: "check", label: t("الفرق (الأصول − الخصوم وحقوق الملكية)"), values: [difference] },
   ];
-
-  return <div dir={direction} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={onClose}>
-    <section className="max-h-[90vh] w-full max-w-6xl overflow-auto rounded-xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-      <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-        <div><p className="text-xs text-slate-400">{t("التقارير")} / {t("المبيعات")}</p><h2 className="mt-1 text-lg font-bold text-slate-800">{t(report)}</h2></div>
-        <button onClick={onClose} className="rounded p-2 text-slate-500 hover:bg-slate-100" title={t("إغلاق")}><X className="h-5 w-5" /></button>
-      </header>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
-        <div className="flex flex-wrap gap-2"><select className="rounded border border-slate-200 bg-white px-3 py-2 text-xs"><option>{t("كل العملاء")}</option></select><select className="rounded border border-slate-200 bg-white px-3 py-2 text-xs"><option>{t("كل الفروع")}</option></select><input type="date" value={endDate} readOnly className="rounded border border-slate-200 bg-white px-3 py-2 text-xs" /></div>
-        <div className="flex gap-2"><button className="rounded border border-slate-200 bg-white px-3 py-2 text-xs">{t("تفاصيل")}</button><button className="rounded bg-blue-700 px-3 py-2 text-xs text-white">{t("تحديث")}</button></div>
-      </div>
-      <div className="p-5"><div className="overflow-x-auto rounded border border-slate-200"><table className="min-w-full text-xs"><thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-3 text-start">{t("جهة التعامل")}</th><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الرقم")}</th><th className="px-3 py-3">{t("الحركة")}</th><th className="px-3 py-3">{t("مدين")}</th><th className="px-3 py-3">{t("دائن")}</th><th className="px-3 py-3">{t("الرصيد")}</th></tr></thead><tbody>{detailRows.map((row, index) => <tr key={index} className="border-t border-slate-100"><td className="px-3 py-4 text-slate-400">{t("لا توجد بيانات للفترة المحددة")}</td><td className="px-3 py-4 text-center">—</td><td className="px-3 py-4 text-center">—</td><td className="px-3 py-4 text-center">—</td><td className="px-3 py-4 text-center">{formatNumber(row.debit, { minimumFractionDigits: 2 })}</td><td className="px-3 py-4 text-center">{formatNumber(row.credit, { minimumFractionDigits: 2 })}</td><td className="px-3 py-4 text-center">{formatNumber(row.balance, { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div>
-      <p className="mt-3 text-xs text-slate-400">{t("سيتم ربط هذا التقرير بحركات العملاء والفواتير والسداد الفعلية عند تفعيل مصدره المحاسبي.")}</p></div>
-    </section>
-  </div>;
+  return {
+    headers: [t("الرصيد")],
+    rows,
+    warnings,
+    summary: [
+      { label: t("إجمالي الأصول"), value: totalAssets },
+      { label: t("إجمالي الخصوم وحقوق الملكية"), value: totalLiabilities + totalEquity },
+      { label: t("الفرق"), value: difference },
+    ],
+  };
 }
+
+function StatementTable({ statement, money }: { statement: Statement; money: (value: number) => string }) {
+  const { t } = useI18n();
+  if (!statement.rows.length) return <State text={t("لا توجد حركات مرحّلة للفترة المحددة")} />;
+  const rowClass: Record<RowKind, string> = {
+    section: "bg-slate-800 text-white font-bold",
+    group: "bg-slate-50 font-semibold text-slate-700",
+    account: "text-slate-600",
+    total: "bg-slate-100 font-bold text-slate-800",
+    grand: "bg-blue-50 font-bold text-blue-900 border-y-2 border-blue-200",
+    check: "font-semibold text-slate-500",
+  };
+  return <div className="mt-4 overflow-x-auto"><table className="min-w-full text-[11px]">
+    <thead className="bg-slate-100 text-slate-600"><tr><th className="min-w-72 border-b px-3 py-2 text-start">{t("البند")}</th>{statement.headers.map((header) => <th key={header} className="min-w-28 border-b px-2 py-2">{header}</th>)}</tr></thead>
+    <tbody>{statement.rows.map((row) => <tr key={row.key} className={`border-b border-slate-100 ${rowClass[row.kind]}`}>
+      <td className={`px-3 py-2 ${row.kind === "account" ? "ps-8" : ""}`}>{row.label}</td>
+      {statement.headers.map((_, index) => {
+        const value = row.values?.[index];
+        const negative = value !== undefined && value < -EPSILON;
+        const checkFailed = row.kind === "check" && value !== undefined && !isZero(value);
+        return <td key={index} className={`px-2 py-2 text-center tabular-nums ${negative && row.kind !== "section" ? "text-red-600" : ""} ${checkFailed ? "bg-red-50 text-red-700" : ""}`}>{value === undefined ? "" : money(value)}</td>;
+      })}
+    </tr>)}</tbody>
+  </table></div>;
+}
+
+function State({ text }: { text: string }) { return <div className="py-16 text-center text-sm text-slate-500">{text}</div>; }

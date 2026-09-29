@@ -4,6 +4,8 @@ import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { riyadhDateString } from "@/lib/utils";
+import { fetchControlAccountCodes } from "@/lib/ledgerData";
 
 type Account = { code: string; name_ar: string; parent_code: string | null };
 type Candidate = {
@@ -30,7 +32,7 @@ type Reclassification = {
 };
 
 const amount = (value: unknown) => Number(value ?? 0) || 0;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => riyadhDateString();
 const monthStart = () => `${today().slice(0, 7)}-01`;
 
 export default function BulkReclassification() {
@@ -55,9 +57,10 @@ export default function BulkReclassification() {
 
   const loadBase = async () => {
     setLoading(true);
-    const [accountResult, historyResult] = await Promise.all([
+    const [accountResult, historyResult, controlCodes] = await Promise.all([
       supabase.from("accounting_accounts").select("code, name_ar, parent_code").order("code"),
       supabase.from("accounting_reclassifications").select("id, journal_entry_id, source_account_code, destination_account_code, entry_date, description, selected_line_count, total_debit, total_credit, created_at").order("created_at", { ascending: false }).limit(100),
+      fetchControlAccountCodes(),
     ]);
     const firstError = accountResult.error ?? historyResult.error;
     if (firstError) {
@@ -66,7 +69,8 @@ export default function BulkReclassification() {
       return;
     }
     const allAccounts = (accountResult.data ?? []) as Account[];
-    setAccounts(allAccounts.filter((account) => !allAccounts.some((child) => child.parent_code === account.code)));
+    // حسابات الرقابة (الذمم، الموردون، ضريبة المخرجات والمدخلات، المخزون) لا يُعاد تصنيفها يدويًا حتى تبقى مطابقة لمستنداتها.
+    setAccounts(allAccounts.filter((account) => !allAccounts.some((child) => child.parent_code === account.code) && !controlCodes.has(account.code)));
     setHistory((historyResult.data ?? []).map((row) => ({
       id: String(row.id), journalEntryId: String(row.journal_entry_id), sourceCode: String(row.source_account_code),
       destinationCode: String(row.destination_account_code), date: String(row.entry_date), description: String(row.description),

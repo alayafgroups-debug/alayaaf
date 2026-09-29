@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Printer, RefreshCw } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
-import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
+import { COMPANY_REPORT_BRAND, exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
 import { supabase } from "@/lib/supabaseClient";
 
 type ReportId = "balances" | "movements" | "monthly" | "issues" | "transfers" | "counts" | "adjustments" | "manufacturing" | "assembly" | "reconciliation";
@@ -259,7 +259,7 @@ export default function InventoryReports() {
     };
   }, [adjustmentById, adjustmentLines, assemblyOrders, countById, countLines, dateFrom, dateTo, journalLines, manufacturingOrders, movements, productById, productFilter, products, transferById, warehouseById, warehouseFilter, locale, formatNumber, t, view]);
 
-  const exportOptions = { title: t(currentReport.label), subtitle: view === "reconciliation" ? `${t("حتى تاريخ")} ${dateTo}` : `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: currentReport.label, summary: report.summary, landscape: true };
+  const exportOptions = { title: t(currentReport.label), subtitle: view === "reconciliation" ? `${t("حتى تاريخ")} ${dateTo}` : `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: currentReport.label, summary: report.summary, landscape: true, brand: COMPANY_REPORT_BRAND };
 
   return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4"><div className="mx-auto max-w-[1600px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
     <header className="border-t-2 border-red-700 px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] text-slate-400">{t("المخزون")} / {t("التقارير")}</p><h1 className="text-base font-bold text-slate-800">{t(currentReport.label)}</h1></div><div className="flex gap-1"><button onClick={() => void load()} className="rounded border border-slate-200 p-2" title={t("تحديث")}><RefreshCw className="h-4 w-4" /></button><button onClick={() => printReport(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("طباعة")}><Printer className="h-4 w-4" /></button><button onClick={() => exportReportExcel(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("تصدير Excel")}><Download className="h-4 w-4" /></button></div></div></header>

@@ -7,7 +7,6 @@ export const salesFeatures = [
   { label: "فواتير المبيعات", href: "/sales/invoices" },
   { label: "إشعار دائن", href: "/sales/credit-note" },
   { label: "إشعار تسليم", href: "/inventory/delivery-notes" },
-  { label: "سندات القبض والصرف", href: "/expenses/petty-cash" },
   { label: "تقارير المبيعات المتقدمة" },
   { label: "تتبع الحالة والتنبيهات" },
 ];

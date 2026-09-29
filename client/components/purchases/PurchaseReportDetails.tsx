@@ -2,7 +2,7 @@ import { Download, Printer, RefreshCw, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
-import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
+import { COMPANY_REPORT_BRAND, exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
 
 type PurchaseItem = {
   description: string;
@@ -265,7 +265,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
   }, [dateFrom, dateTo, formatNumber, invoices, notes, payments, selectedVendor, t, type, vendors]);
 
   const title = type ? report : t("تقرير المشتريات");
-  const exportOptions = { title, subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: columns as ReportColumn[], rows, fileName: title, summary, landscape: true };
+  const exportOptions = { title, subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: columns as ReportColumn[], rows, fileName: title, summary, landscape: true, brand: COMPANY_REPORT_BRAND };
 
   return <div dir={direction} className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4" onMouseDown={onClose}>
     <section className="mx-auto w-full max-w-7xl overflow-hidden rounded border border-slate-200 bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>

@@ -1,10 +1,11 @@
 import { BookOpen, Calculator, Download, Landmark, Printer, RefreshCw, Scale, WalletCards } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
-import { supabase } from "@/lib/supabaseClient";
-import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
+import { riyadhDateString } from "@/lib/utils";
+import { COMPANY_REPORT_BRAND, exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
+import { fetchPostedLedger, fiscalYearStart, isIncomeStatementAccount } from "@/lib/ledgerData";
 
 type View = "trial" | "statement" | "general" | "subsidiary" | "reconciliation" | "revalue";
 type Account = { code: string; name_ar: string; name_en: string | null };
@@ -28,7 +29,7 @@ const isEmpty = (value: unknown) => value === null || value === undefined || val
 export default function AccountantWorkspace() {
   const { t, direction, locale, formatNumber } = useI18n();
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
+  const [today] = useState(() => riyadhDateString());
   const [view, setView] = useState<View>("trial");
   const [dateFrom, setDateFrom] = useState(() => `${today.slice(0, 4)}-01-01`);
   const [dateTo, setDateTo] = useState(today);
@@ -39,8 +40,11 @@ export default function AccountantWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const invalidRange = dateFrom > dateTo;
+  // يمنع ردًا متأخرًا لتاريخ سابق من الكتابة فوق نتيجة التاريخ الحالي.
+  const requestId = useRef(0);
 
   const load = async () => {
+    const current = ++requestId.current;
     if (invalidRange) {
       setError(t("تاريخ البداية يجب أن يسبق تاريخ النهاية"));
       setLoading(false);
@@ -48,34 +52,26 @@ export default function AccountantWorkspace() {
     }
     setLoading(true);
     setError("");
-    const [accountsResult, entriesResult] = await Promise.all([
-      supabase.from("accounting_accounts").select("code, name_ar, name_en").order("code"),
-      supabase.from("accounting_journal_entries").select("id, entry_date, created_at, description, source_document_id").eq("status", "posted").lte("entry_date", dateTo).order("entry_date").order("created_at").order("id"),
-    ]);
-    const initialError = accountsResult.error ?? entriesResult.error;
-    if (initialError) {
-      setError(initialError.message);
+    let ledger: Awaited<ReturnType<typeof fetchPostedLedger>>;
+    try {
+      // قراءة كاملة بترقيم صفحات حتى لا تُقطع الحركات بصمت بعد 1000 سطر.
+      ledger = await fetchPostedLedger(dateTo);
+    } catch (loadError) {
+      if (current !== requestId.current) return;
+      setError(loadError instanceof Error ? loadError.message : t("تعذر تحميل التقارير"));
       setLoading(false);
       return;
     }
-    const ids = (entriesResult.data ?? []).map((entry) => entry.id);
-    const linesResult = ids.length
-      ? await supabase.from("accounting_journal_lines").select("id, journal_entry_id, account_code, debit, credit, counterparty").in("journal_entry_id", ids).order("id")
-      : { data: [], error: null };
-    if (linesResult.error) {
-      setError(linesResult.error.message);
-      setLoading(false);
-      return;
-    }
-    setAccounts((accountsResult.data ?? []) as Account[]);
-    setEntries((entriesResult.data ?? []).map((entry) => ({
+    if (current !== requestId.current) return;
+    setAccounts(ledger.accounts as Account[]);
+    setEntries(ledger.entries.map((entry) => ({
       id: String(entry.id),
       date: String(entry.entry_date),
       createdAt: String(entry.created_at ?? ""),
       description: String(entry.description ?? ""),
       reference: String(entry.source_document_id ?? entry.id),
     })));
-    setLines((linesResult.data ?? []).map((line) => ({
+    setLines(ledger.lines.map((line) => ({
       id: String(line.id),
       entryId: String(line.journal_entry_id),
       account: String(line.account_code),
@@ -104,7 +100,12 @@ export default function AccountantWorkspace() {
   const report = useMemo<ReportResult>(() => {
     const money = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const filtered = lines.filter((line) => !accountFilter || line.account === accountFilter);
-    const openingLines = filtered.filter((line) => (entryById.get(line.entryId)?.date ?? "") < dateFrom);
+    // حسابات الإيرادات والمصروفات تبدأ من صفر في بداية كل سنة مالية؛ ما قبلها يُعرض كأرباح سنوات سابقة غير مقفلة.
+    const yearStart = fiscalYearStart(dateFrom);
+    const isPriorYearsResult = (line: JournalLine) => isIncomeStatementAccount(line.account) && (entryById.get(line.entryId)?.date ?? "") < yearStart;
+    const openingLines = filtered.filter((line) => (entryById.get(line.entryId)?.date ?? "") < dateFrom && !isPriorYearsResult(line));
+    const priorYearsResult = accountFilter ? 0 : lines.filter(isPriorYearsResult).reduce((sum, line) => sum + line.debit - line.credit, 0);
+    const priorYearsLabel = t("أرباح (خسائر) سنوات سابقة غير مقفلة");
     const periodLines = filtered.filter((line) => {
       const date = entryById.get(line.entryId)?.date ?? "";
       return date >= dateFrom && date <= dateTo;
@@ -125,19 +126,20 @@ export default function AccountantWorkspace() {
         value.count += 1;
         grouped.set(line.account, value);
       });
-      const balances = [...grouped.entries()].map(([code, value]) => ({ code, ...value, closing: value.opening + value.debit - value.credit })).filter((value) => Math.abs(value.opening) > 0.001 || value.debit || value.credit);
+      const balances = [...grouped.entries()].sort(([first], [second]) => first.localeCompare(second)).map(([code, value]) => ({ code, name: accountNames.get(code) ?? code, ...value, closing: value.opening + value.debit - value.credit })).filter((value) => Math.abs(value.opening) > 0.001 || value.debit || value.credit);
+      if (Math.abs(priorYearsResult) > 0.001) balances.push({ code: "", name: priorYearsLabel, opening: priorYearsResult, debit: 0, credit: 0, count: 0, closing: priorYearsResult });
       const closingDebit = balances.reduce((sum, value) => sum + Math.max(value.closing, 0), 0);
       const closingCredit = balances.reduce((sum, value) => sum + Math.max(-value.closing, 0), 0);
       if (view === "statement") {
         return {
           columns: [{ key: "account", label: t("الحساب") }, { key: "count", label: t("عدد الحركات") }, { key: "opening", label: t("الرصيد الافتتاحي SAR") }, { key: "debit", label: t("حركة مدين SAR") }, { key: "credit", label: t("حركة دائن SAR") }, { key: "closing", label: t("الرصيد الختامي SAR") }],
-          rows: balances.map((value) => ({ account: `${value.code} - ${accountNames.get(value.code) ?? value.code}`, count: value.count, opening: money(value.opening), debit: money(value.debit), credit: money(value.credit), closing: money(value.closing) })),
+          rows: balances.map((value) => ({ account: value.code ? `${value.code} - ${value.name}` : value.name, count: value.count, opening: money(value.opening), debit: money(value.debit), credit: money(value.credit), closing: money(value.closing) })),
           summary: [{ label: t("إجمالي حركة المدين"), value: money(periodTotals.debit) }, { label: t("إجمالي حركة الدائن"), value: money(periodTotals.credit) }, { label: t("فرق الحركات"), value: money(periodTotals.debit - periodTotals.credit) }],
         };
       }
       return {
         columns: [{ key: "code", label: t("رقم الحساب") }, { key: "account", label: t("الحساب") }, { key: "openingDebit", label: t("افتتاحي مدين") }, { key: "openingCredit", label: t("افتتاحي دائن") }, { key: "periodDebit", label: t("حركة مدين") }, { key: "periodCredit", label: t("حركة دائن") }, { key: "closingDebit", label: t("ختامي مدين") }, { key: "closingCredit", label: t("ختامي دائن") }],
-        rows: balances.map((value) => ({ code: value.code, account: accountNames.get(value.code) ?? value.code, openingDebit: money(Math.max(value.opening, 0)), openingCredit: money(Math.max(-value.opening, 0)), periodDebit: money(value.debit), periodCredit: money(value.credit), closingDebit: money(Math.max(value.closing, 0)), closingCredit: money(Math.max(-value.closing, 0)) })),
+        rows: balances.map((value) => ({ code: value.code || "—", account: value.name, openingDebit: money(Math.max(value.opening, 0)), openingCredit: money(Math.max(-value.opening, 0)), periodDebit: money(value.debit), periodCredit: money(value.credit), closingDebit: money(Math.max(value.closing, 0)), closingCredit: money(Math.max(-value.closing, 0)) })),
         summary: [{ label: t("إجمالي الختامي المدين"), value: money(closingDebit) }, { label: t("إجمالي الختامي الدائن"), value: money(closingCredit) }, { label: t("فرق ميزان المراجعة"), value: money(closingDebit - closingCredit) }],
       };
     }
@@ -162,11 +164,11 @@ export default function AccountantWorkspace() {
     return {
       columns: [{ key: "date", label: t("التاريخ") }, { key: "reference", label: t("الرقم") }, { key: "account", label: t("الحساب") }, ...(view === "subsidiary" ? [{ key: "counterparty", label: t("جهة التعامل") }] : []), { key: "description", label: t("الحركة") }, { key: "debit", label: t("مدين SAR") }, { key: "credit", label: t("دائن SAR") }, { key: "balance", label: t("رصيد الحساب SAR") }],
       rows: movementRows,
-      summary: [{ label: t("إجمالي المدين"), value: money(periodTotals.debit) }, { label: t("إجمالي الدائن"), value: money(periodTotals.credit) }, { label: accountFilter ? t("الرصيد الختامي للحساب") : t("صافي الأرصدة المعروضة"), value: money(finalBalance) }, { label: t("عدد السجلات"), value: movementRows.length }],
+      summary: [{ label: t("إجمالي المدين"), value: money(periodTotals.debit) }, { label: t("إجمالي الدائن"), value: money(periodTotals.credit) }, { label: accountFilter ? t("الرصيد الختامي للحساب") : t("صافي الأرصدة المعروضة"), value: money(finalBalance) }, ...(Math.abs(priorYearsResult) > 0.001 ? [{ label: priorYearsLabel, value: money(priorYearsResult) }] : []), { label: t("عدد السجلات"), value: movementRows.length }],
     };
   }, [accountFilter, accountNames, dateFrom, dateTo, entryById, formatNumber, lines, t, view]);
 
-  const exportOptions = { title: t(currentReport.label), subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: currentReport.label, summary: report.summary, landscape: true };
+  const exportOptions = { title: t(currentReport.label), subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: report.columns, rows: report.rows, fileName: currentReport.label, summary: report.summary, landscape: true, brand: COMPANY_REPORT_BRAND };
 
   return <Layout><main dir={direction} className="min-h-full bg-slate-50 p-4"><div className="mx-auto max-w-[1600px] overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
     <header className="border-t-2 border-red-700 px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] text-slate-400">{t("المحاسبة والمالية")} / {t("مساحة عمل المحاسب")}</p><h1 className="text-base font-bold text-slate-800">{t("مساحة عمل المحاسب")}</h1></div><div className="flex gap-1"><button onClick={() => void load()} className="rounded border border-slate-200 p-2" title={t("تحديث")}><RefreshCw className="h-4 w-4" /></button>{currentReport.realData && <><button onClick={() => printReport(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("طباعة")}><Printer className="h-4 w-4" /></button><button onClick={() => exportReportExcel(exportOptions)} disabled={invalidRange || loading || Boolean(error)} className="rounded border border-slate-200 p-2 disabled:opacity-40" title={t("تصدير Excel")}><Download className="h-4 w-4" /></button></>}</div></div></header>

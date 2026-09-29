@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import { Plus, Search, Eye, Pencil, Trash2, Save, X, Printer } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, Save, X, Printer, AlertTriangle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -86,6 +86,13 @@ const mapPettyCashRow = (row: Record<string, unknown>): PettyCashRow => ({
   receivedBy: String(row.received_by ?? ""),
   status: String(row.status ?? "قيد المراجعة"),
 });
+
+/**
+ * سندات القبض والصرف في هذه الشاشة لا تُنشئ قيودًا محاسبية ولا تُربط بفاتورة أو عميل أو صندوق،
+ * لذلك أصبحت للاطلاع فقط. التحصيل من العملاء يتم من زر السداد في فاتورة المبيعات،
+ * والمصروفات تُسجَّل بفاتورة مشتريات ثم سدادها، فيُرحَّل كل ذلك إلى الدفاتر والإقرار الضريبي.
+ */
+const VOUCHERS_READ_ONLY = true;
 
 const getEmptyVoucherForm = (): VoucherForm => ({
   id: undefined,
@@ -302,9 +309,9 @@ export default function ExpenseManagement() {
   const description = isReports
     ? t("ملخصات وتقارير المصروفات والسندات.")
     : isPettyCash
-      ? t("إدارة سندات القبض والصرف وتتبع جميع المعاملات.")
+      ? t("سجل سندات القبض والصرف السابقة (للاطلاع فقط).")
       : isVouchers
-        ? t("إنشاء وإدارة سندات الصرف والمصروفات.")
+        ? t("سجل سندات الصرف السابقة (للاطلاع فقط).")
         : t("إدارة المصرفات والسندات والتقارير.");
 
   if (!isVouchers && !isPettyCash && !isReports) {
@@ -348,7 +355,7 @@ export default function ExpenseManagement() {
             <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
             <p className="mt-2 text-sm text-muted-foreground">{description}</p>
           </div>
-          {!isReports && (
+          {!isReports && !VOUCHERS_READ_ONLY && (
             <button
               onClick={async () => {
                 if (isVouchers) {
@@ -369,7 +376,22 @@ export default function ExpenseManagement() {
           )}
         </div>
 
-        {!isReports && isFormOpen && isVouchers ? (
+        {!isReports && VOUCHERS_READ_ONLY ? (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" dir={direction}>
+            <p className="flex items-start gap-2 font-semibold"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{t("هذه الشاشة للاطلاع فقط: السندات هنا لا تُرحَّل إلى القيود المحاسبية ولا تؤثر على الصندوق أو البنك أو أرصدة العملاء والموردين أو الإقرار الضريبي.")}</p>
+            <ul className="mt-2 list-disc space-y-1 ps-10 text-xs leading-6">
+              <li>{t("لتسجيل مبلغ مقبوض من عميل: افتح فاتورة المبيعات واستخدم زر السداد، فيُرحَّل القبض ويُخفَّض رصيد العميل.")}</li>
+              <li>{t("لتسجيل مصروف أو دفعة لمورد: سجّل فاتورة مشتريات ثم سدادها من الفاتورة نفسها.")}</li>
+              <li>{t("السندات المسجلة سابقًا معروضة أدناه للاطلاع والطباعة فقط، ولا يمكن إنشاء أو تعديل أو حذف سندات جديدة من هنا.")}</li>
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2 ps-6">
+              <button onClick={() => navigate("/sales/invoices")} className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100">{t("فواتير المبيعات")}</button>
+              <button onClick={() => navigate("/purchases/invoices")} className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100">{t("فواتير المشتريات")}</button>
+            </div>
+          </div>
+        ) : null}
+
+        {!isReports && !VOUCHERS_READ_ONLY && isFormOpen && isVouchers ? (
           <VoucherForm
             form={voucherForm}
             setForm={setVoucherForm}
@@ -426,7 +448,7 @@ export default function ExpenseManagement() {
             onCancel={() => setIsFormOpen(false)}
             saving={saving}
           />
-        ) : !isReports && isFormOpen && isPettyCash ? (
+        ) : !isReports && !VOUCHERS_READ_ONLY && isFormOpen && isPettyCash ? (
           <PettyCashForm
             form={pettyCashForm}
             setForm={setPettyCashForm}
@@ -475,9 +497,9 @@ export default function ExpenseManagement() {
           <VouchersList
             rows={voucherRows}
             onView={handleViewVoucher}
-            onEdit={handleEditVoucher}
+            onEdit={VOUCHERS_READ_ONLY ? undefined : handleEditVoucher}
             onPrint={handlePrintVoucher}
-            onDelete={async (id) => {
+            onDelete={VOUCHERS_READ_ONLY ? undefined : async (id) => {
               if (!confirm(t("هل متأكد من حذف السند؟"))) return;
               setDeleting(true);
               await supabase.from("expense_voucher_items").delete().eq("voucher_id", id);
@@ -498,8 +520,8 @@ export default function ExpenseManagement() {
             <PettyCashList
               rows={pettyCashRows}
               onView={handleViewPettyCash}
-              onEdit={handleEditPettyCash}
-              onDelete={async (id) => {
+              onEdit={VOUCHERS_READ_ONLY ? undefined : handleEditPettyCash}
+              onDelete={VOUCHERS_READ_ONLY ? undefined : async (id) => {
                 if (!confirm(t("هل متأكد من حذف السند؟"))) return;
                 setDeleting(true);
                 const result = await supabase.from("petty_cash_vouchers").delete().eq("id", id);
@@ -518,7 +540,7 @@ export default function ExpenseManagement() {
                   <h2 className="text-xl font-semibold text-foreground">{t("سندات الصرف")}</h2>
                   <p className="text-sm text-muted-foreground">{t("سجلات الصرف والمصروفات المعتمدة")}</p>
                 </div>
-                <button
+                {!VOUCHERS_READ_ONLY && <button
                   onClick={async () => {
                     const voucherNumber = await generateVoucherNumber("expense_vouchers", "SRF");
                     setVoucherForm({ ...getEmptyVoucherForm(), voucherNumber });
@@ -528,14 +550,14 @@ export default function ExpenseManagement() {
                 >
                   <Plus className="h-4 w-4" />
                   {t("إنشاء سند صرف جديد")}
-                </button>
+                </button>}
               </div>
               <VouchersList
                 rows={voucherRows}
                 onView={handleViewVoucher}
-                onEdit={handleEditVoucher}
+                onEdit={VOUCHERS_READ_ONLY ? undefined : handleEditVoucher}
                 onPrint={handlePrintVoucher}
-                onDelete={async (id) => {
+                onDelete={VOUCHERS_READ_ONLY ? undefined : async (id) => {
                   if (!confirm(t("هل متأكد من حذف السند؟"))) return;
                   setDeleting(true);
                   await supabase.from("expense_voucher_items").delete().eq("voucher_id", id);
@@ -632,13 +654,13 @@ export default function ExpenseManagement() {
                     <Printer className="h-4 w-4" />
                     {t("طباعة سند الصرف")}
                   </button>
-                  <button
+                  {!VOUCHERS_READ_ONLY && <button
                     onClick={() => void handleEditVoucher(voucherView)}
                     className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
                   >
                     <Pencil className="h-4 w-4" />
                     {t("تعديل السند")}
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>
@@ -699,13 +721,13 @@ export default function ExpenseManagement() {
                   <Printer className="h-4 w-4" />
                   {t("طباعة سند القبض")}
                 </button>
-                <button
+                {!VOUCHERS_READ_ONLY && <button
                   onClick={() => handleEditPettyCash(pettyCashView)}
                   className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
                 >
                   <Pencil className="h-4 w-4" />
                   {t("تعديل السند")}
-                </button>
+                </button>}
               </div>
             </div>
           </div>
@@ -1059,9 +1081,9 @@ function VouchersList({
 }: {
   rows: VoucherRow[];
   onView: (row: VoucherRow) => void;
-  onEdit: (row: VoucherRow) => void;
+  onEdit?: (row: VoucherRow) => void;
   onPrint?: (row: VoucherRow) => void;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
 }) {
   const { t, direction, formatDate, formatNumber } = useI18n();
   const formatAmount = (value: string) => `${formatNumber(Number.parseFloat(value || "0") || 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ريال")}`;
@@ -1116,13 +1138,13 @@ function VouchersList({
                     >
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button
+                    {onEdit && <button
                       onClick={() => onEdit(row)}
                       title={t("تعديل")}
                       className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
                     >
                       <Pencil className="h-4 w-4" />
-                    </button>
+                    </button>}
                     {onPrint && (
                       <button
                         onClick={() => void onPrint(row)}
@@ -1132,13 +1154,13 @@ function VouchersList({
                         <Printer className="h-4 w-4" />
                       </button>
                     )}
-                    <button
+                    {onDelete && <button
                       onClick={() => onDelete(row.id)}
                       title={t("حذف")}
                       className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-destructive transition"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </button>}
                   </div>
                 </td>
               </tr>
@@ -1158,8 +1180,8 @@ function PettyCashList({
 }: {
   rows: PettyCashRow[];
   onView: (row: PettyCashRow) => void;
-  onEdit: (row: PettyCashRow) => void;
-  onDelete: (id: string) => void;
+  onEdit?: (row: PettyCashRow) => void;
+  onDelete?: (id: string) => void;
 }) {
   const { t, direction, formatDate, formatNumber } = useI18n();
   const formatAmount = (value: string) => `${formatNumber(Number.parseFloat(value || "0") || 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ريال")}`;
@@ -1214,20 +1236,20 @@ function PettyCashList({
                     >
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button
+                    {onEdit && <button
                       onClick={() => onEdit(row)}
                       title={t("تعديل")}
                       className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-primary transition"
                     >
                       <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
+                    </button>}
+                    {onDelete && <button
                       onClick={() => onDelete(row.id)}
                       title={t("حذف")}
                       className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-destructive transition"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </button>}
                   </div>
                 </td>
               </tr>

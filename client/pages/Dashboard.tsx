@@ -51,6 +51,10 @@ const ALL_MODULES = [
   { title: "إدارة العملاء", description: "قاعدة بيانات العملاء والتفاعلات", href: "/crm", permKey: "module.crm", icon: Users, gradient: "from-amber-500 to-orange-600", shadow: "shadow-amber-500/20" },
 ];
 
+/** قراءة المبالغ المخزنة نصًا مثل "ريال 17.25" مع الإبقاء على الإشارة السالبة. */
+const parseAmount = (value: unknown) => Number(String(value ?? "0").replace(/[^0-9.-]/g, "")) || 0;
+type AdjustmentNoteRow = { note_type: string | null; subtotal: number | string | null };
+
 /* ── Status badge helper ── */
 function statusClasses(status: string) {
   if (status === "مدفوعة بالكامل") return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -80,22 +84,31 @@ export default function Dashboard() {
       try {
         // Load sales invoices
         const salesInv = canViewSales
-          ? (await supabase.from("sales_invoices").select("id, date, customer, total, paid, remaining, status").order("date", { ascending: false })).data
+          ? (await supabase.from("sales_invoices").select("id, date, customer, total, subtotal, paid, remaining, status, accounting_status").order("date", { ascending: false })).data
           : [];
         const invoiceRows: InvoiceRow[] = (salesInv || []).map((r) => ({
           id: String(r.id),
           customer: String(r.customer ?? ""),
-          total: Number(String(r.total ?? "0").replace(/[^0-9.]/g, "")),
+          total: parseAmount(r.total),
           status: String(r.status ?? "مفتوحة"),
           date: String(r.date ?? ""),
         }));
         setInvoices(invoiceRows);
 
-        const totalSales = invoiceRows.reduce((s, i) => s + i.total, 0);
+        // الإشعارات الدائنة والمدينة المرحّلة تعدّل صافي المبيعات والمشتريات.
+        const { data: notesData } = canViewSales || canViewPurchases
+          ? await supabase.from("invoice_adjustment_notes").select("note_type, subtotal").eq("status", "posted").eq("accounting_status", "posted")
+          : { data: [] as AdjustmentNoteRow[] };
+        const notes = (notesData ?? []) as AdjustmentNoteRow[];
+        const notesTotal = (types: string[]) => notes.filter((note) => types.includes(String(note.note_type))).reduce((sum, note) => sum + parseAmount(note.subtotal), 0);
 
-        // Load purchase invoices
-        const purchInv = canViewPurchases ? (await supabase.from("purchase_invoices").select("total")).data : [];
-        const totalPurchases = (purchInv || []).reduce((s, r) => s + Number(String(r.total ?? "0").replace(/[^0-9.]/g, "")), 0);
+        // صافي المبيعات: الفواتير المرحّلة فقط، بدون ضريبة القيمة المضافة، بعد الإشعارات.
+        const postedSales = (salesInv || []).filter((r) => r.accounting_status === "posted");
+        const totalSales = postedSales.reduce((sum, r) => sum + parseAmount(r.subtotal), 0) - notesTotal(["sales_credit"]) + notesTotal(["sales_debit"]);
+
+        // صافي المشتريات: الفواتير المرحّلة فقط، بدون ضريبة المدخلات، بعد إشعارات المشتريات.
+        const purchInv = canViewPurchases ? (await supabase.from("purchase_invoices").select("subtotal, accounting_status").eq("accounting_status", "posted")).data : [];
+        const totalPurchases = (purchInv || []).reduce((sum, r) => sum + parseAmount(r.subtotal), 0) - notesTotal(["purchase_debit", "purchase_credit"]);
 
         // Load customers count
         const custData = canViewCustomers ? (await supabase.from("customers").select("id").eq("status", "نشط")).data : [];
@@ -110,7 +123,7 @@ export default function Dashboard() {
 
         // Calculate alerts
         const pendingInvoices = invoiceRows.filter((i) => i.status === "مفتوحة" || i.status === "مدفوعة جزئياً").length;
-        const unpaidPurch = canViewPurchases ? (await supabase.from("purchase_invoices").select("id").eq("status", "مفتوحة")).data : [];
+        const unpaidPurch = canViewPurchases ? (await supabase.from("purchase_invoices").select("id").in("status", ["مفتوحة", "مدفوعة جزئياً"])).data : [];
         const { data: pendingLeavesData } = await supabase.from("leave_requests").select("id").eq("status", "معلقة");
 
         setAlerts({
@@ -129,7 +142,7 @@ export default function Dashboard() {
 
   const kpiCards = [
     {
-      label: "إجمالي المبيعات",
+      label: "صافي المبيعات (بدون ضريبة)",
       value: formatNumber(kpis.totalSales),
       currency: true,
       icon: DollarSign,
@@ -137,7 +150,7 @@ export default function Dashboard() {
       shadow: "shadow-blue-500/25",
     },
     {
-      label: "إجمالي المشتريات",
+      label: "صافي المشتريات (بدون ضريبة)",
       value: formatNumber(kpis.totalPurchases),
       currency: true,
       icon: ShoppingCart,

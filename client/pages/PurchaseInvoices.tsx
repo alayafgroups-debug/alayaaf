@@ -26,7 +26,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import PartyRegistrationDialog from "@/components/PartyRegistrationDialog";
-import { checkPerm } from "@/lib/authSession";
+import { canManagePerm, checkPerm } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import {
   PageHeader,
@@ -187,6 +187,9 @@ export default function PurchaseInvoices() {
   const [refreshKey, setRefreshKey] = useState(0);
   const { permissions } = useRolePermissions();
   const canViewIssuer = checkPerm(permissions, "audit.creator_columns");
+  // فصل المهام: المشتريات تنشئ الفاتورة، والمحاسبة (إدارة الحسابات) تسدد — نفس فحص القاعدة
+  const canCreate = ["purchases.invoices", "module.purchases"].some((key) => canManagePerm(permissions, key));
+  const canPay = ["accounting.accounts", "module.accounting"].some((key) => canManagePerm(permissions, key));
 
   useEffect(() => {
     const load = async () => {
@@ -399,6 +402,8 @@ export default function PurchaseInvoices() {
           <InvoicesList
             invoices={invoices}
             canViewIssuer={canViewIssuer}
+            canCreate={canCreate}
+            canPay={canPay}
             onCreateClick={() => setView("create")}
             onView={(inv) => {
               setSelected(inv);
@@ -455,6 +460,11 @@ export default function PurchaseInvoices() {
         {view === "payment" && selected && (
           <InvoicePayment
             invoice={selected}
+            canPay={canPay}
+            onRefreshed={(updated) => {
+              setInvoices((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+              setSelected(updated);
+            }}
             onBack={() => setView("list")}
             onUpdated={(updated) => {
               setInvoices((prev) =>
@@ -476,6 +486,8 @@ export default function PurchaseInvoices() {
 function InvoicesList({
   invoices,
   canViewIssuer,
+  canCreate,
+  canPay,
   onCreateClick,
   onView,
   onEdit,
@@ -485,6 +497,8 @@ function InvoicesList({
 }: {
   invoices: PurchaseInvoice[];
   canViewIssuer: boolean;
+  canCreate: boolean;
+  canPay: boolean;
   onCreateClick: () => void;
   onView: (i: PurchaseInvoice) => void;
   onEdit: (i: PurchaseInvoice) => void;
@@ -515,8 +529,8 @@ function InvoicesList({
         icon={FileText}
         title={t("فواتير المشتريات")}
         subtitle={t("إدارة وتتبع جميع فواتير المشتريات")}
-        actionLabel={t("إضافة فاتورة مشتريات جديدة")}
-        onAction={onCreateClick}
+        actionLabel={canCreate ? t("إضافة فاتورة مشتريات جديدة") : undefined}
+        onAction={canCreate ? onCreateClick : undefined}
         gradient="from-purple-600 to-indigo-700"
       />
 
@@ -587,9 +601,9 @@ function InvoicesList({
                       color="emerald"
                       onClick={() => onEdit(inv)}
                     />}
-                    {inv.accountingStatus === "posted" && parseCurrency(inv.remaining) > 0.01 && <ActionBtn
+                    {inv.accountingStatus === "posted" && (canPay || parseCurrency(inv.paid) > 0) && <ActionBtn
                       icon={CreditCard}
-                      label={t("تسديد")}
+                      label={t(canPay && parseCurrency(inv.remaining) > 0.01 ? "تسديد" : "المدفوعات")}
                       color="indigo"
                       onClick={() => onPayment(inv)}
                     />}
@@ -977,10 +991,16 @@ function ItemsTable({
   const [expenseAccounts, setExpenseAccounts] = useState<PurchaseExpenseAccount[]>([]);
   useEffect(() => {
     const loadAccounts = async () => {
-      // حسابات المصروفات (5) + الحساب 2113 لبنود البضاعة المخزنية المستلمة بسند استلام (تسوية GRNI)
-      const { data } = await supabase.from("accounting_accounts").select("code, name_ar, parent_code").or("code.like.5%,code.eq.2113").order("code");
-      const rows = (data ?? []) as PurchaseExpenseAccount[];
-      setExpenseAccounts(rows.filter((account) => !rows.some((candidate) => candidate.parent_code === account.code)));
+      // حسابات المصروفات (5) + حساب البضاعة المستلمة غير المفوترة (تسوية GRNI) — حسابات نهائية فقط،
+      // عبر دالة في القاعدة حتى يراها منشئ الفاتورة دون صلاحية على شجرة الحسابات كاملة
+      const { data } = await supabase.rpc("list_purchase_item_accounts");
+      setExpenseAccounts(
+        ((data ?? []) as { code: string; name_ar: string }[]).map((account) => ({
+          code: String(account.code),
+          name_ar: String(account.name_ar ?? ""),
+          parent_code: null,
+        })),
+      );
     };
     void loadAccounts();
   }, []);
@@ -1563,6 +1583,10 @@ function InvoiceForm({
         setError(
           String(postError.message ?? "").includes("purchase_invoices_vendor_reference_uidx")
             ? `${t("فاتورة المورد هذه مسجلة مسبقًا لنفس المورد")}. ${t("لا تُسجَّل الفاتورة مرتين")}`
+            : String(postError.message ?? "").includes("PURCHASE_INVOICE_MANAGE_PERMISSION_REQUIRED")
+            ? t("إنشاء فواتير المشتريات يحتاج صلاحية إدارة فواتير المشتريات")
+            : String(postError.message ?? "").includes("PURCHASE_ITEM_ACCOUNT_NOT_ALLOWED")
+            ? t("حساب البند يجب أن يكون من حسابات المصروفات أو البضاعة المستلمة غير المفوترة")
             : postError.code === "23505"
             ? t("رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى.")
             : `${t("تعذّر حفظ وترحيل الفاتورة")}: ${postError.message ?? t("حاول مرة أخرى")}`,
@@ -1853,31 +1877,192 @@ function InvoiceEdit({
 }
 
 /* ── Payment ── */
+type PaymentAccount = {
+  code: string;
+  name: string;
+  bankName: string;
+  kind: "bank" | "cash";
+};
+
+type InvoicePaymentRow = {
+  id: string;
+  number: string;
+  amount: number;
+  date: string;
+  method: string;
+  reference: string;
+  accountCode: string;
+  chequeNumber: string;
+  chequeDate: string;
+  chequeStatus: "" | "deferred" | "banked" | "cancelled";
+  chequeClearedOn: string;
+  status: "posted" | "reversed";
+  reversedOn: string;
+  reversalReason: string;
+};
+
+const PAYMENT_METHODS = ["تحويل بنكي", "شيك", "بطاقة ائتمانية", "نقدي"] as const;
+
+// رسائل أخطاء دوال السداد في القاعدة
+const purchasePaymentErrorText = (message: string, t: (key: string) => string) => {
+  const map: [string, string][] = [
+    ["PURCHASE_PAYMENT_PERMISSION_REQUIRED", "السداد يحتاج صلاحية إدارة الحسابات"],
+    ["PURCHASE_PAYMENT_ACCOUNT_KIND_MISMATCH", "النقد يُصرف من صندوق، والتحويل والشيك والبطاقة من حساب بنكي"],
+    ["PURCHASE_PAYMENT_ACCOUNT_INVALID", "اختر حسابًا بنكيًا أو صندوقًا مسجلًا ونشطًا"],
+    ["PURCHASE_CHEQUE_DETAILS_REQUIRED", "أدخل رقم الشيك وتاريخ استحقاقه"],
+    ["PURCHASE_CHEQUE_DETAILS_NOT_ALLOWED", "بيانات الشيك للسداد بشيك فقط"],
+    ["PURCHASE_CHEQUE_NUMBER_DUPLICATE", "رقم الشيك مستخدم على هذا الحساب البنكي لمورد آخر أو بتاريخ آخر، أو صُرف أو أُلغي"],
+    ["PURCHASE_PAYMENT_EXCEEDS_REMAINING", "المبلغ يتجاوز المتبقي على الفاتورة"],
+    ["PURCHASE_PAYMENT_DATE_INVALID", "تاريخ السداد لا يكون في المستقبل ولا قبل تاريخ الفاتورة"],
+    ["PURCHASE_PAYMENT_AMOUNT_INVALID", "مبلغ السداد غير صحيح"],
+    ["PURCHASE_CHEQUE_NOT_DEFERRED", "هذا الشيك ليس مؤجلًا بانتظار الصرف"],
+    ["PURCHASE_CHEQUE_CLEAR_DATE_INVALID", "تاريخ الصرف لا يسبق تاريخ الإصدار ولا يكون في المستقبل"],
+    ["PURCHASE_PAYMENT_ALREADY_REVERSED", "هذا السداد معكوس من قبل"],
+    ["PURCHASE_PAYMENT_REVERSAL_REASON_REQUIRED", "اكتب سبب العكس"],
+    ["PURCHASE_PAYMENT_REVERSAL_DATE_INVALID", "تاريخ العكس لا يسبق السداد أو الصرف ولا يكون في المستقبل"],
+    ["ACCOUNTING_FISCAL_PERIOD_CLOSED", "الفترة المحاسبية لهذا التاريخ مقفلة"],
+    ["ACCOUNTING_FISCAL_PERIOD_REQUIRED", "لا توجد فترة محاسبية لهذا التاريخ"],
+    ["POSTED_PURCHASE_INVOICE_REQUIRED", "الفاتورة غير مرحّلة محاسبيًا"],
+    ["PURCHASE_PAYMENT_NOT_FOUND", "السداد غير موجود؛ حدّث الصفحة"],
+  ];
+  const hit = map.find(([code]) => message.includes(code));
+  return hit ? t(hit[1]) : message;
+};
+
+const mapPaymentRow = (row: Record<string, unknown>): InvoicePaymentRow => ({
+  id: String(row.id),
+  number: String(row.payment_number ?? ""),
+  amount: Number(row.amount) || 0,
+  date: String(row.payment_date ?? ""),
+  method: String(row.payment_method ?? ""),
+  reference: String(row.reference ?? ""),
+  accountCode: String(row.bank_account_code ?? row.withdrawal_account_code ?? ""),
+  chequeNumber: String(row.cheque_number ?? ""),
+  chequeDate: String(row.cheque_date ?? ""),
+  chequeStatus: (String(row.cheque_status ?? "") as InvoicePaymentRow["chequeStatus"]),
+  chequeClearedOn: String(row.cheque_cleared_on ?? ""),
+  status: row.status === "reversed" ? "reversed" : "posted",
+  reversedOn: String(row.reversed_on ?? ""),
+  reversalReason: String(row.reversal_reason ?? ""),
+});
+
 function InvoicePayment({
   invoice,
+  canPay,
   onBack,
   onUpdated,
+  onRefreshed,
 }: {
   invoice: PurchaseInvoice;
+  canPay: boolean;
   onBack: () => void;
   onUpdated: (i: PurchaseInvoice) => void;
+  onRefreshed: (i: PurchaseInvoice) => void;
 }) {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, direction, formatNumber, formatDate } = useI18n();
   const formatAmount = (value: number) =>
     formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const totalValue = parseCurrency(invoice.total);
-  const paidValue = parseCurrency(invoice.paid);
-  const remainingValue = parseCurrency(invoice.remaining);
-  const [amount, setAmount] = useState(remainingValue.toFixed(2));
-  const [paymentMethod, setPaymentMethod] = useState("تحويل بنكي");
+  const displayDate = (value: string) =>
+    value ? formatDate(value, { dateStyle: "medium" }) : "-";
+  const today = riyadhDateString();
+  const [current, setCurrent] = useState<PurchaseInvoice>(invoice);
+  const remainingValue = parseCurrency(current.remaining);
+  const [amount, setAmount] = useState(parseCurrency(invoice.remaining).toFixed(2));
+  const [paymentMethod, setPaymentMethod] = useState<string>("تحويل بنكي");
+  const [accountCode, setAccountCode] = useState("");
+  const [chequeNumber, setChequeNumber] = useState("");
+  const [chequeDate, setChequeDate] = useState(today);
+  // تاريخ الشيك يتبع تاريخ السداد حتى يعدّله المستخدم (حتى لا يصير الشيك مؤجلًا دون قصد)
+  const [chequeDateTouched, setChequeDateTouched] = useState(false);
+  const [paymentsError, setPaymentsError] = useState("");
   const [paymentRef, setPaymentRef] = useState("");
-  const [paymentDate, setPaymentDate] = useState(riyadhDateString());
+  const [paymentDate, setPaymentDate] = useState(today);
   const [saving, setSaving] = useState(false);
-  // يمنع تسجيل سداد مكرر عند النقر المتتابع قبل أن يُعطَّل الزر
+  const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
+  const [payments, setPayments] = useState<InvoicePaymentRow[]>([]);
+  const [action, setAction] = useState<{ type: "clear" | "reverse"; paymentId: string } | null>(null);
+  const [actionDate, setActionDate] = useState(today);
+  const [actionReason, setActionReason] = useState("");
+  // يمنع تسجيل سداد أو إجراء مكرر عند النقر المتتابع قبل أن يُعطَّل الزر
   const paymentInFlight = useRef(false);
 
+  const isCash = paymentMethod === "نقدي";
+  const isCheque = paymentMethod === "شيك";
+  const allowedAccounts = accounts.filter((account) => account.kind === (isCash ? "cash" : "bank"));
+  const chequeDeferred = isCheque && !!chequeDate && !!paymentDate && chequeDate > paymentDate;
+  const accountLabel = (code: string) => {
+    const account = accounts.find((item) => item.code === code);
+    return account ? `${account.name}${account.bankName ? ` — ${account.bankName}` : ""} (${code})` : code || "-";
+  };
+
+  const loadPayments = async () => {
+    const { data, error } = await supabase
+      .from("purchase_payments")
+      .select("id, payment_number, amount, payment_date, payment_method, reference, withdrawal_account_code, bank_account_code, cheque_number, cheque_date, cheque_status, cheque_cleared_on, status, reversed_on, reversal_reason, created_at")
+      .eq("invoice_id", invoice.id)
+      .order("payment_date", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) {
+      setPaymentsError(error.message);
+      return;
+    }
+    setPaymentsError("");
+    setPayments((data ?? []).map((row) => mapPaymentRow(row as Record<string, unknown>)));
+  };
+
+  const reloadInvoice = async () => {
+    const { data } = await supabase.from("purchase_invoices").select("*").eq("id", invoice.id).maybeSingle();
+    if (data) {
+      const mapped = { ...mapRow(data as Record<string, unknown>), issuerName: current.issuerName };
+      setCurrent(mapped);
+      return mapped;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("accounting_bank_accounts")
+      .select("account_code, name, bank_name, account_kind")
+      .eq("active", true)
+      .order("name")
+      .then(({ data }) => {
+        if (!active) return;
+        setAccounts(
+          (data ?? []).map((row: Record<string, unknown>) => ({
+            code: String(row.account_code),
+            name: String(row.name ?? ""),
+            bankName: String(row.bank_name ?? ""),
+            kind: row.account_kind === "cash" ? "cash" : "bank",
+          })),
+        );
+      });
+    loadPayments();
+    // أرقام الفاتورة من القاعدة لا من القائمة (قد تكون قديمة)
+    reloadInvoice().then((fresh) => {
+      if (active && fresh) setAmount(parseCurrency(fresh.remaining).toFixed(2));
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice.id]);
+
+  useEffect(() => {
+    if (!chequeDateTouched) setChequeDate(paymentDate);
+  }, [paymentDate, chequeDateTouched]);
+
+  // الحساب يتبع طريقة الدفع: صندوق للنقد، وبنك لغيره
+  useEffect(() => {
+    if (!allowedAccounts.some((account) => account.code === accountCode)) {
+      setAccountCode(allowedAccounts.length === 1 ? allowedAccounts[0].code : "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMethod, accounts]);
+
   const handleSave = async () => {
-    if (paymentInFlight.current) return;
+    if (paymentInFlight.current || !canPay) return;
     const payAmount = round2(Number(amount));
     if (!Number.isFinite(payAmount) || payAmount <= 0 || payAmount > remainingValue + 0.01) {
       toast({ title: t("مبلغ السداد غير صحيح"), description: t("يجب أن يكون المبلغ موجبًا ولا يتجاوز المتبقي") });
@@ -1888,55 +2073,110 @@ function InvoicePayment({
       return;
     }
     // لا سداد بتاريخ مستقبلي ولا قبل تاريخ الفاتورة
-    if (paymentDate > riyadhDateString() || (invoice.date && paymentDate < invoice.date)) {
+    if (paymentDate > today || (current.date && paymentDate < current.date)) {
       toast({
         title: t("تاريخ السداد غير صحيح"),
         description: t("تاريخ السداد لا يكون في المستقبل ولا قبل تاريخ الفاتورة"),
       });
       return;
     }
+    if (!accountCode) {
+      toast({ title: t(isCash ? "اختر الصندوق" : "اختر الحساب البنكي") });
+      return;
+    }
+    if (isCheque && (!chequeNumber.trim() || !chequeDate)) {
+      toast({ title: t("أدخل رقم الشيك وتاريخ استحقاقه") });
+      return;
+    }
 
     paymentInFlight.current = true;
     setSaving(true);
-    let error: { message?: string } | null = null;
     try {
-      const response = await supabase.rpc("record_purchase_payment", {
-        p_invoice_id: invoice.id,
-        p_amount: payAmount,
-        p_payment_method: paymentMethod,
-        p_reference: paymentRef || null,
-        p_payment_date: paymentDate,
-      });
-      error = response.error;
-    } catch (rpcError) {
-      error = { message: rpcError instanceof Error ? rpcError.message : String(rpcError) };
+      let error: { message?: string } | null = null;
+      try {
+        const response = await supabase.rpc("record_purchase_payment_v2", {
+          p_invoice_id: current.id,
+          p_amount: payAmount,
+          p_payment_method: paymentMethod,
+          p_account_code: accountCode,
+          p_reference: paymentRef.trim() || null,
+          p_payment_date: paymentDate,
+          p_cheque_number: isCheque ? chequeNumber.trim() : null,
+          p_cheque_date: isCheque ? chequeDate : null,
+        });
+        error = response.error;
+      } catch (rpcError) {
+        error = { message: rpcError instanceof Error ? rpcError.message : String(rpcError) };
+      }
+      // القفل يبقى حتى تُقرأ الفاتورة من جديد، فلا تُسجَّل دفعة ثانية بالمتبقي القديم
+      const refreshed = await reloadInvoice();
+      if (!error) {
+        toast({
+          title: t(chequeDeferred ? "تم تسجيل الشيك المؤجل" : "تم تسجيل الدفعة والقيد المحاسبي"),
+          description: `${t("المبلغ")}: ${formatAmount(payAmount)} ${t("ريال")}`,
+        });
+        onUpdated(refreshed ?? current);
+      } else {
+        if (refreshed) setAmount(parseCurrency(refreshed.remaining).toFixed(2));
+        toast({ title: t("تعذّر تسجيل السداد"), description: purchasePaymentErrorText(String(error.message ?? ""), t), variant: "destructive" });
+      }
     } finally {
       paymentInFlight.current = false;
       setSaving(false);
     }
+  };
 
-    if (!error) {
-      const nextPaid = (paidValue + payAmount).toFixed(2);
-      const nextRemaining = Math.max(totalValue - paidValue - payAmount, 0).toFixed(2);
-      const nextStatus = Number(nextRemaining) <= 0.01 ? "مدفوعة بالكامل" : "مدفوعة جزئياً";
-      onUpdated({
-        ...invoice,
-        paid: nextPaid,
-        remaining: nextRemaining,
-        status: nextStatus,
-        statusColor: statusColors[nextStatus] ?? "bg-slate-500 text-white",
-      });
-      toast({
-        title: t("تم تسجيل الدفعة والقيد المحاسبي"),
-        description: `${t("المبلغ")}: ${formatAmount(payAmount)} ${t("ريال")}`,
-      });
-    } else {
-      toast({ title: t("تعذّر تسجيل السداد"), description: error.message });
+  const runAction = async () => {
+    if (!action || paymentInFlight.current || !canPay) return;
+    if (!actionDate || actionDate > today) {
+      toast({ title: t("التاريخ غير صحيح"), description: t("التاريخ لا يكون في المستقبل") });
+      return;
+    }
+    if (action.type === "reverse" && !actionReason.trim()) {
+      toast({ title: t("اكتب سبب العكس") });
+      return;
+    }
+    paymentInFlight.current = true;
+    setSaving(true);
+    try {
+      let error: { message?: string } | null = null;
+      try {
+        const response =
+          action.type === "clear"
+            ? await supabase.rpc("clear_purchase_cheque", { p_payment_id: action.paymentId, p_clear_date: actionDate })
+            : await supabase.rpc("reverse_purchase_payment", {
+                p_payment_id: action.paymentId,
+                p_reversal_date: actionDate,
+                p_reason: actionReason.trim(),
+              });
+        error = response.error;
+      } catch (rpcError) {
+        error = { message: rpcError instanceof Error ? rpcError.message : String(rpcError) };
+      }
+      await loadPayments();
+      const refreshed = await reloadInvoice();
+      if (refreshed) {
+        onRefreshed(refreshed);
+        setAmount(parseCurrency(refreshed.remaining).toFixed(2));
+      }
+      if (error) {
+        toast({ title: t("تعذّر تنفيذ الإجراء"), description: purchasePaymentErrorText(String(error.message ?? ""), t), variant: "destructive" });
+        return;
+      }
+      toast({ title: t(action.type === "clear" ? "تم تأكيد صرف الشيك" : "تم عكس السداد وقيده") });
+      setAction(null);
+      setActionReason("");
+    } finally {
+      paymentInFlight.current = false;
+      setSaving(false);
     }
   };
 
+  const chequeStatusLabel = (status: InvoicePaymentRow["chequeStatus"]) =>
+    status === "deferred" ? t("مؤجل بانتظار الصرف") : status === "banked" ? t("مقيد على البنك") : status === "cancelled" ? t("ملغى") : "";
+
   return (
-    <div className="space-y-6 bg-slate-50 min-h-screen pb-12" dir={direction}>
+    <div className="space-y-6 bg-slate-50 min-h-screen pb-12" dir={direction} data-readonly-exempt={canPay ? "true" : undefined}>
       <div className="flex justify-between items-center bg-white p-4 border-b border-slate-200 shadow-sm">
         <button
           onClick={onBack}
@@ -1946,139 +2186,272 @@ function InvoicePayment({
         </button>
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold text-slate-800">
-            {t("تسديد الفاتورة")}
+            {t("تسديد الفاتورة")} {current.id}
           </h1>
           <CreditCard className="h-5 w-5 text-indigo-600" />
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-2"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          {saving ? t("جارٍ الحفظ...") : t("حفظ السداد")}
-        </button>
+        <span />
       </div>
 
-      <div className="p-4 max-w-2xl mx-auto space-y-6">
-        {/* Invoice summary */}
+      <div className="p-4 max-w-3xl mx-auto space-y-6">
         <div className="grid grid-cols-3 gap-4">
           {[
-            {
-              label: t("الإجمالي"),
-              value: `${formatAmount(parseCurrency(invoice.total))} ${t("ريال")}`,
-              color: "text-slate-800",
-              bg: "bg-slate-50",
-            },
-            {
-              label: t("المدفوع"),
-              value: `${formatAmount(parseCurrency(invoice.paid))} ${t("ريال")}`,
-              color: "text-green-700",
-              bg: "bg-green-50",
-            },
-            {
-              label: t("المتبقي"),
-              value: `${formatAmount(parseCurrency(invoice.remaining))} ${t("ريال")}`,
-              color: "text-red-600",
-              bg: "bg-red-50",
-            },
+            { label: t("الإجمالي"), value: `${formatAmount(parseCurrency(current.total))} ${t("ريال")}`, color: "text-slate-800", bg: "bg-slate-50" },
+            { label: t("المدفوع"), value: `${formatAmount(parseCurrency(current.paid))} ${t("ريال")}`, color: "text-green-700", bg: "bg-green-50" },
+            { label: t("المتبقي"), value: `${formatAmount(remainingValue)} ${t("ريال")}`, color: "text-red-600", bg: "bg-red-50" },
           ].map(({ label, value, color, bg }) => (
-            <div
-              key={label}
-              className={`${bg} rounded-lg border border-slate-200 p-4 text-right`}
-            >
+            <div key={label} className={`${bg} rounded-lg border border-slate-200 p-4 text-right`}>
               <div className="text-xs text-slate-500">{label}</div>
               <div className={`text-lg font-bold mt-1 ${color}`}>{value}</div>
             </div>
           ))}
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-indigo-600 text-white px-4 py-2 text-right font-semibold">
-            {t("معلومات السداد")}
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
-                {t("المبلغ المدفوع الآن")}{" "}
-                <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                max={remainingValue}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-              />
+        {canPay && remainingValue > 0.01 && (
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-indigo-600 text-white px-4 py-2 text-right font-semibold">{t("معلومات السداد")}</div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 text-right block">
+                  {t("المبلغ المدفوع الآن")} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  max={remainingValue}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 text-right block">{t("طريقة الدفع")}</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none appearance-none bg-white"
+                >
+                  {PAYMENT_METHODS.map((method) => (
+                    <option key={method} value={method}>{t(method === "نقدي" ? "نقداً" : method)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 text-right block">
+                  {t(isCash ? "الصندوق" : "الحساب البنكي")} <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={accountCode}
+                  onChange={(e) => setAccountCode(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none appearance-none bg-white"
+                >
+                  <option value="">{t("اختر...")}</option>
+                  {allowedAccounts.map((account) => (
+                    <option key={account.code} value={account.code}>{accountLabel(account.code)}</option>
+                  ))}
+                </select>
+                {allowedAccounts.length === 0 && (
+                  <p className="text-xs text-amber-700 text-right">{t("لا يوجد حساب مسجل من هذا النوع في الحسابات البنكية")}</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 text-right block">
+                  {t("تاريخ السداد")} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  min={current.date || undefined}
+                  max={today}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              {isCheque && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-700 text-right block">
+                      {t("رقم الشيك")} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      value={chequeNumber}
+                      onChange={(e) => setChequeNumber(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-700 text-right block">
+                      {t("تاريخ استحقاق الشيك")} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={chequeDate}
+                      onChange={(e) => { setChequeDate(e.target.value); setChequeDateTouched(true); }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <p className="md:col-span-2 text-xs text-slate-600 text-right">
+                    {chequeDeferred
+                      ? t("شيك مؤجل: يُقيَّد على حساب «شيكات صادرة مؤجلة الدفع» ثم يُنقل إلى البنك عند تأكيد صرفه")
+                      : t("شيك حالّ: يُقيَّد على الحساب البنكي مباشرة")}
+                    {" "}
+                    {t("الشيك الواحد يمكن توزيعه على عدة فواتير للمورد نفسه: سجّل رقمه وتاريخه نفسيهما في كل فاتورة.")}
+                  </p>
+                </>
+              )}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-sm font-medium text-slate-700 text-right block">{t("مرجع الدفعة")}</label>
+                <input
+                  value={paymentRef}
+                  onChange={(e) => setPaymentRef(e.target.value)}
+                  placeholder={t("رقم المرجع...")}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
-                {t("طريقة الدفع")}
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none appearance-none bg-white"
+            <div className="flex justify-center gap-4 pb-6">
+              <button onClick={onBack} className="px-6 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600">
+                {t("إلغاء")}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-6 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-60"
               >
-                <option value="تحويل بنكي">{t("تحويل بنكي / شيك صادر")}</option>
-                <option value="نقدي">{t("نقداً")}</option>
-                <option value="بطاقة ائتمانية">{t("بطاقة ائتمانية")}</option>
-              </select>
-              {/* خيار "شيك" أُزيل مؤقتًا: القاعدة تقيّده على 1112 "شيكات تحت التحصيل" (شيكات العملاء) بدل البنك */}
-              <p className="text-xs text-slate-500 text-right">
-                {t("للدفع بشيك: اختر «تحويل بنكي / شيك صادر» واكتب رقم الشيك في المرجع، فيُخصم من الحساب البنكي")}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
-                {t("مرجع الدفعة")}
-              </label>
-              <input
-                value={paymentRef}
-                onChange={(e) => setPaymentRef(e.target.value)}
-                placeholder={t("رقم المرجع...")}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 text-right block">
-                {t("تاريخ السداد")} <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={paymentDate}
-                min={invoice.date || undefined}
-                max={riyadhDateString()}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-              />
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saving ? t("جارٍ الحفظ...") : t("حفظ السداد")}
+              </button>
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="flex justify-center gap-4">
-          <button
-            onClick={onBack}
-            className="px-6 py-2 bg-slate-500 text-white text-sm rounded hover:bg-slate-600"
-          >
-            {t("إلغاء")}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-60"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            {saving ? t("جارٍ الحفظ...") : t("حفظ السداد")}
-          </button>
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-700 text-white px-4 py-2 text-right font-semibold">{t("سجل مدفوعات الفاتورة")}</div>
+          {paymentsError ? (
+            <p className="p-6 text-center text-sm text-red-600">{t("تعذّر تحميل سجل المدفوعات")}: {paymentsError}</p>
+          ) : payments.length === 0 ? (
+            <p className="p-6 text-center text-sm text-slate-500">{t("لا توجد مدفوعات مسجلة")}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-3 py-2 text-right">{t("السند")}</th>
+                    <th className="px-3 py-2 text-right">{t("التاريخ")}</th>
+                    <th className="px-3 py-2 text-right">{t("الطريقة")}</th>
+                    <th className="px-3 py-2 text-right">{t("الحساب")}</th>
+                    <th className="px-3 py-2 text-right">{t("المبلغ")}</th>
+                    <th className="px-3 py-2 text-right">{t("الحالة")}</th>
+                    <th className="px-3 py-2 text-right">{t("الإجراءات")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
+                    <tr key={payment.id} className="border-t border-slate-100 align-top">
+                      <td className="px-3 py-2 font-mono text-xs">{payment.number}</td>
+                      <td className="px-3 py-2">{displayDate(payment.date)}</td>
+                      <td className="px-3 py-2">
+                        {t(payment.method)}
+                        {payment.chequeNumber && (
+                          <div className="text-xs text-slate-500">
+                            {t("شيك")} {payment.chequeNumber} — {t("استحقاق")} {displayDate(payment.chequeDate)}
+                            <div>{chequeStatusLabel(payment.chequeStatus)}{payment.chequeClearedOn ? ` ${displayDate(payment.chequeClearedOn)}` : ""}</div>
+                          </div>
+                        )}
+                        {payment.reference && <div className="text-xs text-slate-500">{payment.reference}</div>}
+                      </td>
+                      <td className="px-3 py-2 text-xs">{accountLabel(payment.accountCode)}</td>
+                      <td className="px-3 py-2 font-semibold">{formatAmount(payment.amount)}</td>
+                      <td className="px-3 py-2">
+                        {payment.status === "reversed" ? (
+                          <div>
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{t("معكوس")}</span>
+                            <div className="text-xs text-slate-500">{displayDate(payment.reversedOn)} — {payment.reversalReason}</div>
+                          </div>
+                        ) : (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">{t("مرحّل")}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {canPay && payment.status === "posted" && (
+                          <div className="flex flex-col gap-1">
+                            {payment.chequeStatus === "deferred" && (
+                              <button
+                                onClick={() => { setAction({ type: "clear", paymentId: payment.id }); setActionDate(today); }}
+                                className="rounded border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                              >
+                                {t("تأكيد صرف الشيك")}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setAction({ type: "reverse", paymentId: payment.id }); setActionDate(today); setActionReason(""); }}
+                              className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              {t("عكس السداد")}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {action && (
+            <div className="border-t border-slate-200 bg-slate-50 p-4 space-y-3">
+              {(() => {
+                const target = payments.find((payment) => payment.id === action.paymentId);
+                return target ? (
+                  <p className="text-sm text-slate-800 text-right">
+                    {t("السند")}: <b className="font-mono">{target.number}</b> — {formatAmount(target.amount)} {t("ريال")}
+                    {target.chequeNumber && <> — {t("شيك")} {target.chequeNumber}. {t("يشمل الإجراء كل الفواتير المسددة بهذا الشيك.")}</>}
+                  </p>
+                ) : null;
+              })()}
+              <p className="text-sm font-semibold text-slate-700 text-right">
+                {action.type === "clear"
+                  ? t("تأكيد صرف الشيك: يُنقل المبلغ من «شيكات صادرة مؤجلة الدفع» إلى الحساب البنكي")
+                  : t("عكس السداد: قيد عكسي بتاريخ العكس، ويعود المبلغ إلى المتبقي على الفاتورة")}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600 block text-right">
+                    {t(action.type === "clear" ? "تاريخ الصرف" : "تاريخ العكس")}
+                  </label>
+                  <input
+                    type="date"
+                    value={actionDate}
+                    max={today}
+                    onChange={(e) => setActionDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right"
+                  />
+                </div>
+                {action.type === "reverse" && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-600 block text-right">{t("سبب العكس")}</label>
+                    <input
+                      value={actionReason}
+                      onChange={(e) => setActionReason(e.target.value)}
+                      placeholder={t("مثال: شيك مرتد، سداد مكرر...")}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right"
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setAction(null)} className="px-4 py-1.5 border border-slate-300 rounded text-sm">
+                  {t("إلغاء")}
+                </button>
+                <button
+                  onClick={runAction}
+                  disabled={saving}
+                  className={`px-4 py-1.5 rounded text-sm font-semibold text-white disabled:opacity-60 ${action.type === "clear" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}
+                >
+                  {saving ? t("جارٍ التنفيذ...") : t(action.type === "clear" ? "تأكيد الصرف" : "تأكيد العكس")}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

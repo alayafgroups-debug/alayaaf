@@ -18,6 +18,7 @@ type SourceData = {
   customerPayments: Array<{ number: string; date: string; amount: number; invoiceId: string; customerId: string }>;
   purchaseInvoices: OpenInvoice[];
   purchaseNotes: Array<{ number: string; type: string; date: string; total: number; invoiceId: string }>;
+  // السداد المعكوس يظهر حركتين: السداد بتاريخه، وعكسه بتاريخ العكس (مبلغ سالب)
   vendorPayments: Array<{ number: string; date: string; amount: number; invoiceId: string; vendorId: string }>;
 };
 
@@ -76,7 +77,7 @@ export default function CrmReports() {
       selectAllRows((from, to) => supabase.from("customer_payments").select("id, payment_number, payment_date, amount, invoice_id, customer_id").order("payment_date").order("id").range(from, to)),
       selectAllRows((from, to) => supabase.from("purchase_invoices").select("id, date, due_date, vendor, vendor_id, total, remaining, adjusted_remaining").eq("accounting_status", "posted").order("date").order("id").range(from, to)),
       selectAllRows((from, to) => supabase.from("invoice_adjustment_notes").select("id, note_number, note_type, issue_date, total, original_invoice_id").in("note_type", ["purchase_debit", "purchase_credit"]).eq("status", "posted").eq("accounting_status", "posted").order("issue_date").order("id").range(from, to)),
-      selectAllRows((from, to) => supabase.from("purchase_payments").select("id, payment_number, payment_date, amount, invoice_id, vendor_id").order("payment_date").order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("purchase_payments").select("id, payment_number, payment_date, amount, invoice_id, vendor_id, status, reversed_on").order("payment_date").order("id").range(from, to)),
     ]);
     if (current !== requestId.current) return;
     const firstError = customers.error ?? vendors.error ?? salesInvoices.error ?? salesNotes.error ?? customerPayments.error ?? purchaseInvoices.error ?? purchaseNotes.error ?? vendorPayments.error;
@@ -94,7 +95,12 @@ export default function CrmReports() {
       customerPayments: customerPayments.data.map((row: Record<string, unknown>) => ({ number: String(row.payment_number ?? row.id), date: dateText(row.payment_date), amount: amount(row.amount), invoiceId: String(row.invoice_id ?? ""), customerId: String(row.customer_id ?? "") })),
       purchaseInvoices: purchaseInvoices.data.map((row: Record<string, unknown>) => ({ id: String(row.id), date: dateText(row.date), dueDate: dateText(row.due_date), partyId: String(row.vendor_id ?? ""), partyName: String(row.vendor ?? ""), total: amount(row.total), outstanding: outstandingOf(row) })),
       purchaseNotes: mapNotes(purchaseNotes.data),
-      vendorPayments: vendorPayments.data.map((row: Record<string, unknown>) => ({ number: String(row.payment_number ?? row.id), date: dateText(row.payment_date), amount: amount(row.amount), invoiceId: String(row.invoice_id ?? ""), vendorId: String(row.vendor_id ?? "") })),
+      vendorPayments: vendorPayments.data.flatMap((row: Record<string, unknown>) => {
+        const payment = { number: String(row.payment_number ?? row.id), date: dateText(row.payment_date), amount: amount(row.amount), invoiceId: String(row.invoice_id ?? ""), vendorId: String(row.vendor_id ?? "") };
+        return row.status === "reversed" && row.reversed_on
+          ? [payment, { ...payment, number: `${payment.number} ↩`, date: dateText(row.reversed_on), amount: -payment.amount }]
+          : [payment];
+      }),
     });
     setLoading(false);
   };
@@ -179,7 +185,9 @@ export default function CrmReports() {
       data.purchaseNotes.filter((note) => invoiceIds.has(note.invoiceId)).forEach((note) =>
         movements.push({ date: note.date, reference: note.number, description: `${t(note.type === "purchase_credit" ? "إشعار دائن مشتريات" : "إشعار مدين مشتريات")} — ${note.invoiceId}`, debit: note.total, credit: 0 }));
       data.vendorPayments.filter((payment) => invoiceIds.has(payment.invoiceId)).forEach((payment) =>
-        movements.push({ date: payment.date, reference: payment.number, description: `${t("سداد مورد")} — ${payment.invoiceId}`, debit: payment.amount, credit: 0 }));
+        movements.push(payment.amount >= 0
+          ? { date: payment.date, reference: payment.number, description: `${t("سداد مورد")} — ${payment.invoiceId}`, debit: payment.amount, credit: 0 }
+          : { date: payment.date, reference: payment.number, description: `${t("عكس سداد مورد")} — ${payment.invoiceId}`, debit: 0, credit: -payment.amount }));
     }
     movements.sort((first, second) => first.date.localeCompare(second.date) || first.reference.localeCompare(second.reference));
     // رصيد العميل = مدين − دائن، ورصيد المورد = دائن − مدين (المستحق له)

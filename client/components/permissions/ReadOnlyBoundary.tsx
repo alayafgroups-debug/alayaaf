@@ -12,6 +12,8 @@ export default function ReadOnlyBoundary({ readOnly, children }: { readOnly: boo
       className="min-h-full"
       onSubmitCapture={(event) => {
         if (!readOnly) return;
+        // جزء تسمح به صلاحية أخرى (مثل السداد لصاحب صلاحية الحسابات)؛ القاعدة تفرض الصلاحية على أي حال
+        if ((event.target as HTMLElement).closest("[data-readonly-exempt]")) return;
         event.preventDefault();
         event.stopPropagation();
         block();
@@ -20,6 +22,7 @@ export default function ReadOnlyBoundary({ readOnly, children }: { readOnly: boo
         if (!readOnly) return;
         const action = (event.target as HTMLElement).closest("button, a");
         if (!action) return;
+        if (action.closest("[data-readonly-exempt]")) return;
         const descriptor = `${action.textContent ?? ""} ${action.getAttribute("title") ?? ""} ${action.getAttribute("aria-label") ?? ""} ${action.getAttribute("href") ?? ""}`;
         if (!MUTATION_WORDS.test(descriptor)) return;
         event.preventDefault();

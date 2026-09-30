@@ -118,7 +118,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
       selectAllRows((from, to) => supabase.from("purchase_invoices").select("*").eq("accounting_status", "posted").order("date", { ascending: true }).order("id").range(from, to)),
       selectAllRows((from, to) => supabase.from("invoice_adjustment_notes").select("id, note_number, note_type, issue_date, counterparty, total, original_invoice_id").in("note_type", ["purchase_debit", "purchase_credit"]).eq("status", "posted").eq("accounting_status", "posted").order("issue_date", { ascending: true }).order("id").range(from, to)),
       selectAllRows((from, to) => supabase.from("vendors").select("id, name, currency").order("id").range(from, to)),
-      selectAllRows((from, to) => supabase.from("purchase_payments").select("id, payment_number, invoice_id, vendor_id, amount, payment_date").order("payment_date", { ascending: true }).order("id").range(from, to)),
+      selectAllRows((from, to) => supabase.from("purchase_payments").select("id, payment_number, invoice_id, vendor_id, amount, payment_date, status, reversed_on").order("payment_date", { ascending: true }).order("id").range(from, to)),
     ]);
 
     const firstError = invoiceResult.error ?? noteResult.error ?? vendorResult.error ?? paymentResult.error;
@@ -147,7 +147,13 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     }));
     setVendors(loadedVendors);
     // السداد مرتبط دائمًا بفاتورة؛ نأخذ سداد الفواتير الظاهرة للمستخدم فقط حتى لا يختل الرصيد
-    setPayments((paymentResult.data ?? []).filter((row) => invoiceById.has(String(row.invoice_id ?? ""))).map((row) => ({ id: String(row.id), number: String(row.payment_number ?? row.id), invoiceId: String(row.invoice_id), vendorId: String(row.vendor_id), amount: number(row.amount), date: String(row.payment_date ?? "") })));
+    // السداد المعكوس حركتان: السداد بتاريخه، وعكسه بتاريخ العكس بمبلغ سالب (الفترات السابقة لا تتغير)
+    setPayments((paymentResult.data ?? []).filter((row) => invoiceById.has(String(row.invoice_id ?? ""))).flatMap((row) => {
+      const payment = { id: String(row.id), number: String(row.payment_number ?? row.id), invoiceId: String(row.invoice_id), vendorId: String(row.vendor_id), amount: number(row.amount), date: String(row.payment_date ?? "") };
+      return row.status === "reversed" && row.reversed_on
+        ? [payment, { ...payment, id: `${payment.id}-reversal`, number: `${payment.number} ↩`, amount: -payment.amount, date: String(row.reversed_on) }]
+        : [payment];
+    }));
     setLoading(false);
   };
 
@@ -276,7 +282,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     const movements = [
       ...invoiceRows.map((invoice) => ({ date: invoice.date, reference: invoice.id, vendor: vendorName(invoice.vendorId, invoice.vendor), movement: t("فاتورة مشتريات"), debit: 0, credit: invoice.total, balanceEffect: invoice.total })),
       ...noteRows.map((note) => ({ date: note.date, reference: note.number, vendor: vendorName(note.vendorId, note.vendor), movement: t(note.type === "purchase_credit" ? "إشعار دائن مشتريات" : "إشعار مدين مشتريات"), debit: note.total, credit: 0, balanceEffect: -note.total })),
-      ...paymentRows.map((payment) => ({ date: payment.date, reference: payment.number, vendor: vendorName(payment.vendorId), movement: t("سداد مورد"), debit: payment.amount, credit: 0, balanceEffect: -payment.amount })),
+      ...paymentRows.map((payment) => ({ date: payment.date, reference: payment.number, vendor: vendorName(payment.vendorId), movement: t(payment.amount >= 0 ? "سداد مورد" : "عكس سداد مورد"), debit: Math.max(payment.amount, 0), credit: Math.max(-payment.amount, 0), balanceEffect: -payment.amount })),
     ].sort((a, b) => a.date.localeCompare(b.date) || a.reference.localeCompare(b.reference));
     // رصيد أول المدة: للمورد المختار، أو لكل الموردين معًا
     const opening = selectedVendor

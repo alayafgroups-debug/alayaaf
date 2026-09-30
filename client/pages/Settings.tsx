@@ -1,240 +1,122 @@
 import Layout from "@/components/Layout";
 import { useState } from "react";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Building2, Landmark, Languages, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import DocumentTemplateWorkspace from "@/components/document-templates/DocumentTemplateWorkspace";
 
+/**
+ * إعدادات الشركة للعرض فقط: بيانات المنشأة مصدرها الملف المعتمد (lib/companyProfile)
+ * وهي نفسها المطبوعة على الفواتير والمسجلة في شهادة ZATCA، فلا تُعدَّل من هذه الشاشة.
+ * إعدادات الضريبة الفعلية في صفحة إعدادات ZATCA وإعدادات المحاسبة.
+ */
 export default function Settings() {
   const { locale, setLocale, t, direction } = useI18n();
   const [activeSection, setActiveSection] = useState<"company" | "templates">("company");
 
+  const companyFields: Array<{ label: string; value: string; mono?: boolean }> = [
+    { label: "اسم الشركة", value: COMPANY_PROFILE.companyNameAr },
+    { label: "الاسم بالإنجليزية", value: COMPANY_PROFILE.companyNameEn },
+    { label: "الرقم الضريبي", value: COMPANY_PROFILE.vatNumber, mono: true },
+    { label: "رقم السجل التجاري", value: COMPANY_PROFILE.commercialRegistration, mono: true },
+    { label: "العنوان الوطني", value: COMPANY_PROFILE.addressAr },
+    { label: "العنوان بالإنجليزية", value: COMPANY_PROFILE.addressEn },
+  ];
+  const bankFields: Array<{ label: string; value: string; mono?: boolean }> = [
+    { label: "اسم المستفيد", value: COMPANY_PROFILE.bank.beneficiaryAr },
+    { label: "البنك", value: COMPANY_PROFILE.bank.nameAr },
+    { label: "رقم الحساب", value: COMPANY_PROFILE.bank.accountNumber, mono: true },
+    { label: "الآيبان", value: COMPANY_PROFILE.bank.iban, mono: true },
+    { label: "الفرع", value: `${COMPANY_PROFILE.bank.branchNameAr} (${COMPANY_PROFILE.bank.branchCode})` },
+  ];
+
+  const renderField = (field: { label: string; value: string; mono?: boolean }) => (
+    <div key={field.label}>
+      <p className="mb-1 text-xs font-semibold text-muted-foreground">{t(field.label)}</p>
+      <p className={cn("rounded-xl border border-border/50 bg-slate-50 px-4 py-2.5 text-sm text-foreground", field.mono && "font-mono")}>{field.value || "—"}</p>
+    </div>
+  );
+
   return (
     <Layout subMenu={null}>
       <div className="space-y-6" dir={direction}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>الإعدادات</span>
-              <span>/</span>
-              <span>{t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}</span>
-            </div>
-            <h1 className="mt-2 text-3xl font-bold text-foreground">
-              {t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}
-            </h1>
+        <div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{t("الإعدادات")}</span>
+            <span>/</span>
+            <span>{t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}</span>
           </div>
-          {activeSection === "company" && (
-            <button className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200">
-              <SettingsIcon className="h-4 w-4" />
-              {t("حفظ الإعدادات")}
-            </button>
-          )}
+          <h1 className="mt-2 text-3xl font-bold text-foreground">
+            {t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}
+          </h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <button onClick={() => setActiveSection("company")} className={cn("rounded-xl px-5 py-2.5 font-bold transition-all duration-200", activeSection === "company" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20" : "border border-border/50 bg-white text-foreground hover:bg-muted/50")}>
             {t("معلومات الشركة")}
           </button>
-          <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
-            الإعدادات الضريبية
-          </button>
-          <a
-            href="/zatca/settings"
-            className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors inline-flex"
-          >
-            إعدادات ZATCA
+          <a href="/zatca/settings" className="inline-flex rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground transition-colors hover:bg-muted/50">
+            {t("إعدادات ZATCA")}
           </a>
-          <button className="rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground hover:bg-muted/50 transition-colors">
-            إعدادات إضافية
-          </button>
+          <a href="/expenses/settings" className="inline-flex rounded-xl border border-border/50 bg-white px-5 py-2.5 font-bold text-foreground transition-colors hover:bg-muted/50">
+            {t("إعدادات المحاسبة")}
+          </a>
           <button onClick={() => setActiveSection("templates")} className={cn("rounded-xl px-5 py-2.5 font-bold transition-all duration-200", activeSection === "templates" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20" : "border border-border/50 bg-white text-foreground hover:bg-muted/50")}>
             {t("قوالب المستندات")}
           </button>
         </div>
 
-        {activeSection === "templates" ? <DocumentTemplateWorkspace /> : <div className="space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-sm animate-fade-in-up">
-            <div className="bg-gradient-to-l from-blue-800 to-blue-900 px-6 py-4 text-sm font-bold text-white flex items-center gap-2">
-              <SettingsIcon className="h-4 w-4" />
-              معلومات الشركة
+        {activeSection === "templates" ? <DocumentTemplateWorkspace /> : (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {t("بيانات الشركة للعرض فقط: هي نفسها المطبوعة على الفواتير والمسجلة لدى هيئة الزكاة والضريبة (ZATCA)، وتغييرها يتم بطلب تطوير مع تحديث شهادة الربط. نسبة الضريبة وطريقة احتسابها تُضبط في الفاتورة وإعدادات المحاسبة.")}
             </div>
-            <div className="grid gap-6 p-6 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-bold text-foreground text-right block mb-2">
-                  اسم الشركة
-                </label>
-                <input
-                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue={COMPANY_PROFILE.companyNameAr}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-bold text-foreground text-right block mb-2">
-                  الرقم الضريبي
-                </label>
-                <input
-                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="314067317200003"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-bold text-foreground text-right block mb-2">
-                  رقم السجل التجاري
-                </label>
-                <input
-                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="7049437580"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-bold text-foreground text-right block mb-2">
-                  البريد الإلكتروني
-                </label>
-                <input
-                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="info@demo.com"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-bold text-foreground text-right block mb-2">
-                  رقم الهاتف
-                </label>
-                <input
-                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="0500000000"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-bold text-foreground text-right block mb-2">
-                  المدينة
-                </label>
-                <input
-                  className="w-full rounded-xl border border-border/50 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
-                  defaultValue="جدة"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium text-foreground">
-                  العنوان
-                </label>
-                <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  defaultValue="8697، نخبة العلماء، حي الأندلس، جدة، 23326، 2882"
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">
-              الإعدادات الضريبية
+            <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-sm">
+              <div className="flex items-center gap-2 bg-gradient-to-l from-blue-800 to-blue-900 px-6 py-4 text-sm font-bold text-white">
+                <Building2 className="h-4 w-4" />
+                {t("معلومات الشركة")}
+              </div>
+              <div className="grid gap-5 p-6 sm:grid-cols-2">{companyFields.map(renderField)}</div>
             </div>
-            <div className="grid gap-4 p-4 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium text-foreground">
-                  نسبة ضريبة القيمة المضافة
-                </label>
-                <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  defaultValue="15%"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">
-                  طريقة احتساب الضريبة
-                </label>
-                <select className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>شامل</option>
-                  <option>غير شامل</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">
-                  الرقم المميز للفوترة
-                </label>
-                <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  defaultValue="ZATCA-0001"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">
-                  صلاحية الفاتورة الإلكترونية
-                </label>
-                <input
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  defaultValue="30 يوم"
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="bg-rose-600 px-4 py-3 text-sm font-semibold text-white">
-              إعدادات إضافية
+            <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-sm">
+              <div className="flex items-center gap-2 bg-emerald-700 px-6 py-4 text-sm font-bold text-white">
+                <Landmark className="h-4 w-4" />
+                {t("الحساب البنكي المطبوع على الفواتير")}
+              </div>
+              <div className="grid gap-5 p-6 sm:grid-cols-2">{bankFields.map(renderField)}</div>
             </div>
-            <div className="grid gap-4 p-4 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium text-foreground">
-                  العملة الافتراضية
-                </label>
-                <select className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>ريال سعودي</option>
-                  <option>دولار أمريكي</option>
-                </select>
+
+            <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-sm">
+              <div className="flex items-center gap-2 bg-slate-700 px-6 py-4 text-sm font-bold text-white">
+                <Languages className="h-4 w-4" />
+                {t("لغة النظام")}
               </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">
-                  المنطقة الزمنية
-                </label>
-                <select className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option>GMT+3</option>
-                  <option>GMT+4</option>
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium text-foreground">
-                  لغة النظام
-                </label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void setLocale("ar")}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                      locale === "ar"
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border bg-card text-foreground"
-                    }`}
-                  >
-                    العربية
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void setLocale("en")}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                      locale === "en"
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border bg-card text-foreground"
-                    }`}
-                  >
-                    English
-                  </button>
-                </div>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium text-foreground">
-                  ملاحظات
-                </label>
-                <textarea
-                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  rows={3}
-                  defaultValue=""
-                />
+              <div className="flex flex-wrap items-center gap-2 p-6">
+                <button
+                  type="button"
+                  onClick={() => void setLocale("ar")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${locale === "ar" ? "bg-primary text-primary-foreground" : "border border-border bg-card text-foreground"}`}
+                >
+                  العربية
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void setLocale("en")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${locale === "en" ? "bg-primary text-primary-foreground" : "border border-border bg-card text-foreground"}`}
+                >
+                  English
+                </button>
+                <span className="ms-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <SettingsIcon className="h-3.5 w-3.5" />
+                  {t("تُحفظ اللغة لحسابك ولا تؤثر على المستخدمين الآخرين.")}
+                </span>
               </div>
             </div>
           </div>
-        </div>}
+        )}
       </div>
     </Layout>
   );

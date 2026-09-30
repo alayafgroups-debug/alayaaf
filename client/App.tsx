@@ -6,7 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Boxes, Truck } from "lucide-react";
+import { Boxes } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Sales from "./pages/Sales";
 import Quotations from "./pages/Quotations";
@@ -125,7 +125,6 @@ import BankAccounts from "./pages/BankAccounts";
 import TaxReports from "./pages/TaxReports";
 import AccountingReports from "./pages/AccountingReports";
 import AccountantWorkspace from "./pages/AccountantWorkspace";
-import UsersPermissions from "./pages/UsersPermissions";
 import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
 import ZATCASettings from "./pages/ZATCASettings";
@@ -133,6 +132,13 @@ import NotFound from "./pages/NotFound";
 import TasksProjects from "./pages/TasksProjects";
 import RequireAuth from "./components/RequireAuth";
 import PlaceholderModule from "./components/PlaceholderModule";
+import FleetOverview from "./pages/fleet/FleetOverview";
+import FleetVehicles from "./pages/fleet/FleetVehicles";
+import FleetDrivers from "./pages/fleet/FleetDrivers";
+import FleetMaintenance from "./pages/fleet/FleetMaintenance";
+import FleetDocuments from "./pages/fleet/FleetDocuments";
+import FleetTrips from "./pages/fleet/FleetTrips";
+import FleetFuel from "./pages/fleet/FleetFuel";
 import { I18nProvider } from "./i18n";
 
 const queryClient = new QueryClient();
@@ -283,7 +289,15 @@ const App = () => (
           <Route path="/inventory/warehouses" element={<InventoryWarehouses />} />
           <Route path="/inventory/reports" element={<InventoryReports />} />
           <Route path="/inventory/*" element={<PlaceholderModule title="المخزون" description="إدارة المنتجات والخدمات والمستودعات وعمليات المخزون." icon={Boxes} features={["عمليات جرد المخزون", "تسويات المخزون", "أوامر التصنيع", "أوامر التركيب", "إشعارات تسليم"]} />} />
-          <Route path="/fleet/*" element={<PlaceholderModule title="الأسطول والسيارات" description="إدارة المركبات والسائقين والصيانة والوقود والرحلات." icon={Truck} features={["السيارات والمركبات", "السائقون", "صيانة المركبات", "التأمين والفحص", "سجل الحركة والرحلات", "الوقود"]} />} />
+          <Route path="/fleet" element={<FleetOverview />} />
+          <Route path="/fleet/reports" element={<FleetOverview />} />
+          <Route path="/fleet/vehicles" element={<FleetVehicles />} />
+          <Route path="/fleet/drivers" element={<FleetDrivers />} />
+          <Route path="/fleet/maintenance" element={<FleetMaintenance />} />
+          <Route path="/fleet/insurance" element={<FleetDocuments />} />
+          <Route path="/fleet/trips" element={<FleetTrips />} />
+          <Route path="/fleet/fuel" element={<FleetFuel />} />
+          <Route path="/fleet/*" element={<Navigate to="/fleet" replace />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customers" element={<CRM />} />
           <Route path="/crm/vendors" element={<CRM />} />
@@ -300,9 +314,10 @@ const App = () => (
           <Route path="/expenses/accountant" element={<AccountantWorkspace />} />
           <Route path="/expenses/tax" element={<Tax />} />
           <Route path="/expenses/tax-reports" element={<TaxReports />} />
-          <Route path="/users" element={<UsersPermissions />} />
-          <Route path="/users/roles" element={<UsersPermissions />} />
-          <Route path="/users/audit" element={<UsersPermissions />} />
+          {/* إدارة المستخدمين والأدوار وسجل النشاط في الموارد البشرية فقط */}
+          <Route path="/users" element={<Navigate to="/hr/permissions/special-user" replace />} />
+          <Route path="/users/roles" element={<Navigate to="/hr/permissions/roles" replace />} />
+          <Route path="/users/audit" element={<Navigate to="/hr/user-logs" replace />} />
           <Route path="/ai" element={<AIAssistant />} />
           <Route path="/ai/assistant" element={<AIAssistant />} />
           <Route path="/settings" element={<Settings />} />

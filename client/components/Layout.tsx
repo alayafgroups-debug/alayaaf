@@ -95,6 +95,7 @@ const navSubMenus: Record<
     { label: "تقارير المخزون", href: "/inventory/reports" },
   ],
   "/fleet": [
+    { label: "لوحة الأسطول والتقارير", href: "/fleet" },
     { label: "السيارات والمركبات", href: "/fleet/vehicles" },
     { label: "السائقون", href: "/fleet/drivers" },
     { label: "صيانة المركبات", href: "/fleet/maintenance" },
@@ -118,11 +119,6 @@ const navSubMenus: Record<
     { label: "حساب الضرائب", href: "/expenses/tax" },
     { label: "تقارير ضريبية", href: "/expenses/tax-reports" },
     { label: "إعدادات المحاسبة", href: "/expenses/settings" },
-  ],
-  "/users": [
-    { label: "المستخدمون", href: "/users" },
-    { label: "الأدوار والصلاحيات", href: "/users/roles" },
-    { label: "سجل النشاط", href: "/users/audit" },
   ],
   "/ai": [{ label: "المساعد الذكي", href: "/ai/assistant" }],
 };

@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo } from "react";
 import { checkPerm } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { supabase } from "@/lib/supabaseClient";
+import { selectAllRows } from "@/lib/ledgerData";
 import { useI18n } from "@/i18n";
 import {
   TrendingUp,
@@ -83,8 +84,9 @@ export default function Dashboard() {
     const load = async () => {
       try {
         // Load sales invoices
+        // كل الصفوف بترقيم صفحات (بدون حد 1000 صف)
         const salesInv = canViewSales
-          ? (await supabase.from("sales_invoices").select("id, date, customer, total, subtotal, paid, remaining, status, accounting_status").order("date", { ascending: false })).data
+          ? (await selectAllRows((from, to) => supabase.from("sales_invoices").select("id, date, customer, total, subtotal, paid, remaining, status, accounting_status").order("date", { ascending: false }).order("id").range(from, to))).data
           : [];
         const invoiceRows: InvoiceRow[] = (salesInv || []).map((r) => ({
           id: String(r.id),
@@ -97,7 +99,7 @@ export default function Dashboard() {
 
         // الإشعارات الدائنة والمدينة المرحّلة تعدّل صافي المبيعات والمشتريات.
         const { data: notesData } = canViewSales || canViewPurchases
-          ? await supabase.from("invoice_adjustment_notes").select("note_type, subtotal").eq("status", "posted").eq("accounting_status", "posted")
+          ? await selectAllRows((from, to) => supabase.from("invoice_adjustment_notes").select("id, note_type, subtotal").eq("status", "posted").eq("accounting_status", "posted").order("id").range(from, to))
           : { data: [] as AdjustmentNoteRow[] };
         const notes = (notesData ?? []) as AdjustmentNoteRow[];
         const notesTotal = (types: string[]) => notes.filter((note) => types.includes(String(note.note_type))).reduce((sum, note) => sum + parseAmount(note.subtotal), 0);
@@ -107,12 +109,13 @@ export default function Dashboard() {
         const totalSales = postedSales.reduce((sum, r) => sum + parseAmount(r.subtotal), 0) - notesTotal(["sales_credit"]) + notesTotal(["sales_debit"]);
 
         // صافي المشتريات: الفواتير المرحّلة فقط، بدون ضريبة المدخلات، بعد إشعارات المشتريات.
-        const purchInv = canViewPurchases ? (await supabase.from("purchase_invoices").select("subtotal, accounting_status").eq("accounting_status", "posted")).data : [];
+        const purchInv = canViewPurchases ? (await selectAllRows((from, to) => supabase.from("purchase_invoices").select("id, subtotal, accounting_status").eq("accounting_status", "posted").order("id").range(from, to))).data : [];
         const totalPurchases = (purchInv || []).reduce((sum, r) => sum + parseAmount(r.subtotal), 0) - notesTotal(["purchase_debit", "purchase_credit"]);
 
         // Load customers count
-        const custData = canViewCustomers ? (await supabase.from("customers").select("id").eq("status", "نشط")).data : [];
-        const activeCustomers = custData?.length ?? 0;
+        const activeCustomers = canViewCustomers
+          ? ((await supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "نشط")).count ?? 0)
+          : 0;
 
         setKpis({
           totalSales,
@@ -123,13 +126,15 @@ export default function Dashboard() {
 
         // Calculate alerts
         const pendingInvoices = invoiceRows.filter((i) => i.status === "مفتوحة" || i.status === "مدفوعة جزئياً").length;
-        const unpaidPurch = canViewPurchases ? (await supabase.from("purchase_invoices").select("id").in("status", ["مفتوحة", "مدفوعة جزئياً"])).data : [];
-        const { data: pendingLeavesData } = await supabase.from("leave_requests").select("id").eq("status", "معلقة");
+        const unpaidPurchases = canViewPurchases
+          ? ((await supabase.from("purchase_invoices").select("id", { count: "exact", head: true }).in("status", ["مفتوحة", "مدفوعة جزئياً"])).count ?? 0)
+          : 0;
+        const { count: pendingLeaves } = await supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "معلقة");
 
         setAlerts({
           pendingInvoices,
-          unpaidPurchases: unpaidPurch?.length ?? 0,
-          pendingLeaves: pendingLeavesData?.length ?? 0,
+          unpaidPurchases,
+          pendingLeaves: pendingLeaves ?? 0,
         });
       } catch (e) {
         console.error("Dashboard load error:", e);

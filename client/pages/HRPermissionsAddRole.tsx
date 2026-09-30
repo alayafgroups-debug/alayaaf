@@ -53,6 +53,12 @@ const MODULE_TREE: ModuleNode[] = [
     { key: "inventory.items", label: "الأصناف" }, { key: "inventory.warehouses", label: "المستودعات" },
     { key: "inventory.movements", label: "حركات المخزون" }, { key: "inventory.reports", label: "تقارير المخزون" },
   ] },
+  { key: "module.fleet", label: "الأسطول والسيارات", children: [
+    { key: "fleet.vehicles", label: "السيارات والمركبات" }, { key: "fleet.drivers", label: "السائقون" },
+    { key: "fleet.maintenance", label: "صيانة المركبات" }, { key: "fleet.insurance", label: "التأمين والفحص" },
+    { key: "fleet.trips", label: "سجل الحركة والرحلات" }, { key: "fleet.fuel", label: "الوقود" },
+    { key: "fleet.reports", label: "لوحة الأسطول والتقارير" },
+  ] },
   { key: "module.users", label: "المستخدمون والصلاحيات", children: [
     { key: "users.list", label: "المستخدمون" }, { key: "users.roles", label: "الأدوار والصلاحيات" }, { key: "users.audit", label: "سجل النشاط" },
   ] },

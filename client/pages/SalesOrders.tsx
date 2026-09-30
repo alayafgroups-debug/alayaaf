@@ -14,7 +14,12 @@ import {
   Download,
   Save,
 } from "lucide-react";
-import { cn, escapeHtml, riyadhDateString } from "@/lib/utils";
+import {
+  cn,
+  escapeHtml,
+  riyadhDateString,
+  SAUDI_STANDARD_VAT_RATE,
+} from "@/lib/utils";
 import {
   PageHeader,
   FilterBar,
@@ -35,6 +40,16 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
 
+// بند أمر البيع كما يُحفظ في عمود items (jsonb) في قاعدة البيانات
+type OrderItem = {
+  id: number;
+  description: string;
+  quantity: number;
+  price: number;
+  discount: number;
+  taxPercent: number;
+};
+
 type SalesOrder = {
   id: string;
   date: string;
@@ -46,6 +61,14 @@ type SalesOrder = {
   statusColor: string;
   subStatus?: string;
   subStatusColor?: string;
+  items: OrderItem[];
+  warehouse: string;
+  notes: string;
+  // مجاميع تحسبها قاعدة البيانات (trigger) من البنود
+  subtotal: number;
+  discountTotal: number;
+  taxTotal: number;
+  grandTotal: number;
 };
 
 const statusColors: Record<string, string> = {
@@ -56,8 +79,13 @@ const statusColors: Record<string, string> = {
 const salesOrderTranslations: Record<string, string> = {
   "لا يمكن حفظ أمر بإجمالي صفر": "An order cannot be saved with a zero total",
   "أضف بنود الأمر بأسعارها قبل الحفظ": "Add the order lines with prices before saving",
-  "بنود هذا الأمر غير محفوظة في هذا المتصفح؛ أعد إدخالها كاملة قبل الحفظ":
-    "This order's lines are not stored in this browser; re-enter all lines before saving",
+  "بنود هذا الأمر غير محفوظة؛ أعد إدخالها كاملة قبل الحفظ":
+    "This order's lines are not saved; re-enter all lines before saving",
+  "تحقق من بنود الأمر": "Check the order lines",
+  "الكمية يجب أن تكون أكبر من صفر، والسعر والخصم غير سالبين، والخصم لا يتجاوز قيمة البند":
+    "Quantity must be above zero, price and discount cannot be negative, and the discount cannot exceed the line value",
+  "تعذر تحميل أوامر البيع": "Unable to load sales orders",
+  "نسبة ضريبة القيمة المضافة الأساسية": "Standard VAT rate",
   "بيانات الأمر غير مكتملة": "Order data is incomplete",
   "اختر العميل وأضف بندًا واحدًا على الأقل بقيمة أكبر من صفر":
     "Select a customer and add at least one line with a value above zero",
@@ -180,6 +208,131 @@ const formatStoredTotal = (
   })} ${t("ريال")}`;
 };
 
+const toNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+// تقريب لخانتين مطابق لـ round(x, 2) في القاعدة: نصف الهللة يُقرَّب بعيدًا عن الصفر،
+// والضرب في 100 يُثبَّت أولًا حتى لا تُحوّل أخطاء الفاصلة العائمة 2.175 إلى 2.17
+const round2 = (value: number) => {
+  const rounded = Math.round(Number((Math.abs(value) * 100).toFixed(6))) / 100;
+  return value < 0 ? -rounded : rounded;
+};
+
+const normalizeOrderItems = (value: unknown): OrderItem[] =>
+  Array.isArray(value)
+    ? value
+        .filter((line) => line && typeof line === "object")
+        .map((line: Record<string, unknown>, index: number) => ({
+          id: toNumber(line.id) || index + 1,
+          description: String(line.description ?? ""),
+          quantity: toNumber(line.quantity),
+          price: toNumber(line.price),
+          discount: toNumber(line.discount),
+          taxPercent: toNumber(line.taxPercent ?? SAUDI_STANDARD_VAT_RATE),
+        }))
+    : [];
+
+// قراءة فقط: بنود الأوامر القديمة التي كانت تُحفظ في المتصفح قبل نقلها لقاعدة البيانات
+const readLegacyOrderItems = (orderId: string): OrderItem[] => {
+  try {
+    return normalizeOrderItems(
+      JSON.parse(localStorage.getItem(`sales-order-items-${orderId}`) || "null"),
+    );
+  } catch {
+    return [];
+  }
+};
+
+// بنود قاعدة البيانات أولًا، ثم نسخة المتصفح القديمة للأوامر السابقة فقط
+const getOrderLines = (order: SalesOrder): { items: OrderItem[]; fromDb: boolean } => {
+  if (Array.isArray(order.items) && order.items.length > 0) {
+    return { items: order.items, fromDb: true };
+  }
+  return { items: readLegacyOrderItems(order.id), fromDb: false };
+};
+
+type LineAmounts = { quantity: number; price: number; discount: number; taxPercent: number };
+
+const calcLine = (item: LineAmounts) => {
+  const net = round2(toNumber(item.quantity) * toNumber(item.price) - toNumber(item.discount));
+  const tax = round2((net * toNumber(item.taxPercent)) / 100);
+  return { net, tax, total: round2(net + tax) };
+};
+
+type OrderTotals = { subtotal: number; discount: number; tax: number; total: number };
+
+const calcOrderTotals = (lines: LineAmounts[]): OrderTotals =>
+  lines.reduce<OrderTotals>(
+    (acc, item) => {
+      const line = calcLine(item);
+      return {
+        subtotal: round2(acc.subtotal + line.net),
+        discount: round2(acc.discount + toNumber(item.discount)),
+        tax: round2(acc.tax + line.tax),
+        total: round2(acc.total + line.total),
+      };
+    },
+    { subtotal: 0, discount: 0, tax: 0, total: 0 },
+  );
+
+// مجاميع قاعدة البيانات عند وجود بنود محفوظة فيها، وإلا نحسبها من بنود المتصفح القديمة
+const getOrderTotals = (
+  order: SalesOrder,
+  lines: { items: OrderItem[]; fromDb: boolean },
+): OrderTotals | null => {
+  if (lines.fromDb) {
+    return {
+      subtotal: order.subtotal,
+      discount: order.discountTotal,
+      tax: order.taxTotal,
+      total: order.grandTotal,
+    };
+  }
+  return lines.items.length > 0 ? calcOrderTotals(lines.items) : null;
+};
+
+// نفس قيود الـ trigger حتى يرى المستخدم رسالة واضحة قبل رفض قاعدة البيانات
+const hasInvalidLine = (lines: LineAmounts[]) =>
+  lines.some((item) => {
+    const quantity = toNumber(item.quantity);
+    const price = toNumber(item.price);
+    const discount = toNumber(item.discount);
+    return !(quantity > 0) || price < 0 || discount < 0 || discount - quantity * price > 1e-9;
+  });
+
+// يُرسل للقاعدة الحقول المعتمدة فقط، والضريبة ثابتة 15% (S-03)
+const toItemsPayload = (lines: Array<LineAmounts & { id: number; description: string }>) =>
+  lines.map((item, index) => ({
+    id: toNumber(item.id) || index + 1,
+    description: String(item.description ?? ""),
+    quantity: toNumber(item.quantity),
+    price: toNumber(item.price),
+    discount: toNumber(item.discount),
+    taxPercent: SAUDI_STANDARD_VAT_RATE,
+  }));
+
+const mapSalesOrderRow = (row: Record<string, any>): SalesOrder => ({
+  id: row.id ?? "",
+  date: row.date ?? "",
+  deliveryDate: row.delivery_date ?? row.deliveryDate ?? "",
+  customer: row.customer ?? "",
+  total: row.total ?? "",
+  quotationId: row.quotation_id ?? row.quotationId ?? "",
+  status: row.status ?? "confirmed",
+  statusColor: statusColors[row.status ?? "confirmed"] ?? "bg-slate-600 text-white",
+  subStatus: row.sub_status ?? row.subStatus,
+  subStatusColor: row.sub_status_color ?? row.subStatusColor,
+  items: normalizeOrderItems(row.items),
+  warehouse: row.warehouse ?? "",
+  notes: row.notes ?? "",
+  subtotal: toNumber(row.subtotal),
+  discountTotal: toNumber(row.discount_total),
+  taxTotal: toNumber(row.tax_total),
+  grandTotal: toNumber(row.grand_total),
+});
+
 export default function SalesOrders() {
   const { t, locale, direction, formatDate, formatNumber } = useSalesOrdersI18n();
   const [view, setView] = useState<"list" | "create" | "details" | "edit">("list");
@@ -193,23 +346,16 @@ export default function SalesOrders() {
         .select("*")
         .order("date", { ascending: false });
 
-      if (!error && data) {
-        setOrders(
-          data.map((row) => ({
-            id: row.id ?? "",
-            date: row.date ?? "",
-            deliveryDate: row.delivery_date ?? row.deliveryDate ?? "",
-            customer: row.customer ?? "",
-            total: row.total ?? "",
-            quotationId: row.quotation_id ?? row.quotationId ?? "",
-            status: row.status ?? "confirmed",
-            statusColor:
-              statusColors[row.status ?? "confirmed"] ??
-              "bg-slate-600 text-white",
-            subStatus: row.sub_status ?? row.subStatus,
-            subStatusColor: row.sub_status_color ?? row.subStatusColor,
-          }))
-        );
+      if (error) {
+        toast({
+          title: t("تعذر تحميل أوامر البيع"),
+          description: error.message || t("يرجى المحاولة لاحقاً"),
+          variant: "destructive",
+        });
+        return;
+      }
+      if (data) {
+        setOrders(data.map(mapSalesOrderRow));
       }
     };
 
@@ -230,49 +376,43 @@ export default function SalesOrders() {
       return;
     }
 
-    const storedItems = localStorage.getItem(`sales-order-items-${order.id}`);
-    const parsedItems = storedItems
-      ? (JSON.parse(storedItems) as Array<{
-          id: number;
-          description: string;
-          quantity: number;
-          price: number;
-          discount: number;
-          taxPercent: number;
-        }>)
-      : [];
+    // بنود قاعدة البيانات أولًا؛ لا نخترع بنودًا عند غيابها
+    const lines = getOrderLines(order);
+    const totals = getOrderTotals(order, lines);
+    const money = (value: number) =>
+      formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const totalText = totals
+      ? `${money(totals.total)} ${t("ريال")}`
+      : formatStoredTotal(order.total, formatNumber, t);
 
-    const fallbackTotal = parseCurrency(order.total);
-    const items =
-      parsedItems.length > 0
-        ? parsedItems
-        : [
-            {
-              id: 1,
-              description: "-",
-              quantity: 1,
-              price: fallbackTotal,
-              discount: 0,
-              taxPercent: 0,
-            },
-          ];
-
-    const rowsHtml = items
-      .map((item) => {
-        const lineSubtotal = item.quantity * item.price - item.discount;
-        const tax = (lineSubtotal * item.taxPercent) / 100;
-        const lineTotal = lineSubtotal + tax;
-        return `<tr>
-          <td>${formatNumber(item.id)}</td>
+    const rowsHtml =
+      lines.items.length > 0
+        ? lines.items
+            .map((item, index) => {
+              const line = calcLine(item);
+              return `<tr>
+          <td>${formatNumber(index + 1)}</td>
           <td>${escapeHtml(item.description || "-")}</td>
           <td>${formatNumber(item.quantity)}</td>
-          <td>${formatNumber(item.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          <td>${formatNumber(item.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td>${money(item.price)}</td>
+          <td>${money(item.discount)}</td>
           <td>${formatNumber(item.taxPercent)}%</td>
-          <td>${formatNumber(lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td>${money(line.total)}</td>
         </tr>`;
-      })
-      .join("");
+            })
+            .join("")
+        : `<tr><td colspan="7" style="text-align:center">${escapeHtml(t("لا توجد بنود"))}</td></tr>`;
+
+    const totalsHtml = totals
+      ? `<table class="totals">
+              <tbody>
+                <tr><th>${t("المجموع الفرعي")}</th><td>${money(totals.subtotal)} ${t("ريال")}</td></tr>
+                <tr><th>${t("الخصم")}</th><td>${money(totals.discount)} ${t("ريال")}</td></tr>
+                <tr><th>${t("الضريبة")}</th><td>${money(totals.tax)} ${t("ريال")}</td></tr>
+                <tr><th>${t("الإجمالي")}</th><td><strong>${money(totals.total)} ${t("ريال")}</strong></td></tr>
+              </tbody>
+            </table>`
+      : "";
 
     printWindow.document.write(`
       <html dir="${direction}" lang="${locale}">
@@ -291,6 +431,8 @@ export default function SalesOrders() {
             table { width:100%; border-collapse:collapse; }
             th, td { border:1px solid #e2e8f0; padding:8px; text-align:${direction === "rtl" ? "right" : "left"}; font-size:13px; }
             th { background:#f1f5f9; }
+            .totals { width:320px; margin-top:14px; margin-${direction === "rtl" ? "right" : "left"}:auto; }
+            .notes { white-space:pre-wrap; }
           </style>
         </head>
         <body>
@@ -302,10 +444,12 @@ export default function SalesOrders() {
             <div class="meta">
               <div class="card"><div class="label">${t("العميل")}</div><div class="value">${escapeHtml(order.customer || "-")}</div></div>
               <div class="card"><div class="label">${t("رقم عرض السعر")}</div><div class="value">${escapeHtml(order.quotationId || "-")}</div></div>
-              <div class="card"><div class="label">${t("تاريخ الأمر")}</div><div class="value">${order.date ? formatDate(order.date) : "-"}</div></div>
-              <div class="card"><div class="label">${t("تاريخ التسليم")}</div><div class="value">${order.deliveryDate ? formatDate(order.deliveryDate) : "-"}</div></div>
-              <div class="card"><div class="label">${t("الحالة")}</div><div class="value">${getStatusLabel(order.status, t)}</div></div>
-              <div class="card"><div class="label">${t("الإجمالي")}</div><div class="value">${formatStoredTotal(order.total, formatNumber, t)}</div></div>
+              <div class="card"><div class="label">${t("تاريخ الأمر")}</div><div class="value">${escapeHtml(order.date ? formatDate(order.date) : "-")}</div></div>
+              <div class="card"><div class="label">${t("تاريخ التسليم")}</div><div class="value">${escapeHtml(order.deliveryDate ? formatDate(order.deliveryDate) : "-")}</div></div>
+              <div class="card"><div class="label">${t("الحالة")}</div><div class="value">${escapeHtml(getStatusLabel(order.status, t))}</div></div>
+              <div class="card"><div class="label">${t("الإجمالي")}</div><div class="value">${escapeHtml(totalText)}</div></div>
+              <div class="card"><div class="label">${t("المستودع")}</div><div class="value">${escapeHtml(order.warehouse || "-")}</div></div>
+              <div class="card"><div class="label">${t("ملاحظات")}</div><div class="value notes">${escapeHtml(order.notes || "-")}</div></div>
             </div>
             <table>
               <thead>
@@ -313,6 +457,7 @@ export default function SalesOrders() {
               </thead>
               <tbody>${rowsHtml}</tbody>
             </table>
+            ${totalsHtml}
           </div>
         </body>
       </html>
@@ -470,73 +615,12 @@ function OrderDetails({
   onBack: () => void;
 }) {
   const { t, direction, formatDate, formatNumber } = useSalesOrdersI18n();
-  const [items, setItems] = useState<
-    Array<{
-      id: number;
-      description: string;
-      quantity: number;
-      price: number;
-      discount: number;
-      taxPercent: number;
-      lineTotal: number;
-    }>
-  >([]);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(`sales-order-items-${order.id}`);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Array<{
-        id: number;
-        description: string;
-        quantity: number;
-        price: number;
-        discount: number;
-        taxPercent: number;
-      }>;
-
-      setItems(
-        parsed.map((item) => {
-          const lineSubtotal = item.quantity * item.price - item.discount;
-          const tax = (lineSubtotal * item.taxPercent) / 100;
-          return {
-            ...item,
-            lineTotal: lineSubtotal + tax,
-          };
-        })
-      );
-      return;
-    }
-
-    const totalValue = parseCurrency(order.total);
-    const taxableValue = totalValue ? totalValue / 1.15 : totalValue;
-    const taxValue = totalValue - taxableValue;
-
-    setItems([
-      {
-        id: 1,
-        description: "-",
-        quantity: 1,
-        price: taxableValue,
-        discount: 0,
-        taxPercent: 15,
-        lineTotal: taxableValue + taxValue,
-      },
-    ]);
-  }, [order.id, order.total]);
-
-  const totals = items.reduce(
-    (acc, item) => {
-      const lineSubtotal = item.quantity * item.price - item.discount;
-      const tax = (lineSubtotal * item.taxPercent) / 100;
-      return {
-        subtotal: acc.subtotal + lineSubtotal,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + lineSubtotal + tax,
-      };
-    },
-    { subtotal: 0, discount: 0, tax: 0, total: 0 }
-  );
+  // بنود قاعدة البيانات أولًا ثم نسخة المتصفح للأوامر القديمة؛ لا نخترع بنودًا عند غيابها
+  const lines = useMemo(() => getOrderLines(order), [order]);
+  const items = lines.items;
+  const totals = getOrderTotals(order, lines);
+  const money = (value: number) =>
+    formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div className="space-y-6 pb-12" dir={direction}>
@@ -565,7 +649,9 @@ function OrderDetails({
             <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("تاريخ الأمر")}</label><div className="text-start font-semibold">{order.date ? formatDate(order.date) : "-"}</div></div>
             <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("تاريخ التسليم")}</label><div className="text-start font-semibold">{order.deliveryDate ? formatDate(order.deliveryDate) : "-"}</div></div>
             <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("رقم عرض السعر")}</label><div className="text-start font-semibold">{order.quotationId || "-"}</div></div>
-            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("الإجمالي")}</label><div className="text-start font-semibold">{formatStoredTotal(order.total, formatNumber, t)}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("الإجمالي")}</label><div className="text-start font-semibold">{totals ? `${money(totals.total)} ${t("ريال")}` : formatStoredTotal(order.total, formatNumber, t)}</div></div>
+            <div className="space-y-1"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("المستودع")}</label><div className="text-start font-semibold">{order.warehouse || "-"}</div></div>
+            <div className="space-y-1 md:col-span-2"><label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("ملاحظات")}</label><div className="text-start font-semibold whitespace-pre-wrap">{order.notes || "-"}</div></div>
           </div>
         </div>
 
@@ -587,40 +673,50 @@ function OrderDetails({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-3 py-2 border border-slate-200">{formatNumber(item.id)}</td>
-                    <td className="px-3 py-2 border border-slate-200">{item.description || "-"}</td>
-                    <td className="px-3 py-2 border border-slate-200">{formatNumber(item.quantity)}</td>
-                    <td className="px-3 py-2 border border-slate-200">{formatNumber(item.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-2 border border-slate-200">{formatNumber(item.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-2 border border-slate-200">{formatNumber(item.taxPercent)}%</td>
-                    <td className="px-3 py-2 border border-slate-200">{formatNumber(item.lineTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                {items.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-6 border border-slate-200 text-center text-muted-foreground">
+                      {t("لا توجد بنود")}
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  items.map((item, index) => (
+                    <tr key={`${item.id}-${index}`}>
+                      <td className="px-3 py-2 border border-slate-200">{formatNumber(index + 1)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{item.description || "-"}</td>
+                      <td className="px-3 py-2 border border-slate-200">{formatNumber(item.quantity)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{money(item.price)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{money(item.discount)}</td>
+                      <td className="px-3 py-2 border border-slate-200">{formatNumber(item.taxPercent)}%</td>
+                      <td className="px-3 py-2 border border-slate-200">{money(calcLine(item).total)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
 
-            <div className="border-t border-slate-200 pt-4 flex justify-end mt-6">
-              <div className="w-72 space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-foreground">{formatNumber(totals.subtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}</span>
-                  <span className="text-slate-600">{t("المجموع الفرعي")}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-foreground">{formatNumber(totals.discount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}</span>
-                  <span className="text-slate-600">{t("الخصم")}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-foreground">{formatNumber(totals.tax, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}</span>
-                  <span className="text-slate-600">{t("الضريبة")}</span>
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                  <span className="font-bold text-blue-600">{formatNumber(totals.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ريال")}</span>
-                  <span className="font-bold text-slate-800">{t("الإجمالي")}</span>
+            {totals && (
+              <div className="border-t border-slate-200 pt-4 flex justify-end mt-6">
+                <div className="w-72 space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-foreground">{money(totals.subtotal)} {t("ريال")}</span>
+                    <span className="text-slate-600">{t("المجموع الفرعي")}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-foreground">{money(totals.discount)} {t("ريال")}</span>
+                    <span className="text-slate-600">{t("الخصم")}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-foreground">{money(totals.tax)} {t("ريال")}</span>
+                    <span className="text-slate-600">{t("الضريبة")}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                    <span className="font-bold text-blue-600">{money(totals.total)} {t("ريال")}</span>
+                    <span className="font-bold text-slate-800">{t("الإجمالي")}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -642,41 +738,31 @@ function OrderEdit({
   const [orderDate, setOrderDate] = useState(order.date);
   const [customer, setCustomer] = useState(order.customer);
   const [quotationId, setQuotationId] = useState(order.quotationId || "");
-  const [warehouse, setWarehouse] = useState("");
-  const [notes, setNotes] = useState("");
-  // تحميل بنود الأمر المحفوظة بدل بند فارغ (كان الحفظ يمسح البنود ويجعل الإجمالي صفرًا)
-  const [items, setItems] = useState(() => {
-    const emptyLine = {
-      id: 1,
-      description: "",
-      unitPriceText: "",
-      quantity: 1,
-      price: 0,
-      discount: 0,
-      taxPercent: 15,
-    };
-    try {
-      const stored = JSON.parse(
-        localStorage.getItem(`sales-order-items-${order.id}`) || "null",
-      );
-      if (Array.isArray(stored) && stored.length > 0) {
-        return stored.map((line: Record<string, unknown>, index: number) => ({
+  const [warehouse, setWarehouse] = useState(order.warehouse ?? "");
+  const [notes, setNotes] = useState(order.notes ?? "");
+  // بنود قاعدة البيانات أولًا، ثم نسخة المتصفح القديمة (قراءة فقط) للأوامر السابقة
+  const [initialLines] = useState(() => getOrderLines(order));
+  const hasSavedLines = initialLines.items.length > 0;
+  const [items, setItems] = useState<OrderItem[]>(() =>
+    hasSavedLines
+      ? initialLines.items.map((line, index) => ({
           id: index + 1,
-          description: String(line.description ?? ""),
-          unitPriceText: String(line.unitPriceText ?? ""),
-          quantity: Number(line.quantity) || 0,
-          price: Number(line.price) || 0,
-          discount: Number(line.discount) || 0,
-          taxPercent: Number(line.taxPercent ?? 15) || 0,
-        }));
-      }
-    } catch {
-      // بيانات متصفح تالفة: نبدأ ببند فارغ ونمنع الحفظ بإجمالي صفر أدناه
-    }
-    return [emptyLine];
-  });
-  const hasStoredLines = Boolean(
-    localStorage.getItem(`sales-order-items-${order.id}`),
+          description: line.description,
+          quantity: line.quantity,
+          price: line.price,
+          discount: line.discount,
+          taxPercent: SAUDI_STANDARD_VAT_RATE,
+        }))
+      : [
+          {
+            id: 1,
+            description: "",
+            quantity: 1,
+            price: 0,
+            discount: 0,
+            taxPercent: SAUDI_STANDARD_VAT_RATE,
+          },
+        ],
   );
 
   const handleAddItem = () => {
@@ -686,11 +772,10 @@ function OrderEdit({
         // رقم بند لا يتكرر بعد حذف بنود سابقة
         id: prev.reduce((max, line) => Math.max(max, Number(line.id) || 0), 0) + 1,
         description: "",
-        unitPriceText: "",
         quantity: 1,
         price: 0,
         discount: 0,
-        taxPercent: 15,
+        taxPercent: SAUDI_STANDARD_VAT_RATE,
       },
     ]);
   };
@@ -705,39 +790,39 @@ function OrderEdit({
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const totals = items.reduce(
-    (acc, item) => {
-      const lineSubtotal = item.quantity * item.price - item.discount;
-      const tax = (lineSubtotal * item.taxPercent) / 100;
-      const lineTotal = lineSubtotal + tax;
-      return {
-        subtotal: acc.subtotal + lineSubtotal,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + lineTotal,
-      };
-    },
-    { subtotal: 0, discount: 0, tax: 0, total: 0 }
-  );
+  const totals = calcOrderTotals(items);
 
   const handleSave = async () => {
-    // حماية مؤقتة حتى تُحفظ بنود الأوامر في قاعدة البيانات: لا نسمح بتصفير إجمالي أمر موجود
+    // لا نسمح بتصفير إجمالي أمر موجود
     if (!(totals.total > 0)) {
       toast({
         title: t("لا يمكن حفظ أمر بإجمالي صفر"),
-        description: hasStoredLines
+        description: hasSavedLines
           ? t("أضف بنود الأمر بأسعارها قبل الحفظ")
-          : t("بنود هذا الأمر غير محفوظة في هذا المتصفح؛ أعد إدخالها كاملة قبل الحفظ"),
+          : t("بنود هذا الأمر غير محفوظة؛ أعد إدخالها كاملة قبل الحفظ"),
         variant: "destructive",
       });
       return;
     }
+    if (hasInvalidLine(items)) {
+      toast({
+        title: t("تحقق من بنود الأمر"),
+        description: t(
+          "الكمية يجب أن تكون أكبر من صفر، والسعر والخصم غير سالبين، والخصم لا يتجاوز قيمة البند",
+        ),
+        variant: "destructive",
+      });
+      return;
+    }
+    // المجاميع وعمود total تحسبها قاعدة البيانات من items
     const payload = {
       date: orderDate,
       delivery_date: deliveryDate,
       customer,
       quotation_id: quotationId,
-      total: `ريال ${totals.total.toFixed(2)}`,
+      items: toItemsPayload(items),
+      warehouse,
+      notes,
     };
 
     const { data, error } = await supabase
@@ -748,22 +833,15 @@ function OrderEdit({
       .single();
 
     if (!error && data) {
-      localStorage.setItem(
-        `sales-order-items-${order.id}`,
-        JSON.stringify(items)
-      );
-      onUpdated({
-        ...order,
-        date: data.date ?? orderDate,
-        deliveryDate: data.delivery_date ?? deliveryDate,
-        customer: data.customer ?? customer,
-        quotationId: data.quotation_id ?? quotationId,
-        total: data.total ?? payload.total,
-      });
+      onUpdated(mapSalesOrderRow(data));
       toast({ title: t("تم تحديث أمر البيع"), description: `${t("الأمر")}: ${order.id}` });
       onBack();
     } else {
-      toast({ title: t("تعذر تحديث أمر البيع"), description: t("يرجى المحاولة لاحقاً") });
+      toast({
+        title: t("تعذر تحديث أمر البيع"),
+        description: error?.message || t("يرجى المحاولة لاحقاً"),
+        variant: "destructive",
+      });
     }
   };
 
@@ -919,12 +997,14 @@ function OrderEdit({
                       </div>
                       <div className="space-y-1">
                         <label className="text-[12px] font-semibold text-muted-foreground block text-start">{t("الضريبة")} %</label>
+                        {/* النسبة ثابتة 15% مثل الفواتير (S-03) */}
                         <input
-                          type="number"
-                          value={item.taxPercent}
-                          onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) })}
-                          min="0"
-                          className="w-full px-3 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 outline-none"
+                          type="text"
+                          value={`${SAUDI_STANDARD_VAT_RATE}%`}
+                          readOnly
+                          disabled
+                          title={t("نسبة ضريبة القيمة المضافة الأساسية")}
+                          className="w-full px-3 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-start outline-none"
                         />
                       </div>
                       <div className="flex items-end">
@@ -988,15 +1068,14 @@ function OrderForm({
   const [customer, setCustomer] = useState("");
   const [notes, setNotes] = useState("");
   const saveInFlight = useRef(false);
-  const [items, setItems] = useState([
+  const [items, setItems] = useState<OrderItem[]>([
     {
       id: 1,
       description: "",
-      unitPriceText: "",
       quantity: 1,
       price: 0,
       discount: 0,
-      taxPercent: 15,
+      taxPercent: SAUDI_STANDARD_VAT_RATE,
     },
   ]);
 
@@ -1007,11 +1086,10 @@ function OrderForm({
         // رقم بند لا يتكرر بعد حذف بنود سابقة
         id: prev.reduce((max, line) => Math.max(max, Number(line.id) || 0), 0) + 1,
         description: "",
-        unitPriceText: "",
         quantity: 1,
         price: 0,
         discount: 0,
-        taxPercent: 15,
+        taxPercent: SAUDI_STANDARD_VAT_RATE,
       },
     ]);
   };
@@ -1026,20 +1104,7 @@ function OrderForm({
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const totals = items.reduce(
-    (acc, item) => {
-      const lineSubtotal = item.quantity * item.price - item.discount;
-      const tax = (lineSubtotal * item.taxPercent) / 100;
-      const lineTotal = lineSubtotal + tax;
-      return {
-        subtotal: acc.subtotal + lineSubtotal,
-        discount: acc.discount + item.discount,
-        tax: acc.tax + tax,
-        total: acc.total + lineTotal,
-      };
-    },
-    { subtotal: 0, discount: 0, tax: 0, total: 0 }
-  );
+  const totals = calcOrderTotals(items);
 
   const handleSave = async () => {
     // منع إنشاء أمرين عند النقر المزدوج، ومنع حفظ أمر بلا عميل أو بإجمالي صفر
@@ -1052,9 +1117,20 @@ function OrderForm({
       });
       return;
     }
+    if (hasInvalidLine(items)) {
+      toast({
+        title: t("تحقق من بنود الأمر"),
+        description: t(
+          "الكمية يجب أن تكون أكبر من صفر، والسعر والخصم غير سالبين، والخصم لا يتجاوز قيمة البند",
+        ),
+        variant: "destructive",
+      });
+      return;
+    }
     saveInFlight.current = true;
     try {
       const orderId = `SO-${Date.now()}`;
+      // البنود تُحفظ في قاعدة البيانات؛ المجاميع وعمود total يحسبها الـ trigger
       const payload = {
         id: orderId,
         date: orderDate,
@@ -1063,6 +1139,9 @@ function OrderForm({
         total: `ريال ${totals.total.toFixed(2)}`,
         quotation_id: quotationId,
         status: "confirmed",
+        items: toItemsPayload(items),
+        warehouse,
+        notes,
       };
 
       const { data, error } = await supabase
@@ -1072,25 +1151,23 @@ function OrderForm({
         .single();
 
       if (!error && data) {
-        localStorage.setItem(
-          `sales-order-items-${data.id ?? orderId}`,
-          JSON.stringify(items)
-        );
-        onSaved({
-          id: data.id ?? orderId,
-          date: data.date ?? orderDate,
-          deliveryDate: data.delivery_date ?? deliveryDate,
-          customer: data.customer ?? customer,
-          total: data.total ?? payload.total,
-          quotationId: data.quotation_id ?? quotationId,
-          status: data.status ?? "confirmed",
-          statusColor: statusColors[data.status ?? "confirmed"] ?? "bg-slate-600 text-white",
-        });
-        toast({ title: t("تم حفظ أمر البيع"), description: `${t("الأمر")}: ${data.id ?? orderId}` });
+        const saved = mapSalesOrderRow(data);
+        onSaved(saved);
+        toast({ title: t("تم حفظ أمر البيع"), description: `${t("الأمر")}: ${saved.id || orderId}` });
         onBack();
       } else {
-        toast({ title: t("تعذر حفظ أمر البيع"), description: t("يرجى المحاولة لاحقاً") });
+        toast({
+          title: t("تعذر حفظ أمر البيع"),
+          description: error?.message || t("يرجى المحاولة لاحقاً"),
+          variant: "destructive",
+        });
       }
+    } catch (err) {
+      toast({
+        title: t("تعذر حفظ أمر البيع"),
+        description: (err as Error)?.message || t("يرجى المحاولة لاحقاً"),
+        variant: "destructive",
+      });
     } finally {
       saveInFlight.current = false;
     }
@@ -1258,16 +1335,13 @@ function OrderForm({
                   <th className="pb-2 font-medium w-24">{t("الضريبة")}</th>
                   <th className="pb-2 font-medium w-20">{t("خصم")}</th>
                   <th className="pb-2 font-medium w-24">{t("السعر")} *</th>
-                  <th className="pb-2 font-medium w-28">{t("سعر الوحدة")}</th>
                   <th className="pb-2 font-medium w-20">{t("الكمية")} *</th>
                   <th className="pb-2 font-medium">{t("وصف البند")}</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => {
-                  const lineSubtotal = item.quantity * item.price - item.discount;
-                  const lineTax = (lineSubtotal * item.taxPercent) / 100;
-                  const lineTotal = lineSubtotal + lineTax;
+                  const lineTotal = calcLine(item).total;
 
                   return (
                     <tr key={item.id}>
@@ -1290,15 +1364,14 @@ function OrderForm({
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
+                        {/* النسبة ثابتة 15% مثل الفواتير (S-03) */}
                         <input
-                          type="number"
-                          value={item.taxPercent}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              taxPercent: Number(event.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
+                          type="text"
+                          value={`${SAUDI_STANDARD_VAT_RATE}%`}
+                          readOnly
+                          disabled
+                          title={t("نسبة ضريبة القيمة المضافة الأساسية")}
+                          className="w-full px-2 py-2 border border-border/40 bg-muted/30 rounded-xl text-sm text-start outline-none h-10"
                         />
                       </td>
                       <td className="pt-4 px-1 align-top">
@@ -1322,19 +1395,6 @@ function OrderForm({
                               price: Number(event.target.value) || 0,
                             })
                           }
-                          className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
-                        />
-                      </td>
-                      <td className="pt-4 px-1 align-top">
-                        <input
-                          type="text"
-                          value={item.unitPriceText}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              unitPriceText: event.target.value,
-                            })
-                          }
-                          placeholder={t("اختياري")}
                           className="w-full px-2 py-2 border border-border/60 rounded-xl text-sm text-start focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-10"
                         />
                       </td>

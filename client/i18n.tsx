@@ -3177,6 +3177,16 @@ Object.assign(translations, {
   "السجل المرتبط غير موجود أو حُذف؛ حدّث الصفحة وأعد المحاولة.": "The linked record does not exist or was deleted; refresh the page and try again.",
 });
 
+Object.assign(translations, {
+  // المرحلة 2 — المشتريات
+  "فاتورة المورد هذه مسجلة مسبقًا لنفس المورد": "This supplier invoice is already recorded for the same supplier",
+  "فاتورة المورد هذه مسجلة مسبقًا برقم": "This supplier invoice is already recorded as",
+  "لا تُسجَّل الفاتورة مرتين": "An invoice cannot be recorded twice",
+  "جارٍ تحميل ضريبة الإشعارات السابقة": "Loading the tax of previous notes",
+  "انتظر لحظة ثم أعد المحاولة": "Wait a moment and try again",
+  "قُصرت الضريبة على المتبقي من ضريبة الفاتورة بعد الإشعارات السابقة": "Tax was limited to the invoice VAT remaining after previous notes",
+});
+
 const getInitialLocale = (): Locale => {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("app_language") === "en" ? "en" : "ar";

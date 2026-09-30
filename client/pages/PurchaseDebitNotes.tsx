@@ -8,8 +8,12 @@ import { supabase } from "@/lib/supabaseClient";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import { riyadhDateString, SAUDI_STANDARD_VAT_RATE } from "@/lib/utils";
 
-// نفس تقريب القاعدة: صافي كل بند يُقرَّب لخانتين
-const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+// تقريب لخانتين مطابق لـ round(x, 2) في القاعدة: نصف الهللة يُقرَّب بعيدًا عن الصفر،
+// والضرب في 100 يُثبَّت أولًا حتى لا تُحوّل أخطاء الفاصلة العائمة 2.175 إلى 2.17
+const round2 = (value: number) => {
+  const rounded = Math.round(Number((Math.abs(value) * 100).toFixed(6))) / 100;
+  return value < 0 ? -rounded : rounded;
+};
 
 type DebitNoteItem = {
   id: string;
@@ -117,6 +121,9 @@ export default function PurchaseDebitNotes({
   // يمنع ترحيل الإشعار مرتين عند النقر المتكرر
   const saveInFlight = useRef(false);
   const [saving, setSaving] = useState(false);
+  // ضريبة الإشعارات المُصدَرة سابقًا (مدينة ودائنة) على الفاتورة المختارة: الإشعارات معًا لا تعكس أكثر من ضريبة الفاتورة
+  const [usedTax, setUsedTax] = useState<{ invoiceId: string; amount: number } | null>(null);
+  const [usedTaxReload, setUsedTaxReload] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -224,6 +231,34 @@ export default function PurchaseDebitNotes({
   const selectedInvoice = invoices.find(
     (item) => item.id === form.originalInvoiceId,
   );
+
+  useEffect(() => {
+    const invoiceId = form.originalInvoiceId;
+    // القيمة غير معروفة حتى تصل من قاعدة البيانات، والحفظ ينتظرها
+    setUsedTax(null);
+    if (!invoiceId) return;
+    let active = true;
+    supabase
+      .from("invoice_adjustment_notes")
+      .select("tax")
+      .eq("original_invoice_table", "purchase_invoices")
+      .eq("original_invoice_id", invoiceId)
+      .in("note_type", ["purchase_debit", "purchase_credit"])
+      .eq("status", "posted")
+      .then(({ data, error }) => {
+        if (!active) return;
+        // تعذّر التحميل: لا نمنع الحفظ؛ قاعدة البيانات تفرض السقف على أي حال
+        const used = error
+          ? 0
+          : round2(
+              (data ?? []).reduce((sum: number, row: any) => sum + (Number(row.tax) || 0), 0),
+            );
+        setUsedTax({ invoiceId, amount: used });
+      });
+    return () => {
+      active = false;
+    };
+  }, [form.originalInvoiceId, usedTaxReload]);
   // نسبة ضريبة الإشعار من الفاتورة الأصلية: فاتورة بلا ضريبة ⇐ إشعار بلا ضريبة
   const noteTaxRate =
     selectedInvoice && selectedInvoice.totalTax <= 0 ? 0 : SAUDI_STANDARD_VAT_RATE;
@@ -237,10 +272,19 @@ export default function PurchaseDebitNotes({
       ),
     [form.items],
   );
-  const tax = useMemo(
+  // المتبقي من ضريبة الفاتورة بعد الإشعارات السابقة (null إن لم يُحمَّل بعد)
+  const remainingInvoiceTax =
+    selectedInvoice && usedTax?.invoiceId === selectedInvoice.id
+      ? Math.max(round2(selectedInvoice.totalTax - usedTax.amount), 0)
+      : null;
+  const calculatedTax = useMemo(
     () => round2((subtotal * noteTaxRate) / 100),
     [subtotal, noteTaxRate],
   );
+  // تقريب كل إشعار جزئي قد يجعل ضريبة آخر إشعار أكبر ببضع هللات من المتبقي؛
+  // الإشعار لا يعكس أكثر مما بقي من ضريبة الفاتورة
+  const taxCapped = remainingInvoiceTax !== null && calculatedTax > remainingInvoiceTax;
+  const tax = taxCapped ? remainingInvoiceTax : calculatedTax;
   const total = useMemo(() => round2(subtotal + tax), [subtotal, tax]);
 
   const updateItem = (
@@ -343,6 +387,13 @@ export default function PurchaseDebitNotes({
       });
       return;
     }
+    if (remainingInvoiceTax === null) {
+      toast({
+        title: t("جارٍ تحميل ضريبة الإشعارات السابقة"),
+        description: t("انتظر لحظة ثم أعد المحاولة"),
+      });
+      return;
+    }
     // الضريبة المعكوسة لا تتجاوز ضريبة الفاتورة الأصلية
     if (selectedInvoice && tax > selectedInvoice.totalTax + 0.01) {
       toast({
@@ -384,6 +435,10 @@ export default function PurchaseDebitNotes({
       setSaving(false);
     }
     if (error) {
+      // إشعار آخر رُحِّل على الفاتورة نفسها في الأثناء: نعيد تحميل المتبقي من ضريبتها
+      if (String(error.message ?? "").includes("PURCHASE_NOTE_TAX")) {
+        setUsedTaxReload((value) => value + 1);
+      }
       toast({
         title: t("تعذر ترحيل الإشعار"),
         description: error.message,
@@ -765,6 +820,11 @@ export default function PurchaseDebitNotes({
                     {formatAmount(tax)} {t("ريال")}
                   </span>
                 </div>
+                {taxCapped && (
+                  <p className="text-xs text-amber-700">
+                    {t("قُصرت الضريبة على المتبقي من ضريبة الفاتورة بعد الإشعارات السابقة")}
+                  </p>
+                )}
                 <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold">
                   <span>{t("المجموع")}</span>
                   <span>

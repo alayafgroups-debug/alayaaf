@@ -76,8 +76,12 @@ const vendorVatState = (vendor?: {
       : "no"
     : "";
 
-// نفس تقريب القاعدة: صافي كل بند وضريبته يُقرّبان لخانتين
-const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+// تقريب لخانتين مطابق لـ round(x, 2) في القاعدة: نصف الهللة يُقرَّب بعيدًا عن الصفر،
+// والضرب في 100 يُثبَّت أولًا حتى لا تُحوّل أخطاء الفاصلة العائمة 2.175 إلى 2.17
+const round2 = (value: number) => {
+  const rounded = Math.round(Number((Math.abs(value) * 100).toFixed(6))) / 100;
+  return value < 0 ? -rounded : rounded;
+};
 const lineAmounts = (item: {
   quantity: number;
   unitPrice: number;
@@ -1549,14 +1553,17 @@ function InvoiceForm({
           },
         });
         postError = result.error;
-        if (!postError || postError.code !== "23505") break;
+        // 23505 لرقم فاتورة المورد المكرر (فهرس القاعدة) لا يُعالج بتغيير رقم فاتورتنا
+        if (!postError || postError.code !== "23505" || String(postError.message ?? "").includes("purchase_invoices_vendor_reference_uidx")) break;
         const nextNumber = Number(savedId.replace(/\D/g, "")) + 1 || Date.now();
         savedId = `PIN-${String(nextNumber).padStart(6, "0")}`;
       }
 
       if (postError) {
         setError(
-          postError.code === "23505"
+          String(postError.message ?? "").includes("purchase_invoices_vendor_reference_uidx")
+            ? `${t("فاتورة المورد هذه مسجلة مسبقًا لنفس المورد")}. ${t("لا تُسجَّل الفاتورة مرتين")}`
+            : postError.code === "23505"
             ? t("رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى.")
             : `${t("تعذّر حفظ وترحيل الفاتورة")}: ${postError.message ?? t("حاول مرة أخرى")}`,
         );

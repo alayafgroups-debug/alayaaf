@@ -19,6 +19,7 @@ import PurchaseInvoices from "./pages/PurchaseInvoices";
 import PurchaseCashExpenses from "./pages/PurchaseCashExpenses";
 import PurchaseDebitNotes from "./pages/PurchaseDebitNotes";
 import PurchaseCreditRequests from "./pages/PurchaseCreditRequests";
+import CustomsDeclarations from "./pages/CustomsDeclarations";
 import PurchaseReports from "./pages/PurchaseReports";
 import InventoryReports from "./pages/InventoryReports";
 import InventoryProducts from "./pages/InventoryProducts";
@@ -188,6 +189,7 @@ const App = () => (
             path="/purchases/credit-notes"
             element={<PurchaseDebitNotes key="purchase-credit" noteType="purchase_credit" />}
           />
+          <Route path="/purchases/customs-declarations" element={<CustomsDeclarations />} />
           <Route path="/purchases/reports" element={<PurchaseReports />} />
           <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
           <Route path="/hr/dashboard" element={<HRDashboard />} />

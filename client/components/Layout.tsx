@@ -78,6 +78,7 @@ const navSubMenus: Record<
     { label: "فواتير المشتريات", href: "/purchases/invoices" },
     { label: "طلبات إشعار دائن", href: "/purchases/debit-notes" },
     { label: "إشعارات دائنة", href: "/purchases/credit-notes" },
+    { label: "البيانات الجمركية", href: "/purchases/customs-declarations" },
     { label: "أوامر الشراء", href: "/purchases/orders" },
     { label: "تقارير المشتريات الشاملة", href: "/purchases/reports" },
   ],

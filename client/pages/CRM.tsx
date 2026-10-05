@@ -23,7 +23,7 @@ type PartyRow = {
   creditLimit: string;
   status: string;
   country: string;
-  taxRegistrationMode: "not_registered" | "registered_sa";
+  taxRegistrationMode: "not_registered" | "registered_sa" | "non_resident";
   taxNumber: string;
   commercialRegistration: string;
   city: string;
@@ -51,7 +51,7 @@ type PartyForm = {
   creditLimit: string;
   status: string;
   country: string;
-  taxRegistrationMode: "not_registered" | "registered_sa";
+  taxRegistrationMode: "not_registered" | "registered_sa" | "non_resident";
   taxNumber: string;
   commercialRegistration: string;
   city: string;
@@ -89,7 +89,9 @@ const mapPartyRow = (row: Record<string, unknown>): PartyRow => ({
   taxRegistrationMode:
     row.tax_registration_mode === "registered_sa"
       ? "registered_sa"
-      : "not_registered",
+      : row.tax_registration_mode === "non_resident"
+        ? "non_resident"
+        : "not_registered",
   taxNumber: String(row.tax_number ?? ""),
   commercialRegistration: String(row.commercial_registration ?? ""),
   city: String(row.city ?? ""),
@@ -494,6 +496,19 @@ export default function CRM() {
       });
       return;
     }
+    // المورد غير المقيم (بلا منشأة في المملكة): الدولة إلزامية وليست السعودية — عليه يُبنى الاحتساب العكسي
+    if (
+      isVendors &&
+      form.taxRegistrationMode === "non_resident" &&
+      (!form.country.trim() || /سعود|saudi|^ksa$|^sa$/i.test(form.country.trim()))
+    ) {
+      toast({
+        title: t("دولة المورد غير المقيم مطلوبة"),
+        description: t("المورد غير المقيم منشأته خارج المملكة؛ اكتب دولته"),
+        variant: "destructive",
+      });
+      return;
+    }
     if (form.creditLimit && !(Number(form.creditLimit) >= 0)) {
       toast({ title: t("فشل الحفظ"), description: t("حد الائتمان يجب أن يكون رقمًا موجبًا"), variant: "destructive" });
       return;
@@ -562,9 +577,11 @@ export default function CRM() {
         status: form.status,
         country: form.country,
         tax_registration_mode: form.taxRegistrationMode,
-        // الرقم الضريبي يُحفظ فقط لمن هو مسجل ضريبيًا (لا تُبنى عليه فواتير ضريبية لغير المسجل)
+        // الرقم الضريبي يُحفظ لمن هو مسجل ضريبيًا (وللمورد غير المقيم رقمه في بلده للتوثيق)
         tax_number:
-          form.taxRegistrationMode === "registered_sa" ? form.taxNumber.trim() : "",
+          form.taxRegistrationMode === "registered_sa" || (isVendors && form.taxRegistrationMode === "non_resident")
+            ? form.taxNumber.trim()
+            : "",
         commercial_registration: form.commercialRegistration.trim(),
         city: form.city.trim(),
         street: form.street.trim(),
@@ -639,9 +656,11 @@ export default function CRM() {
         status: form.status,
         country: form.country,
         tax_registration_mode: form.taxRegistrationMode,
-        // الرقم الضريبي يُحفظ فقط لمن هو مسجل ضريبيًا (لا تُبنى عليه فواتير ضريبية لغير المسجل)
+        // الرقم الضريبي يُحفظ لمن هو مسجل ضريبيًا (وللمورد غير المقيم رقمه في بلده للتوثيق)
         tax_number:
-          form.taxRegistrationMode === "registered_sa" ? form.taxNumber.trim() : "",
+          form.taxRegistrationMode === "registered_sa" || (isVendors && form.taxRegistrationMode === "non_resident")
+            ? form.taxNumber.trim()
+            : "",
         commercial_registration: form.commercialRegistration.trim(),
         city: form.city.trim(),
         street: form.street.trim(),
@@ -888,18 +907,35 @@ export default function CRM() {
               )}
 
               <div className="grid gap-4 md:grid-cols-2 items-center">
-                <select
-                  value={form.country ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
-                  className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end focus:border-slate-400 focus:outline-none"
-                >
-                  <option value="">{t("اختياري")}</option>
-                  <option value="المملكة العربية السعودية">{t("المملكة العربية السعودية")}</option>
-                  <option value="الإمارات العربية المتحدة">{t("الإمارات العربية المتحدة")}</option>
-                  <option value="قطر">{t("قطر")}</option>
-                  <option value="الكويت">{t("الكويت")}</option>
-                </select>
-                <label className="text-sm font-medium text-slate-700 text-end">{t("البلد")}</label>
+                {isVendors ? (
+                  <>
+                    <input
+                      list="vendor-country-options"
+                      value={form.country ?? ""}
+                      onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
+                      className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                      placeholder={t(form.taxRegistrationMode === "non_resident" ? "مطلوب للمورد غير المقيم" : "اختياري")}
+                    />
+                    <datalist id="vendor-country-options">
+                      {["المملكة العربية السعودية", "الإمارات العربية المتحدة", "قطر", "الكويت", "البحرين", "عُمان", "مصر", "الأردن", "الصين", "الهند", "تركيا", "الولايات المتحدة", "المملكة المتحدة", "ألمانيا"].map((country) => (
+                        <option key={country} value={country} />
+                      ))}
+                    </datalist>
+                  </>
+                ) : (
+                  <select
+                    value={form.country ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
+                    className="w-full h-11 rounded-md border border-slate-300 bg-white px-3 text-sm text-end focus:border-slate-400 focus:outline-none"
+                  >
+                    <option value="">{t("اختياري")}</option>
+                    <option value="المملكة العربية السعودية">{t("المملكة العربية السعودية")}</option>
+                    <option value="الإمارات العربية المتحدة">{t("الإمارات العربية المتحدة")}</option>
+                    <option value="قطر">{t("قطر")}</option>
+                    <option value="الكويت">{t("الكويت")}</option>
+                  </select>
+                )}
+                <label className="text-sm font-medium text-slate-700 text-end">{t(isVendors && form.taxRegistrationMode === "non_resident" ? "البلد *" : "البلد")}</label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 items-start">
@@ -920,6 +956,16 @@ export default function CRM() {
                     />
                     {t("جهة اتصال مسجلة في ضريبة القيمة المضافة في السعودية")}
                   </label>
+                  {isVendors && (
+                    <label className="flex items-center justify-end gap-2 text-sm text-slate-700">
+                      <input
+                        type="radio"
+                        checked={form.taxRegistrationMode === "non_resident"}
+                        onChange={() => setForm((prev) => ({ ...prev, taxRegistrationMode: "non_resident" }))}
+                      />
+                      {t("مورد غير مقيم (منشأته خارج المملكة)")}
+                    </label>
+                  )}
                 </div>
                 <label className="text-sm font-medium text-slate-700 text-end">{t("التسجيل في ضريبة القيمة المضافة *")}</label>
               </div>
@@ -999,6 +1045,9 @@ export default function CRM() {
                       <option value="SAR">SAR</option>
                       <option value="USD">USD</option>
                       <option value="EUR">EUR</option>
+                      {isVendors && ["GBP", "AED", "CNY"].map((code) => (
+                        <option key={code} value={code}>{code}</option>
+                      ))}
                     </select>
                     <label className="text-sm font-medium text-slate-700 text-end">{t("العملة")}</label>
                   </div>

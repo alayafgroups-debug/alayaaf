@@ -81,6 +81,7 @@ const creditNoteErrorText = (message: string, t: (key: string) => string) => {
     ["PURCHASE_NOTE_TAX_NOT_ALLOWED", "فاتورة المورد بلا ضريبة، فلا ضريبة في الإشعار"],
     ["ACCOUNTING_MANAGE_PERMISSION_REQUIRED", "تسجيل إشعار المورد يحتاج صلاحية إدارة المحاسبة"],
     ["POSTED_PURCHASE_INVOICE_REQUIRED", "الفاتورة غير مرحّلة محاسبيًا"],
+    ["PURCHASE_NOTE_REVERSE_CHARGE_UNSUPPORTED", "الإشعار على فاتورة احتساب عكسي غير مدعوم حاليًا؛ راجع المحاسب"],
   ];
   const hit = map.find(([code]) => message.includes(code));
   return hit ? t(hit[1]) : message;

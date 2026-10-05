@@ -51,7 +51,21 @@ type InvoiceItem = {
   unitPrice: number;
   discount: number;
   taxPercent: number;
+  // سعر البند وخصمه بعملة فاتورة المورد الأجنبي (للتوثيق؛ القيد بالريال)
+  foreignUnitPrice?: number;
+  foreignDiscount?: number;
 };
+
+// فاتورة المورد غير المقيم: خدمات (احتساب عكسي — الخانة 9)، بضائع (ضريبتها في البيان الجمركي — الخانة 8)، أو غير خاضعة
+type ImportTreatment = "" | "reverse_charge" | "customs_goods" | "not_subject";
+const IMPORT_TREATMENT_LABELS: Record<Exclude<ImportTreatment, "">, string> = {
+  reverse_charge: "خدمات من مورد غير مقيم — احتساب عكسي 15% (الخانة 9)",
+  customs_goods: "بضائع مستوردة — ضريبتها في البيان الجمركي (الخانة 8)",
+  not_subject: "غير خاضعة لضريبة القيمة المضافة في المملكة",
+};
+const SUPPLIER_CURRENCIES = ["SAR", "USD", "EUR", "GBP", "AED", "CNY"];
+// الحساب الوسيط لجمارك وضريبة استيراد دفعها المخلّص نيابة عنا (يُغلق بسطر في فاتورته)
+const CUSTOMS_CLEARING_ACCOUNT = "2115";
 
 type PurchaseExpenseAccount = { code: string; name_ar: string; parent_code: string | null };
 type VendorOption = {
@@ -60,6 +74,7 @@ type VendorOption = {
   vendor_number: string | null;
   tax_registration_mode?: string | null;
   tax_number?: string | null;
+  currency?: string | null;
 };
 
 // حالة تسجيل المورد ضريبيًا: "yes" مسجل برقم صحيح، "no" غير مسجل، "" غير معروفة (فواتير قديمة)
@@ -95,6 +110,14 @@ const lineAmounts = (item: {
   const tax = round2((net * (Number(item.taxPercent) || 0)) / 100);
   return { net, tax, total: round2(net + tax) };
 };
+// البند بعملة المورد → بالريال بسعر الصرف (السعر بست خانات والخصم بخانتين، ثم تقريب القاعدة نفسه للبند)
+const toSarItem = (item: InvoiceItem, rate: number): InvoiceItem => ({
+  ...item,
+  unitPrice: Number(((Number(item.unitPrice) || 0) * rate).toFixed(6)),
+  discount: round2((Number(item.discount) || 0) * rate),
+});
+const reverseChargeTaxOf = (items: InvoiceItem[]) =>
+  round2(items.reduce((sum, item) => sum + round2((lineAmounts(item).net * SAUDI_STANDARD_VAT_RATE) / 100), 0));
 
 type PurchaseInvoice = {
   id: string;
@@ -117,6 +140,11 @@ type PurchaseInvoice = {
   items: InvoiceItem[];
   issuedBy?: string;
   issuerName?: string;
+  importTreatment?: string;
+  reverseChargeTax?: number;
+  supplierCurrency?: string;
+  exchangeRate?: number;
+  supplierCurrencyTotal?: number;
 };
 
 const statusColors: Record<string, string> = {
@@ -157,6 +185,11 @@ function mapRow(row: Record<string, unknown>): PurchaseInvoice {
     accountingJournalEntryId: String(row.accounting_journal_entry_id ?? ""),
     issuedBy: String(row.issued_by ?? row.created_by ?? ""),
     issuerName: "—",
+    importTreatment: String(row.import_treatment ?? ""),
+    reverseChargeTax: Number(row.reverse_charge_tax) || 0,
+    supplierCurrency: String(row.supplier_currency ?? ""),
+    exchangeRate: Number(row.exchange_rate) || 0,
+    supplierCurrencyTotal: Number(row.supplier_currency_total) || 0,
     items: Array.isArray(row.items)
       ? (row.items as Record<string, unknown>[]).map((it) => ({
           id: Number(it.id) || 0,
@@ -167,6 +200,8 @@ function mapRow(row: Record<string, unknown>): PurchaseInvoice {
           unitPrice: Number(it.unitPrice) || 0,
           discount: Number(it.discount) || 0,
           taxPercent: Number(it.taxPercent) || 0,
+          foreignUnitPrice: it.foreignUnitPrice != null ? Number(it.foreignUnitPrice) || 0 : undefined,
+          foreignDiscount: it.foreignDiscount != null ? Number(it.foreignDiscount) || 0 : undefined,
         }))
       : [],
   };
@@ -354,6 +389,8 @@ export default function PurchaseInvoices() {
               <div class="card"><span class="label">${escapeHtml(t("رقم فاتورة المورد"))}</span><span class="value">${escapeHtml(invoice.referenceNo || "-")}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("مركز التكلفة"))}</span><span class="value">${escapeHtml(invoice.costCenterName || invoice.costCenter || "-")}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("الحالة"))} / Status</span><span class="value">${escapeHtml(t(invoice.status))}</span></div>
+              ${invoice.importTreatment ? `<div class="card"><span class="label">${escapeHtml(t("نوع فاتورة المورد غير المقيم"))}</span><span class="value">${escapeHtml(t(IMPORT_TREATMENT_LABELS[invoice.importTreatment as Exclude<ImportTreatment, "">] ?? invoice.importTreatment))}</span></div>` : ""}
+              ${invoice.supplierCurrency ? `<div class="card"><span class="label">${escapeHtml(t("فاتورة المورد بعملته"))}</span><span class="value">${escapeHtml(formatAmount(invoice.supplierCurrencyTotal ?? 0))} ${escapeHtml(invoice.supplierCurrency)} × ${escapeHtml(String(invoice.exchangeRate ?? ""))}</span></div>` : ""}
             </div></section>
             <table>
               <thead><tr><th>${escapeHtml(t("وصف البند"))}<br>Description</th><th>${escapeHtml(t("الوحدة"))}<br>Unit</th><th>${escapeHtml(t("الكمية"))}<br>Qty</th><th>${escapeHtml(t("سعر الوحدة"))}<br>Price</th><th>${escapeHtml(t("الخصم"))}<br>Discount</th><th>${escapeHtml(t("الضريبة"))}<br>VAT</th><th>${escapeHtml(t("الإجمالي"))}<br>Total</th></tr></thead>
@@ -366,6 +403,7 @@ export default function PurchaseInvoices() {
                 <div class="totals-row"><span>${escapeHtml(t("ضريبة القيمة المضافة"))}</span><strong>${formatAmount(printTotals.tax)} ${escapeHtml(t("ريال"))}</strong></div>
                 <div class="totals-row"><span>${escapeHtml(t("الإجمالي الكلي"))}</span><strong>${formatAmount(total)} ${escapeHtml(t("ريال"))}</strong></div>
                 ${Math.abs(adjustments) >= 0.01 ? `<div class="totals-row"><span>${escapeHtml(t("أثر الإشعارات"))}</span><strong>${formatAmount(adjustments)} ${escapeHtml(t("ريال"))}</strong></div><div class="totals-row"><span>${escapeHtml(t("الإجمالي بعد الإشعارات"))}</span><strong>${formatAmount(adjustedTotal)} ${escapeHtml(t("ريال"))}</strong></div>` : ""}
+                ${(invoice.reverseChargeTax ?? 0) > 0 ? `<div class="totals-row"><span>${escapeHtml(t("ضريبة احتساب عكسي (يحتسبها المشتري ولا تُدفع للمورد)"))}</span><strong>${formatAmount(invoice.reverseChargeTax ?? 0)} ${escapeHtml(t("ريال"))}</strong></div>` : ""}
                 <div class="totals-row"><span>${escapeHtml(t("المدفوع"))}</span><strong>${escapeHtml(invoice.paid)} ${escapeHtml(t("ريال"))}</strong></div>
                 <div class="totals-row final"><span>${escapeHtml(t("المتبقي"))}</span><strong>${escapeHtml(invoice.remaining)} ${escapeHtml(t("ريال"))}</strong></div>
               </div>
@@ -431,6 +469,7 @@ export default function PurchaseInvoices() {
                 description: `${t("الفاتورة")}: ${inv.id}`,
               });
               setView("list");
+              refresh();
             }}
           />
         )}
@@ -960,6 +999,23 @@ function InvoiceDetails({
                     {t("الإجمالي الكلي")}
                   </span>
                 </div>
+                {invoice.importTreatment && (
+                  <div className="mt-3 space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                    <p className="font-semibold">
+                      {t(IMPORT_TREATMENT_LABELS[invoice.importTreatment as Exclude<ImportTreatment, "">] ?? invoice.importTreatment)}
+                    </p>
+                    {(invoice.reverseChargeTax ?? 0) > 0 && (
+                      <p>
+                        {t("ضريبة احتساب عكسي (يحتسبها المشتري ولا تُدفع للمورد)")}: {formatAmount(invoice.reverseChargeTax ?? 0)} {t("ريال")}
+                      </p>
+                    )}
+                    {invoice.supplierCurrency && (
+                      <p>
+                        {t("فاتورة المورد بعملته")}: {formatAmount(invoice.supplierCurrencyTotal ?? 0)} {invoice.supplierCurrency} × {invoice.exchangeRate}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -977,6 +1033,9 @@ function ItemsTable({
   onRemove,
   accentClass = "focus:border-blue-500 focus:ring-blue-500",
   vendorVat = "",
+  foreignCurrency = "SAR",
+  exchangeRate = 1,
+  importTreatment = "",
 }: {
   items: InvoiceItem[];
   onAdd: () => void;
@@ -985,9 +1044,17 @@ function ItemsTable({
   accentClass?: string;
   // "no": المورد غير مسجل ضريبيًا فلا تُطالَب ضريبة مدخلات (0% فقط)
   vendorVat?: VendorVatState;
+  // فاتورة المورد غير المقيم: الأسعار بعملته وتُحوَّل للريال بسعر الصرف
+  foreignCurrency?: string;
+  exchangeRate?: number;
+  importTreatment?: ImportTreatment;
 }) {
   const { t, direction, formatNumber } = useI18n();
   const vatLocked = vendorVat === "no";
+  const isForeign = foreignCurrency !== "SAR";
+  const rate = isForeign ? (exchangeRate > 0 ? exchangeRate : 0) : 1;
+  const sarItems = isForeign ? items.map((item) => toSarItem(item, rate)) : items;
+  const reverseChargeTax = importTreatment === "reverse_charge" ? reverseChargeTaxOf(sarItems) : 0;
   const [expenseAccounts, setExpenseAccounts] = useState<PurchaseExpenseAccount[]>([]);
   useEffect(() => {
     const loadAccounts = async () => {
@@ -1006,8 +1073,8 @@ function ItemsTable({
   }, []);
   const formatAmount = (value: number) =>
     formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // نفس تقريب القاعدة لكل بند، فيطابق المعروض ما سيُرحَّل
-  const totals = items.reduce(
+  // نفس تقريب القاعدة لكل بند، فيطابق المعروض ما سيُرحَّل (بالريال)
+  const totals = sarItems.reduce(
     (acc, item) => {
       const line = lineAmounts(item);
       return {
@@ -1019,6 +1086,7 @@ function ItemsTable({
     },
     { subtotal: 0, discount: 0, tax: 0, total: 0 },
   );
+  const foreignTotal = round2(items.reduce((sum, item) => sum + lineAmounts({ ...item, taxPercent: 0 }).net, 0));
 
   return (
     <div
@@ -1040,9 +1108,24 @@ function ItemsTable({
         <div className="mb-3 text-sm text-slate-600 text-right space-y-1">
           <p>{t("الأسعار غير شاملة الضريبة — تُحسب الضريبة لكل بند حسب النسبة المختارة")}</p>
           <p>{t("لبنود البضاعة المخزنية التي استُلمت بسند استلام اختر الحساب 2113 بدل حساب المصروف.")}</p>
-          {vatLocked && (
+          {vatLocked && !importTreatment && (
             <p className="text-amber-700">
               {t("المورد غير مسجل ضريبيًا: لا تُطالَب ضريبة مدخلات على فواتيره (النسبة 0%)")}
+            </p>
+          )}
+          {importTreatment === "reverse_charge" && (
+            <p className="text-amber-700">
+              {t("احتساب عكسي: نحتسب ضريبة 15% على صافي الخدمة (مدخلات ومخرجات بالقيمة نفسها)، ولا تُدفع للمورد.")}
+            </p>
+          )}
+          {importTreatment === "customs_goods" && (
+            <p className="text-amber-700">
+              {t("بضائع مستوردة: هذه الفاتورة خارج الإقرار، وضريبة الاستيراد تُسجَّل من شاشة البيانات الجمركية.")}
+            </p>
+          )}
+          {isForeign && (
+            <p className="text-slate-700">
+              {t("الأسعار بعملة المورد")} ({foreignCurrency}){rate > 0 ? ` — ${t("سعر الصرف")} ${rate}` : ` — ${t("أدخل سعر الصرف")}`}
             </p>
           )}
         </div>
@@ -1055,10 +1138,10 @@ function ItemsTable({
             <thead>
               <tr className="text-slate-600 border-b border-slate-200">
                 <th className="pb-2 font-medium w-10 text-center"></th>
-                <th className="pb-2 font-medium w-24">{t("المجموع")}</th>
+                <th className="pb-2 font-medium w-24">{t("المجموع")}{isForeign ? ` (${foreignCurrency})` : ""}</th>
                 <th className="pb-2 font-medium w-20">{t("الضريبة")}</th>
                 <th className="pb-2 font-medium w-20">{t("الخصم")}</th>
-                <th className="pb-2 font-medium w-24">{t("المبلغ")} *</th>
+                <th className="pb-2 font-medium w-24">{t("المبلغ")}{isForeign ? ` (${foreignCurrency})` : ""} *</th>
                 <th className="pb-2 font-medium w-20">{t("الكمية")} *</th>
                 <th className="pb-2 font-medium w-24">
                   {t("حساب المصروفات")}*
@@ -1150,7 +1233,7 @@ function ItemsTable({
                     <td className="pt-3 px-1 align-top">
                       <select value={item.accountCode} onChange={(e) => onUpdate(item.id, { accountCode: e.target.value })} className={inputClass}>
                         <option value="">{t("اختر حساب المصروف")}</option>
-                        {expenseAccounts.map((account) => <option key={account.code} value={account.code}>{account.code} - {account.name_ar}{account.code === "2113" ? ` (${t("بضاعة مخزنية مستلمة")})` : ""}</option>)}
+                        {expenseAccounts.map((account) => <option key={account.code} value={account.code}>{account.code} - {account.name_ar}{account.code === "2113" ? ` (${t("بضاعة مخزنية مستلمة")})` : account.code === CUSTOMS_CLEARING_ACCOUNT ? ` (${t("جمارك دفعها المخلّص نيابة عنا — بلا ضريبة")})` : ""}</option>)}
                       </select>
                     </td>
                     <td className="pt-3 pl-1 align-top min-w-[260px]">
@@ -1172,6 +1255,14 @@ function ItemsTable({
 
         <div className="border-t border-slate-200 pt-4 mt-2 flex justify-end">
           <div className="w-80 space-y-2 text-sm">
+            {isForeign && (
+              <div className="flex justify-between">
+                <span className="font-semibold">
+                  {formatAmount(foreignTotal)} {foreignCurrency}
+                </span>
+                <span className="text-slate-600">{t("المجموع بعملة المورد")}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="font-semibold">
                 {formatAmount(totals.subtotal)} {t("ريال")}
@@ -1200,6 +1291,14 @@ function ItemsTable({
                 {t("المجموع الكلي")}
               </span>
             </div>
+            {importTreatment === "reverse_charge" && (
+              <div className="flex justify-between text-amber-800">
+                <span className="font-semibold">
+                  {formatAmount(reverseChargeTax)} {t("ريال")}
+                </span>
+                <span>{t("ضريبة احتساب عكسي (لا تُدفع للمورد)")}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1248,10 +1347,35 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
   const setField = (field: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
+  // المورد غير المقيم: نوع الفاتورة (احتساب عكسي/بضائع/غير خاضعة) وعملة فاتورته وسعر الصرف
+  const [importInfo, setImportInfo] = useState({
+    vendorId: "",
+    nonResident: false,
+    treatment: "" as ImportTreatment,
+    currency: "SAR",
+    rate: "",
+  });
+  const updateImport = (changes: Partial<typeof importInfo>) =>
+    setImportInfo((prev) => ({ ...prev, ...changes }));
+
   // عند اختيار مورد غير مسجل ضريبيًا تصبح كل البنود 0% (لا ضريبة مدخلات بلا فاتورة ضريبية)
-  const setVendorVat = (state: VendorVatState) => {
+  const setVendorVat = (state: VendorVatState, vendor?: VendorOption) => {
     const previous = form.vendorVat;
     setForm((prev) => ({ ...prev, vendorVat: state }));
+    const nonResident = vendor?.tax_registration_mode === "non_resident";
+    setImportInfo((prev) =>
+      !nonResident
+        ? { vendorId: vendor?.id ?? "", nonResident: false, treatment: "", currency: "SAR", rate: "" }
+        : prev.vendorId === vendor?.id && prev.nonResident
+          ? prev
+          : {
+              vendorId: vendor?.id ?? "",
+              nonResident: true,
+              treatment: "",
+              currency: vendor?.currency && SUPPLIER_CURRENCIES.includes(vendor.currency) ? vendor.currency : "SAR",
+              rate: "",
+            },
+    );
     if (state === "no") {
       setItems((prev) => prev.map((item) => ({ ...item, taxPercent: 0 })));
     } else if (state === "yes" && previous === "no") {
@@ -1303,6 +1427,8 @@ function useInvoiceForm(initial?: Partial<PurchaseInvoice>) {
     form,
     setField,
     setVendorVat,
+    importInfo,
+    updateImport,
     items,
     addItem,
     updateItem,
@@ -1331,7 +1457,7 @@ function FormFields({
   const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
   useEffect(() => {
     const loadVendors = async () => {
-      const { data } = await supabase.from("vendors").select("id, name, vendor_number, tax_registration_mode, tax_number").eq("status", "نشط").order("name");
+      const { data } = await supabase.from("vendors").select("id, name, vendor_number, tax_registration_mode, tax_number, currency").eq("status", "نشط").order("name");
       setVendorOptions((data ?? []) as VendorOption[]);
     };
     void loadVendors();
@@ -1340,7 +1466,7 @@ function FormFields({
   useEffect(() => {
     if (!setVendorVat || !form.vendorId) return;
     const vendor = vendorOptions.find((option) => option.id === form.vendorId);
-    if (vendor) setVendorVat(vendorVatState(vendor));
+    if (vendor) setVendorVat(vendorVatState(vendor), vendor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.vendorId, vendorOptions]);
   const today = riyadhDateString();
@@ -1454,12 +1580,30 @@ function InvoiceForm({
     form,
     setField,
     setVendorVat,
+    importInfo,
+    updateImport,
     items,
     addItem,
     updateItem,
     removeItem,
-    totals,
   } = useInvoiceForm();
+  // المورد غير المقيم بعملة أجنبية: البنود تُدخل بعملته وتُرسل للقاعدة بالريال
+  const isForeign = importInfo.nonResident && importInfo.currency !== "SAR";
+  // سعر الصرف بست خانات كما يُحفظ في القاعدة، فيطابق التحويل هنا ما تتحقق منه
+  const exchangeRate = isForeign ? Number((Number(importInfo.rate) || 0).toFixed(6)) : 1;
+  const sarItems = isForeign && exchangeRate > 0 ? items.map((item) => toSarItem(item, exchangeRate)) : items;
+  const totals = sarItems.reduce(
+    (acc, item) => {
+      const line = lineAmounts(item);
+      return {
+        subtotal: round2(acc.subtotal + line.net),
+        tax: round2(acc.tax + line.tax),
+        total: round2(acc.total + line.total),
+      };
+    },
+    { subtotal: 0, tax: 0, total: 0 },
+  );
+  const foreignTotal = round2(items.reduce((sum, item) => sum + lineAmounts({ ...item, taxPercent: 0 }).net, 0));
   const [saving, setSaving] = useState(false);
   const saveInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -1515,6 +1659,31 @@ function InvoiceForm({
       setError(t("نسبة الضريبة يجب أن تكون 15% أو 0%"));
       return;
     }
+    // سطر الجمارك المدفوعة نيابة عنا (فاتورة المخلّص): ضريبته مسجلة في البيان الجمركي
+    if (items.some((item) => item.accountCode === CUSTOMS_CLEARING_ACCOUNT && Number(item.taxPercent) > 0)) {
+      setError(t("سطر الجمارك المدفوعة نيابة عنا بلا ضريبة؛ ضريبته مسجلة في البيان الجمركي"));
+      return;
+    }
+    if (importInfo.nonResident) {
+      if (!importInfo.treatment) {
+        setError(t("حدد نوع فاتورة المورد غير المقيم: خدمات (احتساب عكسي) أو بضائع (البيان الجمركي) أو غير خاضعة"));
+        return;
+      }
+      if (isForeign && !(exchangeRate > 0)) {
+        setError(t("أدخل سعر صرف عملة المورد مقابل الريال في تاريخ الفاتورة"));
+        return;
+      }
+      // الحساب الوسيط 2115 يُغلق بفاتورة المخلّص المحلي فقط
+      if (items.some((item) => item.accountCode === CUSTOMS_CLEARING_ACCOUNT)) {
+        setError(t("الحساب الوسيط 2115 يُستخدم في فاتورة المخلّص الجمركي فقط"));
+        return;
+      }
+      // نفس هامش القاعدة: نصف الوحدة الصغرى لعملة المورد × السعر + هللة لكل بند
+      if (isForeign && Math.abs(round2(foreignTotal * exchangeRate) - totals.total) > items.length * (0.005 * exchangeRate + 0.01) + 0.01) {
+        setError(t("بيانات عملة المورد أو سعر الصرف غير صحيحة"));
+        return;
+      }
+    }
     // رقم فاتورة المورد إلزامي ولا يتكرر لنفس المورد (منع تسجيل الفاتورة مرتين)
     const supplierInvoiceNo = form.referenceNo.trim();
     if (!supplierInvoiceNo) {
@@ -1560,7 +1729,11 @@ function InvoiceForm({
             notes: form.notes,
             costCenter: form.costCenter,
             costCenterName: form.costCenterName,
-            items: items.map((item) => ({
+            importTreatment: importInfo.nonResident ? importInfo.treatment : "",
+            supplierCurrency: isForeign ? importInfo.currency : "",
+            exchangeRate: isForeign ? exchangeRate : "",
+            supplierCurrencyTotal: isForeign ? foreignTotal : "",
+            items: sarItems.map((item, index) => ({
               id: item.id,
               description: item.description,
               unit: item.unit,
@@ -1569,6 +1742,9 @@ function InvoiceForm({
               unitPrice: item.unitPrice,
               discount: item.discount,
               taxPercent: item.taxPercent,
+              ...(isForeign
+                ? { foreignUnitPrice: Number(items[index].unitPrice) || 0, foreignDiscount: Number(items[index].discount) || 0 }
+                : {}),
             })),
           },
         });
@@ -1587,6 +1763,14 @@ function InvoiceForm({
             ? t("إنشاء فواتير المشتريات يحتاج صلاحية إدارة فواتير المشتريات")
             : String(postError.message ?? "").includes("PURCHASE_ITEM_ACCOUNT_NOT_ALLOWED")
             ? t("حساب البند يجب أن يكون من حسابات المصروفات أو البضاعة المستلمة غير المفوترة")
+            : String(postError.message ?? "").includes("PURCHASE_IMPORT_TREATMENT_REQUIRED")
+            ? t("حدد نوع فاتورة المورد غير المقيم: خدمات (احتساب عكسي) أو بضائع (البيان الجمركي) أو غير خاضعة")
+            : String(postError.message ?? "").includes("PURCHASE_SUPPLIER_CURRENCY")
+            ? t("بيانات عملة المورد أو سعر الصرف غير صحيحة")
+            : String(postError.message ?? "").includes("PURCHASE_CUSTOMS_CLEARING_LINE_TAX_NOT_ALLOWED")
+            ? t("سطر الجمارك المدفوعة نيابة عنا بلا ضريبة؛ ضريبته مسجلة في البيان الجمركي")
+            : String(postError.message ?? "").includes("PURCHASE_CUSTOMS_CLEARING_LINE_NOT_ALLOWED")
+            ? t("الحساب الوسيط 2115 يُستخدم في فاتورة المخلّص الجمركي فقط")
             : postError.code === "23505"
             ? t("رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى.")
             : `${t("تعذّر حفظ وترحيل الفاتورة")}: ${postError.message ?? t("حاول مرة أخرى")}`,
@@ -1606,7 +1790,12 @@ function InvoiceForm({
         statusColor: statusColors["مفتوحة"],
         accountingStatus: "posted",
         accountingJournalEntryId: "",
-        items,
+        items: sarItems,
+        importTreatment: importInfo.nonResident ? importInfo.treatment : "",
+        reverseChargeTax: importInfo.nonResident && importInfo.treatment === "reverse_charge" ? reverseChargeTaxOf(sarItems) : 0,
+        supplierCurrency: isForeign ? importInfo.currency : "",
+        exchangeRate: isForeign ? exchangeRate : 0,
+        supplierCurrencyTotal: isForeign ? foreignTotal : 0,
       });
     } catch (saveError) {
       setError(
@@ -1660,6 +1849,51 @@ function InvoiceForm({
           onCreateVendor={() => setCreatingVendor(true)}
         />
       </div>
+      {importInfo.nonResident && (
+        <div className="bg-white rounded-lg border border-amber-200 shadow-sm overflow-hidden">
+          <div className="bg-amber-50 px-4 py-2 text-right font-semibold text-amber-900">
+            {t("مورد غير مقيم — نوع الفاتورة وعملتها")}
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-[170px_1fr] gap-3 items-center">
+            <label className="text-sm font-medium text-slate-700">{t("نوع الفاتورة")}*</label>
+            <select
+              value={importInfo.treatment}
+              onChange={(e) => updateImport({ treatment: e.target.value as ImportTreatment })}
+              className="w-full h-10 px-3 py-2 border border-slate-300 rounded text-sm text-right outline-none"
+            >
+              <option value="">{t("اختر نوع الفاتورة")}</option>
+              {(Object.keys(IMPORT_TREATMENT_LABELS) as Exclude<ImportTreatment, "">[]).map((key) => (
+                <option key={key} value={key}>{t(IMPORT_TREATMENT_LABELS[key])}</option>
+              ))}
+            </select>
+            <label className="text-sm font-medium text-slate-700">{t("عملة فاتورة المورد")}*</label>
+            <select
+              value={importInfo.currency}
+              onChange={(e) => updateImport({ currency: e.target.value, rate: e.target.value === "SAR" ? "" : importInfo.rate })}
+              className="w-full h-10 px-3 py-2 border border-slate-300 rounded text-sm text-right outline-none"
+            >
+              {SUPPLIER_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+            </select>
+            {isForeign && (
+              <>
+                <label className="text-sm font-medium text-slate-700">{t("سعر الصرف (ريال لكل وحدة)")}*</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.000001"
+                  value={importInfo.rate}
+                  onChange={(e) => updateImport({ rate: e.target.value })}
+                  placeholder={t("سعر الصرف في تاريخ الفاتورة")}
+                  className="w-full h-10 px-3 py-2 border border-slate-300 rounded text-sm text-right outline-none"
+                />
+              </>
+            )}
+            <p className="md:col-span-2 text-xs text-slate-500">
+              {t("القيد والإقرار بالريال؛ عملة المورد وسعر الصرف يُحفظان للتوثيق. الضريبة لا تُضاف على فاتورة المورد غير المقيم.")}
+            </p>
+          </div>
+        </div>
+      )}
       {creatingVendor && <PartyRegistrationDialog kind="vendor" onClose={() => setCreatingVendor(false)} onCreated={(party) => { setField("vendorId", party.id); setField("vendor", party.name); setVendorVat(SAUDI_VAT_NUMBER_PATTERN.test(String(party.vatNumber ?? "").trim()) ? "yes" : "no"); setCreatingVendor(false); }} />}
 
       <ItemsTable
@@ -1668,6 +1902,9 @@ function InvoiceForm({
         onUpdate={updateItem}
         onRemove={removeItem}
         vendorVat={form.vendorVat}
+        foreignCurrency={importInfo.nonResident ? importInfo.currency : "SAR"}
+        exchangeRate={exchangeRate}
+        importTreatment={importInfo.nonResident ? importInfo.treatment : ""}
       />
 
       <div className="flex justify-center gap-4 pt-2">
@@ -1710,6 +1947,7 @@ function InvoiceEdit({
     form,
     setField,
     setVendorVat,
+    importInfo,
     items,
     addItem,
     updateItem,
@@ -1735,6 +1973,11 @@ function InvoiceEdit({
     }
     if (form.vendorVat === "no" && items.some((item) => Number(item.taxPercent) > 0)) {
       setError(t("المورد غير مسجل ضريبيًا أو رقمه الضريبي غير صحيح: اجعل ضريبة البنود 0% أو صحّح بيانات المورد"));
+      return;
+    }
+    // فاتورة المورد غير المقيم تُسجَّل فاتورةً جديدة (نوعها وعملتها تُحدَّد عند الإنشاء)
+    if (importInfo.nonResident) {
+      setError(t("فاتورة المورد غير المقيم تُسجَّل كفاتورة جديدة؛ لا تُحوَّل فاتورة قائمة إليه"));
       return;
     }
     setSaving(true);

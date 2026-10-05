@@ -115,7 +115,8 @@ export const isIncomeStatementAccount = (code: string) =>
  * قاعدة الترحيل أو المنتجات إن أمكن قراءتها.
  */
 // 2114: الشيكات الصادرة المؤجلة — تُغذّى فقط من سداد الموردين بشيك مؤجل وتأكيد صرفه أو عكسه
-export const DEFAULT_CONTROL_ACCOUNT_CODES = ["112", "2112", "219", "2111", "1151", "2114"] as const;
+// 2115: جمارك وضريبة استيراد دفعها المخلّص — تُغذّى من البيان الجمركي وتُغلق بفاتورة المخلّص
+export const DEFAULT_CONTROL_ACCOUNT_CODES = ["112", "2112", "219", "2111", "1151", "2114", "2115"] as const;
 
 export async function fetchControlAccountCodes(): Promise<Set<string>> {
   const codes = new Set<string>(DEFAULT_CONTROL_ACCOUNT_CODES);

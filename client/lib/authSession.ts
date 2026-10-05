@@ -111,6 +111,7 @@ export function permissionForMainSubPath(path: string): string[] {
     ["/purchases/cash-expenses", "purchases.cash_expenses", "module.purchases"],
     ["/purchases/debit-notes", "purchases.debit_notes", "module.purchases"],
     ["/purchases/credit-notes", "purchases.credit_notes", "module.purchases"],
+    ["/purchases/customs-declarations", "purchases.invoices", "module.purchases"],
     ["/purchases/orders", "purchases.orders", "module.purchases"],
     ["/purchases/reports", "purchases.reports", "module.purchases"],
     ["/inventory/products", "inventory.items", "module.inventory"],

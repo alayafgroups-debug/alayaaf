@@ -18,6 +18,7 @@ import PurchaseOrders from "./pages/PurchaseOrders";
 import PurchaseInvoices from "./pages/PurchaseInvoices";
 import PurchaseCashExpenses from "./pages/PurchaseCashExpenses";
 import PurchaseDebitNotes from "./pages/PurchaseDebitNotes";
+import PurchaseCreditRequests from "./pages/PurchaseCreditRequests";
 import PurchaseReports from "./pages/PurchaseReports";
 import InventoryReports from "./pages/InventoryReports";
 import InventoryProducts from "./pages/InventoryProducts";
@@ -179,10 +180,13 @@ const App = () => (
           <Route path="/purchases/orders" element={<PurchaseOrders />} />
           <Route path="/purchases/invoices" element={<PurchaseInvoices />} />
           <Route path="/purchases/cash-expenses" element={<PurchaseCashExpenses />} />
-          <Route path="/purchases/debit-notes" element={<PurchaseDebitNotes />} />
+          {/* الإشعار المدين للمورد صار طلب إشعار دائن لا يُرحَّل */}
+          <Route path="/purchases/debit-notes" element={<PurchaseCreditRequests />} />
+          {/* الإشعارات المدينة المرحّلة قبل التحويل: عرض فقط */}
+          <Route path="/purchases/debit-notes/archive" element={<PurchaseDebitNotes key="debit-archive" noteType="purchase_debit" />} />
           <Route
             path="/purchases/credit-notes"
-            element={<PurchaseDebitNotes noteType="purchase_credit" />}
+            element={<PurchaseDebitNotes key="purchase-credit" noteType="purchase_credit" />}
           />
           <Route path="/purchases/reports" element={<PurchaseReports />} />
           <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />

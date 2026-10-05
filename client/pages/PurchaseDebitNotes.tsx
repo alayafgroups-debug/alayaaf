@@ -32,6 +32,10 @@ type ExpenseAccount = {
 type DebitNote = {
   id: string;
   noteNumber: string;
+  // مستند المورد (رقم إشعاره الدائن وتاريخه)
+  supplierDocumentNumber: string;
+  supplierDocumentDate: string;
+  requestId: string;
   originalInvoiceId: string;
   supplier: string;
   currency: string;
@@ -61,6 +65,27 @@ type DebitNoteForm = Omit<
   "id" | "subtotal" | "tax" | "total" | "balanceBefore" | "balanceAfter"
 >;
 
+type OpenCreditRequest = { id: string; number: string; invoiceId: string; total: number; reason: string };
+
+// رسائل دوال القاعدة لإشعار المورد الدائن
+const creditNoteErrorText = (message: string, t: (key: string) => string) => {
+  const map: [string, string][] = [
+    ["PURCHASE_CREDIT_NOTE_SUPPLIER_DOCUMENT_DUPLICATE", "إشعار المورد هذا مسجل مسبقًا لنفس المورد"],
+    ["invoice_adjustment_notes_supplier_document_uidx", "إشعار المورد هذا مسجل مسبقًا لنفس المورد"],
+    ["PURCHASE_CREDIT_NOTE_SUPPLIER_DOCUMENT_REQUIRED", "أدخل رقم إشعار المورد وتاريخه كما في مستنده"],
+    ["PURCHASE_CREDIT_NOTE_SUPPLIER_DATE_INVALID", "تاريخ إشعار المورد لا يسبق فاتورته ولا يكون في المستقبل"],
+    ["PURCHASE_CREDIT_NOTE_DATE_INVALID", "تاريخ التسجيل لا يسبق تاريخ إشعار المورد ولا يكون في المستقبل"],
+    ["PURCHASE_CREDIT_REQUEST_INVALID", "الطلب المختار لم يعد مفتوحًا أو يخص فاتورة أخرى"],
+    ["PURCHASE_ITEM_ACCOUNT_NOT_ALLOWED", "حساب البند يجب أن يكون من حسابات المصروفات أو البضاعة المستلمة غير المفوترة"],
+    ["PURCHASE_NOTE_TAX_EXCEEDS_INVOICE_TAX", "ضريبة الإشعارات تتجاوز ضريبة فاتورة المورد"],
+    ["PURCHASE_NOTE_TAX_NOT_ALLOWED", "فاتورة المورد بلا ضريبة، فلا ضريبة في الإشعار"],
+    ["ACCOUNTING_MANAGE_PERMISSION_REQUIRED", "تسجيل إشعار المورد يحتاج صلاحية إدارة المحاسبة"],
+    ["POSTED_PURCHASE_INVOICE_REQUIRED", "الفاتورة غير مرحّلة محاسبيًا"],
+  ];
+  const hit = map.find(([code]) => message.includes(code));
+  return hit ? t(hit[1]) : message;
+};
+
 type PurchaseAdjustmentNoteType = "purchase_debit" | "purchase_credit";
 
 const START_NUMBER = 100;
@@ -84,6 +109,9 @@ const createEmptyForm = (
   noteType: PurchaseAdjustmentNoteType,
 ): DebitNoteForm => ({
   noteNumber: buildNumber(num, noteType),
+  supplierDocumentNumber: "",
+  supplierDocumentDate: riyadhDateString(),
+  requestId: "",
   originalInvoiceId: "",
   supplier: "",
   currency: "SAR",
@@ -94,13 +122,15 @@ const createEmptyForm = (
 });
 
 export default function PurchaseDebitNotes({
-  noteType = "purchase_debit",
+  noteType = "purchase_credit",
 }: {
   noteType?: PurchaseAdjustmentNoteType;
 }) {
   const { t, direction, formatDate, formatNumber } = useI18n();
   const isCredit = noteType === "purchase_credit";
-  const singularLabel = isCredit ? "إشعار دائن مشتريات" : "إشعار مدين";
+  // الإشعار المدين للمورد صار طلبًا لا يُرحَّل؛ الإشعارات المدينة السابقة للاطلاع فقط
+  const readOnly = !isCredit;
+  const singularLabel = isCredit ? "إشعار دائن مشتريات" : "الإشعارات المدينة السابقة";
   const pluralLabel = isCredit
     ? "الإشعارات الدائنة للمشتريات"
     : "الإشعارات المدينة";
@@ -123,7 +153,10 @@ export default function PurchaseDebitNotes({
   const [saving, setSaving] = useState(false);
   // ضريبة الإشعارات المُصدَرة سابقًا (مدينة ودائنة) على الفاتورة المختارة: الإشعارات معًا لا تعكس أكثر من ضريبة الفاتورة
   const [usedTax, setUsedTax] = useState<{ invoiceId: string; amount: number } | null>(null);
+  const [openRequests, setOpenRequests] = useState<OpenCreditRequest[]>([]);
+  const [requestsReload, setRequestsReload] = useState(0);
   const [usedTaxReload, setUsedTaxReload] = useState(0);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -132,7 +165,7 @@ export default function PurchaseDebitNotes({
           supabase
             .from("invoice_adjustment_notes")
             .select(
-              "id, note_number, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items",
+              "id, note_number, original_invoice_id, counterparty, currency, issue_date, subtotal, tax, total, balance_before, balance_after, items, supplier_document_number, supplier_document_date",
             )
             .eq("note_type", noteType)
             .order("created_at", { ascending: false }),
@@ -154,10 +187,14 @@ export default function PurchaseDebitNotes({
             .maybeSingle(),
         ]);
 
+      setLoadError(notesResult.error ? String(notesResult.error.message ?? "") : "");
       if (!notesResult.error) {
         const parsed = (notesResult.data ?? []).map((row: any) => ({
           id: String(row.id),
           noteNumber: String(row.note_number),
+          supplierDocumentNumber: String(row.supplier_document_number ?? ""),
+          supplierDocumentDate: String(row.supplier_document_date ?? ""),
+          requestId: "",
           originalInvoiceId: String(row.original_invoice_id),
           supplier: String(row.counterparty),
           currency: String(row.currency),
@@ -231,6 +268,33 @@ export default function PurchaseDebitNotes({
   const selectedInvoice = invoices.find(
     (item) => item.id === form.originalInvoiceId,
   );
+
+  // طلبات الإشعار الدائن المفتوحة (تُغلق عند تسجيل إشعار المورد المرتبط بها)
+  useEffect(() => {
+    if (!isCredit) return;
+    let active = true;
+    supabase
+      .from("purchase_credit_requests")
+      .select("id, request_number, invoice_id, total, reason")
+      .eq("status", "open")
+      .order("request_date", { ascending: false })
+      .then(({ data }) => {
+        if (!active) return;
+        setOpenRequests(
+          (data ?? []).map((row: any) => ({
+            id: String(row.id),
+            number: String(row.request_number),
+            invoiceId: String(row.invoice_id),
+            total: Number(row.total) || 0,
+            reason: String(row.reason ?? ""),
+          })),
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [isCredit, requestsReload]);
+  const invoiceRequests = openRequests.filter((request) => request.invoiceId === form.originalInvoiceId);
 
   useEffect(() => {
     const invoiceId = form.originalInvoiceId;
@@ -319,6 +383,7 @@ export default function PurchaseDebitNotes({
     }));
 
   const createNew = () => {
+    if (readOnly) return;
     const nextForm = createEmptyForm(nextNumber, noteType);
     nextForm.items = nextForm.items.map((item) => ({
       ...item,
@@ -329,6 +394,7 @@ export default function PurchaseDebitNotes({
   };
 
   const handleSave = async () => {
+    if (readOnly) return;
     if (!form.originalInvoiceId) {
       toast({
         title: t("الفاتورة الأصلية مطلوبة"),
@@ -387,6 +453,20 @@ export default function PurchaseDebitNotes({
       });
       return;
     }
+    if (isCredit) {
+      const supplierDate = form.supplierDocumentDate;
+      if (!form.supplierDocumentNumber.trim() || !supplierDate) {
+        toast({ title: t("أدخل رقم إشعار المورد وتاريخه كما في مستنده") });
+        return;
+      }
+      if (supplierDate > form.date || supplierDate > riyadhDateString() || (selectedInvoice?.date && supplierDate < selectedInvoice.date)) {
+        toast({
+          title: t("تاريخ إشعار المورد غير صحيح"),
+          description: t("لا يسبق فاتورة المورد، ولا يتأخر عن تاريخ التسجيل، ولا يكون في المستقبل"),
+        });
+        return;
+      }
+    }
     if (remainingInvoiceTax === null) {
       toast({
         title: t("جارٍ تحميل ضريبة الإشعارات السابقة"),
@@ -411,22 +491,22 @@ export default function PurchaseDebitNotes({
     }));
     saveInFlight.current = true;
     setSaving(true);
-    let data: unknown = null;
+    let data: { id?: string; note_number?: string } | null = null;
     let error: { message?: string } | null = null;
     try {
-      const response = await supabase.rpc("post_invoice_adjustment_note", {
-        p_note_number: form.noteNumber,
-        p_note_type: noteType,
+      // رقم إشعارنا تولّده القاعدة؛ ومستند المورد إلزامي
+      const response = await supabase.rpc("post_purchase_credit_note", {
         p_original_invoice_id: form.originalInvoiceId,
-        p_counterparty: form.supplier,
-        p_currency: "SAR",
         p_issue_date: form.date,
         p_subtotal: subtotal,
         p_tax: tax,
         p_total: total,
         p_items: cleanedItems,
+        p_supplier_document_number: form.supplierDocumentNumber.trim(),
+        p_supplier_document_date: form.supplierDocumentDate,
+        p_request_id: form.requestId || null,
       });
-      data = response.data;
+      data = (response.data ?? null) as { id?: string; note_number?: string } | null;
       error = response.error;
     } catch (rpcError) {
       error = { message: rpcError instanceof Error ? rpcError.message : String(rpcError) };
@@ -439,20 +519,28 @@ export default function PurchaseDebitNotes({
       if (String(error.message ?? "").includes("PURCHASE_NOTE_TAX")) {
         setUsedTaxReload((value) => value + 1);
       }
+      if (String(error.message ?? "").includes("PURCHASE_CREDIT_REQUEST_INVALID")) {
+        // الطلب المختار أُغلق أو أُلغي في الأثناء: نفرّغ الاختيار ونعيد تحميل المفتوح
+        setForm((current) => ({ ...current, requestId: "" }));
+        setRequestsReload((value) => value + 1);
+      }
       toast({
         title: t("تعذر ترحيل الإشعار"),
-        description: error.message,
+        description: creditNoteErrorText(String(error.message ?? ""), t),
         variant: "destructive",
       });
       return;
     }
+    if (form.requestId) setRequestsReload((value) => value + 1);
 
     const invoice = invoices.find(
       (item) => item.id === form.originalInvoiceId,
     )!;
     const payload: DebitNote = {
-      id: String(data),
       ...form,
+      id: String(data?.id ?? ""),
+      noteNumber: String(data?.note_number ?? ""),
+      supplierDocumentNumber: form.supplierDocumentNumber.trim(),
       currency: "SAR",
       subtotal,
       tax,
@@ -470,7 +558,7 @@ export default function PurchaseDebitNotes({
       ),
     );
 
-    const sequence = extractNumber(form.noteNumber) + 1;
+    const sequence = extractNumber(payload.noteNumber) + 1;
     setNextNumber(sequence);
     const nextForm = createEmptyForm(sequence, noteType);
     nextForm.items = nextForm.items.map((item) => ({
@@ -500,13 +588,15 @@ export default function PurchaseDebitNotes({
 
           <div className="flex items-center gap-2">
             {mode === "list" ? (
-              <button
-                onClick={createNew}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
-              >
-                <Plus className="h-4 w-4" />
-                {t(createLabel)}
-              </button>
+              !readOnly && (
+                <button
+                  onClick={createNew}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
+                >
+                  <Plus className="h-4 w-4" />
+                  {t(createLabel)}
+                </button>
+              )
             ) : (
               <>
                 <button
@@ -531,6 +621,16 @@ export default function PurchaseDebitNotes({
           </div>
         </div>
 
+        {loadError && (
+          <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {t("تعذّر تحميل الإشعارات")}: {loadError}
+          </p>
+        )}
+        {readOnly && (
+          <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            {t("أرشيف للاطلاع فقط: الإشعار المدين للمورد أصبح «طلب إشعار دائن» لا يُرحَّل، والأثر المحاسبي يأتي من إشعار المورد الدائن عند تسجيله.")}
+          </p>
+        )}
         {mode === "list" ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">
@@ -551,6 +651,7 @@ export default function PurchaseDebitNotes({
                   <thead>
                     <tr className="bg-muted/40">
                       <th className="px-3 py-2">{t("رقم الإشعار")}</th>
+                      {isCredit && <th className="px-3 py-2">{t("إشعار المورد")}</th>}
                       <th className="px-3 py-2">{t("الفاتورة الأصلية")}</th>
                       <th className="px-3 py-2">{t("المورد")}</th>
                       <th className="px-3 py-2">{t("التاريخ")}</th>
@@ -564,6 +665,14 @@ export default function PurchaseDebitNotes({
                         <td className="px-3 py-2 font-semibold text-primary">
                           {row.noteNumber}
                         </td>
+                        {isCredit && (
+                          <td className="px-3 py-2">
+                            {row.supplierDocumentNumber || "-"}
+                            {row.supplierDocumentDate && (
+                              <div className="text-xs text-muted-foreground">{formatDate(row.supplierDocumentDate)}</div>
+                            )}
+                          </td>
+                        )}
                         <td className="px-3 py-2 font-medium">
                           {row.originalInvoiceId}
                         </td>
@@ -607,11 +716,32 @@ export default function PurchaseDebitNotes({
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <Field label={t("رقم الإشعار")}>
                   <input
-                    value={form.noteNumber}
+                    value=""
+                    placeholder={t("يُولَّد تلقائيًا عند الحفظ")}
                     readOnly
                     className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                   />
                 </Field>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label={t("رقم إشعار المورد*")}>
+                    <input
+                      value={form.supplierDocumentNumber}
+                      onChange={(e) => setForm({ ...form, supplierDocumentNumber: e.target.value })}
+                      placeholder={t("كما هو مطبوع على إشعار المورد")}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                  <Field label={t("تاريخ إشعار المورد*")}>
+                    <input
+                      type="date"
+                      value={form.supplierDocumentDate}
+                      min={selectedInvoice?.date || undefined}
+                      max={form.date || riyadhDateString()}
+                      onChange={(e) => setForm({ ...form, supplierDocumentDate: e.target.value })}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </Field>
+                </div>
                 <Field label={t("الفاتورة الأصلية*")}>
                   <select
                     value={form.originalInvoiceId}
@@ -623,6 +753,7 @@ export default function PurchaseDebitNotes({
                         ...form,
                         originalInvoiceId: e.target.value,
                         supplier: invoice?.supplier || "",
+                        requestId: "",
                       });
                     }}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
@@ -643,6 +774,22 @@ export default function PurchaseDebitNotes({
                     ))}
                   </select>
                 </Field>
+                {invoiceRequests.length > 0 && (
+                  <Field label={t("طلب الإشعار المرتبط")}>
+                    <select
+                      value={form.requestId}
+                      onChange={(e) => setForm({ ...form, requestId: e.target.value })}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    >
+                      <option value="">{t("بدون طلب")}</option>
+                      {invoiceRequests.map((request) => (
+                        <option key={request.id} value={request.id}>
+                          {request.number} — {formatAmount(request.total)} SAR — {request.reason}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
                 <Field label={t("المورد المرتبط بالفاتورة")}>
                   <input
                     value={form.supplier}

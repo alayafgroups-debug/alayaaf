@@ -25,7 +25,7 @@ const MODULE_TREE: ModuleNode[] = [
   ] },
   { key: "module.purchases", label: "المشتريات", children: [
     { key: "purchases.invoices", label: "فواتير المشتريات" }, { key: "purchases.cash_expenses", label: "المصروفات النقدية" },
-    { key: "purchases.debit_notes", label: "الإشعارات المدينة" }, { key: "purchases.credit_notes", label: "الإشعارات الدائنة" },
+    { key: "purchases.debit_notes", label: "طلبات إشعار دائن من المورد" }, { key: "purchases.credit_notes", label: "الإشعارات الدائنة" },
     { key: "purchases.payments", label: "مدفوعات الموردين" }, { key: "purchases.orders", label: "أوامر الشراء" },
     { key: "purchases.reports", label: "تقارير المشتريات الشاملة" }, { key: "purchases.returns", label: "مرتجعات المشتريات" },
   ] },
@@ -146,7 +146,7 @@ const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
         { key: "purchases.requests", label: "طلبات الشراء" },
         { key: "purchases.orders", label: "أوامر الشراء" },
         { key: "purchases.invoices", label: "فواتير الموردين" },
-        { key: "purchases.debit_notes", label: "الإشعارات المدينة" },
+        { key: "purchases.debit_notes", label: "طلبات إشعار دائن من المورد" },
         { key: "purchases.credit_notes", label: "الإشعارات الدائنة" },
         { key: "purchases.payments", label: "مدفوعات الموردين" },
         { key: "purchases.receipts", label: "استلام البضاعة" },

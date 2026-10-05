@@ -1,6 +1,6 @@
 import Layout from "@/components/Layout";
 import { salesFeatures } from "./Sales";
-import { Plus, Save, Trash2, ArrowRight, RefreshCw } from "lucide-react";
+import { Plus, Save, Trash2, ArrowRight } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { riyadhDateString } from "@/lib/utils";
 import { canManagePerm } from "@/lib/authSession";
@@ -16,43 +16,7 @@ const zatcaStatusLabels: Record<string, string> = {
   cleared: "مصادق من ZATCA",
   reported: "مُبلّغ لـ ZATCA",
   rejected: "مرفوض من ZATCA",
-  failed: "فشل الإرسال",
-  ambiguous: "يتطلب مراجعة — لا تعد الإرسال",
 };
-
-// إشعار مرحّل لم تقبله الهيئة بعد ولا نتيجة غير محسومة له: تجوز إعادة إرساله
-const ZATCA_RESENDABLE_STATUSES = new Set(["pending", "failed", "rejected"]);
-// نفس تعبير دالة الهيئة containsSyntheticMarker
-const ZATCA_SYNTHETIC_MARKER =
-  /(?:^|[^A-Z])(?:TEST(?:ING)?|SIM(?:ULATION|ULATED|ULATOR)?)(?:[^A-Z]|$)|تجريب/i;
-const salesNoteErrorMessages: Array<[string, string]> = [
-  ["SALES_NOTE_ORIGINAL_NOT_ACCEPTED", "الفاتورة الأصلية لم تقبلها الهيئة بعد؛ لا يُصدر إشعار عليها حتى تُبلَّغ"],
-  ["SALES_NOTE_ORIGINAL_NOT_POSTED", "الفاتورة الأصلية غير مرحّلة محاسبيًا"],
-  ["SALES_NOTE_ORIGINAL_NOT_FOUND", "الفاتورة الأصلية غير موجودة"],
-  ["SALES_NOTE_ORIGINAL_BUYER_DATA_INCOMPLETE", "بيانات العميل في الفاتورة الأصلية (العنوان الوطني أو الرقم الضريبي) لا تكفي للهيئة؛ لا يمكن إصدار إشعار عليها"],
-  ["SALES_NOTE_SYNTHETIC_TEXT", "نص الإشعار أو الفاتورة الأصلية يحتوي كلمة اختبارية (test أو simulation أو تجريبي) والهيئة ترفضه في الإنتاج"],
-  ["SALES_NOTE_REASON_REQUIRED", "سبب الإشعار مطلوب"],
-  ["SALES_NOTE_ITEMS_REQUIRED", "أضف بنداً بقيمة أكبر من صفر"],
-  ["SALES_NOTE_ITEM_INVALID", "كل بند يحتاج وصفًا وكمية وسعرًا أكبر من صفر"],
-  ["SALES_NOTE_TAX_RATE_INVALID", "نسبة الضريبة لكل بند 15%"],
-  ["SALES_NOTE_PERMISSION_REQUIRED", "إنشاء الإشعارات يتطلب صلاحية إدارة الإشعارات الدائنة. لم يتم ترحيل أي شيء."],
-  ["ACCOUNTING_MANAGE_PERMISSION_REQUIRED", "ترحيل الإشعار يتطلب صلاحية إدارة المحاسبة. لم يتم ترحيل أي شيء."],
-  ["SALES_NOTE_REQUEST_REUSED", "أُنشئ إشعار من هذا النموذج في محاولة سابقة؛ حدّث القائمة للاطلاع عليه، ثم ابدأ إشعارًا جديدًا إن احتجت"],
-  ["ACCOUNTING_FISCAL_PERIOD_CLOSED", "الفترة المحاسبية لتاريخ اليوم مقفلة"],
-  ["SALES_NOTE_REASON_INVALID_CHARS", "سبب الإشعار لا يقبل الرموز < > & ولا محارف التحكم غير المرئية"],
-  ["SALES_NOTE_INVALID_CHARS", "وصف أحد البنود يحتوي محارف تحكم غير مرئية لا يقبلها ملف الهيئة؛ أعد كتابة النص"],
-  ["ZATCA_RESEND_PERMISSION_REQUIRED", "إعادة الإرسال تتطلب صلاحية إدارة فواتير المبيعات"],
-];
-// نتيجة zatca_resend_state: متى تجوز إعادة الإرسال
-const zatcaResendStateMessages: Record<string, string> = {
-  accepted: "المستند مقبول لدى الهيئة؛ لا حاجة لإعادة الإرسال",
-  ambiguous: "نتيجة إرسال سابق غير محسومة؛ لا تعد الإرسال قبل المراجعة اليدوية",
-  in_progress: "يوجد إرسال سابق لم يكتمل؛ يحتاج مراجعة يدوية قبل أي إعادة إرسال",
-  not_posted: "المستند غير مرحّل محاسبيًا",
-  not_found: "المستند غير موجود أو لا تملك صلاحية عليه",
-};
-const salesNoteErrorText = (message: string) =>
-  salesNoteErrorMessages.find(([code]) => message.includes(code))?.[1] ?? message;
 
 const accountingStatusLabels: Record<string, string> = {
   unposted: "غير مُرحّل",
@@ -172,47 +136,6 @@ const creditNoteTranslations: Record<string, string> = {
   "رمز الاستجابة السريعة يظهر لعرض متطلبات هيئة الزكاة والضريبة والجمارك بالفاتورة الإلكترونية.":
     "The QR code displays the Zakat, Tax and Customs Authority requirements for electronic invoices.",
   "إجمالي ضريبة القيمة المضافة": "Total VAT",
-  "فشل الإرسال": "Submission failed",
-  "يتطلب مراجعة — لا تعد الإرسال": "Needs review — do not resend",
-  "إعادة الإرسال للهيئة": "Resend to ZATCA",
-  "تم إلغاء إعادة الإرسال": "Resend cancelled",
-  "لم يُرسل شيء إلى ZATCA.": "Nothing was sent to ZATCA.",
-  "تلقائي عند الحفظ": "Assigned on save",
-  "تظهر الفواتير المقبولة لدى الهيئة فقط": "Only invoices accepted by ZATCA are listed",
-  "الفاتورة الأصلية لم تقبلها الهيئة بعد؛ لا يُصدر إشعار عليها حتى تُبلَّغ":
-    "ZATCA has not accepted the original invoice yet; no note can be issued until it is reported",
-  "الفاتورة الأصلية غير مرحّلة محاسبيًا": "The original invoice is not posted",
-  "الفاتورة الأصلية غير موجودة": "The original invoice does not exist",
-  "بيانات العميل في الفاتورة الأصلية (العنوان الوطني أو الرقم الضريبي) لا تكفي للهيئة؛ لا يمكن إصدار إشعار عليها":
-    "The customer data on the original invoice (national address or VAT number) is insufficient for ZATCA; no note can be issued on it",
-  "نص الإشعار أو الفاتورة الأصلية يحتوي كلمة اختبارية (test أو simulation أو تجريبي) والهيئة ترفضه في الإنتاج":
-    "The note or original invoice text contains a test word (test, simulation, تجريبي); ZATCA production rejects it",
-  "نسبة الضريبة لكل بند 15%": "Each line's VAT rate is 15%",
-  "ترحيل الإشعار يتطلب صلاحية إدارة المحاسبة. لم يتم ترحيل أي شيء.":
-    "Posting the note requires accounting management permission. Nothing was posted.",
-  "الفترة المحاسبية لتاريخ اليوم مقفلة": "Today's accounting period is closed",
-  "نص اختباري في الإشعار": "Test text in the note",
-  "سبب الإشعار لا يقبل الرموز < > & ولا محارف التحكم غير المرئية": "The note reason cannot contain < > & or invisible control characters",
-  "وصف أحد البنود يحتوي محارف تحكم غير مرئية لا يقبلها ملف الهيئة؛ أعد كتابة النص":
-    "A line description contains invisible control characters that ZATCA XML rejects; retype the text",
-  "أُنشئ إشعار من هذا النموذج في محاولة سابقة؛ حدّث القائمة للاطلاع عليه، ثم ابدأ إشعارًا جديدًا إن احتجت":
-    "A note was already created from this form in a previous attempt; refresh the list to see it, then start a new note if needed",
-  "رموز غير مقبولة في السبب": "Characters not allowed in the reason",
-  "إعادة الإرسال تتطلب صلاحية إدارة فواتير المبيعات": "Resending requires sales invoice management permission",
-  "تعذر إعادة الإرسال": "Cannot resend",
-  "المستند مقبول لدى الهيئة؛ لا حاجة لإعادة الإرسال": "The document is accepted by ZATCA; no resend needed",
-  "نتيجة إرسال سابق غير محسومة؛ لا تعد الإرسال قبل المراجعة اليدوية":
-    "A previous submission result is unresolved; do not resend before manual review",
-  "يوجد إرسال سابق لم يكتمل؛ يحتاج مراجعة يدوية قبل أي إعادة إرسال":
-    "A previous submission did not complete; it needs manual review before any resend",
-  "المستند غير مرحّل محاسبيًا": "The document is not posted",
-  "المستند غير موجود أو لا تملك صلاحية عليه": "The document does not exist or you lack permission",
-  "تعذر التأكد من حفظ الإشعار": "Could not confirm the note was saved",
-  "انقطع الاتصال قبل وصول الرد. حدّث القائمة؛ إعادة الحفظ من هذا النموذج لن تنشئ إشعارًا مكررًا.":
-    "The connection dropped before the reply. Refresh the list; saving again from this form will not create a duplicate note.",
-  "الإشعار مسجّل مسبقًا": "Note already recorded",
-  "لم يُنشأ إشعار جديد؛ هذا هو الإشعار المسجّل من المحاولة السابقة.":
-    "No new note was created; this is the note recorded by the previous attempt.",
 };
 
 type AccountingAccount = {
@@ -259,7 +182,6 @@ type OriginalInvoice = {
   customer: string;
   total: number;
   adjustedTotal: number;
-  zatcaStatus: string;
 };
 
 type CreditNoteForm = {
@@ -334,10 +256,6 @@ export default function SalesCreditNote() {
   // يمنع ترحيل/إرسال الإشعار مرتين عند النقر المتكرر
   const saveInFlight = useRef(false);
   const [saving, setSaving] = useState(false);
-  // معرّف الطلب يمنع إنشاء الإشعار مرتين: يبقى كما هو حتى ينجح الحفظ أو يُبدأ إشعار جديد،
-  // فإعادة المحاولة بعد انقطاع الاتصال تعيد الإشعار المسجّل بدل إنشاء آخر
-  const requestIdRef = useRef<string>(crypto.randomUUID());
-  const resendInFlight = useRef<Set<string>>(new Set());
   const { permissions, ready: permissionsReady } = useRolePermissions();
   const [mode, setMode] = useState<"list" | "create" | "details">("list");
   const [selectedNote, setSelectedNote] = useState<SavedCreditNote | null>(
@@ -360,7 +278,7 @@ export default function SalesCreditNote() {
             .order("created_at", { ascending: false }),
           supabase
             .from("sales_invoices")
-            .select("id, customer, total, adjusted_total, accounting_status, zatca_status, uuid")
+            .select("id, customer, total, adjusted_total, accounting_status")
             .eq("accounting_status", "posted")
             .order("date", { ascending: false }),
           supabase
@@ -414,17 +332,9 @@ export default function SalesCreditNote() {
 
       if (!invoicesResult.error) {
         setInvoices(
-          (invoicesResult.data ?? [])
-            // القاعدة ترفض الإشعار على فاتورة لم تقبلها الهيئة؛ نعرض المقبولة فقط
-            .filter(
-              (row: any) =>
-                ["reported", "cleared"].includes(String(row.zatca_status ?? "")) &&
-                String(row.uuid ?? "").trim() !== "",
-            )
-            .map((row: any) => ({
+          (invoicesResult.data ?? []).map((row: any) => ({
             id: String(row.id),
             customer: String(row.customer || ""),
-            zatcaStatus: String(row.zatca_status ?? ""),
             total:
               Number(String(row.total || "0").replace(/[^0-9.-]/g, "")) || 0,
             adjustedTotal:
@@ -507,7 +417,6 @@ export default function SalesCreditNote() {
     }));
 
   const createNewNote = () => {
-    requestIdRef.current = crypto.randomUUID();
     const nextForm = createEmptyForm(nextSequence);
     nextForm.items = nextForm.items.map((item) => ({
       ...item,
@@ -547,14 +456,6 @@ export default function SalesCreditNote() {
       });
       return;
     }
-    if (/[<>&]/.test(form.reason)) {
-      toast({
-        title: t("رموز غير مقبولة في السبب"),
-        description: t("سبب الإشعار لا يقبل الرموز < > & ولا محارف التحكم غير المرئية"),
-        variant: "destructive",
-      });
-      return;
-    }
     if (form.items.some((item) => !item.account)) {
       toast({
         title: t("الحساب المحاسبي مطلوب"),
@@ -574,16 +475,6 @@ export default function SalesCreditNote() {
       toast({
         title: t("بنود الإشعار غير مكتملة"),
         description: t("كل بند يحتاج وصفًا وكمية وسعرًا أكبر من صفر"),
-        variant: "destructive",
-      });
-      return;
-    }
-    if (
-      form.items.some((item) => ZATCA_SYNTHETIC_MARKER.test(item.description))
-    ) {
-      toast({
-        title: t("نص اختباري في الإشعار"),
-        description: t(salesNoteErrorText("SALES_NOTE_SYNTHETIC_TEXT")),
         variant: "destructive",
       });
       return;
@@ -616,58 +507,65 @@ export default function SalesCreditNote() {
       (item) =>
         item.description.trim() || item.account.trim() || item.unitPrice > 0,
     );
-    const requestId = requestIdRef.current;
+    // تاريخ الإصدار = اليوم بتوقيت الرياض، والعملة ريال (القيد وملف ZATCA بالريال دائمًا)
+    const issueDate = riyadhDateString();
 
     saveInFlight.current = true;
     setSaving(true);
     try {
-      // الرقم والتاريخ (اليوم بتوقيت الرياض) والإجماليات من القاعدة، والسبب يُحفظ مع الترحيل نفسه
-      const { data: result, error } = await supabase.rpc(
-        "post_sales_adjustment_note",
+      const { data, error } = await supabase.rpc(
+        "post_invoice_adjustment_note",
         {
-          p_request_id: requestId,
+          p_note_number: form.noteNumber,
           p_note_type: form.noteType,
           p_original_invoice_id: form.originalInvoiceId,
-          p_reason: form.reason.trim(),
-          p_items: cleanedItems,
+          p_counterparty: form.customer,
+          p_currency: "SAR",
+          p_issue_date: issueDate,
+          p_subtotal: subtotal,
+          p_tax: tax,
+          p_total: total,
+          p_items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
         },
       );
 
-      if (error || !result?.id) {
-        if (error && !error.code) {
-          // خطأ اتصال لا رد من القاعدة: قد يكون الإشعار حُفظ. نُبقي معرّف الطلب نفسه لإعادة المحاولة
-          toast({
-            title: t("تعذر التأكد من حفظ الإشعار"),
-            description: t(
-              "انقطع الاتصال قبل وصول الرد. حدّث القائمة؛ إعادة الحفظ من هذا النموذج لن تنشئ إشعارًا مكررًا.",
-            ),
-            variant: "destructive",
-          });
-          return;
-        }
+      if (error) {
         toast({
           title: t("تعذر ترحيل الإشعار"),
-          description: t(salesNoteErrorText(String(error?.message ?? ""))),
+          description: error.message,
           variant: "destructive",
         });
         return;
       }
-      if (result.existing) {
+
+      const { data: reasonRows, error: reasonError } = await supabase
+        .from("invoice_adjustment_notes")
+        .update({ reason: form.reason.trim() })
+        .eq("id", String(data))
+        .select("id");
+      if (reasonError) {
         toast({
-          title: t("الإشعار مسجّل مسبقًا"),
-          description: `${String(result.noteNumber)} — ${t("لم يُنشأ إشعار جديد؛ هذا هو الإشعار المسجّل من المحاولة السابقة.")}`,
+          title: t("تعذر حفظ سبب الإشعار"),
+          description: reasonError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!reasonRows?.length) {
+        // التحديث الذي تمنعه الصلاحيات يعود بلا خطأ وبلا صفوف: الإشعار مرحّل بالسبب الافتراضي.
+        // نكمل الإرسال كما كان سابقًا حتى لا يبقى الإشعار في الدفاتر دون تبليغ، مع تنبيه واضح.
+        toast({
+          title: t("لم يُحفظ سبب الإشعار"),
+          description: t(
+            "سيُرسل الإشعار إلى ZATCA بالسبب الافتراضي «تعديل على المستند الأصلي». راجع صلاحية الإشعارات الدائنة لهذا المستخدم.",
+          ),
+          variant: "destructive",
         });
       }
-      const data = String(result.id);
-      const issueDate = String(result.issueDate ?? riyadhDateString());
-      const savedSubtotal = Number(result.subtotal ?? subtotal);
-      const savedTax = Number(result.tax ?? tax);
-      const savedTotal = Number(result.total ?? total);
 
-      // بيانات الإشعار كما حُفظت في القاعدة (قد يكون مسجّلًا من محاولة سابقة)
       const { data: postedNote } = await supabase
         .from("invoice_adjustment_notes")
-        .select("accounting_status, accounting_journal_entry_id, reason, items, balance_before, balance_after")
+        .select("accounting_status, accounting_journal_entry_id")
         .eq("id", String(data))
         .single();
 
@@ -714,33 +612,26 @@ export default function SalesCreditNote() {
       const invoice = invoices.find(
         (item) => item.id === form.originalInvoiceId,
       )!;
-      const signedAmount =
-        form.noteType === "sales_credit" ? -savedTotal : savedTotal;
+      const signedAmount = form.noteType === "sales_credit" ? -total : total;
       const payload: SavedCreditNote = {
         id: String(data),
-        noteNumber: String(result.noteNumber),
+        noteNumber: form.noteNumber,
         noteType: form.noteType,
         originalInvoiceId: form.originalInvoiceId,
         customer: form.customer,
-        reason: String(postedNote?.reason ?? form.reason.trim()),
+        reason: form.reason.trim(),
         currency: "SAR",
         date: issueDate,
         orderRef: form.orderRef,
         reference: form.originalInvoiceId,
         project: form.project,
         warehouse: form.warehouse,
-        subtotal: savedSubtotal,
-        tax: savedTax,
-        total: savedTotal,
-        balanceBefore: Number(postedNote?.balance_before ?? invoice.adjustedTotal),
-        balanceAfter: Number(
-          postedNote?.balance_after ?? invoice.adjustedTotal + signedAmount,
-        ),
-        items: Array.isArray(postedNote?.items)
-          ? postedNote.items
-          : cleanedItems.length > 0
-            ? cleanedItems
-            : [emptyItem()],
+        subtotal,
+        tax,
+        total,
+        balanceBefore: invoice.adjustedTotal,
+        balanceAfter: invoice.adjustedTotal + signedAmount,
+        items: cleanedItems.length > 0 ? cleanedItems : [emptyItem()],
         zatcaStatus: String(
           zatca.error || zatca.data?.error
             ? zatcaFailureStatus
@@ -752,10 +643,7 @@ export default function SalesCreditNote() {
           postedNote?.accounting_journal_entry_id ?? "",
         ),
       };
-      setSavedNotes((current) => [
-        payload,
-        ...current.filter((note) => note.id !== payload.id),
-      ]);
+      setSavedNotes((current) => [payload, ...current]);
       setInvoices((current) =>
         current.map((item) =>
           item.id === form.originalInvoiceId
@@ -764,8 +652,7 @@ export default function SalesCreditNote() {
         ),
       );
 
-      requestIdRef.current = crypto.randomUUID();
-      const sequence = extractSequence(payload.noteNumber) + 1;
+      const sequence = extractSequence(form.noteNumber) + 1;
       setNextSequence(sequence);
       const nextForm = createEmptyForm(sequence);
       nextForm.items = nextForm.items.map((item) => ({
@@ -784,99 +671,6 @@ export default function SalesCreditNote() {
     } finally {
       saveInFlight.current = false;
       setSaving(false);
-    }
-  };
-
-  // إعادة إرسال إشعار مرحّل لم تقبله الهيئة بعد (نفس الدالة ونفس مفتاح عدم التكرار)
-  const resendNote = async (note: SavedCreditNote) => {
-    if (
-      note.accountingStatus !== "posted" ||
-      !ZATCA_RESENDABLE_STATUSES.has(note.zatcaStatus) ||
-      resendInFlight.current.has(note.id)
-    ) {
-      return;
-    }
-    // القاعدة تحسم: لا إعادة أثناء إرسال لم يكتمل أو نتيجة غير محسومة أو بعد القبول
-    const { data: resendState, error: resendStateError } = await supabase.rpc(
-      "zatca_resend_state",
-      { p_table: "invoice_adjustment_notes", p_id: note.id },
-    );
-    if (resendStateError || resendState !== "allowed") {
-      toast({
-        title: t("تعذر إعادة الإرسال"),
-        description: t(
-          zatcaResendStateMessages[String(resendState ?? "")] ??
-            salesNoteErrorText(String(resendStateError?.message ?? resendState ?? "")),
-        ),
-        variant: "destructive",
-      });
-      return;
-    }
-    const confirmation = window.prompt(
-      `إعادة إرسال الإشعار ${note.noteNumber} إلى ZATCA (إنتاج حقيقي وملزم قانونيًا). اكتب SUBMIT_REAL_ZATCA_INVOICE للمتابعة:`,
-    );
-    if (confirmation?.trim() !== "SUBMIT_REAL_ZATCA_INVOICE") {
-      toast({
-        title: t("تم إلغاء إعادة الإرسال"),
-        description: t("لم يُرسل شيء إلى ZATCA."),
-        variant: "destructive",
-      });
-      return;
-    }
-    resendInFlight.current.add(note.id);
-    try {
-      const zatca = await supabase.functions.invoke("zatca-invoice", {
-        body: {
-          noteId: note.id,
-          mode: "production",
-          deviceSerial: localStorage.getItem(
-            "zatca-active-production-device-serial",
-          ),
-          productionConfirmation: confirmation.trim(),
-        },
-      });
-      if (zatca.error || zatca.data?.error) {
-        const context = (zatca.error as { context?: Response } | null)?.context;
-        const errorPayload = context
-          ? await context
-              .clone()
-              .json()
-              .catch(() => null)
-          : null;
-        toast({
-          title: t("تعذر إرسال الإشعار إلى ZATCA"),
-          description: String(
-            errorPayload?.error ??
-              zatca.data?.error ??
-              zatca.error?.message ??
-              t("حدث خطأ غير متوقع"),
-          ),
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "ZATCA", description: String(zatca.data.message) });
-      }
-      // الحالة الفعلية من القاعدة بعد المحاولة
-      const { data: fresh } = await supabase
-        .from("invoice_adjustment_notes")
-        .select("zatca_status, qr_code_data")
-        .eq("id", note.id)
-        .maybeSingle();
-      if (fresh) {
-        setSavedNotes((current) =>
-          current.map((item) =>
-            item.id === note.id
-              ? {
-                  ...item,
-                  zatcaStatus: String(fresh.zatca_status ?? item.zatcaStatus),
-                  qrCodeData: String(fresh.qr_code_data ?? item.qrCodeData ?? ""),
-                }
-              : item,
-          ),
-        );
-      }
-    } finally {
-      resendInFlight.current.delete(note.id);
     }
   };
 
@@ -1027,16 +821,6 @@ export default function SalesCreditNote() {
                                 note.zatcaStatus,
                             )}
                           </span>
-                          {note.accountingStatus === "posted" &&
-                            ZATCA_RESENDABLE_STATUSES.has(note.zatcaStatus) && (
-                              <button
-                                onClick={() => resendNote(note)}
-                                className="ms-2 inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                              >
-                                <RefreshCw className="h-3 w-3" />
-                                {t("إعادة الإرسال للهيئة")}
-                              </button>
-                            )}
                         </td>
                       </tr>
                     ))}
@@ -1158,7 +942,7 @@ export default function SalesCreditNote() {
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <Field label={t("رقم الإشعار")}>
                   <input
-                    value={t("تلقائي عند الحفظ")}
+                    value={form.noteNumber}
                     readOnly
                     className="h-10 w-full rounded-md border border-border bg-muted/30 px-3 text-sm"
                   />
@@ -1202,7 +986,7 @@ export default function SalesCreditNote() {
                       }}
                       className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                     >
-                      <option value="">{t("اختر الفاتورة")} — {t("تظهر الفواتير المقبولة لدى الهيئة فقط")}</option>
+                      <option value="">{t("اختر الفاتورة")}</option>
                       {invoices.map((invoice) => (
                         <option key={invoice.id} value={invoice.id}>
                           {invoice.id} — {invoice.customer} — {t("الرصيد")}{" "}

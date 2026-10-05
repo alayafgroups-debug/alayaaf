@@ -16,7 +16,6 @@ import {
   Download,
   Loader2,
   Save,
-  RefreshCw,
 } from "lucide-react";
 import {
   cn,
@@ -120,87 +119,8 @@ const nextLineId = (lines: Array<{ id: number }>) =>
 
 // الحذف مسموح فقط لفاتورة غير مرحّلة ولم تلمس ZATCA إطلاقًا
 const ZATCA_UNTOUCHED_STATUSES = new Set(["", "pending"]);
-// مستند مرحّل لم تقبله الهيئة بعد ولا نتيجة غير محسومة له: تجوز إعادة إرساله (دالة الهيئة لا تكرر المقبول وتمنع غير المحسوم)
-const ZATCA_RESENDABLE_STATUSES = new Set(["pending", "failed", "rejected"]);
-// نفس تعبير دالة الهيئة containsSyntheticMarker: نص اختباري ترفضه الهيئة في الإنتاج
-const ZATCA_SYNTHETIC_MARKER =
-  /(?:^|[^A-Z])(?:TEST(?:ING)?|SIM(?:ULATION|ULATED|ULATOR)?)(?:[^A-Z]|$)|تجريب/i;
-const salesInvoiceErrorMessages: Array<[string, string]> = [
-  [
-    "SALES_INVOICE_SYNTHETIC_TEXT",
-    "اسم العميل أو وصف أحد البنود يحتوي كلمة اختبارية (test أو simulation أو تجريبي)، والهيئة ترفض هذه الفاتورة في الإنتاج. عدّل النص ثم احفظ",
-  ],
-  [
-    "SALES_INVOICE_ADDRESS_INCOMPLETE",
-    "العنوان الوطني للعميل غير مكتمل: رقم المبنى (4 أرقام)، الشارع، الحي، المدينة، الرمز البريدي (5 أرقام). الهيئة تشترطه لكل فاتورة",
-  ],
-  [
-    "SALES_INVOICE_BUYER_VAT_INVALID",
-    "الفاتورة المعيارية B2B تتطلب رقم ضريبة العميل: 15 رقمًا يبدأ وينتهي بالرقم 3",
-  ],
-  [
-    "SALES_INVOICE_SYSTEM_FIELDS_READ_ONLY",
-    "لا يمكن تحديد حالة الترحيل أو الهيئة أو المبلغ المدفوع عند إنشاء الفاتورة",
-  ],
-  ["SALES_INVOICE_TOTALS_DO_NOT_MATCH_LINES", "إجماليات الفاتورة لا تطابق بنودها"],
-  ["SALES_INVOICE_TAX_RATE_INVALID", "نسبة الضريبة لكل بند 15%"],
-  ["SALES_INVOICE_TYPE_INVALID", "نوع الفاتورة يجب أن يكون معيارية أو مبسطة"],
-  ["SALES_INVOICE_INVALID_CHARS", "اسم العميل أو العنوان أو وصف أحد البنود يحتوي محارف تحكم غير مرئية لا يقبلها ملف الهيئة؛ أعد كتابة النص"],
-  ["ZATCA_RESEND_PERMISSION_REQUIRED", "إعادة الإرسال تتطلب صلاحية إدارة فواتير المبيعات"],
-  ["ACCOUNTING_FISCAL_PERIOD_CLOSED", "الفترة المحاسبية لتاريخ اليوم مقفلة"],
-  ["ACCOUNTING_FISCAL_PERIOD_REQUIRED", "لا توجد فترة محاسبية لتاريخ اليوم"],
-];
-// نتيجة zatca_resend_state: متى تجوز إعادة الإرسال
-const zatcaResendStateMessages: Record<string, string> = {
-  accepted: "المستند مقبول لدى الهيئة؛ لا حاجة لإعادة الإرسال",
-  ambiguous: "نتيجة إرسال سابق غير محسومة؛ لا تعد الإرسال قبل المراجعة اليدوية",
-  in_progress: "يوجد إرسال سابق لم يكتمل؛ يحتاج مراجعة يدوية قبل أي إعادة إرسال",
-  not_posted: "المستند غير مرحّل محاسبيًا",
-  not_found: "المستند غير موجود أو لا تملك صلاحية عليه",
-};
-const salesInvoiceErrorText = (message: string) =>
-  salesInvoiceErrorMessages.find(([code]) => message.includes(code))?.[1] ??
-  message;
 
 const invoiceTranslations: Record<string, string> = {
-  "إعادة الإرسال للهيئة": "Resend to ZATCA",
-  "تم إلغاء إعادة الإرسال": "Resend cancelled",
-  "لم يُرسل شيء إلى ZATCA.": "Nothing was sent to ZATCA.",
-  "نص اختباري في الفاتورة": "Test text in the invoice",
-  "الرقم النهائي تحدده القاعدة عند الحفظ":
-    "The final number is assigned by the database on save",
-  "اسم العميل أو وصف أحد البنود يحتوي كلمة اختبارية (test أو simulation أو تجريبي)، والهيئة ترفض هذه الفاتورة في الإنتاج. عدّل النص ثم احفظ":
-    "The customer name or an item description contains a test word (test, simulation, تجريبي); ZATCA production rejects such invoices. Edit the text and save",
-  "العنوان الوطني للعميل غير مكتمل: رقم المبنى (4 أرقام)، الشارع، الحي، المدينة، الرمز البريدي (5 أرقام). الهيئة تشترطه لكل فاتورة":
-    "The customer's national address is incomplete: building number (4 digits), street, district, city, postal code (5 digits). ZATCA requires it for every invoice",
-  "لا يمكن تحديد حالة الترحيل أو الهيئة أو المبلغ المدفوع عند إنشاء الفاتورة":
-    "Posting, ZATCA and paid fields cannot be set when creating an invoice",
-  "إجماليات الفاتورة لا تطابق بنودها": "Invoice totals do not match its lines",
-  "نسبة الضريبة لكل بند 15%": "Each line's VAT rate is 15%",
-  "نوع الفاتورة يجب أن يكون معيارية أو مبسطة": "Invoice type must be standard or simplified",
-  "اسم العميل أو العنوان أو وصف أحد البنود يحتوي محارف تحكم غير مرئية لا يقبلها ملف الهيئة؛ أعد كتابة النص":
-    "The customer name, address or an item description contains invisible control characters that ZATCA XML rejects; retype the text",
-  "إعادة الإرسال تتطلب صلاحية إدارة فواتير المبيعات": "Resending requires sales invoice management permission",
-  "تعذر التأكد من حفظ الفاتورة": "Could not confirm the invoice was saved",
-  "انقطع الاتصال قبل وصول الرد. أعد الحفظ من هذا النموذج دون تغيير: لن تُنشأ فاتورة مكررة، وستُستكمل الفاتورة المحفوظة إن وُجدت.":
-    "The connection dropped before the reply. Save again from this form without changes: no duplicate invoice will be created and the saved invoice, if any, will be completed.",
-  "الفاتورة محفوظة مسبقًا": "Invoice already saved",
-  "يبدو أن الفاتورة حُفظت في محاولة سابقة؛ حدّث القائمة قبل إعادة المحاولة.":
-    "The invoice seems to have been saved by a previous attempt; refresh the list before retrying.",
-  "لم تُنشأ فاتورة جديدة؛ اكتمل حفظ الفاتورة من المحاولة السابقة.":
-    "No new invoice was created; the invoice from the previous attempt was completed.",
-  "تعذر إعادة الإرسال": "Cannot resend",
-  "المستند مقبول لدى الهيئة؛ لا حاجة لإعادة الإرسال": "The document is accepted by ZATCA; no resend needed",
-  "نتيجة إرسال سابق غير محسومة؛ لا تعد الإرسال قبل المراجعة اليدوية":
-    "A previous submission result is unresolved; do not resend before manual review",
-  "يوجد إرسال سابق لم يكتمل؛ يحتاج مراجعة يدوية قبل أي إعادة إرسال":
-    "A previous submission did not complete; it needs manual review before any resend",
-  "المستند غير مرحّل محاسبيًا": "The document is not posted",
-  "المستند غير موجود أو لا تملك صلاحية عليه": "The document does not exist or you lack permission",
-  "الفترة المحاسبية لتاريخ اليوم مقفلة": "Today's accounting period is closed",
-  "لا توجد فترة محاسبية لتاريخ اليوم": "No accounting period exists for today",
-  "أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي في بيانات العميل قبل إنشاء الفاتورة؛ الهيئة تشترطه للفاتورة المبسطة والمعيارية":
-    "Complete the building number, street, district, city and postal code in the customer record before creating the invoice; ZATCA requires it for simplified and standard invoices",
   "فواتير المبيعات": "Sales invoices",
   الإجراءات: "Actions",
   الإجمالي: "Total",
@@ -638,74 +558,6 @@ export default function SalesInvoices() {
     setInvoices((prev) => [invoice, ...prev]);
   };
 
-  // إعادة إرسال مستند مرحّل لم تقبله الهيئة بعد (نفس دالة الإرسال ونفس مفتاح عدم التكرار)
-  const resendInFlight = useRef<Set<string>>(new Set());
-  const handleResendZatca = async (invoice: Invoice) => {
-    if (
-      invoice.accountingStatus !== "posted" ||
-      !ZATCA_RESENDABLE_STATUSES.has(invoice.zatcaStatus ?? "pending") ||
-      resendInFlight.current.has(invoice.id)
-    ) {
-      return;
-    }
-    // القاعدة تحسم: لا إعادة أثناء إرسال لم يكتمل أو نتيجة غير محسومة أو بعد القبول
-    const { data: resendState, error: resendStateError } = await supabase.rpc(
-      "zatca_resend_state",
-      { p_table: "sales_invoices", p_id: invoice.id },
-    );
-    if (resendStateError || resendState !== "allowed") {
-      toast({
-        title: t("تعذر إعادة الإرسال"),
-        description: t(
-          zatcaResendStateMessages[String(resendState ?? "")] ??
-            String(resendStateError?.message ?? resendState ?? ""),
-        ),
-        variant: "destructive",
-      });
-      return;
-    }
-    const confirmation = window.prompt(
-      `إعادة إرسال الفاتورة ${invoice.id} إلى ZATCA (إنتاج حقيقي وملزم قانونيًا). اكتب SUBMIT_REAL_ZATCA_INVOICE للمتابعة:`,
-    );
-    if (confirmation?.trim() !== "SUBMIT_REAL_ZATCA_INVOICE") {
-      toast({
-        title: t("تم إلغاء إعادة الإرسال"),
-        description: t("لم يُرسل شيء إلى ZATCA."),
-        variant: "destructive",
-      });
-      return;
-    }
-    resendInFlight.current.add(invoice.id);
-    try {
-      const result = await submitInvoiceToZatca(
-        invoice.id,
-        confirmation.trim(),
-        t,
-      );
-      // الحالة الفعلية من القاعدة بعد المحاولة (الرفض قبل الإرسال لا يغيّر حالة الفاتورة)
-      const { data: fresh } = await supabase
-        .from("sales_invoices")
-        .select("zatca_status, qr_code_data")
-        .eq("id", invoice.id)
-        .maybeSingle();
-      setInvoices((prev) =>
-        prev.map((item) =>
-          item.id === invoice.id
-            ? {
-                ...item,
-                zatcaStatus: String(fresh?.zatca_status ?? result.status),
-                qrCodeData: String(
-                  fresh?.qr_code_data || result.qrCodeData || item.qrCodeData || "",
-                ),
-              }
-            : item,
-        ),
-      );
-    } finally {
-      resendInFlight.current.delete(invoice.id);
-    }
-  };
-
   const handleUpdate = (updated: Invoice) => {
     setInvoices((prev) =>
       prev.map((invoice) => (invoice.id === updated.id ? updated : invoice)),
@@ -1050,7 +902,6 @@ export default function SalesInvoices() {
             onPostAccounting={handlePostAccounting}
             onDelete={handleDelete}
             onDownloadPdf={handleDownloadPdf}
-            onResendZatca={handleResendZatca}
             invoices={invoices}
             canViewIssuer={canViewIssuer}
           />
@@ -1095,7 +946,6 @@ function InvoicesList({
   onPostAccounting,
   onDelete,
   onDownloadPdf,
-  onResendZatca,
   invoices,
   canViewIssuer,
 }: {
@@ -1106,7 +956,6 @@ function InvoicesList({
   onPostAccounting: (invoice: Invoice) => void;
   onDelete: (invoiceId: string) => void;
   onDownloadPdf: (invoice: Invoice) => void;
-  onResendZatca: (invoice: Invoice) => void;
   invoices: Invoice[];
   canViewIssuer: boolean;
 }) {
@@ -1232,17 +1081,6 @@ function InvoicesList({
                     );
                   }}
                 />
-                {invoice.accountingStatus === "posted" &&
-                  ZATCA_RESENDABLE_STATUSES.has(
-                    invoice.zatcaStatus ?? "pending",
-                  ) && (
-                    <ActionBtn
-                      icon={RefreshCw}
-                      label={t("إعادة الإرسال للهيئة")}
-                      color="amber"
-                      onClick={() => onResendZatca(invoice)}
-                    />
-                  )}
               </div>
             </td>
             <td className="px-5 py-3.5 align-middle text-start">
@@ -2478,8 +2316,6 @@ function InvoiceForm({
   const [customerSelectorOpen, setCustomerSelectorOpen] = useState(false);
   const [saveIntent, setSaveIntent] = useState<"save" | "print" | null>(null);
   const saveInFlight = useRef(false);
-  // معرّف طلب ثابت لهذا النموذج حتى ينجح الحفظ: إعادة الحفظ بعد انقطاع الاتصال لا تنشئ فاتورة ثانية
-  const requestIdRef = useRef<string>(crypto.randomUUID());
 
   useEffect(() => {
     const loadDefaults = async () => {
@@ -2706,26 +2542,12 @@ function InvoiceForm({
       });
       return;
     }
-    // دالة الهيئة تشترط العنوان الوطني الكامل لكل مستند إنتاجي (مبسط ومعياري)، فبدونه تُرحَّل الفاتورة ولا تُبلَّغ
-    if (!hasCompleteNationalAddress(customerAddress)) {
+    if (invoiceType === "standard" && !hasCompleteNationalAddress(customerAddress)) {
       toast({
         title: t("العنوان الوطني للعميل غير مكتمل"),
         description: t(
-          "أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي في بيانات العميل قبل إنشاء الفاتورة؛ الهيئة تشترطه للفاتورة المبسطة والمعيارية",
+          "أكمل رقم المبنى والشارع والحي والمدينة والرمز البريدي في بيانات العميل قبل إنشاء الفاتورة",
         ),
-        variant: "destructive",
-      });
-      return;
-    }
-    if (
-      ZATCA_SYNTHETIC_MARKER.test(customer) ||
-      items.some((item) =>
-        ZATCA_SYNTHETIC_MARKER.test(String(item.description ?? "")),
-      )
-    ) {
-      toast({
-        title: t("نص اختباري في الفاتورة"),
-        description: t(salesInvoiceErrorText("SALES_INVOICE_SYNTHETIC_TEXT")),
         variant: "destructive",
       });
       return;
@@ -2773,49 +2595,23 @@ function InvoiceForm({
         paid: "ريال 0.00",
         remaining: `ريال ${totalValue.toFixed(2)}`,
         status: "مفتوحة",
-        client_request_id: requestIdRef.current,
       };
 
-      // الرقم والتاريخ تحددهما القاعدة؛ id المرسل للتوافق فقط
-      const attemptId = invoiceId;
-      const inserted = await supabase
-        .from("sales_invoices")
-        .insert(payload)
-        .select()
-        .single();
-      let data: any = inserted.data;
-      let error: any = inserted.error;
-      if (
-        error?.code === "23505" &&
-        String(error.message ?? "").includes("client_request")
-      ) {
-        // حُفظت في محاولة سابقة انقطع ردّها: نستكمل الفاتورة المحفوظة (الترحيل والإرسال لا يتكرران)
-        const existing = await supabase
+      let data: any = null;
+      let error: any = null;
+      let attemptId = invoiceId;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const result = await supabase
           .from("sales_invoices")
+          .insert({ ...payload, id: attemptId })
           .select()
-          .eq("client_request_id", requestIdRef.current)
-          .maybeSingle();
-        if (!existing.error && existing.data) {
-          data = existing.data;
-          error = null;
-          toast({
-            title: t("الفاتورة محفوظة مسبقًا"),
-            description: `${String(existing.data.id)} — ${t("لم تُنشأ فاتورة جديدة؛ اكتمل حفظ الفاتورة من المحاولة السابقة.")}`,
-          });
-        }
-      }
-
-      if (error && !error.code) {
-        // خطأ اتصال لا رد من القاعدة: قد تكون الفاتورة حُفظت؛ نُبقي معرّف الطلب لإعادة الحفظ الآمنة
-        printWindow?.close();
-        toast({
-          title: t("تعذر التأكد من حفظ الفاتورة"),
-          description: t(
-            "انقطع الاتصال قبل وصول الرد. أعد الحفظ من هذا النموذج دون تغيير: لن تُنشأ فاتورة مكررة، وستُستكمل الفاتورة المحفوظة إن وُجدت.",
-          ),
-          variant: "destructive",
-        });
-        return;
+          .single();
+        data = result.data;
+        error = result.error;
+        if (!error || error.code !== "23505") break;
+        const nextNumber =
+          Number(String(attemptId).replace(/\D/g, "")) + 1 || Date.now();
+        attemptId = `INV-${String(nextNumber).padStart(6, "0")}`;
       }
 
       if (error) {
@@ -2824,10 +2620,8 @@ function InvoiceForm({
           title: t("تعذر حفظ الفاتورة"),
           description:
             error.code === "23505"
-              ? t("يبدو أن الفاتورة حُفظت في محاولة سابقة؛ حدّث القائمة قبل إعادة المحاولة.")
-              : error.message
-                ? t(salesInvoiceErrorText(String(error.message)))
-                : t("حاول مرة أخرى"),
+              ? t("رقم الفاتورة مستخدم بالفعل. حدّث القائمة ثم حاول مرة أخرى.")
+              : String(error.message ?? t("حاول مرة أخرى")),
           variant: "destructive",
         });
         return;
@@ -2882,7 +2676,6 @@ function InvoiceForm({
           statusColor:
             statusColors[data.status ?? "مفتوحة"] ?? "bg-cyan-500 text-white",
         };
-        requestIdRef.current = crypto.randomUUID();
         onSaved(savedInvoice);
         if (intent === "print") {
           try {
@@ -3069,9 +2862,6 @@ function InvoiceForm({
                     readOnly
                     className="w-full px-3 py-2 border border-border/60 rounded-lg text-sm text-start bg-muted/30"
                   />
-                  <p className="text-[11px] text-muted-foreground text-start">
-                    {t("الرقم النهائي تحدده القاعدة عند الحفظ")}
-                  </p>
                 </div>
 
                 <div className="space-y-1">

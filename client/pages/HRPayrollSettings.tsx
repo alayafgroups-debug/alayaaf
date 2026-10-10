@@ -18,6 +18,8 @@ type PayrollSettings = {
   excludeAdvances: boolean;
   totalsColumns: string;
   earnedSalary: boolean;
+  /** المطبّق فعلًا في كشف الرواتب (مفتاح جديد؛ earnedSalary القديم لم يكن مطبّقًا ولا يُقرأ) */
+  earnedSalaryApplied: boolean;
   monthDaysMethod: string;
   month31Policy: string;
 };
@@ -34,7 +36,9 @@ const DEFAULTS: PayrollSettings = {
   overtimeInsurance: false,
   excludeAdvances: false,
   totalsColumns: "الإثنين معاً",
-  earnedSalary: true,
+  earnedSalary: false,
+  // يُطبَّق في كشف الرواتب: تشغيله يجعل كل يوم عمل بلا تسجيل حضور غيابًا مخصومًا، فالافتراضي إيقافه
+  earnedSalaryApplied: false,
   monthDaysMethod: "30 يوم ثابت (افتراضي حسب نظام العمل السعودي)",
   month31Policy: "لصالح الموظف (متساهل)",
 };
@@ -46,21 +50,24 @@ export default function HRPayrollSettings() {
   const [s, setS] = useState<PayrollSettings>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // إن تعذر التحميل لا يُسمح بالحفظ، حتى لا تُستبدل الإعدادات المحفوظة بالقيم الافتراضية
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("hr_settings")
           .select("setting_value")
           .eq("setting_key", SETTING_KEY)
           .maybeSingle();
+        if (error) throw error;
         if (data?.setting_value) {
           setS({ ...DEFAULTS, ...(data.setting_value as Partial<PayrollSettings>) });
         }
-      } catch {
-        // keep defaults
+      } catch (error) {
+        setLoadError(String((error as { message?: string } | null)?.message ?? "") || "تعذر تحميل الإعدادات");
       } finally {
         setLoading(false);
       }
@@ -71,6 +78,7 @@ export default function HRPayrollSettings() {
     setS((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
+    if (loadError) return;
     setSaving(true);
     const { error } = await supabase
       .from("hr_settings")
@@ -80,7 +88,7 @@ export default function HRPayrollSettings() {
       toast({ title: t("تعذر الحفظ"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: t("تم الحفظ"), description: t("تم حفظ إعدادات حساب الراتب في قاعدة البيانات") });
+    toast({ title: t("تم الحفظ"), description: t("تم حفظ إعدادات حساب الراتب؛ تُطبَّق على الكشوف التي تُحسب أو يُعاد إرسالها بعد الآن") });
   };
 
   const Radio = ({ name, checked, onChange, label }: { name: string; checked: boolean; onChange: () => void; label: string }) => (
@@ -111,6 +119,13 @@ export default function HRPayrollSettings() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100">
             <h2 className="text-lg font-bold text-gray-800">{t("إعدادات حساب الراتب")}</h2>
+          </div>
+
+          <div className="mx-8 mt-6 space-y-1 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+            <p className="font-semibold">{t("المطبّق في كشف الرواتب وحساب الدوام:")}</p>
+            <p>{t("طريقة احتساب قيمة أيام الغياب، وطريقة حساب أيام الشهر، واستثناء السلف من الاقتطاعات، ونظام الراتب المكتسب حسب الحضور. الحقول المعلَّمة «مطبّق» تغيّر الأرقام مباشرة؛ الباقي يُحفظ ولا يُستخدم بعد.")}</p>
+            <p className="text-xs text-sky-700">{t("خيار «البدلات + الامتيازات» يُحسب حاليًا كالبدلات لعدم وجود امتيازات مسجلة للموظفين.")}</p>
+            <p className="text-xs text-sky-700">{t("الإجازات: نوع «مدفوعة = لا» يُخصم يومه كاملًا، ونسبة الخصم في تصنيفات الإجازات تُطبّق، والمرضية حسب المادة 117 (30 يومًا كاملة، ثم 60 بثلاثة أرباع، ثم 30 بلا أجر)، بالأيام التقويمية. من لم يعمل أي يوم في الشهر (غياب أو إجازة بدون راتب في كل أيام عمله) لا يُستحق له أجر الشهر.")}</p>
           </div>
 
           <div className="p-8 space-y-8">
@@ -148,10 +163,10 @@ export default function HRPayrollSettings() {
 
               <div className="space-y-8">
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("طريقة احتساب قيمة أيام الغياب")} <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("طريقة احتساب قيمة أيام الغياب")} <span className="text-red-500">*</span> <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
                   <div className="space-y-3 mt-2">
-                    <Radio name="absence_calc" checked={s.absenceCalc === "basic"} onChange={() => set("absenceCalc", "basic")} label="من الراتب الأساسي (الافتراضي)" />
-                    <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances"} onChange={() => set("absenceCalc", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات" />
+                    <Radio name="absence_calc" checked={s.absenceCalc === "basic"} onChange={() => set("absenceCalc", "basic")} label="من الراتب الأساسي" />
+                    <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances"} onChange={() => set("absenceCalc", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات (الافتراضي)" />
                     <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances_privileges"} onChange={() => set("absenceCalc", "basic_allowances_privileges")} label="من إجمالي الراتب الأساسي + البدلات + الإمتيازات" />
                   </div>
                 </div>
@@ -197,7 +212,7 @@ export default function HRPayrollSettings() {
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">{t("استثناء السلف من الاقتطاعات")}</label>
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("استثناء السلف من الاقتطاعات")} <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
                 <YesNo name="exclude_advances" value={s.excludeAdvances} onChange={(v) => set("excludeAdvances", v)} />
               </div>
 
@@ -214,9 +229,10 @@ export default function HRPayrollSettings() {
             <div className="pt-6 border-t border-gray-100">
               <h3 className="text-[#004e89] font-bold text-base mb-6 border-s-4 border-[#004e89] ps-3">{t("إعدادات طريقة احتساب الراتب")}</h3>
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">{t("تفعيل نظام الراتب المكتسب حسب الحضور")}</label>
-                <YesNo name="earned_salary" value={s.earnedSalary} onChange={(v) => set("earnedSalary", v)} />
-                <p className="text-xs text-gray-400 mt-2">{t("في نظام الراتب المكتسب يُحسب الراتب حسب أيام الحضور الفعلية مقابل أيام الدوام.")}</p>
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("تفعيل نظام الراتب المكتسب حسب الحضور")} <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
+                <YesNo name="earned_salary" value={s.earnedSalaryApplied} onChange={(v) => set("earnedSalaryApplied", v)} />
+                <p className="text-xs text-gray-500 mt-2">{t("لا: يُخصم الغياب المسجَّل في الحضور فقط (حالة «غائب»). نعم: كل يوم عمل ماضٍ ليس فيه تسجيل حضور ولا إجازة معتمدة ولا عطلة يُحتسب غيابًا ويُخصم، إلا للموظف المعفى من الحضور.")}</p>
+                {s.earnedSalaryApplied && <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("تنبيه: فعّله فقط إذا كان كل الموظفين يسجلون حضورهم يوميًا؛ وإلا خُصمت أيام موظفين لا يستخدمون البصمة.")}</p>}
               </div>
             </div>
 
@@ -224,7 +240,7 @@ export default function HRPayrollSettings() {
               <h3 className="text-[#004e89] font-bold text-base mb-6 border-s-4 border-[#004e89] ps-3">{t("إعدادات أيام الشهر")}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("طريقة حساب أيام الشهر")} <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("طريقة حساب أيام الشهر")} <span className="text-red-500">*</span> <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
                   <select value={s.monthDaysMethod} onChange={(e) => set("monthDaysMethod", e.target.value)} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
                     <option value="30 يوم ثابت (افتراضي حسب نظام العمل السعودي)">{t("30 يوم ثابت (افتراضي حسب نظام العمل السعودي)")}</option>
                     <option value="عدد أيام الشهر الفعلي">{t("عدد أيام الشهر الفعلي")}</option>
@@ -242,7 +258,8 @@ export default function HRPayrollSettings() {
             </div>
 
             <div className="pt-6 border-t border-gray-100 flex justify-end">
-              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865] text-white px-8 h-10 rounded-md">
+              {loadError && <p className="me-4 self-center text-sm text-red-600">{t("تعذر تحميل الإعدادات المحفوظة؛ الحفظ معطّل حتى لا تُستبدل بالقيم الافتراضية")}: {loadError}</p>}
+              <Button onClick={handleSave} disabled={saving || Boolean(loadError)} className="bg-[#004e89] hover:bg-[#003865] text-white px-8 h-10 rounded-md">
                 {saving ? t("جاري الحفظ...") : t("حفظ")}
               </Button>
             </div>

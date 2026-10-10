@@ -7,6 +7,7 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { supabase } from "@/lib/supabaseClient";
 import { selectAllRows } from "@/lib/ledgerData";
 import { useI18n } from "@/i18n";
+import { PENDING_STATUSES } from "@/lib/hrStatus";
 import {
   TrendingUp,
   TrendingDown,
@@ -129,7 +130,14 @@ export default function Dashboard() {
         const unpaidPurchases = canViewPurchases
           ? ((await supabase.from("purchase_invoices").select("id", { count: "exact", head: true }).in("status", ["مفتوحة", "مدفوعة جزئياً"])).count ?? 0)
           : 0;
-        const { count: pendingLeaves } = await supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "معلقة");
+        // عدّ فقط بلا تنزيل الصفوف: كل صيغ الحالة المعلقة (فارغة / معلق / معلقة / pending)
+        const pendingFilter = `status.is.null,status.eq."",status.in.(${PENDING_STATUSES.map((value) => `"${value}"`).join(",")})`;
+        const leavesCount = await supabase
+          .from("leave_requests")
+          .select("id", { count: "exact", head: true })
+          .or(pendingFilter);
+        if (leavesCount.error) console.error("Dashboard pending leaves count error:", leavesCount.error);
+        const pendingLeaves = leavesCount.error ? 0 : (leavesCount.count ?? 0);
 
         setAlerts({
           pendingInvoices,

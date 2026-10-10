@@ -6,6 +6,20 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+
+const NO_ROWS_MESSAGE = "لم يُحفظ شيء: السجل غير موجود أو لا تملك صلاحية هذه العملية";
+const orgErrorText = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "23503"
+    ? "مرتبط بموظفين أو سجلات أخرى؛ لا يمكن حذفه"
+    : hrRequestErrorText(error, "تعذر حفظ البيانات");
+
+// عدد الموظفين المرتبطين قبل الحذف (قاعدة البيانات تمنع الحذف أيضًا برمز ORG_ITEM_IN_USE)
+const countLinkedEmployees = async (column: string, value: string) => {
+  const { count, error } = await supabase.from("employees").select("id", { count: "exact", head: true }).eq(column, value);
+  if (error) throw error;
+  return count ?? 0;
+};
 
 type Section = { id: string; name: string; nameEn: string; department: string; departmentId: string; manager: string; description: string };
 
@@ -28,15 +42,19 @@ export default function HROrgSections() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("org_sections").select("*").order("id", { ascending: false });
+      const { data, error } = await supabase.from("org_sections").select("*").order("id", { ascending: false });
+      if (error) throw error;
       if (data) setItems(data.map((r: any) => ({
         id: String(r.id), name: r.name ?? "", nameEn: r.name_en ?? "", department: r.department ?? "",
         departmentId: r.department_id ? String(r.department_id) : "",
         manager: r.manager ?? "", description: r.description ?? "",
       })));
-      const { data: depts } = await supabase.from("departments").select("id, name").order("name");
+      const { data: depts, error: deptError } = await supabase.from("departments").select("id, name").order("name");
+      if (deptError) throw deptError;
       if (depts) setDepartments(depts.map((d: any) => ({ id: String(d.id), name: d.name })));
-    } catch {} finally { setLoading(false); }
+    } catch (error) {
+      toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -60,8 +78,9 @@ export default function HROrgSections() {
     try {
       const payload = { name: formName.trim(), name_en: formNameEn.trim(), department: formDept, department_id: formDeptId || null, manager: formManager, description: formDesc };
       if (editingId) {
-        const { error } = await supabase.from("org_sections").update(payload).eq("id", editingId);
+        const { data, error } = await supabase.from("org_sections").update(payload).eq("id", editingId).select("id");
         if (error) throw error;
+        if (!data?.length) throw new Error(NO_ROWS_MESSAGE);
         toast({ title: t("تم التعديل") });
       } else {
         const { error } = await supabase.from("org_sections").insert([payload]);
@@ -70,13 +89,27 @@ export default function HROrgSections() {
       }
       resetForm(); loadData();
     } catch (error) {
-      toast({ title: t("خطأ"), description: error instanceof Error ? error.message : t("تعذر حفظ القسم"), variant: "destructive" });
+      toast({ title: t("خطأ"), description: t(orgErrorText(error)), variant: "destructive" });
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: Section) => {
     if (!confirm(`${t("حذف")} "${item.name}"؟`)) return;
-    await supabase.from("org_sections").delete().eq("id", item.id);
+    try {
+      const linked = await countLinkedEmployees("section_id", item.id);
+      if (linked > 0) {
+        toast({ title: t("لم يتم الحذف"), description: `${t("لا يمكن الحذف: مرتبط بـ")} ${formatNumber(linked)} ${t("موظف")}`, variant: "destructive" });
+        return;
+      }
+    } catch (error) {
+      toast({ title: t("تعذر التحقق من الموظفين المرتبطين"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      return;
+    }
+    const { data, error } = await supabase.from("org_sections").delete().eq("id", item.id).select("id");
+    if (error || !data?.length) {
+      toast({ title: t("لم يتم الحذف"), description: t(error ? orgErrorText(error) : NO_ROWS_MESSAGE), variant: "destructive" });
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: t("تم الحذف") });
   };

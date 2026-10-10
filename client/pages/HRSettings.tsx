@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Layout from "@/components/Layout";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarClock, MapPin, Save, Settings2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarClock, MapPin, Save, Settings2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import JobTitlesManager from "@/components/hr/JobTitlesManager";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type TabKey = "general" | "recruitment" | "payroll" | "leaves" | "attendance";
 
@@ -66,8 +67,6 @@ type HRSettingsState = {
   };
 };
 
-const SETTINGS_STORAGE_KEY = "hr_settings_local";
-
 const defaultSettings: HRSettingsState = {
   general: {
     monthlyHours: 160,
@@ -125,26 +124,39 @@ const defaultSettings: HRSettingsState = {
   },
 };
 
+function mergeTab<T extends Record<string, unknown>>(defaults: T, incoming: unknown): T {
+  if (!incoming || typeof incoming !== "object") return defaults;
+  return { ...defaults, ...(incoming as Partial<T>) };
+}
+
+// قيم قديمة كانت تُحفظ على هذا الجهاز فقط قبل نقل الإعدادات إلى قاعدة البيانات
+const LOCAL_SETTINGS_KEY = "hr_settings_local";
+const SETTINGS_TABS: TabKey[] = ["general", "recruitment", "payroll", "leaves", "attendance"];
+
 function readLocalSettings(): HRSettingsState | null {
   try {
-    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed as HRSettingsState;
+    const parsed = JSON.parse(raw) as Partial<Record<TabKey, unknown>> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      general: mergeTab(defaultSettings.general, parsed.general),
+      recruitment: mergeTab(defaultSettings.recruitment, parsed.recruitment),
+      payroll: mergeTab(defaultSettings.payroll, parsed.payroll),
+      leaves: mergeTab(defaultSettings.leaves, parsed.leaves),
+      attendance: mergeTab(defaultSettings.attendance, parsed.attendance),
+    };
   } catch {
     return null;
   }
 }
 
-function writeLocalSettings(settings: HRSettingsState) {
+function clearLocalSettings() {
   try {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {}
-}
-
-function mergeTab<T extends Record<string, unknown>>(defaults: T, incoming: unknown): T {
-  if (!incoming || typeof incoming !== "object") return defaults;
-  return { ...defaults, ...(incoming as Partial<T>) };
+    localStorage.removeItem(LOCAL_SETTINGS_KEY);
+  } catch {
+    // التخزين المحلي غير متاح: لا شيء نحذفه
+  }
 }
 
 export default function HRSettings() {
@@ -154,6 +166,10 @@ export default function HRSettings() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<HRSettingsState>(defaultSettings);
+  // عند فشل التحميل لا نسمح بالحفظ حتى لا تُكتب القيم الافتراضية فوق إعدادات قاعدة البيانات
+  const [loadError, setLoadError] = useState("");
+  // قاعدة البيانات فارغة وعُرضت قيم محلية قديمة: الحفظ التالي ينقل كل الأقسام دفعة واحدة
+  const [localPending, setLocalPending] = useState(false);
 
   const tabLabels: Record<TabKey, string> = {
     general: t("الإعدادات العامة"),
@@ -169,26 +185,17 @@ export default function HRSettings() {
 
   async function loadSettings() {
     setLoading(true);
-    const local = readLocalSettings();
+    setLoadError("");
+    setLocalPending(false);
 
-    const fallback = local ?? defaultSettings;
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setSettings(fallback);
-      setLoading(false);
-      return;
-    }
-
-    let result: any = { error: null, data: null, failed: false };
+    let result: any = { error: null, data: null };
     try {
-      const res = await supabase
+      result = await supabase
         .from("hr_settings")
         .select("setting_key, setting_value")
         .in("setting_key", ["general", "recruitment", "payroll", "leaves", "attendance"]);
-      result = { ...res, failed: false };
-      if (res.error) result.error = res.error;
     } catch (e) {
-      result = { data: null, error: new Error("fetch_failed"), failed: true };
+      result = { data: null, error: e };
     }
 
     if (!result.error && result.data) {
@@ -210,18 +217,17 @@ export default function HRSettings() {
         if (key === "attendance") dbState.attendance = mergeTab(defaultSettings.attendance, value);
       });
 
-      const hasDbValues = result.data.length > 0;
-      const resolved = hasDbValues ? dbState : fallback;
-      setSettings(resolved);
-      writeLocalSettings(resolved);
-    } else {
-      setSettings(fallback);
-      if (result.failed) {
-        toast({
-          title: t("وضع دون اتصال"),
-          description: t("تعذر الوصول لقاعدة البيانات، تم تحميل آخر إعدادات محفوظة محلياً"),
-        });
+      const local = result.data.length === 0 ? readLocalSettings() : null;
+      if (local) {
+        setSettings(local);
+        setLocalPending(true);
+      } else {
+        setSettings(dbState);
       }
+    } else {
+      const message = hrRequestErrorText(result.error, "تعذر تحميل الإعدادات من قاعدة البيانات");
+      setLoadError(message);
+      toast({ title: t("تعذر تحميل الإعدادات"), description: t(message), variant: "destructive" });
     }
 
     setLoading(false);
@@ -236,35 +242,48 @@ export default function HRSettings() {
   }, [activeTab, t]);
 
   async function saveCurrentTab() {
-    const payload = {
-      setting_key: activeTab,
-      setting_value: settings[activeTab],
-      updated_at: new Date().toISOString(),
-    };
+    const updatedAt = new Date().toISOString();
+    // القيم المحلية تُنقل كلها حتى لا تضيع الأقسام الأخرى بعد حذفها من الجهاز
+    const tabsToSave = localPending ? SETTINGS_TABS : [activeTab];
+    const payload = tabsToSave.map((tab) => ({
+      setting_key: tab,
+      setting_value: settings[tab],
+      updated_at: updatedAt,
+    }));
+
+    if (loadError) {
+      toast({ title: t("لم يتم الحفظ"), description: t("أعد تحميل الإعدادات من قاعدة البيانات أولًا"), variant: "destructive" });
+      return;
+    }
 
     setSaving(true);
 
-    let result: any = { error: null, failed: false };
+    let result: any = { error: null, data: null };
     try {
-      const res = await supabase
+      result = await supabase
         .from("hr_settings")
-        .upsert([payload], { onConflict: "setting_key" });
-      result = { ...res, failed: false };
-      if (res.error) result.error = res.error;
+        .upsert(payload, { onConflict: "setting_key" })
+        .select("setting_key");
     } catch (e) {
-      result = { error: new Error("fetch_failed"), failed: true };
+      result = { error: e, data: null };
     }
 
-    writeLocalSettings(settings);
-
-    if (!result.error) {
-      toast({ title: t("تم الحفظ"), description: t("تم حفظ الإعدادات في قاعدة البيانات") });
+    if (!result.error && (result.data?.length ?? 0) >= payload.length) {
+      // قاعدة البيانات هي المرجع بعد أي حفظ ناجح: لا حاجة للنسخة المحلية القديمة
+      clearLocalSettings();
+      if (localPending) {
+        setLocalPending(false);
+        toast({ title: t("تم الحفظ"), description: t("تم نقل الإعدادات المحلية إلى قاعدة البيانات") });
+      } else {
+        toast({ title: t("تم الحفظ"), description: t("تم حفظ الإعدادات في قاعدة البيانات") });
+      }
     } else {
       toast({
-        title: t("تم الحفظ محليًا"),
-        description: result.failed
-          ? t("تعذر الاتصال بقاعدة البيانات، تم الحفظ محليًا")
-          : t("تعذر حفظ الإعدادات في قاعدة البيانات حالياً"),
+        title: t("لم يتم الحفظ"),
+        description: t(result.error
+          ? hrRequestErrorText(result.error, "تعذر حفظ الإعدادات في قاعدة البيانات")
+          : "لم يُحفظ شيء: لا تملك صلاحية تعديل هذه الإعدادات"),
+        variant: "destructive",
       });
     }
 
@@ -286,6 +305,11 @@ export default function HRSettings() {
             <ArrowRight className="h-4 w-4" />
             {t("العودة")}
           </button>
+        </div>
+
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+          <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+          <p className="text-sm">{t("تنبيه: هذه الإعدادات تُحفظ في قاعدة البيانات لكنها لا تُستخدم بعد في احتساب الرواتب أو الحضور أو الإجازات.")}</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -322,6 +346,22 @@ export default function HRSettings() {
 
           <div className="p-4 space-y-4">
             {loading ? <div className="text-center text-gray-500 py-6">{t("جاري تحميل الإعدادات...")}</div> : null}
+
+            {!loading && loadError ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <span>{t("تعذر تحميل الإعدادات من قاعدة البيانات؛ القيم المعروضة افتراضية والحفظ معطّل.")} {t(loadError)}</span>
+                <button onClick={() => void loadSettings()} className="rounded-md border border-red-300 bg-white px-3 py-1.5 font-medium hover:bg-red-100">
+                  {t("إعادة المحاولة")}
+                </button>
+              </div>
+            ) : null}
+
+            {!loading && !loadError && localPending ? (
+              <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{t("قيم محلية غير محفوظة على هذا الجهاز — اضغط حفظ لنقلها إلى قاعدة البيانات")}</span>
+              </div>
+            ) : null}
 
             {!loading && activeTab === "general" ? (
               <>
@@ -364,7 +404,7 @@ export default function HRSettings() {
             <div className="pt-2">
               <button
                 onClick={saveCurrentTab}
-                disabled={saving || loading}
+                disabled={saving || loading || !!loadError}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />

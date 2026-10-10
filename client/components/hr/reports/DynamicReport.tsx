@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, FileSpreadsheet, Loader2, Printer, Search, UserCheck, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
+import { fetchAllRows } from "@/lib/fetchAll";
+import { addDays, monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
 import { ReportFilter, ReportSchema } from "./reportSchemas";
 
 type Employee = {
@@ -26,16 +28,23 @@ type EmployeeReportRow = Employee & {
   details: string;
 };
 
-const SOURCE_CONFIG: Record<string, { table: string; dateField?: string }> = {
+// dateFieldMayBeMissing: عمود التاريخ غير مؤكد في قاعدة البيانات؛ إن لم يوجد يُعرض التقرير بلا فلتر تاريخ
+const SOURCE_CONFIG: Record<string, { table: string; dateField?: string; dateFieldMayBeMissing?: boolean }> = {
   leaves: { table: "leave_requests", dateField: "start_date" },
   payroll_expenses: { table: "payroll", dateField: "paid_date" },
   disbursement_reports: { table: "payroll", dateField: "paid_date" },
   attendance_departure: { table: "attendance", dateField: "date" },
   end_of_service: { table: "hr_terminations", dateField: "termination_date" },
-  advances_reports: { table: "hr_advances", dateField: "request_date" },
+  advances_reports: { table: "hr_advances", dateField: "request_date", dateFieldMayBeMissing: true },
   overtime_reports: { table: "overtime_records", dateField: "date" },
   social_insurance: { table: "insurance_records", dateField: "start_date" },
 };
+
+// حقل التاريخ لكل مصدر من مصادر تقرير المساءلات والإنذارات
+const PENALTY_SOURCES = [
+  { table: "penalty_investigations", dateField: "investigation_date", kind: "مساءلة" },
+  { table: "penalty_warnings", dateField: "warning_date", kind: "إنذار" },
+];
 
 const EMPLOYEE_REPORTS = new Set([
   "financial_data",
@@ -44,6 +53,31 @@ const EMPLOYEE_REPORTS = new Set([
   "new_employees",
   "leave_balances",
 ]);
+
+// فلاتر الموظف تُطبَّق على كل التقارير
+const EMPLOYEE_FILTERS = new Set(["branch", "management", "department", "work_location"]);
+
+/** هل يطبّق التقرير هذا الفلتر فعلًا؟ الفلاتر غير المطبّقة تُعرض معطّلة بعلامة «غير مفعّل» */
+function isFilterApplied(schemaId: string, filterId: string) {
+  if (EMPLOYEE_FILTERS.has(filterId)) return true;
+  if (filterId === "from_date" || filterId === "to_date") return !!SOURCE_CONFIG[schemaId]?.dateField || schemaId === "penalties_warnings";
+  if (filterId === "report_type") return schemaId === "penalties_warnings";
+  if (filterId === "leave_type") return schemaId === "leaves";
+  if (filterId === "new_period") return schemaId === "new_employees";
+  return false;
+}
+
+const recordDateField = (schemaId: string, record: ReportRecord) =>
+  schemaId === "penalties_warnings"
+    ? PENALTY_SOURCES.find((source) => source.kind === record.record_kind)?.dateField
+    : SOURCE_CONFIG[schemaId]?.dateField;
+
+// تاريخ صالح للاستعلام: فارغ أو YYYY-MM-DD بسنة 2000 فأحدث؛ null = تاريخ قيد الكتابة يُتجاهل
+const usableDate = (value: string): string | null => {
+  if (!value) return "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number(value.slice(0, 4)) >= 2000 ? value : null;
+};
+const DATE_RELOAD_DELAY_MS = 500;
 
 const valueText = (value: unknown) => (value === null || value === undefined || value === "" ? "-" : String(value));
 
@@ -77,9 +111,16 @@ function recordDetail(schemaId: string, record: ReportRecord) {
 
 export default function DynamicReport({ schema }: { schema: ReportSchema }) {
   const [selectionMode, setSelectionMode] = useState<"all" | "custom">("all");
-  const [filterValues, setFilterValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(schema.filters.filter((filter) => filter.type === "select" && filter.options?.length).map((filter) => [filter.id, filter.options![0]])),
-  );
+  const [filterValues, setFilterValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = Object.fromEntries(schema.filters.filter((filter) => filter.type === "select" && filter.options?.length).map((filter) => [filter.id, filter.options![0]]));
+    // الحضور جدول كبير: يبدأ التقرير بالشهر الحالي بدل جلب السجل كاملًا
+    if (schema.id === "attendance_departure") {
+      const { from, to } = monthRange(riyadhMonth());
+      initial.from_date = from;
+      initial.to_date = to;
+    }
+    return initial;
+  });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<ReportRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,45 +129,81 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const fromDate = filterValues.from_date || "";
+  const toDate = filterValues.to_date || "";
+  // التواريخ المطبّقة فعلًا: تتأخر نصف ثانية بعد آخر تعديل ولا تقبل تاريخًا ناقصًا أثناء الكتابة
+  const [queryDates, setQueryDates] = useState(() => ({ from: usableDate(fromDate) ?? "", to: usableDate(toDate) ?? "" }));
+  // جداول مصدر بلا عمود التاريخ: لا فلترة بالتاريخ لا في الخادم ولا هنا
+  const missingDateTables = useRef(new Set<string>());
+  const [missingDateSources, setMissingDateSources] = useState<string[]>([]);
+  const sourceTable = SOURCE_CONFIG[schema.id]?.table;
+  const dateFilterUnavailable = !!sourceTable && missingDateSources.includes(sourceTable);
+
+  useEffect(() => {
+    const from = usableDate(fromDate);
+    const to = usableDate(toDate);
+    if (from === null || to === null) return;
+    const timer = window.setTimeout(() => {
+      setQueryDates((previous) => (previous.from === from && previous.to === to ? previous : { from, to }));
+    }, DATE_RELOAD_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [fromDate, toDate]);
 
   useEffect(() => {
     let active = true;
+    const { from: queryFrom, to: queryTo } = queryDates;
+
+    // جلب كل الصفوف على دفعات، مع تصفية التاريخ في الخادم عند تحديد فترة
+    const fetchSource = (table: string, dateField?: string) =>
+      fetchAllRows<ReportRecord>((from, to) => {
+        let query = supabase.from(table).select("*");
+        if (dateField && queryFrom) query = query.gte(dateField, queryFrom);
+        if (dateField && queryTo) query = query.lte(dateField, queryTo);
+        return query.order("id").range(from, to);
+      });
+
+    const loadSource = async (table: string, dateField?: string, dateFieldMayBeMissing = false) => {
+      if (!dateField || !dateFieldMayBeMissing) return fetchSource(table, dateField);
+      if (missingDateTables.current.has(table)) return fetchSource(table);
+      try {
+        return await fetchSource(table, dateField);
+      } catch (err) {
+        // 42703: عمود التاريخ غير موجود؛ نعيد الجلب بلا فلتر تاريخ (الترتيب بـ id فقط)
+        if ((err as { code?: string } | null)?.code !== "42703") throw err;
+        missingDateTables.current.add(table);
+        if (active) setMissingDateSources((previous) => (previous.includes(table) ? previous : [...previous, table]));
+        return fetchSource(table);
+      }
+    };
 
     async function loadReport() {
       setLoading(true);
       setError("");
       try {
-        const employeesRequest = supabase
-          .from("employees")
-          .select("id, emp_id, name, job_title, department, directorate, branch, work_location, hire_date, bank_account, social_insurance")
-          .order("name");
+        const employeesRequest = fetchAllRows<Employee>((from, to) =>
+          supabase
+            .from("employees")
+            .select("id, emp_id, name, job_title, department, directorate, branch, work_location, hire_date, bank_account, social_insurance")
+            .order("name")
+            .order("id")
+            .range(from, to));
 
         let reportRecords: ReportRecord[] = [];
         if (schema.id === "penalties_warnings") {
-          const [investigations, warnings] = await Promise.all([
-            supabase.from("penalty_investigations").select("*"),
-            supabase.from("penalty_warnings").select("*"),
-          ]);
-          if (investigations.error) throw investigations.error;
-          if (warnings.error) throw warnings.error;
-          reportRecords = [
-            ...(investigations.data ?? []).map((row) => ({ ...row, record_kind: "مساءلة" })),
-            ...(warnings.data ?? []).map((row) => ({ ...row, record_kind: "إنذار" })),
-          ];
+          const results = await Promise.all(PENALTY_SOURCES.map((source) => loadSource(source.table, source.dateField)));
+          reportRecords = results.flatMap((rows, index) => rows.map((row) => ({ ...row, record_kind: PENALTY_SOURCES[index].kind })));
         } else if (SOURCE_CONFIG[schema.id]) {
           const source = SOURCE_CONFIG[schema.id];
-          const result = await supabase.from(source.table).select("*");
-          if (result.error) throw result.error;
-          reportRecords = result.data ?? [];
+          reportRecords = await loadSource(source.table, source.dateField, source.dateFieldMayBeMissing);
         }
 
-        const employeesResult = await employeesRequest;
-        if (employeesResult.error) throw employeesResult.error;
+        const employeeRows = await employeesRequest;
         if (!active) return;
-        setEmployees((employeesResult.data ?? []) as Employee[]);
+        setEmployees(employeeRows);
         setRecords(reportRecords);
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : "تعذر تحميل بيانات التقرير");
+        const message = (err as { message?: string } | null)?.message;
+        if (active) setError(message || "تعذر تحميل بيانات التقرير");
       } finally {
         if (active) setLoading(false);
       }
@@ -136,7 +213,7 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     return () => {
       active = false;
     };
-  }, [schema.id]);
+  }, [schema.id, queryDates]);
 
   const filterOptions = useMemo(() => {
     const unique = (field: keyof Employee) =>
@@ -157,14 +234,14 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
       if (wantedKind) relevantRecords = relevantRecords.filter((record) => record.record_kind === wantedKind);
     }
 
-    const source = SOURCE_CONFIG[schema.id];
-    if (source?.dateField) {
-      if (filterValues.from_date) {
-        relevantRecords = relevantRecords.filter((record) => String(record[source.dateField!] ?? "") >= filterValues.from_date);
-      }
-      if (filterValues.to_date) {
-        relevantRecords = relevantRecords.filter((record) => String(record[source.dateField!] ?? "") <= filterValues.to_date);
-      }
+    if (isFilterApplied(schema.id, "from_date") && !dateFilterUnavailable && (queryDates.from || queryDates.to)) {
+      relevantRecords = relevantRecords.filter((record) => {
+        const field = recordDateField(schema.id, record);
+        const date = field ? String(record[field] ?? "").slice(0, 10) : "";
+        if (queryDates.from && date < queryDates.from) return false;
+        if (queryDates.to && date > queryDates.to) return false;
+        return true;
+      });
     }
 
     if (schema.id === "leaves" && filterValues.leave_type && filterValues.leave_type !== "الكل") {
@@ -190,9 +267,8 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     }
     if (schema.id === "new_employees") {
       const days = Number.parseInt(filterValues.new_period || "60", 10);
-      const threshold = new Date();
-      threshold.setDate(threshold.getDate() - days);
-      baseEmployees = baseEmployees.filter((employee) => employee.hire_date && new Date(employee.hire_date) >= threshold);
+      const threshold = addDays(riyadhToday(), -days);
+      baseEmployees = baseEmployees.filter((employee) => !!employee.hire_date && String(employee.hire_date).slice(0, 10) >= threshold);
     }
 
     const employeeRows = baseEmployees.map((employee) => {
@@ -205,13 +281,16 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
         if (schema.id === "new_employees") details = `تاريخ التعيين: ${valueText(employee.hire_date)}`;
         if (schema.id === "leave_balances") details = "رصيد الإجازات حسب العقد والطلبات";
       }
-      return { ...employee, recordCount: matches.length || 1, details };
+      // تقارير الموظفين: السجل هو بيانات الموظف نفسه؛ غيرها: عدد السجلات المطابقة فعلًا (0 إن لم توجد)
+      return { ...employee, recordCount: EMPLOYEE_REPORTS.has(schema.id) ? 1 : matches.length, details };
     });
 
     const employeeIds = new Set(employees.flatMap((employee) => [employee.id, employee.emp_id ?? ""]));
+    const orphanKeys = new Set<string>();
     relevantRecords.forEach((record, index) => {
       const key = recordEmployeeKey(record);
-      if (!key || employeeIds.has(key)) return;
+      if (!key || employeeIds.has(key) || orphanKeys.has(key)) return;
+      orphanKeys.add(key);
       const empName = valueText(record.emp_name);
       employeeRows.push({
         id: `record-${schema.id}-${key}-${index}`,
@@ -225,7 +304,7 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
         hire_date: null,
         bank_account: null,
         social_insurance: null,
-        recordCount: recordsByEmployee.get(key)?.length ?? 1,
+        recordCount: recordsByEmployee.get(key)?.length ?? 0,
         details: recordDetail(schema.id, record),
       });
     });
@@ -238,7 +317,7 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
       const term = search.trim().toLowerCase();
       return !term || [row.name, row.emp_id, row.job_title, row.department, row.details].some((value) => String(value ?? "").toLowerCase().includes(term));
     });
-  }, [employees, records, filterValues, schema.id, search]);
+  }, [employees, records, filterValues, queryDates, dateFilterUnavailable, schema.id, search]);
 
   useEffect(() => setPage(1), [search, filterValues, pageSize, schema.id]);
 
@@ -292,12 +371,17 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     fileName: schema.title,
   });
 
+  // فلتر نوع التقرير بخيار واحد هو اسم التقرير نفسه وليس فلترًا
+  const isInformationalFilter = (filter: ReportFilter) => filter.id === "report_type" && (filter.options?.length ?? 0) <= 1;
+  const isFilterDisabled = (filter: ReportFilter) => !isFilterApplied(schema.id, filter.id) && !isInformationalFilter(filter);
+
   const renderFilter = (filter: ReportFilter) => {
+    const disabled = isFilterDisabled(filter);
     if (filter.type === "select") {
       const dynamicOptions = filterOptions[filter.id as keyof typeof filterOptions];
       const options = dynamicOptions ? ["الكل", ...dynamicOptions] : filter.options ?? [];
       return (
-        <select value={filterValues[filter.id] || options[0] || ""} onChange={(event) => handleFilterChange(filter.id, event.target.value)} className="w-full bg-white border border-gray-200 text-gray-800 text-sm rounded-lg focus:ring-2 focus:ring-[#004e89] outline-none px-3 py-2.5 h-10">
+        <select disabled={disabled} value={filterValues[filter.id] || options[0] || ""} onChange={(event) => handleFilterChange(filter.id, event.target.value)} className="w-full bg-white border border-gray-200 text-gray-800 text-sm rounded-lg focus:ring-2 focus:ring-[#004e89] outline-none px-3 py-2.5 h-10 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
           {options.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       );
@@ -305,7 +389,7 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     if (filter.type === "date") {
       return (
         <div className="relative">
-          <input type="date" value={filterValues[filter.id] || ""} onChange={(event) => handleFilterChange(filter.id, event.target.value)} className="w-full bg-white border border-gray-200 text-gray-800 text-sm rounded-lg focus:ring-2 focus:ring-[#004e89] outline-none px-3 py-2.5 h-10 pr-10" />
+          <input type="date" disabled={disabled} value={disabled ? "" : filterValues[filter.id] || ""} onChange={(event) => handleFilterChange(filter.id, event.target.value)} className="w-full bg-white border border-gray-200 text-gray-800 text-sm rounded-lg focus:ring-2 focus:ring-[#004e89] outline-none px-3 py-2.5 h-10 pr-10 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" />
           <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
         </div>
       );
@@ -335,11 +419,15 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
           {schema.filters.map((filter) => (
             <div key={filter.id} className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">{filter.required && <span className="text-red-500">*</span>}{filter.label}</label>
+              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">{filter.required && <span className="text-red-500">*</span>}{filter.label}{isFilterDisabled(filter) && <span className="text-[10px] font-medium text-gray-400">(غير مفعّل)</span>}</label>
               {renderFilter(filter)}
             </div>
           ))}
         </div>
+
+        {dateFilterUnavailable && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">فلتر التاريخ لا ينطبق على هذا التقرير: جدول المصدر لا يحتوي على عمود التاريخ، فتُعرض كل السجلات.</p>
+        )}
 
         <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
           <button onClick={() => setSelectionMode("all")} className={cn("px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm", selectionMode === "all" ? "bg-[#004e89] text-white" : "bg-white border border-[#004e89] text-[#004e89]")}><Users className="w-4 h-4" />جميع الموظفين</button>

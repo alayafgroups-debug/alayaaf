@@ -57,7 +57,13 @@ export default function HRRequestFormSettings() {
   const schemaList = Object.values(schemas);
   const activeSchema = activeSchemaId ? schemas[activeSchemaId] : null;
 
+  // الحفظ معطّل: نماذج الطلبات الفعلية لا تقرأ هذه الإعدادات بعد، فلا نوهم المستخدم بأنها طُبّقت
+  const SAVE_ENABLED = false;
   const handleSave = () => {
+    if (!SAVE_ENABLED) {
+      toast.error(t("هذه الإعدادات لا تُطبّق على النماذج بعد"));
+      return;
+    }
     saveSchemas(schemas);
     toast.success(t("تم حفظ إعدادات الحقول"));
   };
@@ -124,6 +130,9 @@ export default function HRRequestFormSettings() {
   return (
     <Layout>
       <div dir={direction} className="space-y-5">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          {t("هذه الإعدادات لا تُطبّق على النماذج بعد")}
+        </div>
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -133,7 +142,9 @@ export default function HRRequestFormSettings() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
+              disabled={!SAVE_ENABLED}
+              title={t("هذه الإعدادات لا تُطبّق على النماذج بعد")}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="h-4 w-4" />
               {t("حفظ التغييرات")}

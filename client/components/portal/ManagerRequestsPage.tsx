@@ -3,23 +3,30 @@ import { Search, ChevronLeft, CheckCircle, XCircle, Eye, Loader2, Filter } from 
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+import { readUserSession } from "@/lib/authSession";
 
 type Props = { onBack: () => void };
 
 type Request = {
   id: string;
-  rawTable: "leave_requests" | "payroll";
-  reqNumber: number;
+  rawId: string;
+  rawTable: "leave_requests" | "hr_requests";
+  reqNumber: string;
   empName: string;
   type: string;
   status: string;
   date: string;
   details: string;
   signatureData: string;
+  incoming: boolean;
+  rawDetails: Record<string, unknown>;
 };
 
+// طلبات المدير في البوابة: الوارد إليه (إجازات وطلبات) للقرار، والمرسل منه للمتابعة.
+// اعتماد مسير الرواتب لا يتم من هنا (يتم من الطلبات الواردة في الموارد البشرية).
 export default function ManagerRequestsPage({ onBack }: Props) {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, direction, formatDate } = useI18n();
   const [tab, setTab] = useState<"pending" | "incoming" | "sent">("pending");
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,46 +41,73 @@ export default function ManagerRequestsPage({ onBack }: Props) {
   async function load() {
     setLoading(true);
     try {
-      const [leavesResult, payrollResult] = await Promise.all([
+      const { data: auth } = await supabase.auth.getUser();
+      const me = auth.user?.id;
+      if (!me) {
+        setRequests([]);
+        return;
+      }
+      const column = tab === "sent" ? "sender_auth_user_id" : "recipient_auth_user_id";
+      const [leavesResult, requestsResult] = await Promise.all([
         supabase
           .from("leave_requests")
           .select("id, emp_name, leave_type, start_date, end_date, days, status, notes, signature_data, created_at")
+          .eq(column, me)
           .order("created_at", { ascending: false }),
         supabase
-          .from("payroll")
-          .select("id, emp_name, month, basic_salary, net_salary, status, created_at")
+          .from("hr_requests")
+          .select("id, emp_name, request_type, start_date, end_date, status, details, signature_data, created_at")
+          .eq(column, me)
           .order("created_at", { ascending: false }),
       ]);
+      if (leavesResult.error || requestsResult.error) throw leavesResult.error ?? requestsResult.error;
 
-      const leaveRows: Request[] = (leavesResult.data ?? []).map((r: any, idx: number) => ({
+      const leaveRows: Request[] = (leavesResult.data ?? []).map((r: any) => ({
         id: `leave-${r.id}`,
+        rawId: String(r.id),
         rawTable: "leave_requests",
-        reqNumber: 1000 + idx,
+        reqNumber: String(r.id).slice(0, 8).toUpperCase(),
         empName: r.emp_name ?? "—",
         type: `إجازة — ${r.leave_type ?? ""}`,
         status: normalizeStatus(r.status),
         date: r.created_at ?? "",
-        details: `${r.days ?? 0} يوم من ${r.start_date ?? ""} إلى ${r.end_date ?? ""}${r.notes ? ` — ${r.notes}` : ""}`,
+        details: `${r.days ? `${r.days} يوم ` : ""}من ${r.start_date ?? ""} إلى ${r.end_date ?? ""}${r.notes ? ` — ${r.notes}` : ""}`,
         signatureData: r.signature_data ?? "",
+        incoming: tab !== "sent",
+        rawDetails: {},
       }));
 
-      const payrollRows: Request[] = (payrollResult.data ?? []).map((r: any, idx: number) => ({
-        id: `payroll-${r.id}`,
-        rawTable: "payroll",
-        reqNumber: 2000 + idx,
-        empName: r.emp_name ?? "—",
-        type: `صرف رواتب الموظفين`,
-        status: r.status === "مدفوع" ? "موافق" : normalizeStatus(r.status),
-        date: r.created_at ?? "",
-        details: `${t("شهر")} ${r.month} — ${t("صافي")} ${formatNumber(+r.net_salary)} ${t("ر.س")}`,
-        signatureData: "",
-      }));
+      const requestRows: Request[] = (requestsResult.data ?? [])
+        .filter((r: any) => (r.details?.workflow ?? "") !== "payroll_approval")
+        .map((r: any) => {
+          const details = r.details && typeof r.details === "object" ? r.details as Record<string, unknown> : {};
+          const shown = Object.entries(details)
+            .filter(([key, value]) => !key.startsWith("reviewed_") && !key.startsWith("sender_") && value !== "" && value !== null && typeof value !== "object")
+            .map(([key, value]) => `${key}: ${String(value)}`)
+            .join(" — ");
+          return {
+            id: `request-${r.id}`,
+            rawId: String(r.id),
+            rawTable: "hr_requests" as const,
+            reqNumber: String(r.id).slice(0, 8).toUpperCase(),
+            empName: r.emp_name ?? "—",
+            type: r.request_type ?? "طلب",
+            status: normalizeStatus(r.status),
+            date: r.created_at ?? "",
+            details: [r.start_date ? `من ${r.start_date}` : "", r.end_date ? `إلى ${r.end_date}` : "", shown].filter(Boolean).join(" — ") || "—",
+            signatureData: r.signature_data ?? "",
+            incoming: tab !== "sent",
+            rawDetails: details,
+          };
+        });
 
-      const all = [...leaveRows, ...payrollRows].sort((a, b) => b.date.localeCompare(a.date));
-
+      const all = [...leaveRows, ...requestRows].sort((a, b) => b.date.localeCompare(a.date));
       if (tab === "pending") setRequests(all.filter((r) => r.status === "معلق"));
-      else if (tab === "incoming") setRequests(all.filter((r) => r.status === "موافق"));
+      else if (tab === "incoming") setRequests(all.filter((r) => r.status !== "معلق"));
       else setRequests(all);
+    } catch (error) {
+      toast.error(hrRequestErrorText(error, t("تعذر تحميل الطلبات")));
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -81,46 +115,45 @@ export default function ManagerRequestsPage({ onBack }: Props) {
 
   function normalizeStatus(s: string) {
     if (!s) return "معلق";
-    if (["معتمدة", "مقبول", "approved", "موافق", "مدفوع"].includes(s)) return "موافق";
+    if (["معتمدة", "معتمد", "مقبول", "approved", "موافق"].includes(s)) return "موافق";
     if (["مرفوض", "مرفوضة", "rejected"].includes(s)) return "مرفوض";
     return "معلق";
   }
 
-  async function handleApprove(req: Request) {
+  async function decide(req: Request, decision: "موافق" | "مرفوض") {
+    if (!req.incoming || processing) return;
     setProcessing(true);
     try {
-      if (req.rawTable === "leave_requests") {
-        await supabase.from("leave_requests").update({ status: "معتمدة" }).eq("id", req.id.replace("leave-", ""));
-      } else {
-        await supabase.from("payroll").update({ status: "مدفوع", paid_date: new Date().toISOString().split("T")[0] }).eq("id", req.id.replace("payroll-", ""));
-      }
-      toast.success(t("تمت الموافقة على الطلب"));
+      const reviewer = readUserSession();
+      const status = req.rawTable === "leave_requests"
+        ? (decision === "موافق" ? "معتمدة" : "مرفوضة")
+        : decision;
+      const update = req.rawTable === "hr_requests"
+        ? {
+            status,
+            details: {
+              ...req.rawDetails,
+              review_decision: decision,
+              reviewed_at: new Date().toISOString(),
+              reviewed_by_name: reviewer?.name ?? "",
+              reviewed_by_user_id: reviewer?.id ?? "",
+            },
+          }
+        : { status };
+      const { error } = await supabase.from(req.rawTable).update(update).eq("id", req.rawId).select("id").single();
+      if (error) throw error;
+      toast.success(t(decision === "موافق" ? "تمت الموافقة على الطلب" : "تم رفض الطلب"));
       setSelected(null);
       await load();
-    } catch (e) {
-      toast.error(t("تعذرت الموافقة"));
+    } catch (error) {
+      toast.error(hrRequestErrorText(error, t("تعذر حفظ القرار")));
     } finally {
       setProcessing(false);
     }
   }
 
-  async function handleReject(req: Request) {
-    setProcessing(true);
-    try {
-      if (req.rawTable === "leave_requests") {
-        await supabase.from("leave_requests").update({ status: "مرفوضة" }).eq("id", req.id.replace("leave-", ""));
-      } else {
-        await supabase.from("payroll").update({ status: "مرفوض" }).eq("id", req.id.replace("payroll-", ""));
-      }
-      toast.success(t("تم رفض الطلب"));
-      setSelected(null);
-      await load();
-    } catch {
-      toast.error(t("تعذر رفض الطلب"));
-    } finally {
-      setProcessing(false);
-    }
-  }
+  const handleApprove = (req: Request) => decide(req, "موافق");
+  const handleReject = (req: Request) => decide(req, "مرفوض");
 
   const filtered = requests.filter(
     (r) => !search || r.empName.includes(search) || r.type.includes(search),
@@ -130,7 +163,7 @@ export default function ManagerRequestsPage({ onBack }: Props) {
     s === "موافق" ? "bg-green-100 text-green-700" : s === "مرفوض" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700";
 
   if (selected) {
-    const isPending = selected.status === "معلق";
+    const isPending = selected.status === "معلق" && selected.incoming;
     return (
       <div className="flex flex-col h-full" dir={direction}>
         <div className="flex items-center gap-3 p-4 bg-white border-b sticky top-0 z-10">
@@ -211,7 +244,7 @@ export default function ManagerRequestsPage({ onBack }: Props) {
             <div key={req.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-gray-400 text-xs">{req.date ? formatDate(req.date, { dateStyle: "medium" }) : ""}</p>
-                <p className="text-gray-500 text-xs">#{1180 + i}</p>
+                <p className="text-gray-500 text-xs">#{req.reqNumber}</p>
               </div>
               <div className="space-y-1 mb-3">
                 <div className="flex justify-between text-sm"><span className="text-gray-500">{t("الاسم")}</span><span className="font-semibold">{req.empName}</span></div>
@@ -222,7 +255,7 @@ export default function ManagerRequestsPage({ onBack }: Props) {
                 <button onClick={() => setSelected(req)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
                   <Eye className="h-4 w-4" /> {t("عرض")}
                 </button>
-                {req.status === "معلق" && (
+                {req.status === "معلق" && req.incoming && (
                   <button onClick={() => setSelected(req)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg border border-[#004e89] text-[#004e89] text-sm font-medium hover:bg-blue-50">
                     {t("معالجة")}
                   </button>

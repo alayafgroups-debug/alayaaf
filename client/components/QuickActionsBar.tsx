@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { readUserSession } from "@/lib/authSession";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type Panel =
   | "contact"
@@ -246,7 +247,7 @@ export default function QuickActionsBar() {
       toast.success(t("تم إرسال رسالتك إلى الإدارة"));
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("تعذر إرسال الرسالة"),
+        t(hrRequestErrorText(error instanceof Error ? { message: error.message } : error, "تعذر إرسال الرسالة")),
       );
     } finally {
       setSending(false);

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+import { riyadhToday } from "@/lib/hrDates";
 
 type Employee = {
   id: string;
@@ -34,22 +36,15 @@ type Investigation = {
   status: string;
 };
 
-const getLocalDate = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const emptyForm = {
+// يُحسب تاريخ اليوم عند إنشاء النموذج أو تفريغه، لا مرة واحدة عند تحميل الملف
+const createEmptyForm = () => ({
   employeeId: "",
-  date: getLocalDate(),
+  date: riyadhToday(),
   groupId: "",
   typeId: "",
   subject: "",
   message: "السلام عليكم ورحمة الله وبركاته\nنحيطكم علماً بوجود مخالفة تتطلب إفادتكم، ونرجو توضيح أسباب الواقعة وإرسال الرد للإدارة.",
-};
+});
 
 export default function HRPenaltiesInvestigations() {
   const { t, direction } = useI18n();
@@ -61,8 +56,10 @@ export default function HRPenaltiesInvestigations() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // عرض مساءلة مرسلة: للقراءة فقط، لا يلمس نموذج المسودة ولا يتيح إعادة الإرسال
+  const [viewItem, setViewItem] = useState<Investigation | null>(null);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(createEmptyForm);
 
   const loadData = async () => {
     setLoading(true);
@@ -163,14 +160,14 @@ export default function HRPenaltiesInvestigations() {
       if (error) throw error;
 
       toast({ title: t("تم إرسال المساءلة"), description: `${t("تم إرسال المساءلة إلى")} ${selectedEmployee.name}` });
-      setForm({ ...emptyForm, date: getLocalDate() });
+      setForm(createEmptyForm());
       setPreviewOpen(false);
       setShowForm(false);
       await loadData();
     } catch (error) {
       toast({
         title: t("تعذر إرسال المساءلة"),
-        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
+        description: t(hrRequestErrorText(error)),
         variant: "destructive",
       });
     } finally {
@@ -327,13 +324,7 @@ export default function HRPenaltiesInvestigations() {
                     <td className="py-3 px-4 text-center">
                       <button
                         type="button"
-                        onClick={() => {
-                          const employee = employees.find((row) => row.empId === item.empId);
-                          const group = groups.find((row) => row.name === item.groupName);
-                          const type = types.find((row) => row.name === item.typeName);
-                          setForm({ employeeId: employee?.id ?? "", date: item.date, groupId: group?.id ?? "", typeId: type?.id ?? "", subject: item.subject, message: item.message });
-                          setPreviewOpen(true);
-                        }}
+                        onClick={() => setViewItem(item)}
                         className="text-[#004e89] hover:text-[#003d6d]"
                         aria-label={`${t("عرض مساءلة")} ${item.empName}`}
                       >
@@ -347,7 +338,36 @@ export default function HRPenaltiesInvestigations() {
           </div>
         </div>
 
-        {previewOpen && (
+        {viewItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir={direction}>
+            <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl overflow-hidden">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                <h3 className="text-xl font-bold text-gray-900">{t("عرض مساءلة")}</h3>
+                <button type="button" onClick={() => setViewItem(null)} className="text-gray-500 hover:text-gray-900"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="p-6 space-y-5">
+                <div className="text-center border-b border-gray-100 pb-4">
+                  <h4 className="text-2xl font-bold text-[#004e89]">{t("مساءلة إدارية")}</h4>
+                  <p className="mt-1 text-sm text-gray-500">{t("التاريخ")}: {viewItem.date || "—"}</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <PreviewItem label={t("الموظف")} value={viewItem.empName || "—"} />
+                  <PreviewItem label={t("مجموعة المخالفة")} value={viewItem.groupName || "—"} />
+                  <PreviewItem label={t("المخالفة")} value={viewItem.typeName || "—"} />
+                  <PreviewItem label={t("الموضوع")} value={viewItem.subject || "—"} />
+                  <PreviewItem label={t("الحالة")} value={t(viewItem.status)} />
+                  <PreviewItem label={t("المرسل")} value={viewItem.senderName || "—"} />
+                </div>
+                <div className="rounded-lg bg-gray-50 p-4 whitespace-pre-wrap leading-7 text-gray-800">{viewItem.message}</div>
+              </div>
+              <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
+                <Button variant="outline" onClick={() => setViewItem(null)}>{t("إغلاق")}</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {previewOpen && !viewItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir={direction}>
             <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl overflow-hidden">
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">

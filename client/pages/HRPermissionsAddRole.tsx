@@ -11,6 +11,7 @@ import AccessSelector from "@/components/permissions/AccessSelector";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type Permission = { key: string; label: string };
 type PermissionGroup = { title: string; permissions: Permission[] };
@@ -315,7 +316,7 @@ export default function HRPermissionsAddRole() {
       toast.success(t(isEditing ? "تم تحديث الدور والصلاحيات" : "تم إضافة الدور والصلاحيات"));
       navigate("/hr/permissions/roles");
     } catch (error) {
-      toast.error(`${t("تعذر حفظ الدور")}: ${error instanceof Error ? error.message : t("خطأ غير معروف")}`);
+      toast.error(`${t("تعذر حفظ الدور")}: ${t(hrRequestErrorText(error, "خطأ غير معروف"))}`);
     } finally {
       setLoading(false);
     }

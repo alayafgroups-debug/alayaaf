@@ -5,6 +5,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
+import { riyadhToday } from "@/lib/hrDates";
+import { ACTIVE_EMPLOYEE_STATUSES } from "@/lib/hrStatus";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 import {
   PageHeader,
   FilterBar,
@@ -21,6 +24,7 @@ type EmployeeOption = {
   name: string;
   jobTitle: string;
   hireDate: string;
+  status: string;
 };
 
 type Certificate = {
@@ -46,11 +50,103 @@ type NewCertificateForm = {
   notes: string;
 };
 
-const CERTIFICATES_STORAGE_KEY = "hr_certificates_local";
+// الموظفون المنتهية خدمتهم وغير الفعالين هم الأحوج لشهادة الخبرة
+const CERTIFICATE_EMPLOYEE_STATUSES = [...ACTIVE_EMPLOYEE_STATUSES, "منتهي", "غير فعال"];
+
+/** رقم شهادة فريد بتوقيت الرياض: CERT-YYYYMMDD-HHMMSS */
+function makeCertificateNo(existing: Set<string>): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Riyadh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .map((part) => [part.type, part.value]),
+  );
+  const base = `CERT-${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}${parts.second}`;
+  let candidate = base;
+  for (let n = 2; existing.has(candidate); n += 1) candidate = `${base}-${n}`;
+  return candidate;
+}
+
+// النسخة السابقة كانت تحفظ الشهادة على الجهاز عند فشل الحفظ في قاعدة البيانات؛ نقرأها لرفعها فقط
+const LEGACY_LOCAL_KEY = "hr_certificates_local";
+
+function readLegacyLocalCertificates(): Certificate[] {
+  try {
+    const raw = localStorage.getItem(LEGACY_LOCAL_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item === "object" && String(item.certificateNo ?? "").trim())
+      .map((item: Record<string, unknown>) => ({
+        id: String(item.id ?? "") || crypto.randomUUID(),
+        certificateNo: String(item.certificateNo ?? "").trim(),
+        employeeId: String(item.employeeId ?? ""),
+        empId: String(item.empId ?? ""),
+        empName: String(item.empName ?? ""),
+        jobTitle: String(item.jobTitle ?? ""),
+        hireDate: String(item.hireDate ?? ""),
+        issueDate: String(item.issueDate ?? "").slice(0, 10),
+        directedTo: String(item.directedTo ?? "لمن يهمه الأمر"),
+        purpose: String(item.purpose ?? "شهادة خبرة"),
+        notes: String(item.notes ?? ""),
+        status: String(item.status ?? "معتمدة"),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function removeLegacyLocalCertificate(id: string) {
+  try {
+    const raw = localStorage.getItem(LEGACY_LOCAL_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    localStorage.setItem(LEGACY_LOCAL_KEY, JSON.stringify(parsed.filter((item) => String(item?.id ?? "") !== id)));
+  } catch {
+    // التخزين المحلي غير متاح: لا شيء نحذفه
+  }
+}
+
+/** صف الإدراج في hr_certificates (نفس الشكل للإصدار الجديد ولرفع الشهادات المحلية) */
+const certificatePayload = (certificate: Certificate) => ({
+  id: certificate.id,
+  certificate_no: certificate.certificateNo,
+  employee_id: certificate.employeeId || null,
+  emp_id: certificate.empId,
+  emp_name: certificate.empName,
+  job_title: certificate.jobTitle,
+  hire_date: certificate.hireDate || null,
+  issue_date: certificate.issueDate || null,
+  directed_to: certificate.directedTo,
+  purpose: certificate.purpose,
+  notes: certificate.notes,
+  status: certificate.status,
+});
+
+/** رقم الشهادة المكرر (فهرس فريد) يرجع 23505 */
+const certificateErrorText = (error: unknown, fallback: string) =>
+  (error as { code?: string } | null)?.code === "23505" ? "رقم الشهادة مستخدم مسبقًا؛ أعد المحاولة" : hrRequestErrorText(error, fallback);
+
+/** هل رقم الشهادة مستخدم في قاعدة البيانات (وليس فقط في القائمة المحمّلة) */
+async function certificateNoExists(certificateNo: string): Promise<boolean> {
+  const { data, error } = await supabase.from("hr_certificates").select("id").eq("certificate_no", certificateNo).limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
 
 const emptyForm = (): NewCertificateForm => ({
   employeeId: "",
-  issueDate: new Date().toISOString().slice(0, 10),
+  issueDate: riyadhToday(),
   directedTo: "لمن يهمه الأمر",
   purpose: "شهادة خبرة",
   notes: "",
@@ -62,6 +158,7 @@ const mapEmployee = (row: Record<string, unknown>): EmployeeOption => ({
   name: String(row.name ?? ""),
   jobTitle: String(row.job_title ?? ""),
   hireDate: String(row.hire_date ?? ""),
+  status: String(row.status ?? ""),
 });
 
 const mapCertificateRow = (row: Record<string, unknown>): Certificate => {
@@ -84,30 +181,6 @@ const mapCertificateRow = (row: Record<string, unknown>): Certificate => {
   };
 };
 
-function readLocalCertificates(): Certificate[] {
-  try {
-    const raw = localStorage.getItem(CERTIFICATES_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalCertificates(certificates: Certificate[]) {
-  try {
-    localStorage.setItem(CERTIFICATES_STORAGE_KEY, JSON.stringify(certificates));
-  } catch {}
-}
-
-function mergeCertificates(dbCertificates: Certificate[], localCertificates: Certificate[]) {
-  const map = new Map<string, Certificate>();
-  dbCertificates.forEach((item) => map.set(item.id, item));
-  localCertificates.forEach((item) => map.set(item.id, item));
-  return Array.from(map.values()).sort((a, b) => b.issueDate.localeCompare(a.issueDate));
-}
-
 export default function HRCertificates() {
   const { t, direction } = useI18n();
   const [mode, setMode] = useState<"list" | "create">("list");
@@ -118,6 +191,9 @@ export default function HRCertificates() {
   const [form, setForm] = useState<NewCertificateForm>(emptyForm());
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Certificate | null>(null);
+  // شهادات محفوظة على هذا الجهاز فقط (من النسخة السابقة) وليست في قاعدة البيانات
+  const [localOnly, setLocalOnly] = useState<Certificate[]>([]);
+  const [uploadingLocal, setUploadingLocal] = useState(false);
 
   useEffect(() => {
     loadAll();
@@ -139,33 +215,40 @@ export default function HRCertificates() {
 
   async function loadAll() {
     setLoading(true);
-    const localCertificates = readLocalCertificates();
+    try {
+      const [certResult, empResult] = await Promise.all([
+        supabase.from("hr_certificates").select("*").order("created_at", { ascending: false }),
+        supabase
+          .from("employees")
+          .select("id, emp_id, name, job_title, hire_date, status")
+          .in("status", CERTIFICATE_EMPLOYEE_STATUSES)
+          .order("name", { ascending: true }),
+      ]);
 
-    const [certResult, empResult] = await Promise.allSettled([
-      supabase.from("hr_certificates").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("employees")
-        .select("id, emp_id, name, job_title, hire_date")
-        .in("status", ["نشط", "فعال"])
-        .order("name", { ascending: true }),
-    ]);
+      if (certResult.error) {
+        setCertificates([]);
+        // لا نعرف ما في قاعدة البيانات، فلا نقارن الشهادات المحلية
+        setLocalOnly([]);
+        toast({ title: t("تعذر تحميل الشهادات"), description: t(hrRequestErrorText(certResult.error)), variant: "destructive" });
+      } else {
+        const dbCertificates = (certResult.data ?? []).map((r) => mapCertificateRow(r as Record<string, unknown>));
+        setCertificates(dbCertificates);
+        const dbNumbers = new Set(dbCertificates.map((c) => c.certificateNo));
+        const dbIds = new Set(dbCertificates.map((c) => c.id));
+        setLocalOnly(readLegacyLocalCertificates().filter((c) => !dbNumbers.has(c.certificateNo) && !dbIds.has(c.id)));
+      }
 
-    if (certResult.status === "fulfilled" && !certResult.value.error && certResult.value.data) {
-      const dbCertificates = certResult.value.data.map((r) => mapCertificateRow(r as Record<string, unknown>));
-      const merged = mergeCertificates(dbCertificates, localCertificates);
-      setCertificates(merged);
-      writeLocalCertificates(merged);
-    } else {
-      setCertificates(localCertificates);
+      if (empResult.error) {
+        setEmployees([]);
+        toast({ title: t("تعذر تحميل الموظفين"), description: t(hrRequestErrorText(empResult.error)), variant: "destructive" });
+      } else {
+        setEmployees((empResult.data ?? []).map((r) => mapEmployee(r as Record<string, unknown>)));
+      }
+    } catch (error) {
+      toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-
-    if (empResult.status === "fulfilled" && !empResult.value.error && empResult.value.data) {
-      setEmployees(empResult.value.data.map((r) => mapEmployee(r as Record<string, unknown>)));
-    } else {
-      setEmployees([]);
-    }
-
-    setLoading(false);
   }
 
   async function handleCreateCertificate() {
@@ -183,7 +266,7 @@ export default function HRCertificates() {
     const id = crypto.randomUUID();
     const newCertificate: Certificate = {
       id,
-      certificateNo: `CERT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 900 + 100)}`,
+      certificateNo: "",
       employeeId: emp.id,
       empId: emp.empId,
       empName: emp.name,
@@ -198,37 +281,28 @@ export default function HRCertificates() {
 
     setSaving(true);
     try {
-      const payload = {
-        id: newCertificate.id,
-        certificate_no: newCertificate.certificateNo,
-        employee_id: newCertificate.employeeId,
-        emp_id: newCertificate.empId,
-        emp_name: newCertificate.empName,
-        job_title: newCertificate.jobTitle,
-        hire_date: newCertificate.hireDate || null,
-        issue_date: newCertificate.issueDate || null,
-        directed_to: newCertificate.directedTo,
-        purpose: newCertificate.purpose,
-        notes: newCertificate.notes,
-        status: newCertificate.status,
-      };
+      // رقم فريد: مقارنة بالقائمة المحمّلة ثم تأكيد من قاعدة البيانات (قد يصدر مستخدم آخر شهادة في الثانية نفسها)
+      const taken = new Set([...certificates, ...localOnly].map((c) => c.certificateNo));
+      let certificateNo = "";
+      for (let attempt = 0; attempt < 5 && !certificateNo; attempt += 1) {
+        const candidate = makeCertificateNo(taken);
+        if (await certificateNoExists(candidate)) taken.add(candidate);
+        else certificateNo = candidate;
+      }
+      if (!certificateNo) throw new Error(t("تعذر توليد رقم شهادة فريد؛ أعد المحاولة"));
+      newCertificate.certificateNo = certificateNo;
 
-      const { error } = await supabase.from("hr_certificates").insert([payload]);
+      const { error } = await supabase.from("hr_certificates").insert([certificatePayload(newCertificate)]);
       if (error) throw error;
 
-      const next = [newCertificate, ...certificates];
-      setCertificates(next);
-      writeLocalCertificates(next);
+      setCertificates((prev) => [newCertificate, ...prev]);
+      setSelected(newCertificate);
       setMode("list");
       setForm(emptyForm());
-      toast({ title: t("تم الحفظ"), description: t("تم إصدار شهادة الخبرة بنجاح") });
-    } catch {
-      const next = [newCertificate, ...certificates];
-      setCertificates(next);
-      writeLocalCertificates(next);
-      setMode("list");
-      setForm(emptyForm());
-      toast({ title: t("تم الحفظ محليًا"), description: t("تم حفظ الشهادة محليًا لحين توفر قاعدة البيانات") });
+      toast({ title: t("تم الحفظ"), description: `${t("تم إصدار شهادة الخبرة بنجاح")} — ${t("رقم الشهادة")}: ${newCertificate.certificateNo}` });
+    } catch (error) {
+      // لا حفظ محلي: الشهادة لم تُسجَّل ما لم تقبلها قاعدة البيانات
+      toast({ title: t("تعذر حفظ الشهادة"), description: t(certificateErrorText(error, "لم تُحفظ الشهادة")), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -237,15 +311,58 @@ export default function HRCertificates() {
   async function handleDelete(certificate: Certificate) {
     if (!confirm(`${t("حذف الشهادة")} ${certificate.certificateNo}؟`)) return;
 
-    try {
-      await supabase.from("hr_certificates").delete().eq("id", certificate.id);
-    } catch {}
+    const { data, error } = await supabase.from("hr_certificates").delete().eq("id", certificate.id).select("id");
+    if (error || !data?.length) {
+      toast({
+        title: t("تعذر حذف الشهادة"),
+        description: error ? t(hrRequestErrorText(error)) : t("لم يُحذف شيء: لا تملك صلاحية حذف هذه الشهادة"),
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const next = certificates.filter((c) => c.id !== certificate.id);
-    setCertificates(next);
-    writeLocalCertificates(next);
+    setCertificates((prev) => prev.filter((c) => c.id !== certificate.id));
+    // نسخة قديمة على هذا الجهاز لا يجب أن تظهر لاحقًا كشهادة غير مرفوعة
+    removeLegacyLocalCertificate(certificate.id);
     if (selected?.id === certificate.id) setSelected(null);
     toast({ title: t("تم الحذف") });
+  }
+
+  // رفع شهادة محلية واحدة بعد مراجعتها: النسخة السابقة كانت تحفظ على الجهاز نسخة من كل القائمة،
+  // فالشهادة "المحلية فقط" قد تكون حُذفت من قاعدة البيانات عمدًا. لا رفع جماعي.
+  async function uploadLocalCertificate(certificate: Certificate) {
+    if (uploadingLocal) return;
+    setUploadingLocal(true);
+    try {
+      const { data, error } = await supabase.from("hr_certificates").select("id").eq("certificate_no", certificate.certificateNo).limit(1);
+      if (error) throw error;
+      const existing = (data ?? [])[0] as { id?: unknown } | undefined;
+      if (existing) {
+        if (String(existing.id ?? "") === certificate.id) {
+          removeLegacyLocalCertificate(certificate.id);
+          setLocalOnly((rows) => rows.filter((c) => c.id !== certificate.id));
+          toast({ title: t("الشهادة موجودة في قاعدة البيانات"), description: certificate.certificateNo });
+        } else {
+          toast({ title: t("لم تُرفع"), description: `${certificate.certificateNo}: ${t("الرقم مستخدم لشهادة أخرى في قاعدة البيانات")}`, variant: "destructive" });
+        }
+        return;
+      }
+      const { error: insertError } = await supabase.from("hr_certificates").insert([certificatePayload(certificate)]);
+      if (insertError) throw insertError;
+      removeLegacyLocalCertificate(certificate.id);
+      setLocalOnly((rows) => rows.filter((c) => c.id !== certificate.id));
+      toast({ title: t("تم الرفع"), description: certificate.certificateNo });
+      await loadAll();
+    } catch (error) {
+      toast({ title: t("لم تُرفع الشهادة"), description: `${certificate.certificateNo}: ${t(certificateErrorText(error, "لم تُرفع الشهادة"))}`, variant: "destructive" });
+    } finally {
+      setUploadingLocal(false);
+    }
+  }
+
+  function discardLocalCertificate(certificate: Certificate) {
+    removeLegacyLocalCertificate(certificate.id);
+    setLocalOnly((rows) => rows.filter((c) => c.id !== certificate.id));
   }
 
   const totalCertificates = certificates.length;
@@ -298,7 +415,7 @@ export default function HRCertificates() {
                   <option value="">{t("اختر الموظف")}</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.empId || t("بدون رقم")})
+                      {emp.name} ({emp.empId || t("بدون رقم")}){ACTIVE_EMPLOYEE_STATUSES.includes(emp.status) ? "" : ` - ${t(emp.status)}`}
                     </option>
                   ))}
                 </select>
@@ -371,7 +488,7 @@ export default function HRCertificates() {
             <div className="bg-white rounded-xl border-2 border-amber-200 shadow-sm p-8">
               <div className="text-center border-b border-dashed border-amber-300 pb-4 mb-6">
                 <p className="text-sm text-gray-500">{t("رقم الشهادة")}</p>
-                <p className="font-bold text-gray-800">{t("توليد تلقائي بعد الحفظ")}</p>
+                <p className="font-bold text-gray-800">{t("يُولَّد عند الحفظ")} (CERT-YYYYMMDD-HHMMSS)</p>
               </div>
 
               <div className="space-y-4 leading-8 text-gray-700">
@@ -402,6 +519,36 @@ export default function HRCertificates() {
           </div>
         ) : (
           <div className="space-y-4">
+            {localOnly.length > 0 && (
+              <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="font-semibold">{t("توجد")} {localOnly.length} {t("شهادة محفوظة على هذا الجهاز فقط")}</p>
+                <p className="text-xs">{t("قد تكون حُذفت من قاعدة البيانات عمدًا من جهاز آخر. ارفع فقط ما تتأكد أنه صادر فعلًا، وتجاهل الباقي.")}</p>
+                <ul className="divide-y divide-amber-200">
+                  {localOnly.map((c) => (
+                    <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <span>{c.certificateNo} — {c.empName || "-"} {c.issueDate ? `(${c.issueDate})` : ""}</span>
+                      <span className="flex gap-2">
+                        <button
+                          onClick={() => void uploadLocalCertificate(c)}
+                          disabled={uploadingLocal}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-60"
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                          {t("رفعها")}
+                        </button>
+                        <button
+                          onClick={() => discardLocalCertificate(c)}
+                          disabled={uploadingLocal}
+                          className="px-3 py-1.5 rounded-lg border border-amber-300 text-xs font-medium hover:bg-amber-100 disabled:opacity-60"
+                        >
+                          {t("تجاهلها")}
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <p className="text-sm text-gray-500">{t("إجمالي الشهادات")}</p>

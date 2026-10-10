@@ -7,6 +7,13 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+
+const NO_ROWS_MESSAGE = "لم يُحفظ شيء: السجل غير موجود أو لا تملك صلاحية هذه العملية";
+const configErrorText = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "23503"
+    ? "مرتبط بسجلات أخرى؛ لا يمكن حذفه"
+    : hrRequestErrorText(error, "تعذر حفظ البيانات");
 
 type ConfigItem = {
   id: string;
@@ -39,16 +46,19 @@ export default function HRConfigPage({ title, configType, valueLabel = "القي
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("hr_config_items")
         .select("*")
         .eq("config_type", configType)
         .order("sort_order", { ascending: true });
+      if (error) throw error;
       if (data) setItems(data.map((r) => ({
         id: String(r.id), nameAr: String(r.name_ar ?? ""), nameEn: String(r.name_en ?? ""),
         value: String(r.value ?? ""), description: String(r.description ?? ""), status: String(r.status ?? "فعال"),
       })));
-    } catch {} finally { setLoading(false); }
+    } catch (error) {
+      toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, [configType]);
@@ -64,19 +74,27 @@ export default function HRConfigPage({ title, configType, valueLabel = "القي
     setSaving(true);
     try {
       if (editingId) {
-        await supabase.from("hr_config_items").update({ name_ar: formNameAr, name_en: formNameEn, value: formValue }).eq("id", editingId);
-        toast({ title: t("تم التعديل") });
+        const { data, error } = await supabase.from("hr_config_items").update({ name_ar: formNameAr, name_en: formNameEn, value: formValue }).eq("id", editingId).select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error(NO_ROWS_MESSAGE);
       } else {
-        await supabase.from("hr_config_items").insert([{ config_type: configType, name_ar: formNameAr, name_en: formNameEn, value: formValue }]);
-        toast({ title: t("تمت الإضافة") });
+        const { error } = await supabase.from("hr_config_items").insert([{ config_type: configType, name_ar: formNameAr, name_en: formNameEn, value: formValue }]);
+        if (error) throw error;
       }
+      toast({ title: editingId ? t("تم التعديل") : t("تمت الإضافة") });
       resetForm(); loadData();
-    } catch { toast({ title: t("خطأ"), variant: "destructive" }); } finally { setSaving(false); }
+    } catch (error) {
+      toast({ title: t("خطأ"), description: t(configErrorText(error)), variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: ConfigItem) => {
     if (!confirm(`${t("حذف")} "${item.nameAr}"؟`)) return;
-    await supabase.from("hr_config_items").delete().eq("id", item.id);
+    const { data, error } = await supabase.from("hr_config_items").delete().eq("id", item.id).select("id");
+    if (error || !data?.length) {
+      toast({ title: t("لم يتم الحذف"), description: t(error ? configErrorText(error) : NO_ROWS_MESSAGE), variant: "destructive" });
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: t("تم الحذف") });
   };

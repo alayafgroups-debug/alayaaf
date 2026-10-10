@@ -19,6 +19,11 @@ type LeaveType = {
   status: string;
 };
 
+const ACTIVE_STATUS = "مفعلة";
+const INACTIVE_STATUS = "غير مفعلة";
+const INACTIVE_SPELLINGS = ["غير مفعلة", "غير مفعل", "معطلة", "معطل", "غير فعال", "غير فعالة", "موقوفة", "موقوف", "inactive", "disabled"];
+const isInactiveStatus = (status: unknown) => INACTIVE_SPELLINGS.includes(String(status ?? "").trim().toLowerCase());
+
 export default function HRLeavesTypes() {
   const { t, direction } = useI18n();
   const [items, setItems] = useState<LeaveType[]>([]);
@@ -34,6 +39,9 @@ export default function HRLeavesTypes() {
   const [formPaid, setFormPaid] = useState(true);
   const [formAffects, setFormAffects] = useState(true);
   const [formGender, setFormGender] = useState("both");
+  const [formStatus, setFormStatus] = useState(ACTIVE_STATUS);
+  // عمود الحالة يُرسل فقط إن كان موجودًا فعلًا في صفوف الجدول المحمّلة
+  const [hasStatusColumn, setHasStatusColumn] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const loadData = async () => {
@@ -41,11 +49,12 @@ export default function HRLeavesTypes() {
     try {
       const { data, error } = await supabase.from("leave_types").select("*").order("id");
       if (error) throw error;
+      setHasStatusColumn(Boolean(data?.length) && Object.prototype.hasOwnProperty.call(data[0], "status"));
       if (data) setItems(data.map((r: any) => ({
         id: String(r.id), name: r.name ?? "", name_en: r.name_en ?? "",
         max_days: r.max_days ?? 0, deduction_percent: r.deduction_percent ?? 0,
         paid: r.is_paid ?? true, affects_balance: r.affects_balance ?? true,
-        gender: r.gender ?? "both", status: r.status ?? "مفعلة",
+        gender: r.gender ?? "both", status: r.status ?? ACTIVE_STATUS,
       })));
     } catch (error) {
       toast({ title: t("تعذر تحميل تصنيفات الإجازات"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
@@ -58,12 +67,14 @@ export default function HRLeavesTypes() {
     setShowForm(false); setEditingId(null);
     setFormName(""); setFormNameEn(""); setFormDays("1");
     setFormDeduction("0"); setFormPaid(true); setFormAffects(true); setFormGender("both");
+    setFormStatus(ACTIVE_STATUS);
   };
 
   const startEdit = (item: LeaveType) => {
     setEditingId(item.id); setFormName(item.name); setFormNameEn(item.name_en);
     setFormDays(String(item.max_days)); setFormDeduction(String(item.deduction_percent));
     setFormPaid(item.paid); setFormAffects(item.affects_balance); setFormGender(item.gender);
+    setFormStatus(isInactiveStatus(item.status) ? INACTIVE_STATUS : ACTIVE_STATUS);
     setShowForm(true);
   };
 
@@ -71,14 +82,16 @@ export default function HRLeavesTypes() {
     if (!formName.trim()) { toast({ title: t("خطأ"), description: t("اسم التصنيف مطلوب"), variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: formName.trim(), name_en: formNameEn.trim(), max_days: Number(formDays),
         deduction_percent: Number(formDeduction), is_paid: formPaid,
         affects_balance: formAffects, gender: formGender,
       };
+      if (hasStatusColumn) payload.status = formStatus;
       if (editingId) {
-        const { error } = await supabase.from("leave_types").update(payload).eq("id", editingId);
+        const { data, error } = await supabase.from("leave_types").update(payload).eq("id", editingId).select("id");
         if (error) throw error;
+        if (!data?.length) throw new Error(t("لم يُحفظ التعديل: لا تملك صلاحية تعديل هذا التصنيف"));
         toast({ title: t("تم التعديل بنجاح") });
       } else {
         const { error } = await supabase.from("leave_types").insert([payload]);
@@ -88,15 +101,15 @@ export default function HRLeavesTypes() {
       resetForm();
       await loadData();
     } catch (error) {
-      toast({ title: t("تعذر حفظ التصنيف"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
+      toast({ title: t("تعذر حفظ التصنيف"), description: (error as { message?: string } | null)?.message || t("حدث خطأ غير متوقع"), variant: "destructive" });
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: LeaveType) => {
     if (!confirm(`${t("حذف")} "${item.name}"؟`)) return;
-    const { error } = await supabase.from("leave_types").delete().eq("id", item.id);
-    if (error) {
-      toast({ title: t("تعذر حذف التصنيف"), description: error.message, variant: "destructive" });
+    const { data, error } = await supabase.from("leave_types").delete().eq("id", item.id).select("id");
+    if (error || !data?.length) {
+      toast({ title: t("تعذر حذف التصنيف"), description: error?.message || t("لم يُحذف شيء: لا تملك صلاحية حذف هذا التصنيف"), variant: "destructive" });
       return;
     }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
@@ -122,7 +135,7 @@ export default function HRLeavesTypes() {
               <div><label className="block text-sm font-medium mb-1">{t("الاسم بالعربية")} *</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
               <div><label className="block text-sm font-medium mb-1">{t("الاسم بالإنجليزية")}</label><Input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} /></div>
               <div><label className="block text-sm font-medium mb-1">{t("مدة الإجازة (يوم)")}</label><Input type="number" value={formDays} onChange={(e) => setFormDays(e.target.value)} /></div>
-              <div><label className="block text-sm font-medium mb-1">{t("نسبة الخصم (%)")}</label><Input type="number" value={formDeduction} onChange={(e) => setFormDeduction(e.target.value)} /></div>
+              <div><label className="block text-sm font-medium mb-1">{t("نسبة الخصم (%)")}</label><Input type="number" min={0} max={100} value={formDeduction} onChange={(e) => setFormDeduction(e.target.value)} /><p className="mt-1 text-[11px] text-gray-500">{t("تُخصم من الراتب لكل يوم من الإجازة. الإجازة المرضية تُحسب تلقائيًا حسب المادة 117 ولا تُستخدم نسبتها.")}</p></div>
               <div>
                 <label className="block text-sm font-medium mb-1">{t("إجازة مدفوعة")}</label>
                 <div className="flex gap-4 h-10 items-center">
@@ -145,6 +158,15 @@ export default function HRLeavesTypes() {
                   <option value="female">{t("إناث فقط")}</option>
                 </select>
               </div>
+              {hasStatusColumn && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t("الحالة")}</label>
+                  <select value={formStatus} onChange={(e) => setFormStatus(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-white text-sm">
+                    <option value={ACTIVE_STATUS}>{t("مفعلة")}</option>
+                    <option value={INACTIVE_STATUS}>{t("غير مفعلة")}</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003865]"><Save className="h-4 w-4 ml-1" /> {saving ? t("جاري الحفظ...") : t("حفظ")}</Button>
@@ -186,7 +208,7 @@ export default function HRLeavesTypes() {
                     <td className="py-3 px-4">{item.max_days} {t("يوم")}</td>
                     <td className="py-3 px-4">{item.deduction_percent}%</td>
                     <td className="py-3 px-4 text-center">
-                      <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded text-xs font-medium">{t(item.status)}</span>
+                      <span className={`${isInactiveStatus(item.status) ? "bg-gray-100 text-gray-500" : "bg-emerald-50 text-emerald-600"} px-3 py-1 rounded text-xs font-medium`}>{t(item.status)}</span>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex justify-center items-center gap-2">

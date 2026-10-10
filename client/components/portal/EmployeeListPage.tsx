@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, ChevronLeft, Filter, Phone, Mail, Briefcase } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
+import { EmployeePhoto } from "@/components/hr/employeeFiles";
 
 type Emp = {
   id: string;
@@ -67,7 +68,7 @@ export default function EmployeeListPage({ onBack }: Props) {
           <div className="bg-white rounded-xl shadow-sm p-6 mb-4">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-20 h-20 rounded-full bg-[#004e89] flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
-                {selected.photo_url ? <img src={selected.photo_url} alt={selected.name} className="w-full h-full object-cover" /> : selected.name.charAt(0)}
+                <EmployeePhoto value={selected.photo_url} name={selected.name} />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-gray-900">{selected.name}</h3>
@@ -126,7 +127,7 @@ export default function EmployeeListPage({ onBack }: Props) {
           filtered.map((emp) => (
             <button key={emp.id} onClick={() => setSelected(emp)} className="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3 flex items-center gap-3 hover:shadow-md transition text-start">
               <div className="w-12 h-12 rounded-full bg-[#004e89] flex items-center justify-center text-white font-bold text-lg flex-shrink-0 overflow-hidden">
-                {emp.photo_url ? <img src={emp.photo_url} alt={emp.name} className="w-full h-full object-cover" /> : emp.name.charAt(0)}
+                <EmployeePhoto value={emp.photo_url} name={emp.name} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm truncate">{emp.name}</p>

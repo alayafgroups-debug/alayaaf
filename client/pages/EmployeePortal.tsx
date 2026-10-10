@@ -44,6 +44,7 @@ import EmployeeSettingsPage from "@/components/portal/EmployeeSettingsPage";
 import AboutPage from "@/components/portal/AboutPage";
 import PrivacyPage from "@/components/portal/PrivacyPage";
 import EmployeeEmailPage from "./EmployeeEmailPage";
+import { isPendingStatus, normalizeRequestStatus } from "@/lib/hrStatus";
 
 interface UserSession {
   id: string;
@@ -374,6 +375,8 @@ export default function EmployeePortal() {
     [],
   );
   const [requestsLoading, setRequestsLoading] = useState(false);
+  // عدد الطلبات الواردة إليّ كمستلم (مدير مباشر) — يحدد ظهور زر الطلبات المعلقة
+  const [incomingRequestsCount, setIncomingRequestsCount] = useState(0);
   const [allowedRequests, setAllowedRequests] = useState<string[]>([]);
   const [employeeDepartment, setEmployeeDepartment] = useState("");
   const [attendanceOverview, setAttendanceOverview] =
@@ -615,18 +618,26 @@ export default function EmployeePortal() {
     navigate("/employee/login");
   };
 
+  // معلق / موافق / مرفوض بكل الصيغ المخزنة؛ الحالات غير المعروفة تُعرض كما هي
   const normalizeStatus = (status?: string) => {
     const s = String(status ?? "").trim();
-    if (["معلق", "معلقة", "pending"].includes(s)) return "معلق";
-    if (["موافق", "معتمدة", "approved"].includes(s)) return "موافق";
-    if (["مرفوض", "مرفوضة", "rejected"].includes(s)) return "مرفوض";
-    return s || "معلق";
+    return isPendingStatus(s) || normalizeRequestStatus(s) !== "معلق"
+      ? normalizeRequestStatus(s)
+      : s;
   };
 
   const loadEmployeeRequests = async (empId: string) => {
     setRequestsLoading(true);
     try {
-      const [requestsResult, investigationsResult, warningsResult] =
+      // getSession يقرأ الجلسة المحلية بلا طلب شبكة (يُستدعى مع كل تحديث دوري)
+      const me = (await supabase.auth.getSession()).data.session?.user?.id ?? "";
+      const [
+        requestsResult,
+        investigationsResult,
+        warningsResult,
+        sentHrRequestsResult,
+        ownHrRequestsResult,
+      ] =
         await Promise.all([
           supabase
             .from("leave_requests")
@@ -643,11 +654,26 @@ export default function EmployeePortal() {
             .select("*")
             .eq("emp_id", empId)
             .order("sent_at", { ascending: false }),
+          // طلبات hr_requests التي أرسلتها أنا أو المسجلة برقمي الوظيفي
+          me
+            ? supabase
+                .from("hr_requests")
+                .select("*")
+                .eq("sender_auth_user_id", me)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [] as any[], error: null }),
+          supabase
+            .from("hr_requests")
+            .select("*")
+            .eq("emp_id", empId)
+            .order("created_at", { ascending: false }),
         ]);
 
       if (requestsResult.error) throw requestsResult.error;
       if (investigationsResult.error) throw investigationsResult.error;
       if (warningsResult.error) throw warningsResult.error;
+      if (sentHrRequestsResult.error) throw sentHrRequestsResult.error;
+      if (ownHrRequestsResult.error) throw ownHrRequestsResult.error;
 
       const requests: EmployeeRequest[] = (requestsResult.data ?? []).map(
         (r: any) => ({
@@ -658,6 +684,28 @@ export default function EmployeePortal() {
           reason: formatRequestReason(
             String(r.leave_type ?? "طلب"),
             r.reason ?? r.notes,
+          ),
+          adminNote: String(r.admin_note ?? ""),
+        }),
+      );
+
+      const hrRequestRows = new Map<string, any>();
+      for (const r of [
+        ...(sentHrRequestsResult.data ?? []),
+        ...(ownHrRequestsResult.data ?? []),
+      ])
+        hrRequestRows.set(String(r.id), r);
+      const hrRequests: EmployeeRequest[] = [...hrRequestRows.values()].map(
+        (r: any) => ({
+          id: `hr-request-${String(r.id)}`,
+          type: String(r.request_type ?? "طلب"),
+          status: normalizeStatus(r.status),
+          createdAt: r.created_at ? String(r.created_at) : "",
+          reason: formatRequestReason(
+            String(r.request_type ?? "طلب"),
+            r.details && typeof r.details === "object"
+              ? JSON.stringify(r.details)
+              : r.details,
           ),
           adminNote: String(r.admin_note ?? ""),
         }),
@@ -685,7 +733,12 @@ export default function EmployeePortal() {
         }),
       );
 
-      const mapped = [...requests, ...investigations, ...warnings].sort(
+      const mapped = [
+        ...requests,
+        ...hrRequests,
+        ...investigations,
+        ...warnings,
+      ].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt),
       );
       setEmployeeRequests(mapped);
@@ -707,6 +760,9 @@ export default function EmployeePortal() {
     }
     if (schemaId === "leave") {
       setLeaveFormOpen(true);
+    } else if (!requestFormSchemas[schemaId]) {
+      // لا يوجد نموذج معرّف لهذا النوع (مثل إضافة طرف / إضافة موظف)
+      toast.info(t("هذا النوع غير متاح بعد"));
     } else {
       setActiveSchemaId(schemaId);
       setDynamicFormOpen(true);
@@ -901,6 +957,40 @@ export default function EmployeePortal() {
 
     return () => clearInterval(timer);
   }, [currentPage, user?.empId]);
+
+  // زر "الطلبات المعلقة" يظهر فقط لمن لديه طلبات واردة فعلًا (مستلم في أي من الجدولين)
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const me = (await supabase.auth.getSession()).data.session?.user?.id;
+      if (!me) {
+        if (!cancelled) setIncomingRequestsCount(0);
+        return;
+      }
+      const [leavesResult, requestsResult] = await Promise.all([
+        supabase
+          .from("leave_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("recipient_auth_user_id", me),
+        supabase
+          .from("hr_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("recipient_auth_user_id", me),
+      ]);
+      if (cancelled) return;
+      // تعذر العد: يبقى الزر ظاهرًا (البيانات محمية بصلاحيات قاعدة البيانات على أي حال)
+      if (leavesResult.error || requestsResult.error) {
+        setIncomingRequestsCount((previous) => Math.max(previous, 1));
+        return;
+      }
+      setIncomingRequestsCount((leavesResult.count ?? 0) + (requestsResult.count ?? 0));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // يُعاد العد عند تغيّر صفحة البوابة (مثل العودة من صفحة الطلبات الواردة بعد اتخاذ قرار)
+  }, [user?.id, currentPage]);
 
   const filteredRequests = employeeRequests.filter((r) => {
     const matchesSearch =
@@ -1264,10 +1354,10 @@ export default function EmployeePortal() {
                           : "border-transparent text-gray-500"
                       }`}
                     >
-                      {tab === "received" && t("الواردة")}
-                      {tab === "draft" && t("المسودة")}
-                      {tab === "sent" && t("المرسلة")}
-                      {tab === "attached" && t("الملحقة")}
+                      {tab === "received" && t("الكل")}
+                      {tab === "draft" && t("معلقة")}
+                      {tab === "sent" && t("معتمدة")}
+                      {tab === "attached" && t("مرفوضة")}
                     </button>
                   ))}
                 </div>
@@ -1619,16 +1709,18 @@ export default function EmployeePortal() {
                     {t("مرحباً بك في نظام إدارة الموارد البشرية")}
                   </p>
                 </div>
-                <button
-                  onClick={() => setCurrentPage("manager-requests")}
-                  className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-5 py-3 flex items-center gap-3 transition"
-                >
-                  <FileText className="h-5 w-5" />
-                  <div className="text-start">
-                    <p className="font-bold text-sm">{t("الطلبات المعلقة")}</p>
-                    <p className="text-xs text-blue-200">{t("تنتظر موافقتك")}</p>
-                  </div>
-                </button>
+                {incomingRequestsCount > 0 && (
+                  <button
+                    onClick={() => setCurrentPage("manager-requests")}
+                    className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-5 py-3 flex items-center gap-3 transition"
+                  >
+                    <FileText className="h-5 w-5" />
+                    <div className="text-start">
+                      <p className="font-bold text-sm">{t("الطلبات المعلقة")}</p>
+                      <p className="text-xs text-blue-200">{t("تنتظر موافقتك")}</p>
+                    </div>
+                  </button>
+                )}
               </div>
 
               {/* Work Hours Summary */}
@@ -1870,10 +1962,10 @@ export default function EmployeePortal() {
                           : "border-transparent text-gray-600"
                       }`}
                     >
-                      {tab === "received" && t("الواردة")}
-                      {tab === "draft" && t("المسودة")}
-                      {tab === "sent" && t("المرسلة")}
-                      {tab === "attached" && t("الملحقة")}
+                      {tab === "received" && t("الكل")}
+                      {tab === "draft" && t("معلقة")}
+                      {tab === "sent" && t("معتمدة")}
+                      {tab === "attached" && t("مرفوضة")}
                     </button>
                   ))}
                 </div>

@@ -5,6 +5,21 @@ import { Plus, Trash2, Edit, Save, X, Printer, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+import { exportReportExcel, printReport } from "@/lib/reportExport";
+
+const NO_ROWS_MESSAGE = "لم يُحفظ شيء: السجل غير موجود أو لا تملك صلاحية هذه العملية";
+const orgErrorText = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "23503"
+    ? "مرتبط بموظفين أو سجلات أخرى؛ لا يمكن حذفه"
+    : hrRequestErrorText(error, "تعذر حفظ البيانات");
+
+// عدد الموظفين المرتبطين قبل الحذف (قاعدة البيانات تمنع الحذف أيضًا برمز ORG_ITEM_IN_USE)
+const countLinkedEmployees = async (column: string, value: string) => {
+  const { count, error } = await supabase.from("employees").select("id", { count: "exact", head: true }).eq(column, value);
+  if (error) throw error;
+  return count ?? 0;
+};
 
 const DEFAULT_JOBS = [
   { name: "مدير عام", name_en: "General Manager", department: "", status: "فعال" },
@@ -32,13 +47,18 @@ export default function HROrgJobs() {
   const [formDept, setFormDept] = useState("");
   const [formStatus, setFormStatus] = useState("فعال");
   const [seeded, setSeeded] = useState(false);
+  // فشل التحميل لا يعني أن الجدول فارغ: نخفي زر التعبئة حتى لا تتكرر الوظائف
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 outline-none";
 
   const loadData = async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
-      const { data } = await supabase.from("hr_jobs").select("*").order("name");
+      const { data, error } = await supabase.from("hr_jobs").select("*").order("name");
+      if (error) throw error;
       if (data && data.length > 0) {
         setJobs(data.map((r: any) => ({
           id: String(r.id), name: String(r.name ?? ""),
@@ -49,44 +69,89 @@ export default function HROrgJobs() {
       } else {
         setJobs([]);
       }
-    } catch {
+    } catch (error) {
       setJobs([]);
+      setLoadFailed(true);
+      toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
   const seedDefaults = async () => {
-    if (seeded) return;
+    if (seeded || loadFailed || saving) return;
+    setSaving(true);
     try {
-      await supabase.from("hr_jobs").insert(DEFAULT_JOBS);
+      const { error } = await supabase.from("hr_jobs").insert(DEFAULT_JOBS);
+      if (error) throw error;
       toast({ title: t("تم إضافة الوظائف الافتراضية") });
       loadData();
-    } catch {
-      toast({ title: t("خطأ"), description: t("تعذر إضافة الوظائف"), variant: "destructive" });
-    }
+    } catch (error) {
+      toast({ title: t("تعذر إضافة الوظائف"), description: t(orgErrorText(error)), variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
   useEffect(() => { loadData(); }, []);
 
   const handleDelete = async (job: JobRow) => {
     if (!confirm(`${t("حذف الوظيفة")} "${job.name}"؟`)) return;
-    await supabase.from("hr_jobs").delete().eq("id", job.id);
+    // الموظف يرتبط بالوظيفة باسمها (employees.job_title)
+    if (job.name.trim()) {
+      try {
+        const linked = await countLinkedEmployees("job_title", job.name);
+        if (linked > 0) {
+          toast({ title: t("لم يتم الحذف"), description: `${t("لا يمكن الحذف: مرتبط بـ")} ${formatNumber(linked)} ${t("موظف")}`, variant: "destructive" });
+          return;
+        }
+      } catch (error) {
+        toast({ title: t("تعذر التحقق من الموظفين المرتبطين"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+        return;
+      }
+    }
+    const { data, error } = await supabase.from("hr_jobs").delete().eq("id", job.id).select("id");
+    if (error || !data?.length) {
+      toast({ title: t("لم يتم الحذف"), description: t(error ? orgErrorText(error) : NO_ROWS_MESSAGE), variant: "destructive" });
+      return;
+    }
     setJobs((prev) => prev.filter((j) => j.id !== job.id));
     toast({ title: t("تم الحذف") });
   };
 
   const handleSave = async () => {
     if (!formName.trim()) { toast({ title: t("خطأ"), description: t("اسم الوظيفة مطلوب"), variant: "destructive" }); return; }
-    if (editingId) {
-      await supabase.from("hr_jobs").update({ name: formName, name_en: formNameEn, department: formDept, status: formStatus }).eq("id", editingId);
-      toast({ title: t("تم التعديل") });
-    } else {
-      await supabase.from("hr_jobs").insert([{ name: formName, name_en: formNameEn, department: formDept, status: formStatus }]);
-      toast({ title: t("تمت الإضافة") });
-    }
-    resetForm(); loadData();
+    const payload = { name: formName, name_en: formNameEn, department: formDept, status: formStatus };
+    setSaving(true);
+    try {
+      if (editingId) {
+        const { data, error } = await supabase.from("hr_jobs").update(payload).eq("id", editingId).select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error(NO_ROWS_MESSAGE);
+      } else {
+        const { error } = await supabase.from("hr_jobs").insert([payload]);
+        if (error) throw error;
+      }
+      toast({ title: editingId ? t("تم التعديل") : t("تمت الإضافة") });
+      resetForm(); loadData();
+    } catch (error) {
+      toast({ title: t("خطأ"), description: t(orgErrorText(error)), variant: "destructive" });
+    } finally { setSaving(false); }
   };
+
+  const reportOptions = () => ({
+    title: "قائمة الوظائف",
+    fileName: "jobs",
+    columns: [
+      { key: "name", label: "المسمى الوظيفي", width: 26 },
+      { key: "nameEn", label: "الاسم بالإنجليزية", width: 26 },
+      { key: "department", label: "الإدارة", width: 22 },
+      { key: "status", label: "الحالة", width: 12 },
+    ],
+    rows: jobs.map((row) => ({ name: row.name, nameEn: row.nameEn, department: row.department, status: row.status })),
+  });
+  const handlePrint = () => {
+    if (!printReport(reportOptions())) toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة ثم أعد المحاولة"), variant: "destructive" });
+  };
+  const handleExport = () => exportReportExcel(reportOptions());
 
   const startEdit = (job: JobRow) => {
     setEditingId(job.id); setFormName(job.name); setFormNameEn(job.nameEn); setFormDept(job.department); setFormStatus(job.status); setShowForm(true);
@@ -99,13 +164,13 @@ export default function HROrgJobs() {
       <div className="p-6 max-w-[1200px] mx-auto space-y-5" dir={direction}>
         <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
           <div className="flex gap-2">
-            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600"><Printer className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600"><FileText className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600" onClick={handlePrint} disabled={jobs.length === 0} title={t("طباعة")} aria-label={t("طباعة")}><Printer className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600" onClick={handleExport} disabled={jobs.length === 0} title={t("تصدير Excel")} aria-label={t("تصدير Excel")}><FileText className="h-4 w-4" /></Button>
             <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1" onClick={() => { resetForm(); setShowForm(true); }}>
               <Plus className="h-4 w-4" /> {t("إضافة وظيفة")}
             </Button>
-            {jobs.length === 0 && !loading && (
-              <Button variant="outline" onClick={seedDefaults}>{t("تعبئة الوظائف الافتراضية")}</Button>
+            {jobs.length === 0 && !loading && !loadFailed && (
+              <Button variant="outline" onClick={seedDefaults} disabled={saving}>{t("تعبئة الوظائف الافتراضية")}</Button>
             )}
           </div>
           <h1 className="font-bold text-xl text-[#004e89]">{t("قائمة الوظائف")}</h1>
@@ -136,7 +201,7 @@ export default function HROrgJobs() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1"><Save className="h-4 w-4" /> {t("حفظ")}</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1"><Save className="h-4 w-4" /> {saving ? t("جاري الحفظ...") : t("حفظ")}</Button>
               <Button variant="outline" onClick={resetForm} className="gap-1"><X className="h-4 w-4" /> {t("إلغاء")}</Button>
             </div>
           </div>
@@ -157,6 +222,8 @@ export default function HROrgJobs() {
             <tbody className="divide-y">
               {loading ? (
                 <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("جاري التحميل...")}</td></tr>
+              ) : loadFailed ? (
+                <tr><td colSpan={6} className="text-center py-8 text-red-500">{t("تعذر تحميل الوظائف؛ أعد تحميل الصفحة")}</td></tr>
               ) : jobs.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t("لا توجد وظائف - استخدم زر \"تعبئة الوظائف الافتراضية\"")}</td></tr>
               ) : jobs.map((row, i) => (

@@ -3,6 +3,7 @@ import { ChevronLeft, Send, MessageCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type Props = { empId: string; empName: string; onBack: () => void };
 type Msg = { id: string; type: string; subject: string; message: string; status: string; created: string; admin_note?: string };
@@ -48,7 +49,7 @@ export default function ContactManagementPage({ empId, empName, onBack }: Props)
       created_at: new Date().toISOString(),
     }]);
     setSending(false);
-    if (error) { toast.error(`${t("تعذر الإرسال")}: ${error.message}`); return; }
+    if (error) { toast.error(`${t("تعذر الإرسال")}: ${t(hrRequestErrorText(error))}`); return; }
     toast.success(t("تم إرسال رسالتك إلى الإدارة"));
     setSubject("");
     setMessage("");

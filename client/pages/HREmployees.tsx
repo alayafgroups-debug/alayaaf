@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import {
   Users,
@@ -18,8 +19,11 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { PageHeader } from "@/components/SalesPageUI";
-import EmployeeForm, { emptyForm, mapRowToForm } from "./EmployeeForm";
+import EmployeeForm, { computeTotalSalary, emptyForm, mapRowToForm } from "./EmployeeForm";
 import type { EmpFormData } from "./EmployeeForm";
+import { EmployeePhoto, employeeFileName, isEmployeeStoragePath, openEmployeeFile } from "@/components/hr/employeeFiles";
+import { printReport } from "@/lib/reportExport";
+import { deleteOrDeactivateEmployee } from "@/components/hr/employeeActions";
 import { useI18n } from "@/i18n";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -92,7 +96,10 @@ export default function HREmployees() {
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<{ id: string; name: string; nameEn: string }[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isNewRoute = location.pathname.replace(/\/+$/, "").endsWith("/employees/new");
+  const [mode, setMode] = useState<"list" | "create" | "edit" | "view">(isNewRoute ? "create" : "list");
   const [selected, setSelected] = useState<EmpFormData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -114,6 +121,15 @@ export default function HREmployees() {
     phone: true,
     email: true,
   });
+
+  useEffect(() => {
+    if (isNewRoute) setMode("create");
+  }, [isNewRoute]);
+
+  const backToList = () => {
+    setMode("list");
+    if (isNewRoute) navigate("/hr/employees", { replace: true });
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -142,7 +158,7 @@ export default function HREmployees() {
 
   const filtered = useMemo(() => employees.filter((employee) => {
     const keyword = fSearch.trim().toLowerCase();
-    if (keyword && ![employee.name, employee.firstName, employee.empId, employee.phone, employee.email, employee.nationalId]
+    if (keyword && ![employee.name, employee.firstName, employee.empId, employee.accountTitle, employee.phone, employee.email, employee.nationalId]
       .some((value) => value.toLowerCase().includes(keyword))) return false;
 
     const selectedDepartment = departmentOptions.find((item) => item.id === fDepartment);
@@ -299,8 +315,52 @@ export default function HREmployees() {
     }
   };
 
+  // التصدير والطباعة: المحددون إن وُجد تحديد، وإلا كل نتائج الفلتر
+  const outputRows = selectedIds.size ? filtered.filter((employee) => selectedIds.has(employee.id)) : filtered;
+
+  const printEmployees = () => {
+    if (!outputRows.length) {
+      toast({ title: t("لا توجد بيانات للطباعة") });
+      return;
+    }
+    const columns = [
+      { key: "number", label: t("الرقم الوظيفي") },
+      { key: "name", label: t("الاسم") },
+      { key: "branch", label: t("الفرع") },
+      ...(visibleColumns.directorate ? [{ key: "directorate", label: t("الإدارة") }] : []),
+      { key: "department", label: t("القسم") },
+      { key: "jobTitle", label: t("المسمى الوظيفي") },
+      ...(visibleColumns.nationality ? [{ key: "nationality", label: t("الجنسية") }] : []),
+      ...(visibleColumns.nationalId ? [{ key: "nationalId", label: t("رقم الهوية") }] : []),
+      ...(visibleColumns.hireDate ? [{ key: "hireDate", label: t("تاريخ التعيين") }] : []),
+      ...(visibleColumns.phone ? [{ key: "phone", label: t("رقم الجوال") }] : []),
+      { key: "status", label: t("الحالة") },
+    ];
+    const opened = printReport({
+      title: t("قائمة الموظفين"),
+      subtitle: selectedIds.size ? `${t("الموظفون المحددون")}: ${outputRows.length}` : `${t("حسب الفلتر الحالي")}: ${outputRows.length}`,
+      columns,
+      rows: outputRows.map((employee) => ({
+        number: employee.accountTitle && employee.accountTitle !== employee.empId ? `${employee.accountTitle} (${employee.empId})` : employee.empId,
+        name: employee.name || employee.firstName,
+        branch: employee.branch,
+        directorate: employee.directorate,
+        department: employee.department,
+        jobTitle: employee.jobTitle,
+        nationality: employee.nationality,
+        nationalId: employee.nationalId,
+        hireDate: employee.hireDate,
+        phone: employee.phone,
+        status: t(employee.status),
+      })),
+      fileName: "employees",
+      landscape: true,
+    });
+    if (!opened) toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة لهذا الموقع"), variant: "destructive" });
+  };
+
   const exportSafeEmployeesExcel = async () => {
-    if (!filtered.length) {
+    if (!outputRows.length) {
       toast({ title: t("لا توجد بيانات للتصدير") });
       return;
     }
@@ -351,7 +411,7 @@ export default function HREmployees() {
       worksheet.getRow(4).height = 8;
       worksheet.addRow(headers);
 
-      filtered.forEach((employee, index) => {
+      outputRows.forEach((employee, index) => {
         worksheet.addRow([
           index + 1,
           employee.empId || employee.accountTitle || "-",
@@ -717,8 +777,8 @@ export default function HREmployees() {
       <EmployeeForm
         mode="create"
         initialData={emptyForm()}
-        onBack={() => setMode("list")}
-        onSaved={() => { setMode("list"); setRefreshKey((k) => k + 1); }}
+        onBack={backToList}
+        onSaved={() => { backToList(); setRefreshKey((k) => k + 1); }}
       />
     );
   }
@@ -763,8 +823,8 @@ export default function HREmployees() {
               {t("قائمة الموظفين")} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <div className="flex items-center gap-1">
-              <button onClick={() => void exportSafeEmployeesExcel()} title={t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
-              <button title={t("طباعة")} className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
+              <button onClick={() => void exportSafeEmployeesExcel()} title={selectedIds.size ? t("تحميل المحددين Excel") : t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>
+              <button onClick={printEmployees} title={selectedIds.size ? t("طباعة المحددين") : t("طباعة")} className="p-1.5 rounded hover:bg-white/20 transition"><Printer className="h-4 w-4" /></button>
               <button onClick={() => setRefreshKey((k) => k + 1)} title={t("تحديث")} className="p-1.5 rounded hover:bg-white/20 transition"><RefreshCw className="h-4 w-4" /></button>
               <div className="relative">
                 <button
@@ -847,8 +907,9 @@ export default function HREmployees() {
               {t("مسح")}
             </button>
             {selectedIds.size > 0 && (
-              <span className="text-xs text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
-                {formatNumber(selectedIds.size)} {t("محدد")}
+              <span className="flex items-center gap-2 text-xs text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
+                {formatNumber(selectedIds.size)} {t("محدد")} — {t("الطباعة والتصدير للمحددين فقط")}
+                <button type="button" onClick={() => setSelectedIds(new Set())} className="text-rose-600 hover:underline">{t("إلغاء التحديد")}</button>
               </span>
             )}
           </div>
@@ -1015,14 +1076,12 @@ export default function HREmployees() {
   );
 
   async function handleDelete(emp: EmpFormData) {
-    if (!confirm(`${t("هل تريد حذف الموظف")} "${emp.name || emp.firstName}"؟`)) return;
-    try {
-      const { error } = await supabase.from("employees").delete().eq("id", emp.id);
-      if (error) throw error;
+    const result = await deleteOrDeactivateEmployee(emp, t);
+    if (result === "deleted") {
       setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
-      toast({ title: t("تم الحذف"), description: `${t("تم حذف الموظف")}: ${emp.name || emp.firstName}` });
-    } catch {
-      toast({ title: t("خطأ"), description: t("فشل حذف الموظف"), variant: "destructive" });
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(emp.id); return next; });
+    } else if (result === "deactivated") {
+      setEmployees((prev) => prev.map((e) => e.id === emp.id ? { ...e, status: "غير فعال" } : e));
     }
   }
 }
@@ -1030,6 +1089,13 @@ export default function HREmployees() {
 // ─── Employee View ────────────────────────────────────────────────────────────
 function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData; onBack: () => void; onEdit: () => void }) {
   const { t, direction, locale, formatNumber } = useI18n();
+  const money = (value: number) => `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}`;
+  const total = computeTotalSalary(emp.baseSalary, emp.allowances);
+  const documentLabels: Record<string, string> = {
+    id_card: "صورة بطاقة الهوية", passport: "صورة جواز السفر", cv: "سيرة ذاتية",
+    personal_photo: "صورة شخصية", qualification: "المؤهل العملي", other: "وثائق أخرى",
+  };
+  const documents = Object.entries(emp.documents).filter(([key, value]) => !key.endsWith("_name") && value);
 
   return (
     <Layout>
@@ -1049,42 +1115,84 @@ function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData
         <div className="bg-white rounded-xl shadow border border-gray-100 p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center gap-4 pb-4 border-b">
-            <div className="h-16 w-16 rounded-full bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
-              {(emp.name || emp.firstName || "م").charAt(0)}
+            <div className="h-16 w-16 overflow-hidden rounded-full bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+              <EmployeePhoto value={emp.photoUrl} name={emp.name || emp.firstName} />
             </div>
             <div>
               <div className="text-xl font-bold">{locale === "en" ? emp.firstName || emp.name : emp.name || emp.firstName}</div>
-              <div className="text-sm text-gray-500">{emp.empId} | {emp.jobTitle || "—"}</div>
+              <div className="text-sm text-gray-500">
+                {emp.empId}{emp.accountTitle && emp.accountTitle !== emp.empId ? ` (${emp.accountTitle})` : ""} | {emp.jobTitle || "—"}
+              </div>
               <span className={cn("inline-block px-2 py-0.5 rounded-full text-xs font-semibold border mt-1", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600")}>
                 {emp.status ? t(emp.status) : "—"}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <InfoGroup title={t("المعلومات الشخصية")}>
               <InfoRow label={t("الجنسية")} value={emp.nationality} />
-              <InfoRow label={t("رقم الهوية")} value={emp.nationalId} />
+              <InfoRow label={t("رقم الهوية / الإقامة")} value={emp.nationalId} />
+              <InfoRow label={t("تاريخ انتهاء الهوية")} value={emp.idExpiryDate} />
               <InfoRow label={t("الجنس")} value={emp.gender} />
+              <InfoRow label={t("تاريخ الميلاد")} value={emp.birthDate} />
               <InfoRow label={t("الحالة الاجتماعية")} value={emp.maritalStatus} />
-              <InfoRow label={t("الهاتف")} value={emp.phone} />
+              <InfoRow label={t("الجوال")} value={emp.phone} />
               <InfoRow label={t("البريد الإلكتروني")} value={emp.email} />
+              <InfoRow label={t("رقم جواز السفر")} value={emp.passportNumber} />
+              <InfoRow label={t("انتهاء جواز السفر")} value={emp.passportExpiryDate} />
             </InfoGroup>
             <InfoGroup title={t("المعلومات الوظيفية")}>
+              <InfoRow label={t("الفرع")} value={emp.branch} />
+              <InfoRow label={t("الإدارة")} value={emp.directorate} />
               <InfoRow label={t("القسم")} value={emp.department} />
               <InfoRow label={t("المسمى الوظيفي")} value={emp.jobTitle} />
-              <InfoRow label={t("الفرع")} value={emp.branch} />
+              <InfoRow label={t("نوع التوظيف")} value={emp.employmentType} />
               <InfoRow label={t("تاريخ التعيين")} value={emp.hireDate} />
+              <InfoRow label={t("عقد محدد المدة")} value={emp.isContractEnd ? `${t("نعم")} — ${emp.contractEndDate || "—"}` : t("لا")} />
               <InfoRow label={t("المدير المباشر")} value={emp.directManager} />
+              <InfoRow label={t("مكان العمل")} value={emp.workLocation} />
               <InfoRow label={t("جدول العمل")} value={emp.workSchedule} />
+              <InfoRow label={t("الدور في النظام")} value={emp.employeeRole} />
             </InfoGroup>
           </div>
 
-          <div className="bg-blue-50 rounded-xl p-4 flex items-center justify-between">
-            <span className="text-blue-700 font-semibold">{t("الراتب الأساسي")}</span>
-            <span className="text-2xl font-bold text-blue-700">
-              {formatNumber(emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t("ر.س")}
-            </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <InfoGroup title={t("الراتب والبدلات")}>
+              <InfoRow label={t("الراتب الأساسي")} value={money(emp.baseSalary)} />
+              {emp.allowances.map((allowance) => (
+                <Fragment key={allowance.id}><InfoRow
+                  label={`${t(allowance.type || "بدل")}${allowance.from || allowance.to ? ` (${allowance.from || "…"} → ${allowance.to || "…"})` : ""}`}
+                  value={`${allowance.effect === "مخصوم" ? "−" : "+"} ${money(Number(allowance.amount) || 0)}`}
+                /></Fragment>
+              ))}
+              <InfoRow label={t("إجمالي الراتب الشهري")} value={money(total)} />
+              <InfoRow label={t("التأمينات الاجتماعية")} value={emp.socialInsurance === "نعم" ? `${t("نعم")} — ${emp.socialInsuranceType || "—"}` : t("لا")} />
+              <InfoRow label={t("البنك")} value={emp.bankName} />
+              <InfoRow label={t("الآيبان")} value={emp.iban} />
+            </InfoGroup>
+            <InfoGroup title={t("الوثائق")}>
+              {documents.length === 0 && <p className="text-sm text-gray-400">{t("لا توجد وثائق مرفوعة")}</p>}
+              {documents.map(([key, value]) => (
+                <div key={key} className="flex justify-between text-sm">
+                  <span className="text-gray-500">{t(documentLabels[key] ?? key)}</span>
+                  {isEmployeeStoragePath(value) ? (
+                    <button
+                      type="button"
+                      className="font-medium text-blue-600 hover:underline"
+                      onClick={async () => {
+                        const opened = await openEmployeeFile(value);
+                        if (!opened) toast({ title: t("تعذر فتح الملف"), variant: "destructive" });
+                      }}
+                    >
+                      {emp.documents[`${key}_name`] || employeeFileName(value)}
+                    </button>
+                  ) : (
+                    <span className="text-amber-600">{value} — {t("لم يُرفع الملف")}</span>
+                  )}
+                </div>
+              ))}
+            </InfoGroup>
           </div>
         </div>
       </div>

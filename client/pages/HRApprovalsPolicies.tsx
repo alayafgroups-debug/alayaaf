@@ -40,11 +40,14 @@ export default function HRApprovalsPolicies() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("hr_settings")
         .select("setting_value")
         .eq("setting_key", SETTING_KEY)
         .maybeSingle();
+      if (error) {
+        toast({ title: t("تعذر تحميل السياسات المحفوظة"), description: error.message, variant: "destructive" });
+      }
       if (data?.setting_value) {
         setPolicies({ ...defaults, ...(data.setting_value as Partial<Policies>) });
       }
@@ -99,6 +102,9 @@ export default function HRApprovalsPolicies() {
         <div className="bg-white rounded-lg border shadow-sm p-6">
           <div className="text-right font-semibold text-lg text-gray-800 border-b pb-4 mb-6">
             {t("سياسات الموافقات والتوقيع الالكتروني")}
+          </div>
+          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            {t("هذه السياسات محفوظة لكنها لا تُطبّق تلقائيًا بعد")}
           </div>
 
           <div className="space-y-8">

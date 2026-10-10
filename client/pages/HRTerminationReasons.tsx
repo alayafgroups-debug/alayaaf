@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type Reason = { id: string; reason: string; effect: string };
 
@@ -28,9 +29,12 @@ export default function HRTerminationReasons() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("termination_reasons").select("*").order("id");
-      if (data) setItems(data.map((r: any) => ({ id: String(r.id), reason: r.reason ?? "", effect: r.effect ?? "" })));
-    } catch {} finally { setLoading(false); }
+      const { data, error } = await supabase.from("termination_reasons").select("*").order("id");
+      if (error) throw error;
+      setItems((data ?? []).map((r: any) => ({ id: String(r.id), reason: r.reason ?? "", effect: r.effect ?? "" })));
+    } catch (error) {
+      toast({ title: t("تعذر تحميل الأسباب"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -47,21 +51,34 @@ export default function HRTerminationReasons() {
     if (!formReason.trim()) { toast({ title: t("خطأ"), description: t("السبب مطلوب"), variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const payload = { reason: formReason, effect: effectLabels[formEffect] };
+      const payload = { reason: formReason.trim(), effect: effectLabels[formEffect] };
       if (editingId) {
-        await supabase.from("termination_reasons").update(payload).eq("id", editingId);
+        const { data, error } = await supabase.from("termination_reasons").update(payload).eq("id", editingId).select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error(t("لم يُحفظ التعديل: لا تملك صلاحية تعديل هذا السبب"));
         toast({ title: t("تم التعديل") });
       } else {
-        await supabase.from("termination_reasons").insert([payload]);
+        const { error } = await supabase.from("termination_reasons").insert([payload]);
+        if (error) throw error;
         toast({ title: t("تمت الإضافة") });
       }
-      resetForm(); loadData();
-    } catch { toast({ title: t("خطأ"), variant: "destructive" }); } finally { setSaving(false); }
+      resetForm(); await loadData();
+    } catch (error) {
+      toast({ title: t("تعذر الحفظ"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: Reason) => {
     if (!confirm(`${t("حذف")} "${item.reason}"؟`)) return;
-    await supabase.from("termination_reasons").delete().eq("id", item.id);
+    const { data, error } = await supabase.from("termination_reasons").delete().eq("id", item.id).select("id");
+    if (error || !data?.length) {
+      toast({
+        title: t("تعذر الحذف"),
+        description: error ? t(hrRequestErrorText(error)) : t("لم يُحذف شيء: لا تملك صلاحية حذف هذا السبب"),
+        variant: "destructive",
+      });
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: t("تم الحذف") });
   };

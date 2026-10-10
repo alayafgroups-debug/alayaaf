@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,17 +9,28 @@ import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 const DEFAULT_REQUEST_TYPES = ["إجازة", "سلفة", "نقل", "استئذان", "عهدة", "مصروفات", "أخرى", "الرواتب"];
 const ADD_REQUEST_TYPE = "__add_request_type__";
 
 type Step = { order: number; approver: string; role: string };
 
+const ACTIVE_CHAIN_EXISTS_MESSAGE = "توجد سلسلة موافقات فعالة لهذا النوع؛ عطّلها أولًا";
+
+/** أخطاء حفظ سلسلة الموافقات: الفهرس الفريد (سلسلة فعالة واحدة لكل نوع) يرجع 23505 أو APPROVAL_CHAIN_ACTIVE_EXISTS */
+const chainSaveErrorText = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "23505" ? ACTIVE_CHAIN_EXISTS_MESSAGE : hrRequestErrorText(error);
+
 export default function HRApprovalsAdd() {
   const { t, direction } = useI18n();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // وضع التعديل: /hr/approvals/add?id=<id>
+  const editId = searchParams.get("id");
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [loadingChain, setLoadingChain] = useState(Boolean(editId));
 
   const [nameAr, setNameAr] = useState("");
   const [nameEn, setNameEn] = useState("");
@@ -41,13 +52,67 @@ export default function HRApprovalsAdd() {
           .order("name"),
         supabase.from("approval_chains").select("type"),
       ]);
+      if (employeesResult.error) {
+        toast({ title: t("تعذر تحميل قائمة الموظفين"), description: t(hrRequestErrorText(employeesResult.error)), variant: "destructive" });
+      }
       setManagers((employeesResult.data ?? []).map((e: any) => ({ id: String(e.id), name: String(e.name) })));
       const savedTypes = (chainsResult.data ?? [])
         .map((chain: any) => String(chain.type ?? "").trim())
         .filter(Boolean);
-      setRequestTypes([...new Set([...DEFAULT_REQUEST_TYPES, ...savedTypes])]);
+      setRequestTypes((current) => [...new Set([...DEFAULT_REQUEST_TYPES, ...savedTypes, ...current])]);
     })();
   }, []);
+
+  useEffect(() => {
+    // الانتقال من ?id=X إلى إضافة جديدة بلا إعادة تركيب الصفحة: نموذج فارغ
+    if (!editId) {
+      setNameAr("");
+      setNameEn("");
+      setActive(true);
+      setType("إجازة");
+      setAddingRequestType(false);
+      setCustomRequestType("");
+      setSteps([{ order: 1, approver: "", role: "معتمد" }]);
+      setStep(1);
+      setLoadingChain(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingChain(true);
+      const { data, error } = await supabase
+        .from("approval_chains")
+        .select("id, name, type, steps, status")
+        .eq("id", editId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        toast({ title: t("تعذر تحميل سلسلة الموافقات"), description: error ? t(hrRequestErrorText(error)) : t("السلسلة غير موجودة"), variant: "destructive" });
+        navigate("/hr/approvals/list");
+        return;
+      }
+      const chainType = String(data.type ?? "").trim() || "إجازة";
+      const savedSteps = Array.isArray(data.steps) ? data.steps : [];
+      setNameAr(String(data.name ?? ""));
+      setType(chainType);
+      setRequestTypes((current) => (current.includes(chainType) ? current : [...current, chainType]));
+      setActive(String(data.status ?? "").trim() === "فعال");
+      setSteps(
+        savedSteps.length > 0
+          ? savedSteps.map((item: any, index: number) => ({
+              order: index + 1,
+              approver: String(item?.approver ?? ""),
+              role: String(item?.role ?? "معتمد"),
+            }))
+          : [{ order: 1, approver: "", role: "معتمد" }],
+      );
+      setStep(1);
+      setLoadingChain(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
 
   const addCustomRequestType = () => {
     const customType = customRequestType.trim();
@@ -77,19 +142,58 @@ export default function HRApprovalsAdd() {
       return;
     }
 
-    setSaving(true);
-    const { error } = await supabase.from("approval_chains").insert({
-      name: nameAr.trim(),
-      type,
-      steps: validSteps,
-      status: active ? "فعال" : "غير فعال",
-    });
-    setSaving(false);
-    if (error) {
-      toast({ title: t("تعذر الحفظ"), description: error.message, variant: "destructive" });
+    const chainType = type.trim();
+    if (!chainType) {
+      toast({ title: t("بيانات ناقصة"), description: t("اختر نوع الطلب المرتبط"), variant: "destructive" });
+      setStep(2);
       return;
     }
-    toast({ title: t("تم الحفظ"), description: t("تم إنشاء سلسلة الموافقات بنجاح") });
+
+    setSaving(true);
+    // سلسلة فعالة واحدة فقط لكل نوع طلب (المقارنة بعد حذف المسافات، كما في فهرس قاعدة البيانات)
+    if (active) {
+      const { data: activeChains, error: lookupError } = await supabase
+        .from("approval_chains")
+        .select("id, name, type")
+        .eq("status", "فعال");
+      if (lookupError) {
+        setSaving(false);
+        toast({ title: t("تعذر الحفظ"), description: t(hrRequestErrorText(lookupError)), variant: "destructive" });
+        return;
+      }
+      const conflict = (activeChains ?? []).find(
+        (chain: { id?: unknown; type?: unknown }) => String(chain.type ?? "").trim() === chainType && String(chain.id) !== String(editId ?? ""),
+      ) as { name?: unknown } | undefined;
+      if (conflict) {
+        setSaving(false);
+        toast({
+          title: t("توجد سلسلة فعالة لنفس النوع"),
+          description: `${t("عطّل السلسلة الحالية أولًا أو احفظ هذه كغير فعالة")}: ${String(conflict.name ?? "")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    const payload = {
+      name: nameAr.trim(),
+      type: chainType,
+      steps: validSteps,
+      status: active ? "فعال" : "غير فعال",
+    };
+    const { data: savedRows, error } = editId
+      ? await supabase.from("approval_chains").update(payload).eq("id", editId).select("id")
+      : await supabase.from("approval_chains").insert(payload).select("id");
+    setSaving(false);
+    if (error) {
+      toast({ title: t("تعذر الحفظ"), description: t(chainSaveErrorText(error)), variant: "destructive" });
+      return;
+    }
+    if (!savedRows || savedRows.length === 0) {
+      toast({ title: t("لم يُحفظ شيء"), description: t("لا تملك صلاحية تعديل هذه السلسلة أو أنها حُذفت"), variant: "destructive" });
+      return;
+    }
+    toast({ title: t("تم الحفظ"), description: t(editId ? "تم تحديث سلسلة الموافقات بنجاح" : "تم إنشاء سلسلة الموافقات بنجاح") });
     navigate("/hr/approvals/list");
   };
 
@@ -105,7 +209,10 @@ export default function HRApprovalsAdd() {
 
           {step === 1 && (
             <div className="space-y-6">
-              <h2 className="text-lg font-bold text-gray-800 border-b pb-3">{t("بيانات سلسلة الموافقات")}</h2>
+              <h2 className="text-lg font-bold text-gray-800 border-b pb-3">
+                {t(editId ? "تعديل سلسلة الموافقات" : "بيانات سلسلة الموافقات")}
+                {loadingChain && <span className="ms-2 text-sm font-normal text-gray-400">{t("جاري التحميل...")}</span>}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label className="text-gray-700">{t("الوصف بالعربية")} *</Label>
@@ -187,6 +294,7 @@ export default function HRApprovalsAdd() {
                     <div className="w-8 h-8 rounded-full bg-[#004e89] text-white flex items-center justify-center text-sm shrink-0">{st.order}</div>
                     <select value={st.approver} onChange={(e) => updateStep(st.order, { approver: e.target.value })} className="flex-1 h-10 border border-gray-300 rounded-md px-3 bg-white text-sm">
                       <option value="">{t("اختر المعتمِد")}</option>
+                      {st.approver && !managers.some((m) => m.name === st.approver) && <option value={st.approver}>{st.approver}</option>}
                       {managers.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
                     </select>
                     <select value={st.role} onChange={(e) => updateStep(st.order, { role: e.target.value })} className="w-40 h-10 border border-gray-300 rounded-md px-3 bg-white text-sm">
@@ -207,7 +315,7 @@ export default function HRApprovalsAdd() {
             {step < 3 ? (
               <Button onClick={() => setStep((s) => s + 1)} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">{t("التالي")}</Button>
             ) : (
-              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">{saving ? t("جاري الحفظ...") : t("حفظ السلسلة")}</Button>
+              <Button onClick={handleSave} disabled={saving || loadingChain} className="bg-[#004e89] hover:bg-[#003d6d] text-white px-8">{saving ? t("جاري الحفظ...") : t("حفظ السلسلة")}</Button>
             )}
             <Button variant="outline" className="text-gray-500 px-8" disabled={step === 1} onClick={() => setStep((s) => Math.max(1, s - 1))}>{t("السابق")}</Button>
           </div>

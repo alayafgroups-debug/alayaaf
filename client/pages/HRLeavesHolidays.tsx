@@ -21,6 +21,8 @@ type Holiday = {
 
 type Opt = { id: string; name: string };
 
+const PAGE_SIZE = 20;
+
 export default function HRLeavesHolidays() {
   const { t, direction } = useI18n();
   const [rows, setRows] = useState<Holiday[]>([]);
@@ -29,6 +31,7 @@ export default function HRLeavesHolidays() {
   const [departments, setDepartments] = useState<Opt[]>([]);
   const [sections, setSections] = useState<Opt[]>([]);
   const [branchFilter, setBranchFilter] = useState("الكل");
+  const [page, setPage] = useState(1);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Holiday | null>(null);
@@ -70,6 +73,9 @@ export default function HRLeavesHolidays() {
     () => rows.filter((r) => branchFilter === "الكل" || (r.branch ?? "") === branchFilter),
     [rows, branchFilter],
   );
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const openAdd = () => {
     setEditing(null);
@@ -85,6 +91,14 @@ export default function HRLeavesHolidays() {
   const handleSave = async () => {
     if (!form.name.trim()) {
       toast({ title: t("خطأ"), description: t("اسم الإجازة مطلوب"), variant: "destructive" });
+      return;
+    }
+    if (form.end_date && !form.start_date) {
+      toast({ title: t("خطأ"), description: t("حدد تاريخ البداية"), variant: "destructive" });
+      return;
+    }
+    if (form.start_date && form.end_date && form.end_date < form.start_date) {
+      toast({ title: t("خطأ"), description: t("تاريخ النهاية يجب أن يكون في يوم البداية أو بعده"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -134,10 +148,10 @@ export default function HRLeavesHolidays() {
               <div className="flex gap-2 text-black w-full sm:w-auto">
                 <select
                   value={branchFilter}
-                  onChange={(e) => setBranchFilter(e.target.value)}
+                  onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }}
                   className="h-8 rounded px-2 text-sm bg-white border-none outline-none flex-1 sm:w-[160px]"
                 >
-                  <option>{t("الكل")}</option>
+                  <option value="الكل">{t("الكل")}</option>
                   {branches.map((b) => (
                     <option key={b.id}>{b.name}</option>
                   ))}
@@ -193,7 +207,7 @@ export default function HRLeavesHolidays() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((h) => (
+                  pageRows.map((h) => (
                     <tr key={h.id} className="hover:bg-gray-50">
                       <td className="py-2.5 px-2 font-medium text-gray-800">{h.name}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.start_date || "-"}</td>
@@ -221,11 +235,16 @@ export default function HRLeavesHolidays() {
           </div>
 
           <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-500">{t("يعرض")} {filtered.length} {t("من أصل")} {rows.length} {t("سجل")}</span>
-            <div className="flex gap-1 opacity-50 pointer-events-none">
-              <Button variant="outline" size="sm" className="h-8 px-3">{t("السابق")}</Button>
-              <Button variant="outline" size="sm" className="h-8 px-3">{t("التالي")}</Button>
-            </div>
+            <span className="text-gray-500">
+              {t("يعرض")} {filtered.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}-{(currentPage - 1) * PAGE_SIZE + pageRows.length} {t("من أصل")} {filtered.length} {t("سجل")}
+            </span>
+            {pageCount > 1 && (
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-8 px-3" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>{t("السابق")}</Button>
+                <span className="px-2 text-gray-500">{currentPage} / {pageCount}</span>
+                <Button variant="outline" size="sm" className="h-8 px-3" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>{t("التالي")}</Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -251,7 +270,7 @@ export default function HRLeavesHolidays() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ النهاية")}</label>
-                  <Input type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} />
+                  <Input type="date" value={form.end_date ?? ""} min={form.start_date || undefined} onChange={(e) => set("end_date", e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

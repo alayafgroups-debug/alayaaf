@@ -29,12 +29,9 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) return respond({ error: "Unauthorized" }, 401);
 
-    const { data: allowed } = await caller.rpc("business_permission_allowed", {
-      p_permissions: ["users.special.manage", "hr.permissions"],
-      p_manage: true,
-    });
-    const { data: mainAdmin } = await caller.rpc("is_main_system_admin");
-    if (!allowed && !mainAdmin) return respond({ error: "غير مصرح بإدارة المستخدمين الخاصين" }, 403);
+    // إنشاء مستخدم خاص يمنح حساب دخول بدور كامل: لمدير النظام فقط
+    const { data: mainAdmin, error: adminError } = await caller.rpc("is_main_system_admin");
+    if (adminError || mainAdmin !== true) return respond({ error: "إنشاء المستخدمين الخاصين لمدير النظام فقط" }, 403);
 
     const body = await req.json().catch(() => ({}));
     const fullName = String(body.fullName ?? "").trim();
@@ -47,12 +44,16 @@ Deno.serve(async (req: Request) => {
       return respond({ error: "الاسم والبريد والدور وكلمة مرور من 8 أحرف على الأقل مطلوبة" }, 400);
     }
 
-    const { data: role } = await admin.from("user_roles").select("id").eq("id", roleId).eq("status", "فعال").maybeSingle();
+    const { data: role } = await admin.from("user_roles").select("id, name_ar").eq("id", roleId).eq("status", "فعال").maybeSingle();
     if (!role) return respond({ error: "الدور المحدد غير صالح" }, 400);
+    if (["مدير النظام", "مدير عام", "المدير العام"].includes(String(role.name_ar ?? "").trim())) {
+      return respond({ error: "لا يُمنح دور مدير النظام لمستخدم خاص" }, 400);
+    }
 
+    const escaped = email.replace(/[\\%_]/g, (character) => `\\${character}`);
     const [{ data: employeeWithEmail }, { data: systemUserWithEmail }] = await Promise.all([
-      admin.from("employees").select("id").ilike("email", email).maybeSingle(),
-      admin.from("system_users").select("id").ilike("email", email).maybeSingle(),
+      admin.from("employees").select("id").ilike("email", escaped).limit(1).maybeSingle(),
+      admin.from("system_users").select("id").ilike("email", escaped).limit(1).maybeSingle(),
     ]);
     if (employeeWithEmail) {
       return respond({ error: "هذا البريد مرتبط مسبقًا بحساب موظف، استخدم بريدًا مختلفًا للمستخدم الخاص" }, 400);
@@ -69,36 +70,17 @@ Deno.serve(async (req: Request) => {
       user_metadata: userMetadata,
     });
 
-    let authUser = created.user;
-    let createdNewAuthUser = Boolean(authUser);
-    if (createError || !authUser) {
+    // لا يُستولى على حساب دخول قائم: البريد المسجّل مسبقًا يُرفض
+    if (createError || !created.user) {
       const duplicateEmail = createError?.message.toLowerCase().includes("already") || createError?.message.toLowerCase().includes("registered");
-      if (!duplicateEmail) {
-        return respond({ error: createError?.message ?? "تعذر إنشاء حساب الدخول" }, 400);
-      }
-
-      let existingAuthUser: { id: string; email?: string } | undefined;
-      for (let page = 1; page <= 10 && !existingAuthUser; page += 1) {
-        const { data: usersPage, error: usersError } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-        if (usersError) return respond({ error: "تعذر التحقق من حساب الدخول السابق" }, 500);
-        existingAuthUser = usersPage.users.find((item) => item.email?.toLowerCase() === email);
-        if (usersPage.users.length < 1000) break;
-      }
-      if (!existingAuthUser) {
-        return respond({ error: "هذا البريد مستخدم بالفعل لحساب دخول في النظام، استخدم بريدًا مختلفًا" }, 400);
-      }
-
-      const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(existingAuthUser.id, {
-        password,
-        email_confirm: true,
-        user_metadata: userMetadata,
-      });
-      if (updateError || !updated.user) {
-        return respond({ error: updateError?.message ?? "تعذر إعادة تفعيل حساب الدخول السابق" }, 400);
-      }
-      authUser = updated.user;
-      createdNewAuthUser = false;
+      return respond({
+        error: duplicateEmail
+          ? "هذا البريد مستخدم بالفعل لحساب دخول في النظام، استخدم بريدًا مختلفًا"
+          : createError?.message ?? "تعذر إنشاء حساب الدخول",
+      }, duplicateEmail ? 409 : 400);
     }
+    const authUser = created.user;
+    const createdNewAuthUser = true;
 
     const { data: systemUser, error: insertError } = await admin
       .from("system_users")

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type PenaltyRow = {
   id: string;
@@ -16,6 +17,39 @@ type PenaltyRow = {
   date: string | null;
   status: string | null;
   created_at: string | null;
+};
+
+// رواتب الشهر المعتمدة أو المرحّلة أو المدفوعة (أو المرحّلة محاسبيًا) مقفلة
+const LOCKED_PAYROLL_FILTER = "status.in.(معتمد,مرحّل,مدفوع),accounting_status.eq.posted";
+
+// هل دخل هذا الجزاء في رواتب شهر مقفل؟ مسير الرواتب يجمع الجزاءات بتاريخها (penalties.date)
+// ويربطها بالموظف بمعرّفه (penalties.employee_id = employees.id)، بينما payroll.emp_id هو الرقم الوظيفي.
+const isPenaltyPayrollLocked = async (row: PenaltyRow): Promise<boolean> => {
+  const date = String(row.date ?? "").slice(0, 10);
+  // الجزاء بلا تاريخ لا يدخل أي مسير رواتب
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const month = date.slice(0, 7);
+  let empCode = "";
+  const employeeId = String(row.employee_id ?? "").trim();
+  if (employeeId) {
+    const { data, error } = await supabase.from("employees").select("emp_id").eq("id", employeeId).maybeSingle();
+    // 22P02: المعرّف المخزن ليس uuid صالحًا؛ نعامله كموظف غير محدد
+    if (error && (error as { code?: string }).code !== "22P02") throw error;
+    empCode = String(data?.emp_id ?? "").trim();
+  }
+  let query = supabase.from("payroll").select("id", { count: "exact", head: true }).eq("month", month).or(LOCKED_PAYROLL_FILTER);
+  // إن تعذر تحديد الموظف نمنع الحذف إذا كان أي راتب في ذلك الشهر مقفلًا
+  if (empCode) query = query.eq("emp_id", empCode);
+  const { count, error } = await query;
+  if (error) throw error;
+  return (count ?? 0) > 0;
+};
+
+// منع حقن الصيغ عند فتح الملف في Excel: الخلية التي تبدأ بـ = + - @ تُسبق بفاصلة عليا
+const csvCell = (value: unknown) => {
+  const text = String(value ?? "");
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
 };
 
 export default function HRPenaltiesArchive() {
@@ -58,11 +92,25 @@ export default function HRPenaltiesArchive() {
     [rows, statusFilter, typeFilter],
   );
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (row: PenaltyRow) => {
+    const id = row.id;
     if (!confirm(t("هل تريد حذف هذا الجزاء من الأرشيف؟"))) return;
-    const { error } = await supabase.from("penalties").delete().eq("id", id);
+    try {
+      if (await isPenaltyPayrollLocked(row)) {
+        toast({ title: t("تعذّر الحذف"), description: t("رواتب هذا الشهر معتمدة أو مرحّلة؛ لا يُحذف جزاء خُصم منها"), variant: "destructive" });
+        return;
+      }
+    } catch (error) {
+      toast({ title: t("تعذّر التحقق من رواتب الشهر"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      return;
+    }
+    const { data, error } = await supabase.from("penalties").delete().eq("id", id).select("id");
     if (error) {
-      toast({ title: t("تعذّر الحذف"), description: error.message, variant: "destructive" });
+      toast({ title: t("تعذّر الحذف"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      return;
+    }
+    if (!data?.length) {
+      toast({ title: t("تعذّر الحذف"), description: t("لم يُحذف شيء: السجل غير موجود أو لا تملك صلاحية حذفه"), variant: "destructive" });
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
@@ -75,10 +123,10 @@ export default function HRPenaltiesArchive() {
     const header = [t("رقم المساءلة"), t("إسم الموظف"), t("المخالفة"), t("الجزاء"), t("المبلغ"), t("الحالة"), t("التاريخ")];
     const lines = filtered.map((r) =>
       [r.id, r.emp_name ?? "", r.reason ?? "", r.penalty_type ?? "", r.amount ?? 0, r.status ?? "", r.date ?? ""]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .map(csvCell)
         .join(","),
     );
-    const csv = "\uFEFF" + [header.join(","), ...lines].join("\n");
+    const csv = "\uFEFF" + [header.map(csvCell).join(","), ...lines].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -101,19 +149,19 @@ export default function HRPenaltiesArchive() {
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="h-8 rounded px-2 text-sm bg-white border-none outline-none flex-1 sm:w-[120px]"
                 >
-                  <option>{t("الكل")}</option>
-                  <option>{t("معتمد")}</option>
-                  <option>{t("معلق")}</option>
-                  <option>{t("مرفوض")}</option>
+                  <option value="الكل">{t("الكل")}</option>
+                  <option value="معتمد">{t("معتمد")}</option>
+                  <option value="معلق">{t("معلق")}</option>
+                  <option value="مرفوض">{t("مرفوض")}</option>
                 </select>
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
                   className="h-8 rounded px-2 text-sm bg-white border-none outline-none flex-1 sm:w-[180px]"
                 >
-                  <option>{t("الكل")}</option>
+                  <option value="الكل">{t("الكل")}</option>
                   {penaltyTypes.map((pt) => (
-                    <option key={pt}>{pt}</option>
+                    <option key={pt} value={pt}>{pt}</option>
                   ))}
                 </select>
               </div>
@@ -193,7 +241,7 @@ export default function HRPenaltiesArchive() {
                         {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString("ar-EG") : "-")}
                       </td>
                       <td className="py-2.5 px-2">
-                        <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
+                        <button onClick={() => handleDelete(r)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
                           <Trash2 className="h-4 w-4 mx-auto" />
                         </button>
                       </td>

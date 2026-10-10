@@ -11,6 +11,10 @@ import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport
 import { useI18n } from "@/i18n";
 import { useNavigate } from "react-router-dom";
 import { readUserSession } from "@/lib/authSession";
+import { preparePayrollResend, resendPreparationOf, submitPayrollApprovalRequest, type PayrollResendPreparation } from "@/lib/payrollApproval";
+import { payrollApprovalErrorText } from "@/lib/hrErrors";
+import { computePayroll, savePayrollRows, type PayrollComputation, type PayrollLine } from "@/lib/payrollCalc";
+import PayrollApprovalDialog from "@/components/hr/PayrollApprovalDialog";
 
 type EmpLite = {
   id: string;
@@ -32,30 +36,6 @@ type EmpLite = {
   baseSalary: number;
 };
 
-type PayrollCalc = {
-  workDays: number;
-  presentDays: number;
-  absentDays: number;
-  basic: number;
-  allowances: number;
-  overtime: number;
-  socialInsurance: number;
-  deductions: number;
-  net: number;
-};
-
-// عدد أيام العمل في الشهر باستثناء الجمعة والسبت
-function workingDaysInMonth(period: string): number {
-  const [year, month] = period.split("-").map(Number);
-  const days = new Date(year, month, 0).getDate();
-  let count = 0;
-  for (let d = 1; d <= days; d++) {
-    const weekday = new Date(year, month - 1, d).getDay();
-    if (weekday !== 5 && weekday !== 6) count++;
-  }
-  return count;
-}
-
 const monthNames: Record<string, string> = {
   "01": "يناير",
   "02": "فبراير",
@@ -70,12 +50,6 @@ const monthNames: Record<string, string> = {
   "11": "نوفمبر",
   "12": "ديسمبر",
 };
-
-const SOCIAL_INSURANCE_RATE = 0.0975;
-const isSaudiNationality = (nationality: string) => [
-  "سعودي", "سعودية", "السعودية", "المملكة العربية السعودية", "saudi", "saudi arabia", "saudi arabian",
-].includes(nationality.trim().toLowerCase());
-const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const current = new Date();
 const defaultYear = String(current.getFullYear());
@@ -108,6 +82,10 @@ export default function HRPayrollStatement() {
   const [approvalStep, setApprovalStep] = useState<1 | 2>(1);
   const [approvalScope, setApprovalScope] = useState<"all" | "partial">("all");
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [computing, setComputing] = useState(false);
+  const [computation, setComputation] = useState<PayrollComputation | null>(null);
 
   const [approvalDepartment, setApprovalDepartment] = useState("الكل");
   const [approvalSection, setApprovalSection] = useState("الكل");
@@ -241,132 +219,28 @@ export default function HRPayrollStatement() {
 
   const selectedEmployees = useMemo(() => filtered.filter((e) => selected.has(e.id)), [filtered, selected]);
 
-  const [calc, setCalc] = useState<Record<string, PayrollCalc>>({});
+  // حساب الراتب من الحضور (بجدول دوام كل موظف) والإجازات والعطل والجزاءات والسلف والإضافي وإعدادات الراتب
+  const calc: Record<string, PayrollLine> = useMemo(
+    () => (computation && computation.period === period ? Object.fromEntries(computation.lines) : {}),
+    [computation, period],
+  );
 
-  // حساب الراتب فعلياً من الحضور والجزاءات والعمل الإضافي
-  const computePayroll = async (targetEmployees: EmpLite[]): Promise<Record<string, PayrollCalc>> => {
-    const [year, month] = period.split("-").map(Number);
-    const startDate = `${period}-01`;
-    const endDate = `${period}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
-    const workDays = workingDaysInMonth(period);
-
-    const empIds = targetEmployees.map((e) => e.empId).filter(Boolean);
-    const empUuids = targetEmployees.map((e) => e.id).filter(Boolean);
-
-    const [attRes, penRes, otRes] = await Promise.all([
-      supabase.from("attendance").select("emp_id, status, late_minutes, date").gte("date", startDate).lte("date", endDate).in("emp_id", empIds.length ? empIds : ["__none__"]),
-      supabase.from("penalties").select("employee_id, amount, date").gte("date", startDate).lte("date", endDate).in("employee_id", empUuids.length ? empUuids : ["__none__"]),
-      supabase.from("overtime_records").select("employee_id, amount, date, status").gte("date", startDate).lte("date", endDate).in("employee_id", empUuids.length ? empUuids : ["__none__"]),
-    ]);
-
-    const attByEmp: Record<string, { present: number; absent: number }> = {};
-    (attRes.data ?? []).forEach((r: any) => {
-      const key = String(r.emp_id);
-      if (!attByEmp[key]) attByEmp[key] = { present: 0, absent: 0 };
-      if (String(r.status).includes("غائب")) attByEmp[key].absent++;
-      else attByEmp[key].present++;
-    });
-
-    const penByEmp: Record<string, number> = {};
-    (penRes.data ?? []).forEach((r: any) => {
-      const key = String(r.employee_id);
-      penByEmp[key] = (penByEmp[key] ?? 0) + Number(r.amount ?? 0);
-    });
-
-    const otByEmp: Record<string, number> = {};
-    (otRes.data ?? []).forEach((r: any) => {
-      if (String(r.status ?? "").includes("مرفوض")) return;
-      const key = String(r.employee_id);
-      otByEmp[key] = (otByEmp[key] ?? 0) + Number(r.amount ?? 0);
-    });
-
-    const result: Record<string, PayrollCalc> = {};
-    targetEmployees.forEach((e) => {
-      const att = attByEmp[e.empId] ?? { present: 0, absent: 0 };
-      const dailyRate = e.baseSalary / 30;
-      const absenceDeduction = att.absent * dailyRate;
-      const penalties = penByEmp[e.id] ?? 0;
-      const overtime = otByEmp[e.id] ?? 0;
-      const otherDeductions = roundMoney(absenceDeduction + penalties);
-      const socialInsurance = isSaudiNationality(e.nationality)
-        ? roundMoney(e.baseSalary * SOCIAL_INSURANCE_RATE)
-        : 0;
-      const deductions = roundMoney(otherDeductions + socialInsurance);
-      const net = roundMoney(e.baseSalary + overtime - deductions);
-      result[e.id] = {
-        workDays,
-        presentDays: att.present,
-        absentDays: att.absent,
-        basic: e.baseSalary,
-        allowances: 0,
-        overtime,
-        socialInsurance,
-        deductions,
-        net,
-      };
-    });
-    return result;
-  };
-
-  const createPayrollRecords = async (targetEmployees: EmpLite[]) => {
-    const { data: existing } = await supabase
-      .from("payroll")
-      .select("emp_id")
-      .eq("month", period);
-
-    const existingIds = new Set((existing || []).map((r) => String(r.emp_id)));
-    const computed = await computePayroll(targetEmployees);
-
-    const payload = targetEmployees
-      .filter((e) => !existingIds.has(e.empId))
-      .map((e) => {
-        const c = computed[e.id];
-        return {
-          emp_id: e.empId,
-          emp_name: e.name,
-          department: e.department,
-          month: period,
-          basic_salary: c.basic,
-          allowances: c.allowances + c.overtime,
-          social_insurance_deduction: c.socialInsurance,
-          social_insurance_rate: c.socialInsurance > 0 ? SOCIAL_INSURANCE_RATE : 0,
-          nationality_snapshot: e.nationality,
-          deductions: c.deductions,
-          net_salary: c.net,
-          status: "معلق",
-          notes: `أيام العمل ${c.workDays} - حضور ${c.presentDays} - غياب ${c.absentDays}`,
-        };
-      });
-
-    if (payload.length === 0) {
-      toast({ title: t("موجود مسبقاً"), description: t("تم إنشاء مسير هؤلاء الموظفين مسبقاً") });
-      return false;
-    }
-
-    const { error } = await supabase.from("payroll").insert(payload);
-    if (error) {
-      toast({ title: t("خطأ"), description: error.message, variant: "destructive" });
-      return false;
-    }
-
-    toast({ title: t("تم الإنشاء"), description: `${t("تم إنشاء")} ${formatNumber(payload.length)} ${t("سجل رواتب")}` });
-    return true;
-  };
-
+  // "اختيار الموظفين (تفصيلي)": يحسب ويعرض الكشف فقط؛ لا يُكتب شيء في الرواتب قبل إرسال طلب الاعتماد
   const handleGenerate = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) {
       toast({ title: t("تنبيه"), description: t("اختر موظفاً واحداً على الأقل"), variant: "destructive" });
       return;
     }
-
     setGenerating(true);
     try {
-      const emps = filtered.filter((e) => ids.includes(e.id));
-      const done = await createPayrollRecords(emps);
-      if (done) setSelected(new Set());
-    } catch {
-      toast({ title: t("خطأ"), variant: "destructive" });
+      const result = await computePayroll(ids, period);
+      setComputation(result);
+      setPageMode("report");
+      const notices = [...result.loadErrors, ...result.warnings];
+      if (notices.length) toast({ title: t("تنبيه"), description: notices.map((notice) => t(notice)).join(" | "), variant: result.loadErrors.length ? "destructive" : undefined });
+    } catch (error) {
+      toast({ title: t("تعذر حساب الرواتب"), description: t(payrollApprovalErrorText(error)), variant: "destructive" });
     } finally {
       setGenerating(false);
     }
@@ -380,6 +254,7 @@ export default function HRPayrollStatement() {
     sessionStorage.setItem("payroll_full_report", JSON.stringify({
       period,
       employeeIds: selectedEmployees.map((employee) => employee.id),
+      stoppedEmployeeIds: selectedEmployees.filter((employee) => stoppedEmployeeIds.has(employee.id)).map((employee) => employee.id),
       filters: {
         branch: branchFilter,
         department: departmentFilter,
@@ -390,22 +265,39 @@ export default function HRPayrollStatement() {
     navigate("/hr/payroll/statement/full-report");
   };
 
+  const moneyText = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const payrollColumns: ReportColumn[] = [
-    { key: "empId", label: t("رقم الموظف"), width: 15 }, { key: "name", label: t("الموظف"), width: 25 },
-    { key: "department", label: t("القسم"), width: 20 }, { key: "branch", label: t("الفرع"), width: 18 },
-    { key: "workDays", label: t("أيام العمل"), width: 14 }, { key: "basic", label: t("الراتب الأساسي"), width: 16 },
-    { key: "allowances", label: t("البدلات"), width: 14 }, { key: "overtime", label: t("الإضافي"), width: 14 },
-    { key: "socialInsurance", label: t("التأمينات الاجتماعية 9.75%"), width: 20 },
-    { key: "deductions", label: t("إجمالي الاستقطاعات"), width: 18 }, { key: "net", label: t("صافي الراتب"), width: 16 },
+    { key: "empId", label: t("رقم الموظف"), width: 13 }, { key: "name", label: t("الموظف"), width: 24 },
+    { key: "department", label: t("القسم"), width: 18 }, { key: "branch", label: t("الفرع"), width: 16 },
+    { key: "workDays", label: t("أيام الحضور/العمل"), width: 14 }, { key: "absentDays", label: t("أيام الغياب"), width: 11 },
+    { key: "basic", label: t("الراتب الأساسي"), width: 15 }, { key: "allowances", label: t("البدلات"), width: 13 },
+    { key: "overtime", label: t("الإضافي"), width: 12 }, { key: "absenceDeduction", label: t("خصم الغياب والإجازات غير المدفوعة"), width: 16 },
+    { key: "socialInsurance", label: t("التأمينات الاجتماعية 9.75%"), width: 18 }, { key: "otherDeductions", label: t("جزاءات وسلف وأخرى"), width: 16 },
+    { key: "deductions", label: t("إجمالي الاستقطاعات"), width: 17 }, { key: "net", label: t("صافي الراتب"), width: 15 },
   ];
-  const payrollRows = selectedEmployees.map((employee) => {
-    const computed = calc[employee.id];
-    return { empId: employee.empId, name: employee.name, department: employee.section || t("غير متوفر"), branch: employee.branch || t("غير متوفر"), workDays: computed ? `${formatNumber(computed.presentDays)}/${formatNumber(computed.workDays)}` : t("غير متوفر"), basic: formatNumber(computed?.basic ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), allowances: formatNumber(computed?.allowances ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), overtime: formatNumber(computed?.overtime ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), socialInsurance: formatNumber(computed?.socialInsurance ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), deductions: formatNumber(computed?.deductions ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), net: formatNumber(computed?.net ?? employee.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
+  const reportEmployees = selectedEmployees.filter((employee) => calc[employee.id]);
+  const payrollRows = reportEmployees.map((employee) => {
+    const c = calc[employee.id];
+    return {
+      empId: employee.empId, name: employee.name, department: employee.section || t("غير متوفر"), branch: employee.branch || t("غير متوفر"),
+      workDays: `${formatNumber(c.presentDays)}/${formatNumber(c.workDays)}`, absentDays: formatNumber(c.absentDays),
+      basic: moneyText(c.basic), allowances: moneyText(c.allowances), overtime: moneyText(c.overtime), absenceDeduction: moneyText(c.absenceDeduction + c.unpaidLeaveDeduction),
+      socialInsurance: moneyText(c.socialInsurance), otherDeductions: moneyText(c.penalties + c.loans + c.allowanceDeductions),
+      deductions: moneyText(c.totalDeductions), net: moneyText(c.net),
+    };
   });
-  const payrollTotal = selectedEmployees.reduce((total, employee) => total + (calc[employee.id]?.net ?? employee.baseSalary), 0);
+  const payrollTotal = reportEmployees.reduce((total, employee) => total + (calc[employee.id]?.net ?? 0), 0);
+  const totalAbsentDays = reportEmployees.reduce((total, employee) => total + (calc[employee.id]?.absentDays ?? 0), 0);
+  const totalAbsenceDeduction = reportEmployees.reduce((total, employee) => total + (calc[employee.id]?.absenceDeduction ?? 0) + (calc[employee.id]?.unpaidLeaveDeduction ?? 0), 0);
   const payrollSubtitle = `${t("كشف الرواتب")} ${formatDate(`${period}-01`, { month: "long", year: "numeric" })}`;
-  const printPayroll = () => printReport({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: [{ label: t("عدد الموظفين"), value: formatNumber(payrollRows.length) }, { label: t("إجمالي صافي الرواتب"), value: `${formatNumber(payrollTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}` }] });
-  const exportPayroll = () => exportReportExcel({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `كشف-الرواتب-${period}`, summary: [{ label: t("إجمالي صافي الرواتب"), value: formatNumber(payrollTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }] });
+  const reportSummary = [
+    { label: t("عدد الموظفين"), value: formatNumber(payrollRows.length) },
+    { label: t("مجموع أيام الغياب"), value: formatNumber(totalAbsentDays) },
+    { label: t("مجموع خصم الغياب"), value: `${moneyText(totalAbsenceDeduction)} ${t("ر.س")}` },
+    { label: t("إجمالي صافي الرواتب"), value: `${moneyText(payrollTotal)} ${t("ر.س")}` },
+  ];
+  const printPayroll = () => printReport({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: reportSummary });
+  const exportPayroll = () => exportReportExcel({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `كشف-الرواتب-${period}`, summary: reportSummary });
 
   const handleOpenApproval = () => {
     setApprovalScope("all");
@@ -452,126 +344,93 @@ export default function HRPayrollStatement() {
     });
   };
 
-  const handleSendApproval = async () => {
-    const target = getApprovalEmployees();
+  // الخطوة الأولى (النطاق) ثم بطاقة الإعدادات: تحديد الموظفين الموقوفة رواتبهم
+  const openStopSettings = () => {
+    const target = getApprovalEmployees().filter((employee) => calc[employee.id]);
     if (target.length === 0) {
+      toast({ title: t("لا يوجد موظفون"), description: t("لا يوجد موظفون مطابقون للاختيار الحالي"), variant: "destructive" });
+      return;
+    }
+    setApprovalOpen(false);
+    setStopDialogOpen(true);
+  };
+
+  const handleSendApproval = async (stopped: Set<string>, reason: string) => {
+    // من لم يبدأ خدمته في الشهر يُمرَّر أيضًا حتى يُصفَّر صفه القديم إن وُجد
+    const target = getApprovalEmployees().filter((employee) => calc[employee.id] || (computation?.period === period && computation.notStarted.has(employee.id)));
+    if (!target.some((employee) => calc[employee.id])) {
       toast({ title: t("لا يوجد موظفون"), description: t("لا يوجد موظفون مطابقون للاختيار الحالي"), variant: "destructive" });
       return;
     }
 
     setApprovalSubmitting(true);
+    // بعد حذف طلبي السابق: أي فشل لاحق يترك رواتب الشهر بلا طلب، فيُطلب إعادة الإرسال مع تسمية من كانوا فيه
+    let preparation: PayrollResendPreparation | null = null;
     try {
-      const { data: existing, error: existingError } = await supabase
-        .from("payroll")
-        .select("emp_id")
-        .eq("month", period);
-      if (existingError) throw existingError;
-
-      const existingIds = new Set((existing || []).map((row) => String(row.emp_id)));
-      const computed = await computePayroll(target);
-      const missingPayload = target
-        .filter((employee) => !existingIds.has(employee.empId))
-        .map((employee) => {
-          const c = computed[employee.id];
-          return {
-            emp_id: employee.empId,
-            emp_name: employee.name,
-            department: employee.section,
-            month: period,
-            basic_salary: c.basic,
-            allowances: c.allowances + c.overtime,
-            social_insurance_deduction: c.socialInsurance,
-            social_insurance_rate: c.socialInsurance > 0 ? SOCIAL_INSURANCE_RATE : 0,
-            nationality_snapshot: employee.nationality,
-            deductions: c.deductions,
-            net_salary: c.net,
-            status: stoppedEmployeeIds.has(employee.id) ? "موقوف" : "معلق",
-            notes: `أيام العمل ${c.workDays} - حضور ${c.presentDays} - غياب ${c.absentDays}`,
-          };
+      // يُعاد الحساب لحظة الإرسال حتى يدخل أي غياب أو جزاء سُجّل بعد عرض الكشف
+      const ids = target.map((employee) => employee.id);
+      const fresh = await computePayroll(ids, period);
+      setComputation((current) => {
+        if (!current || current.period !== period) return fresh;
+        // أرقام الإرسال تحل محل المعروض لهؤلاء الموظفين، ومن لم يعد له سطر (تعيينه بعد الشهر) يُزال
+        const lines = new Map(current.lines);
+        const employees = new Map(current.employees);
+        const notStarted = new Map(current.notStarted);
+        ids.forEach((id) => {
+          const line = fresh.lines.get(id);
+          const employee = fresh.employees.get(id);
+          if (line && employee) {
+            lines.set(id, line);
+            employees.set(id, employee);
+            notStarted.delete(id);
+          } else {
+            lines.delete(id);
+            const code = fresh.notStarted.get(id);
+            if (code !== undefined) notStarted.set(id, code);
+          }
         });
-
-      if (missingPayload.length > 0) {
-        const { error } = await supabase.from("payroll").insert(missingPayload);
-        if (error) throw error;
-      }
-
-      const stoppedIds = target.filter((employee) => stoppedEmployeeIds.has(employee.id)).map((employee) => employee.empId);
-      const activeIds = target.filter((employee) => !stoppedEmployeeIds.has(employee.id)).map((employee) => employee.empId);
-
-      if (stoppedIds.length > 0) {
-        const { error } = await supabase.from("payroll").update({ status: "موقوف" }).eq("month", period).in("emp_id", stoppedIds);
-        if (error) throw error;
-      }
-
-      if (activeIds.length > 0) {
-        const { error } = await supabase.from("payroll").update({ status: "معلق" }).eq("month", period).in("emp_id", activeIds);
-        if (error) throw error;
-      }
+        return { ...current, policy: fresh.policy, lines, employees, notStarted, warnings: fresh.warnings, loadErrors: fresh.loadErrors };
+      });
+      if (fresh.loadErrors.length) throw new Error(`PAYROLL_INPUTS_INCOMPLETE: ${fresh.loadErrors.join(" | ")}`);
+      const codeOf = (id: string) => fresh.employees.get(id)?.empId.trim() ?? "";
+      const stoppedIds = ids.filter((id) => stopped.has(id)).map(codeOf).filter(Boolean);
+      const activeIds = ids.filter((id) => !stopped.has(id)).map(codeOf).filter(Boolean);
+      // من تعيينه بعد نهاية الشهر: لا سطر له، لكن صفه المفتوح القديم (إن وُجد) يُصفَّر ويدخل الطلب
+      const notStartedCodes = ids.map((id) => fresh.notStarted.get(id) ?? "").filter(Boolean);
+      // طلبي المعلق المتداخل يُحذف قبل تغيير الأرقام، ولا يُعاد الحساب على موظف في طلب معلق لمستخدم آخر
+      preparation = await preparePayrollResend(period, [...activeIds, ...stoppedIds, ...notStartedCodes]);
+      const saved = await savePayrollRows(fresh, ids, stopped);
 
       const session = readUserSession();
       const senderName = session?.name?.trim() || t("مسؤول الموارد البشرية");
-      const requestDetails = {
-        workflow: "payroll_approval",
-        sender_department: "قسم الموارد البشرية",
-        sender_name: senderName,
-        sender_user_id: session?.id ?? "",
-        sender_emp_id: session?.empId ?? "",
-        payroll_period: period,
-        employee_ids: target.map((employee) => employee.empId),
-        active_employee_ids: activeIds,
-        stopped_employee_ids: stoppedIds,
-        employee_count: target.length,
-        active_employee_count: activeIds.length,
-        stopped_employee_count: stoppedIds.length,
-      };
-      const { data: existingRequest, error: requestLookupError } = await supabase
-        .from("hr_requests")
-        .select("id")
-        .eq("request_type", "اعتماد رواتب الموظفين")
-        .contains("details", { workflow: "payroll_approval", payroll_period: period })
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (requestLookupError) throw requestLookupError;
-
-      if (existingRequest) {
-        const { error: requestError } = await supabase
-          .from("hr_requests")
-          .update({
-            emp_id: `PAYROLL-${period}`,
-            emp_name: `قسم الموارد البشرية — ${senderName}`,
-            start_date: `${period}-01`,
-            end_date: `${period}-${String(new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
-            status: "معلق",
-            admin_note: null,
-            details: requestDetails,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingRequest.id);
-        if (requestError) throw requestError;
-      } else {
-        const { error: requestError } = await supabase.from("hr_requests").insert({
-          emp_id: `PAYROLL-${period}`,
-          emp_name: `قسم الموارد البشرية — ${senderName}`,
-          request_type: "اعتماد رواتب الموظفين",
-          start_date: `${period}-01`,
-          end_date: `${period}-${String(new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
-          status: "معلق",
-          details: requestDetails,
-        });
-        if (requestError) throw requestError;
-      }
+      const sent = await submitPayrollApprovalRequest({
+        period,
+        senderName,
+        senderUserId: session?.id ?? "",
+        senderEmpId: session?.empId ?? "",
+        activeIds: [...activeIds, ...saved.zeroed.filter((code) => !activeIds.includes(code))],
+        stoppedIds,
+        carriedIds: preparation.carried,
+        stopReason: reason,
+        previousStopReason: preparation.previousStopReason,
+      });
 
       toast({
         title: t("تم إرسال طلب الاعتماد"),
-        description: `${t("تم تجهيز")} ${formatNumber(activeIds.length)} ${t("موظف")} ${t("وإيقاف راتب")} ${formatNumber(stoppedIds.length)} ${t("موظف")}`,
+        description: `${t("أُرسل")} ${formatNumber(sent.active)} ${t("موظف")}، ${t("وأُوقف راتب")} ${formatNumber(sent.stopped)} ${t("موظف")}${sent.skipped ? ` — ${formatNumber(sent.skipped)} ${t("معتمد أو مرحّل مسبقًا لم يُعَد إرساله")}` : ""}${sent.carried ? ` — ${formatNumber(sent.carried)} ${t("من طلبك المعلق السابق ضُمّوا للطلب الجديد")}` : ""}`,
       });
-      setApprovalOpen(false);
+      setStopDialogOpen(false);
       setSelected(new Set());
       setStoppedEmployeeIds(new Set());
       setPageMode("setup");
     } catch (error) {
-      toast({ title: t("تعذر تطبيق كشف الرواتب"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
+      const failureHint = (cause: unknown) => {
+        const done = resendPreparationOf(preparation, cause);
+        if (!done || done.deleted === 0) return "";
+        const list = done.carried.length ? ` ${t("ومعهم من طلبك السابق")}: ${done.carried.slice(0, 15).join("، ")}${done.carried.length > 15 ? " …" : ""}` : "";
+        return ` — ${t("حُذف طلبك المعلق السابق؛ أعد الإرسال لإكمال الطلب")}${list}`;
+      };
+      toast({ title: t("تعذر إرسال طلب الاعتماد"), description: `${t(payrollApprovalErrorText(error))}${failureHint(error)}`, variant: "destructive" });
     } finally {
       setApprovalSubmitting(false);
     }
@@ -708,46 +567,68 @@ export default function HRPayrollStatement() {
               </div>
             </div>
 
-            <div className="p-4 border-b border-gray-100 text-sm text-gray-700">
-              {t("الشهر")}: {t(monthNames[monthFilter])} | {t("السنة")}: {yearFilter} | {t("عدد الموظفين المختارين")}: {formatNumber(selectedEmployees.length)}
+            <div className="space-y-2 border-b border-gray-100 p-4 text-sm text-gray-700">
+              <div>
+                {t("الشهر")}: {t(monthNames[monthFilter])} | {t("السنة")}: {yearFilter} | {t("عدد الموظفين")}: {formatNumber(reportEmployees.length)} | {t("مجموع أيام الغياب")}: <b className="text-red-600">{formatNumber(totalAbsentDays)}</b> | {t("مجموع خصم الغياب")}: <b className="text-red-600">{moneyText(totalAbsenceDeduction)}</b> | {t("إجمالي صافي الرواتب")}: <b className="text-emerald-700">{moneyText(payrollTotal)}</b>
+              </div>
+              {computation && (
+                <p className="text-xs text-gray-500">
+                  {computation.policy.absenceBasis === "basic" ? t("قيمة يوم الغياب = الراتب الأساسي") : t("قيمة يوم الغياب = الراتب الأساسي + البدلات")}
+                  {" ÷ "}{computation.policy.dayDivisor === "actual" ? t("أيام الشهر الفعلية") : "30"}
+                  {" — "}{computation.policy.countUnrecordedAsAbsent ? t("أيام العمل بلا تسجيل حضور تُحتسب غيابًا (الراتب المكتسب حسب الحضور)") : t("يُخصم الغياب المسجّل في الحضور فقط")}
+                  {" — "}{t("تُغيَّر من إعدادات حساب الراتب")}
+                </p>
+              )}
+              {computation && computation.loadErrors.length > 0 && (
+                <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{t("الكشف تقديري ولا يمكن إرساله: تعذر تحميل")} {computation.loadErrors.map((error) => t(error)).join(" | ")}</p>
+              )}
+              {computation && computation.warnings.length > 0 && (
+                <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{computation.warnings.map((warning) => t(warning)).join(" | ")}</p>
+              )}
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-right min-w-[1300px]">
+              <table className="w-full min-w-[1400px] text-right text-xs">
                 <thead className="bg-[#0a5a92] text-white">
                   <tr>
-                    <th className="py-2 px-2">#</th>
-                    <th className="py-2 px-2">{t("الموظف")}</th>
-                    <th className="py-2 px-2">{t("القسم")}</th>
-                    <th className="py-2 px-2">{t("الفرع")}</th>
-                    <th className="py-2 px-2">{t("أيام العمل")}</th>
-                    <th className="py-2 px-2">{t("الراتب الأساسي")}</th>
-                    <th className="py-2 px-2">{t("البدلات")}</th>
-                    <th className="py-2 px-2">{t("إضافي")}</th>
-                    <th className="py-2 px-2">{t("عمولات")}</th>
-                    <th className="py-2 px-2">{t("التأمينات الاجتماعية 9.75%")}</th>
-                    <th className="py-2 px-2">{t("إجمالي الاستقطاعات")}</th>
-                    <th className="py-2 px-2">{t("صافي الراتب")}</th>
+                    <th className="px-2 py-2">#</th>
+                    <th className="px-2 py-2">{t("الموظف")}</th>
+                    <th className="px-2 py-2">{t("القسم")}</th>
+                    <th className="px-2 py-2">{t("الفرع")}</th>
+                    <th className="px-2 py-2">{t("أيام الحضور/العمل")}</th>
+                    <th className="px-2 py-2">{t("أيام الغياب")}</th>
+                    <th className="px-2 py-2">{t("الراتب الأساسي")}</th>
+                    <th className="px-2 py-2">{t("البدلات")}</th>
+                    <th className="px-2 py-2">{t("إضافي")}</th>
+                    <th className="px-2 py-2">{t("خصم الغياب والإجازات غير المدفوعة")}</th>
+                    <th className="px-2 py-2">{t("التأمينات الاجتماعية 9.75%")}</th>
+                    <th className="px-2 py-2">{t("جزاءات وسلف وأخرى")}</th>
+                    <th className="px-2 py-2">{t("إجمالي الاستقطاعات")}</th>
+                    <th className="px-2 py-2">{t("صافي الراتب")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {selectedEmployees.map((emp, idx) => {
+                  {reportEmployees.length === 0 ? (
+                    <tr><td colSpan={14} className="py-8 text-center text-gray-400">{t("لا توجد نتائج؛ ارجع واختر الموظفين ثم اضغط اختيار الموظفين (تفصيلي)")}</td></tr>
+                  ) : reportEmployees.map((emp, idx) => {
                     const c = calc[emp.id];
                     return (
-                    <tr key={emp.id} className="hover:bg-gray-50">
-                      <td className="py-2 px-2">{formatNumber(idx + 1)}</td>
-                      <td className="py-2 px-2 font-medium">{emp.name}</td>
-                      <td className="py-2 px-2">{emp.section || t("غير متوفر")}</td>
-                      <td className="py-2 px-2">{emp.branch || t("غير متوفر")}</td>
-                      <td className="py-2 px-2">{c ? `${formatNumber(c.presentDays)}/${formatNumber(c.workDays)}` : t("غير متوفر")}</td>
-                      <td className="py-2 px-2">{formatNumber(c?.basic ?? emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="py-2 px-2">{formatNumber(c?.allowances ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="py-2 px-2">{formatNumber(c?.overtime ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="py-2 px-2">{formatNumber(0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="py-2 px-2 text-orange-600">{formatNumber(c?.socialInsurance ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="py-2 px-2 text-red-600">{formatNumber(c?.deductions ?? 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="py-2 px-2 font-semibold text-emerald-700">{formatNumber(c?.net ?? emp.baseSalary, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    </tr>
+                      <tr key={emp.id} className="hover:bg-gray-50">
+                        <td className="px-2 py-2">{formatNumber(idx + 1)}</td>
+                        <td className="px-2 py-2 font-medium">{emp.name}</td>
+                        <td className="px-2 py-2">{emp.section || t("غير متوفر")}</td>
+                        <td className="px-2 py-2">{emp.branch || t("غير متوفر")}</td>
+                        <td className="px-2 py-2">{`${formatNumber(c.presentDays)}/${formatNumber(c.workDays)}`}{c.unrecordedDays > 0 && <span className="ms-1 text-[10px] text-gray-400" title={t("أيام عمل بلا تسجيل حضور (لم تُخصم)")}>({formatNumber(c.unrecordedDays)} {t("بلا تسجيل")})</span>}</td>
+                        <td className={`px-2 py-2 ${c.absentDays > 0 ? "font-semibold text-red-600" : ""}`}>{formatNumber(c.absentDays)}</td>
+                        <td className="px-2 py-2" title={c.notEmployedDays ? `${t("معيَّن خلال الشهر")}: ${t("أيام قبل التعيين")} ${formatNumber(c.notEmployedDays)} — ${t("الأساسي الكامل")} ${moneyText(c.fullBasic)}` : undefined}>{moneyText(c.basic)}{c.notEmployedDays > 0 && <span className="ms-1 text-[10px] text-amber-600">*</span>}</td>
+                        <td className="px-2 py-2" title={c.notEmployedDays ? `${t("البدلات الكاملة")} ${moneyText(c.fullAllowances)}` : undefined}>{moneyText(c.allowances)}</td>
+                        <td className="px-2 py-2">{moneyText(c.overtime)}</td>
+                        <td className="px-2 py-2 text-red-600" title={[c.unpaidLeaveDays ? `${t("أيام إجازة مخصومة")}: ${formatNumber(c.unpaidLeaveDays)}` : "", c.fullPeriodUnearned ? t("لم يعمل أي يوم في الفترة: خُصم أجرها كاملًا") : ""].filter(Boolean).join(" — ") || undefined}>{moneyText(c.absenceDeduction + c.unpaidLeaveDeduction)}</td>
+                        <td className="px-2 py-2 text-orange-600">{moneyText(c.socialInsurance)}</td>
+                        <td className="px-2 py-2 text-red-600">{moneyText(c.penalties + c.loans + c.allowanceDeductions)}</td>
+                        <td className="px-2 py-2 text-red-600">{moneyText(c.totalDeductions)}</td>
+                        <td className="px-2 py-2 font-semibold text-emerald-700" title={c.cappedDeductions > 0 ? t("خُفّضت الاستقطاعات حتى لا يكون الصافي سالبًا") : undefined}>{moneyText(c.net)}</td>
+                      </tr>
                     );
                   })}
                 </tbody>
@@ -757,115 +638,90 @@ export default function HRPayrollStatement() {
         )}
 
         {approvalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir={direction}>
-            <div className="w-full max-w-3xl bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <button onClick={() => setApprovalOpen(false)} className="text-gray-500 hover:text-gray-800">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir={direction}>
+            <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                <h3 className="text-xl font-bold text-gray-800">{t("إرسال طلب اعتماد رواتب الموظفين")}</h3>
+                <button onClick={() => setApprovalOpen(false)} className="text-gray-500 hover:text-gray-800" aria-label={t("إغلاق")}>
                   <X className="h-5 w-5" />
                 </button>
-                <h3 className="text-2xl font-bold text-gray-800">{t("إرسال طلب اعتماد رواتب الموظفين")}</h3>
               </div>
 
-              <div className="p-5 space-y-4">
+              <div className="space-y-4 p-5">
                 <div className="space-y-2">
-                  <label className="text-2xl font-semibold text-gray-800">{t("كشف الرواتب")}</label>
+                  <label className="text-base font-semibold text-gray-800">{t("كشف الرواتب")}</label>
                   <select
                     value={approvalScope}
                     onChange={(e) => setApprovalScope(e.target.value as "all" | "partial")}
-                    className="w-full h-12 border border-gray-300 rounded-md px-3 text-lg"
+                    className="h-11 w-full rounded-md border border-gray-300 px-3"
                   >
                     <option value="all">{t("لجميع الموظفين")}</option>
                     <option value="partial">{t("لجزء من الموظفين")}</option>
                   </select>
                 </div>
 
-                {approvalStep === 2 && approvalScope === "partial" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                {approvalScope === "partial" && (
+                  <div className="grid grid-cols-1 gap-4 pt-1 md:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">{t("اختر الفرع")}</label>
-                      <select value={approvalBranch} onChange={(e) => { setApprovalBranch(e.target.value); setApprovalDepartment("الكل"); setApprovalSection("الكل"); }} className="w-full h-12 border border-gray-300 rounded-md px-3">
+                      <label className="text-sm font-semibold text-gray-700">{t("اختر الفرع")}</label>
+                      <select value={approvalBranch} onChange={(e) => { setApprovalBranch(e.target.value); setApprovalDepartment("الكل"); setApprovalSection("الكل"); }} className="h-11 w-full rounded-md border border-gray-300 px-3">
                         <option value="الكل">{t("الكل")}</option>
                         {organizationBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">{t("اختر الإدارة")}</label>
-                      <select value={approvalDepartment} onChange={(e) => { setApprovalDepartment(e.target.value); setApprovalSection("الكل"); }} className="w-full h-12 border border-gray-300 rounded-md px-3">
+                      <label className="text-sm font-semibold text-gray-700">{t("اختر الإدارة")}</label>
+                      <select value={approvalDepartment} onChange={(e) => { setApprovalDepartment(e.target.value); setApprovalSection("الكل"); }} className="h-11 w-full rounded-md border border-gray-300 px-3">
                         <option value="الكل">{t("الكل")}</option>
                         {organizationDepartments.filter((department) => approvalBranch === "الكل" || department.branchId === approvalBranch).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">{t("اختر القسم")}</label>
-                      <select value={approvalSection} onChange={(e) => setApprovalSection(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
+                      <label className="text-sm font-semibold text-gray-700">{t("اختر القسم")}</label>
+                      <select value={approvalSection} onChange={(e) => setApprovalSection(e.target.value)} className="h-11 w-full rounded-md border border-gray-300 px-3">
                         <option value="الكل">{t("الكل")}</option>
                         {organizationSections.filter((section) => approvalDepartment === "الكل" || section.departmentId === approvalDepartment).map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-lg font-semibold text-gray-700">{t("اختر موقع العمل")}</label>
-                      <select value={approvalLocation} onChange={(e) => setApprovalLocation(e.target.value)} className="w-full h-12 border border-gray-300 rounded-md px-3">
+                      <label className="text-sm font-semibold text-gray-700">{t("اختر موقع العمل")}</label>
+                      <select value={approvalLocation} onChange={(e) => setApprovalLocation(e.target.value)} className="h-11 w-full rounded-md border border-gray-300 px-3">
                         <option value="الكل">{t("الكل")}</option>
                         {organizationLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                       </select>
                     </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-lg font-semibold text-gray-700">{t("إيقاف رواتب الموظفين")}</label>
-                      <div className="relative">
-                        <Input
-                          value={approvalStopKeyword}
-                          onChange={(e) => setApprovalStopKeyword(e.target.value)}
-                          placeholder={t("ابدأ بكتابة اسم الموظف")}
-                          className="h-12"
-                        />
-                        {stopSuggestions.length > 0 && (
-                          <div className="absolute z-20 top-full mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg overflow-hidden">
-                            {stopSuggestions.map((employee) => (
-                              <button
-                                key={employee.id}
-                                type="button"
-                                onClick={() => addStoppedEmployee(employee)}
-                                className="w-full px-4 py-3 text-right hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                              >
-                                <span className="block font-medium text-gray-900">{employee.name}</span>
-                                <span className="block text-xs text-gray-500">{employee.department || employee.jobTitle || t("موظف")}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {stoppedEmployeeIds.size > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {getApprovalEmployees()
-                            .filter((employee) => stoppedEmployeeIds.has(employee.id))
-                            .map((employee) => (
-                              <div key={employee.id} className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm text-red-700 border border-red-200">
-                                <span>{employee.name}</span>
-                                <button type="button" onClick={() => removeStoppedEmployee(employee.id)} aria-label={`${t("إلغاء إيقاف راتب")} ${employee.name}`}>
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500">{t("سيتم حفظ حالة «موقوف» فعلياً في كشف رواتب الفترة المحددة عند الإرسال.")}</p>
-                    </div>
                   </div>
                 )}
+                <p className="text-sm text-gray-600">
+                  {t("الموظفون في هذا الطلب")}: <b>{formatNumber(getApprovalEmployees().filter((employee) => calc[employee.id]).length)}</b>. {t("في الخطوة التالية تحدد الموظفين الموقوفة رواتبهم.")}
+                </p>
               </div>
 
-              <div className="px-5 py-4 border-t border-gray-100 flex justify-start gap-3">
-                {approvalScope === "partial" && approvalStep === 1 ? (
-                  <Button onClick={() => setApprovalStep(2)} className="bg-[#004e89] hover:bg-[#003d6d] text-white">{t("التالي")}</Button>
-                ) : (
-                  <Button onClick={handleSendApproval} disabled={approvalSubmitting} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
-                    {approvalSubmitting ? t("جاري الإرسال...") : t("إرسال")}
-                  </Button>
-                )}
+              <div className="flex justify-start gap-3 border-t border-gray-100 px-5 py-4">
+                <Button onClick={openStopSettings} className="bg-[#004e89] text-white hover:bg-[#003d6d]">{t("التالي: إعدادات الإيقاف")}</Button>
+                <Button variant="outline" onClick={() => setApprovalOpen(false)}>{t("إلغاء")}</Button>
               </div>
             </div>
           </div>
         )}
+
+        <PayrollApprovalDialog
+          open={stopDialogOpen}
+          period={period}
+          employees={getApprovalEmployees().filter((employee) => calc[employee.id]).map((employee) => ({
+            id: employee.id,
+            empId: employee.empId,
+            name: employee.name,
+            department: employee.section,
+            absentDays: calc[employee.id].absentDays,
+            net: calc[employee.id].net,
+          }))}
+          initialStopped={stoppedEmployeeIds}
+          submitting={approvalSubmitting}
+          blockingErrors={computation?.loadErrors ?? []}
+          onCancel={() => setStopDialogOpen(false)}
+          onSubmit={(stopped, reason) => void handleSendApproval(stopped, reason)}
+        />
       </div>
     </Layout>
   );

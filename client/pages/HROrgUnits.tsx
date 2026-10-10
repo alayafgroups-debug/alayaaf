@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+
+const NO_ROWS_MESSAGE = "لم يُحفظ شيء: السجل غير موجود أو لا تملك صلاحية هذه العملية";
+const orgErrorText = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "23503"
+    ? "مرتبط بموظفين أو سجلات أخرى؛ لا يمكن حذفه"
+    : hrRequestErrorText(error, "تعذر حفظ البيانات");
 
 type Unit = { id: string; name: string; section: string; employee: string; description: string };
 
@@ -25,12 +32,16 @@ export default function HROrgUnits() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("org_units").select("*").order("id", { ascending: false });
+      const { data, error } = await supabase.from("org_units").select("*").order("id", { ascending: false });
+      if (error) throw error;
       if (data) setItems(data.map((r: any) => ({
         id: String(r.id), name: r.name ?? "", section: r.section ?? "",
         employee: r.employee ?? "", description: r.description ?? "",
       })));
-    } catch { setItems([]); } finally { setLoading(false); }
+    } catch (error) {
+      setItems([]);
+      toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -48,19 +59,27 @@ export default function HROrgUnits() {
     try {
       const payload = { name: formName, section: formSection, employee: formEmployee, description: formDesc };
       if (editingId) {
-        await supabase.from("org_units").update(payload).eq("id", editingId);
-        toast({ title: t("تم التعديل") });
+        const { data, error } = await supabase.from("org_units").update(payload).eq("id", editingId).select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error(NO_ROWS_MESSAGE);
       } else {
-        await supabase.from("org_units").insert([payload]);
-        toast({ title: t("تمت الإضافة") });
+        const { error } = await supabase.from("org_units").insert([payload]);
+        if (error) throw error;
       }
+      toast({ title: editingId ? t("تم التعديل") : t("تمت الإضافة") });
       resetForm(); loadData();
-    } catch { toast({ title: t("خطأ"), variant: "destructive" }); } finally { setSaving(false); }
+    } catch (error) {
+      toast({ title: t("خطأ"), description: t(orgErrorText(error)), variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: Unit) => {
     if (!confirm(`${t("حذف")} "${item.name}"؟`)) return;
-    await supabase.from("org_units").delete().eq("id", item.id);
+    const { data, error } = await supabase.from("org_units").delete().eq("id", item.id).select("id");
+    if (error || !data?.length) {
+      toast({ title: t("لم يتم الحذف"), description: t(error ? orgErrorText(error) : NO_ROWS_MESSAGE), variant: "destructive" });
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: t("تم الحذف") });
   };

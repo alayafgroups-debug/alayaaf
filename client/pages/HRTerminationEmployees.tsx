@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { riyadhToday, serviceYears } from "@/lib/hrDates";
+import { ACTIVE_EMPLOYEE_STATUSES, isApprovedStatus, isPendingStatus } from "@/lib/hrStatus";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type Employee = {
   id: string;
@@ -36,9 +39,26 @@ type TermRow = {
   notes: string;
 };
 
-const TERM_REASONS = [
+type TermReason = { reason: string; deprivesReward: boolean };
+
+// تُستخدم فقط إن كان جدول termination_reasons فارغًا أو تعذّر تحميله
+const TERM_REASONS: TermReason[] = [
   "استقالة", "انتهاء العقد", "إنهاء من قِبل صاحب العمل", "تقاعد", "وفاة", "أخرى",
-];
+].map((reason) => ({ reason, deprivesReward: false }));
+
+// نفس قاعدة صفحة أسباب إنهاء الخدمة: "يؤدي إلى حرمان..." مقابل "لا يؤدي إلى حرمان..."
+const reasonDeprivesReward = (effect: unknown) => {
+  const text = String(effect ?? "");
+  return text.includes("حرمان") && !text.includes("لا ");
+};
+
+// الاستقالة وفق المادة 81 (إخلال صاحب العمل) تستحق المكافأة كاملة، فلا تُعامل كاستقالة في نسبة المادة 85
+const mentionsArticle81 = (reason: string) => /(^|[^0-9٠-٩])(81|٨١)([^0-9٠-٩]|$)/.test(reason);
+const isResignationReason = (reason: string) => reason.includes("استقالة") && !mentionsArticle81(reason);
+
+// سجل إنهاء الخدمة يمنع سجلًا ثانيًا ما دام معلقًا أو معتمدًا؛ المرفوض والملغى لا يمنع
+const isOpenTermination = (status: unknown) =>
+  isPendingStatus(status) || isApprovedStatus(status) || String(status ?? "").trim() === "موافق عليه";
 
 const CONTRACT_TYPES = ["دائم", "مؤقت", "موسمي", "جزئي"];
 
@@ -59,21 +79,35 @@ function calcServiceDuration(hireDateStr: string, endDateStr: string, t: (s: str
   return parts.join(" ");
 }
 
-function calcGratuity(baseSalary: number, hireDateStr: string, endDateStr: string): number {
-  if (!hireDateStr || !endDateStr || baseSalary <= 0) return 0;
-  const hire = new Date(hireDateStr);
-  const end = new Date(endDateStr);
-  const msPerYear = 365.25 * 24 * 3600 * 1000;
-  const years = (end.getTime() - hire.getTime()) / msPerYear;
+/** الأجر المعتمد للمكافأة: آخر أجر فعلي (الإجمالي)، وإن لم يوجد فالأساسي */
+const rewardWage = (employee: { totalSalary: number; baseSalary: number }) =>
+  employee.totalSalary > 0 ? employee.totalSalary : employee.baseSalary;
+
+/** نسبة المكافأة عند الاستقالة (المادة 85): أقل من سنتين لا شيء، 2–5 الثلث، 5–10 الثلثان، 10 فأكثر كاملة */
+function resignationFactor(years: number): number {
+  if (years < 2) return 0;
+  if (years < 5) return 1 / 3;
+  if (years < 10) return 2 / 3;
+  return 1;
+}
+
+/** مكافأة نهاية الخدمة (المادة 84): نصف شهر عن كل سنة من الخمس الأولى، وشهر عن كل سنة بعدها، وبالنسبة لأجزاء السنة */
+function calcGratuity(wage: number, hireDateStr: string, endDateStr: string, resignation: boolean): number {
+  if (!hireDateStr || !endDateStr || wage <= 0) return 0;
+  const years = serviceYears(hireDateStr, endDateStr);
   if (years <= 0) return 0;
-  const dailySalary = baseSalary / 30;
-  let gratuity = 0;
-  if (years <= 5) {
-    gratuity = dailySalary * 15 * years;
-  } else {
-    gratuity = dailySalary * 15 * 5 + dailySalary * 30 * (years - 5);
-  }
+  const full = years <= 5 ? (wage / 2) * years : (wage / 2) * 5 + wage * (years - 5);
+  const gratuity = resignation ? full * resignationFactor(years) : full;
   return Math.round(gratuity * 100) / 100;
+}
+
+function rewardRuleText(years: number, resignation: boolean, deprived: boolean): string {
+  if (deprived) return "السبب المختار يحرم الموظف من المكافأة حسب إعداد أسباب إنهاء الخدمة";
+  if (!resignation) return "مكافأة كاملة: نصف شهر عن كل سنة من الخمس الأولى وشهر عن كل سنة بعدها، على الأجر الإجمالي";
+  if (years < 2) return "استقالة قبل إكمال سنتين: لا مكافأة";
+  if (years < 5) return "استقالة بعد سنتين وقبل خمس سنوات: ثلث المكافأة";
+  if (years < 10) return "استقالة بعد خمس سنوات وقبل عشر: ثلثا المكافأة";
+  return "استقالة بعد عشر سنوات فأكثر: المكافأة كاملة";
 }
 
 function calcLeaveValue(totalSalary: number, leaveRemaining: number): number {
@@ -82,11 +116,11 @@ function calcLeaveValue(totalSalary: number, leaveRemaining: number): number {
   return Math.round(daily * leaveRemaining * 100) / 100;
 }
 
-const emptyForm = {
+const emptyForm = () => ({
   employeeId: "",
   contractType: "",
   endReason: "",
-  terminationDate: new Date().toISOString().slice(0, 10),
+  terminationDate: riyadhToday(),
   hireDate: "",
   leaveRemaining: "0",
   leaveValue: "0",
@@ -94,7 +128,7 @@ const emptyForm = {
   otherDeductions: "0",
   total: "0",
   notes: "",
-};
+});
 
 export default function HRTerminationEmployees() {
   const { t, direction } = useI18n();
@@ -106,40 +140,48 @@ export default function HRTerminationEmployees() {
   const [search, setSearch] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [reasons, setReasons] = useState<TermReason[]>(TERM_REASONS);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [empsResult, termsResult] = await Promise.all([
+      const [empsResult, termsResult, reasonsResult] = await Promise.all([
         supabase
           .from("employees")
           .select("id, emp_id, name, department, base_salary, total_salary, hire_date, contract_end_date, job_title")
-          .in("status", ["نشط", "فعال"])
+          .in("status", ACTIVE_EMPLOYEE_STATUSES)
           .order("name"),
         supabase.from("hr_terminations").select("*").order("created_at", { ascending: false }),
+        supabase.from("termination_reasons").select("*").order("id"),
       ]);
 
       if (empsResult.error) throw empsResult.error;
       if (termsResult.error) throw termsResult.error;
 
-      setEmployees(
-        (empsResult.data ?? []).map((row: any) => ({
-          id: String(row.id),
-          empId: String(row.emp_id ?? row.id),
-          name: String(row.name ?? ""),
-          department: String(row.department ?? ""),
-          baseSalary: Number(row.base_salary ?? 0),
-          totalSalary: Number(row.total_salary ?? row.base_salary ?? 0),
-          hireDate: String(row.hire_date ?? ""),
-          contractEndDate: String(row.contract_end_date ?? ""),
-          jobTitle: String(row.job_title ?? ""),
-        }))
-      );
+      const loadedReasons = ((reasonsResult.data as Record<string, unknown>[] | null) ?? [])
+        .map((row) => ({ reason: String(row.reason ?? "").trim(), deprivesReward: reasonDeprivesReward(row.effect) }))
+        .filter((row) => row.reason);
+      setReasons(!reasonsResult.error && loadedReasons.length ? loadedReasons : TERM_REASONS);
+
+      const loadedEmployees: Employee[] = (empsResult.data ?? []).map((row: any) => ({
+        id: String(row.id),
+        empId: String(row.emp_id ?? row.id),
+        name: String(row.name ?? ""),
+        department: String(row.department ?? ""),
+        baseSalary: Number(row.base_salary ?? 0),
+        totalSalary: Number(row.total_salary ?? 0),
+        hireDate: String(row.hire_date ?? ""),
+        contractEndDate: String(row.contract_end_date ?? ""),
+        jobTitle: String(row.job_title ?? ""),
+      }));
+      setEmployees(loadedEmployees);
+      const employeeByUuid = new Map(loadedEmployees.map((employee) => [employee.id, employee]));
 
       setItems(
         (termsResult.data ?? []).map((row: any) => ({
           id: String(row.id),
-          jobId: String(row.job_id ?? ""),
+          // emp_id = UUID الموظف، والرقم الوظيفي للعرض في job_id؛ نطابق بالـ UUID أولًا ثم الرقم
+          jobId: String(row.job_id ?? "") || employeeByUuid.get(String(row.emp_id ?? ""))?.empId || String(row.emp_id ?? ""),
           name: String(row.emp_name ?? ""),
           department: String(row.department ?? ""),
           reason: String(row.end_reason ?? row.reason ?? ""),
@@ -157,7 +199,7 @@ export default function HRTerminationEmployees() {
     } catch (error) {
       toast({
         title: t("تعذر تحميل البيانات"),
-        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
+        description: t(hrRequestErrorText(error)),
         variant: "destructive",
       });
     } finally {
@@ -170,16 +212,20 @@ export default function HRTerminationEmployees() {
   }, []);
 
   const selectedEmployee = employees.find((emp) => emp.id === form.employeeId);
+  const selectedReason = reasons.find((item) => item.reason === form.endReason);
+  const isResignation = isResignationReason(form.endReason);
+  const deprived = Boolean(selectedReason?.deprivesReward);
+  const yearsOfService = selectedEmployee ? serviceYears(selectedEmployee.hireDate, form.terminationDate) : 0;
 
   // Auto-compute fields when employee or date changes
   const computedReward = useMemo(() => {
-    if (!selectedEmployee) return 0;
-    return calcGratuity(selectedEmployee.baseSalary, selectedEmployee.hireDate, form.terminationDate);
-  }, [selectedEmployee, form.terminationDate]);
+    if (!selectedEmployee || deprived) return 0;
+    return calcGratuity(rewardWage(selectedEmployee), selectedEmployee.hireDate, form.terminationDate, isResignation);
+  }, [selectedEmployee, form.terminationDate, isResignation, deprived]);
 
   const computedLeaveValue = useMemo(() => {
     if (!selectedEmployee) return 0;
-    return calcLeaveValue(selectedEmployee.totalSalary, Number(form.leaveRemaining));
+    return calcLeaveValue(rewardWage(selectedEmployee), Number(form.leaveRemaining));
   }, [selectedEmployee, form.leaveRemaining]);
 
   const computedTotal = useMemo(() => {
@@ -210,6 +256,10 @@ export default function HRTerminationEmployees() {
       toast({ title: t("أكمل الحقول المطلوبة"), description: t("الموظف وسبب إنهاء الخدمة والتاريخ مطلوبة"), variant: "destructive" });
       return false;
     }
+    if (selectedEmployee.hireDate && form.terminationDate < selectedEmployee.hireDate) {
+      toast({ title: t("تاريخ غير صحيح"), description: t("تاريخ إنهاء الخدمة قبل تاريخ التعيين"), variant: "destructive" });
+      return false;
+    }
     return true;
   };
 
@@ -217,6 +267,20 @@ export default function HRTerminationEmployees() {
     if (!validateForm() || !selectedEmployee) return;
     setSaving(true);
     try {
+      // منع إنهاء خدمة ثانٍ لنفس الموظف ما دام لديه سجل معلق أو معتمد.
+      // emp_id يحمل UUID الموظف (الرقم الوظيفي قد يتكرر بين موظفين فلا يُطابق به)
+      const existing = await supabase.from("hr_terminations").select("id, status").eq("emp_id", selectedEmployee.id);
+      if (existing.error) throw existing.error;
+      const openRecord = (existing.data ?? []).find((row: { status?: unknown }) => isOpenTermination(row.status));
+      if (openRecord) {
+        toast({
+          title: t("يوجد إنهاء خدمة سابق"),
+          description: `${t("لدى")} ${selectedEmployee.name} ${t("سجل إنهاء خدمة معلق أو معتمد؛ لا يمكن إنشاء سجل ثانٍ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase.from("hr_terminations").insert({
         emp_id: selectedEmployee.id,
         job_id: selectedEmployee.empId,
@@ -239,14 +303,15 @@ export default function HRTerminationEmployees() {
       });
       if (error) throw error;
       toast({ title: t("تم حفظ إنهاء الخدمة"), description: `${t("تم تسجيل إنهاء خدمة")} ${selectedEmployee.name}` });
-      setForm(emptyForm);
+      setForm(emptyForm());
       setShowForm(false);
       setPreviewOpen(false);
       await loadData();
     } catch (error) {
+      const duplicate = (error as { code?: string } | null)?.code === "23505";
       toast({
         title: t("تعذر الحفظ"),
-        description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"),
+        description: duplicate ? t("يوجد إنهاء خدمة مسجل لهذا الموظف") : t(hrRequestErrorText(error)),
         variant: "destructive",
       });
     } finally {
@@ -264,7 +329,7 @@ export default function HRTerminationEmployees() {
       <div className="w-full p-4 space-y-5" dir={direction}>
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">{t("إنهاء خدمة الموظفين")}</h1>
-          <Button onClick={() => { setForm(emptyForm); setShowForm((v) => !v); }} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
+          <Button onClick={() => { setForm(emptyForm()); setShowForm((v) => !v); }} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
             {showForm ? <X className="h-4 w-4 ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
             {showForm ? t("إغلاق") : t("إنهاء خدمة")}
           </Button>
@@ -276,7 +341,7 @@ export default function HRTerminationEmployees() {
               <h2 className="font-bold text-gray-900">{t("إنهاء خدمة الموظف")}</h2>
               {selectedEmployee && (
                 <span className="text-sm text-emerald-700 font-medium bg-emerald-50 px-3 py-1 rounded-full">
-                  {t("راتب الموظف")}: SAR {selectedEmployee.totalSalary.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  {t("الأجر الفعلي (الإجمالي)")}: SAR {rewardWage(selectedEmployee).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </span>
               )}
             </div>
@@ -316,7 +381,7 @@ export default function HRTerminationEmployees() {
                     className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#004e89]"
                   >
                     <option value="">{t("اختر السبب")}</option>
-                    {TERM_REASONS.map((reason) => <option key={reason} value={reason}>{t(reason)}</option>)}
+                    {reasons.map((item) => <option key={item.reason} value={item.reason}>{t(item.reason)}</option>)}
                   </select>
                 </Field>
 
@@ -331,8 +396,11 @@ export default function HRTerminationEmployees() {
                   )}
                 </Field>
 
-                <Field label={t("مساحة إنهاء الخدمة")}>
+                <Field label={t("مكافأة نهاية الخدمة")}>
                   <Input type="number" value={computedReward.toFixed(2)} readOnly className="bg-gray-50 font-medium" placeholder={t("تُحسب تلقائياً")} />
+                  {selectedEmployee && form.endReason && (
+                    <p className="text-xs text-gray-500 mt-1">{t(rewardRuleText(yearsOfService, isResignation, deprived))}</p>
+                  )}
                 </Field>
 
                 <Field label={t("رصيد الإجازات السنوية المتبقية")}>
@@ -342,21 +410,21 @@ export default function HRTerminationEmployees() {
 
                 <Field label={t("قيمة الإجازات")}>
                   <Input value={computedLeaveValue.toFixed(2)} readOnly className="bg-gray-50 font-medium" />
-                  <p className="text-xs text-gray-400 mt-0.5">{t("= راتب الموظف ÷ 30 × أيام الإجازة")}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t("= الأجر الإجمالي ÷ 30 × أيام الإجازة")}</p>
                 </Field>
 
                 <Field label={t("مستحقات أخرى")}>
                   <Input type="number" value={form.otherEntitlements} onChange={(event) => setForm((current) => ({ ...current, otherEntitlements: event.target.value }))} min="0" step="0.01" />
                 </Field>
 
-                <Field label={t("مطلبيات استقطاع أخرى")}>
+                <Field label={t("استقطاعات أخرى")}>
                   <Input type="number" value={form.otherDeductions} onChange={(event) => setForm((current) => ({ ...current, otherDeductions: event.target.value }))} min="0" step="0.01" />
                 </Field>
 
                 <Field label={t("الإجمالي")}>
                   <div className="flex items-center gap-3">
                     <Input value={computedTotal.toFixed(2)} readOnly className="bg-gray-50 font-bold text-[#004e89]" />
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{t("= مبلغ الراتب الأساسي")}</span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">{t("= المكافأة + قيمة الإجازات + المستحقات − الاستقطاعات")}</span>
                   </div>
                 </Field>
 
@@ -373,9 +441,9 @@ export default function HRTerminationEmployees() {
 
                 <div className="md:col-span-2">
                   <Field label={t("المرفق")}>
-                    <div className="flex items-center gap-2 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-500 cursor-pointer hover:bg-gray-50">
+                    <div aria-disabled="true" className="flex items-center gap-2 border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-400 bg-gray-50 cursor-not-allowed">
                       <FileText className="h-4 w-4" />
-                      <span>{t("إضافة ملفات")}</span>
+                      <span>{t("إرفاق الملفات غير متاح حاليًا")}</span>
                     </div>
                   </Field>
                 </div>

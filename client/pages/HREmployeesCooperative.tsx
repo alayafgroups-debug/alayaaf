@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/SalesPageUI";
 import EmployeeForm, { emptyForm, mapRowToForm } from "./EmployeeForm";
 import type { EmpFormData } from "./EmployeeForm";
 import { useI18n } from "@/i18n";
+import { deleteOrDeactivateEmployee } from "@/components/hr/employeeActions";
 
 const STATUS_COLORS: Record<string, string> = {
   نشط: "bg-green-100 text-green-700 border-green-200",
@@ -83,6 +84,7 @@ export default function HREmployeesCooperative() {
         fSearch &&
         !e.name.includes(fSearch) &&
         !e.empId.includes(fSearch) &&
+        !e.accountTitle.includes(fSearch) &&
         !e.phone.includes(fSearch)
       ) {
         return false;
@@ -96,16 +98,9 @@ export default function HREmployeesCooperative() {
   const refresh = () => setRefreshKey((k) => k + 1);
 
   const handleDelete = async (emp: EmpFormData) => {
-    if (!confirm(`${t("هل تريد حذف الموظف المتعاون")} "${emp.name || emp.firstName}"؟`)) return;
-
-    const { error } = await supabase.from("employees").delete().eq("id", emp.id);
-    if (error) {
-      toast({ title: t("تعذر الحذف"), description: error.message, variant: "destructive" });
-      return;
-    }
-
-    setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
-    toast({ title: t("تم الحذف"), description: t("تم حذف الموظف المتعاون") });
+    const result = await deleteOrDeactivateEmployee(emp, t);
+    if (result === "deleted") setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
+    if (result === "deactivated") setEmployees((prev) => prev.map((e) => e.id === emp.id ? { ...e, status: "غير فعال" } : e));
   };
 
   if (mode === "create") {
@@ -113,11 +108,11 @@ export default function HREmployeesCooperative() {
       <EmployeeForm
         mode="create"
         initialData={getCooperativeInitialData()}
+        title="إضافة موظف متعاون"
         onBack={() => setMode("list")}
         onSaved={() => {
           setMode("list");
           refresh();
-          toast({ title: t("تمت إضافة موظف متعاون"), description: t("تم ربطه فعلياً بقاعدة البيانات") });
         }}
       />
     );
@@ -129,10 +124,10 @@ export default function HREmployeesCooperative() {
         mode="edit"
         initialData={selected}
         onBack={() => setMode("list")}
+        title="تعديل موظف متعاون"
         onSaved={() => {
           setMode("list");
           refresh();
-          toast({ title: t("تم تحديث بيانات الموظف المتعاون") });
         }}
       />
     );

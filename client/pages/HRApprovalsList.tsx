@@ -4,10 +4,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, Trash2, Edit } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type ApprovalChain = {
   id: string;
@@ -19,6 +20,7 @@ type ApprovalChain = {
 
 export default function HRApprovalsList() {
   const { t, direction } = useI18n();
+  const navigate = useNavigate();
   const [chains, setChains] = useState<ApprovalChain[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -27,19 +29,30 @@ export default function HRApprovalsList() {
     const load = async () => {
       setLoading(true);
       try {
-        const { data } = await supabase.from("approval_chains").select("*").order("created_at", { ascending: false });
-        if (data) setChains(data.map((r) => ({
+        const { data, error } = await supabase.from("approval_chains").select("*").order("created_at", { ascending: false });
+        if (error) throw error;
+        setChains((data ?? []).map((r) => ({
           id: String(r.id), name: String(r.name ?? ""), type: String(r.type ?? ""),
-          steps: Array.isArray(r.steps) ? r.steps : [], status: String(r.status ?? "فعال"),
+          steps: Array.isArray(r.steps) ? r.steps : [], status: String(r.status ?? "").trim(),
         })));
-      } catch {} finally { setLoading(false); }
+      } catch (error) {
+        toast({ title: t("تعذر تحميل سلاسل الموافقات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      } finally { setLoading(false); }
     };
     load();
   }, []);
 
   const handleDelete = async (chain: ApprovalChain) => {
     if (!confirm(`${t("حذف سلسلة الموافقات")} "${chain.name}"؟`)) return;
-    await supabase.from("approval_chains").delete().eq("id", chain.id);
+    const { data, error } = await supabase.from("approval_chains").delete().eq("id", chain.id).select("id");
+    if (error) {
+      toast({ title: t("تعذر الحذف"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast({ title: t("لم يُحذف شيء"), description: t("لا تملك صلاحية حذف هذه السلسلة أو أنها حُذفت مسبقًا"), variant: "destructive" });
+      return;
+    }
     setChains((prev) => prev.filter((c) => c.id !== chain.id));
     toast({ title: t("تم الحذف") });
   };
@@ -94,11 +107,11 @@ export default function HRApprovalsList() {
                   <TableCell>{row.type || "—"}</TableCell>
                   <TableCell>{row.steps.length} {t("خطوة")}</TableCell>
                   <TableCell className="text-center">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">{t(row.status)}</span>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.status === "فعال" ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-700"}`}>{row.status ? t(row.status) : t("غير محدد")}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-2">
-                      <Button variant="ghost" size="icon" title={t("تعديل")} aria-label={t("تعديل")} className="h-8 w-8 text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" title={t("تعديل")} aria-label={t("تعديل")} className="h-8 w-8 text-blue-600 hover:bg-blue-50" onClick={() => navigate(`/hr/approvals/add?id=${encodeURIComponent(row.id)}`)}><Edit className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" title={t("حذف")} aria-label={t("حذف")} className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(row)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </TableCell>

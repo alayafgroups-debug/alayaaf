@@ -42,6 +42,13 @@ const randomDigits = () => {
   return String(value[0] % 1000).padStart(3, "0");
 };
 
+const strongPassword = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%";
+  const values = new Uint32Array(14);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => chars[value % chars.length]).join("");
+};
+
 const bytesToBase64 = (bytes: Uint8Array) => {
   let binary = "";
   bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
@@ -119,14 +126,19 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
-    const linkedEmployeeId = String(user.user_metadata?.employee_id ?? "").trim();
-    let callerQuery = adminClient
-      .from("employees")
-      .select("id, emp_id, name, employee_role");
-    callerQuery = linkedEmployeeId
-      ? callerQuery.eq("id", linkedEmployeeId)
-      : callerQuery.ilike("email", user.email);
-    const { data: caller } = await callerQuery.maybeSingle();
+    // المستدعي يُحدَّد من ربط employee_emails بحسابه أو من بريده المطابق تمامًا؛ لا من user_metadata (يغيّرها المستخدم بنفسه)
+    const escapeLike = (value: string) => value.replace(/[\\%_]/g, (character) => `\\${character}`);
+    const { data: linkedCredential } = await adminClient
+      .from("employee_emails")
+      .select("employee_id")
+      .eq("auth_user_id", user.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    const { data: callerRows } = linkedCredential?.employee_id
+      ? await adminClient.from("employees").select("id, emp_id, name, employee_role").eq("id", linkedCredential.employee_id).limit(1)
+      : await adminClient.from("employees").select("id, emp_id, name, employee_role").ilike("email", escapeLike(user.email.toLowerCase())).limit(2);
+    const caller = callerRows && callerRows.length === 1 ? callerRows[0] : null;
 
     if (["mailbox-info", "verify-mailbox", "mark-mailbox-messages-read", "delete-mailbox-message", "purge-mailbox-message"].includes(action)) {
       const requestedEmpId = String(body?.empId ?? "").trim();
@@ -134,23 +146,13 @@ Deno.serve(async (req: Request) => {
         return respond({ success: false, error: "غير مصرح بالدخول إلى هذا البريد" }, 403);
       }
 
-      let { data: credential } = await adminClient
+      const { data: credential } = await adminClient
         .from("employee_emails")
         .select("generated_email, password_ciphertext")
         .eq("employee_id", caller.id)
         .eq("status", "active")
         .maybeSingle();
-      if (!credential) {
-        const fallback = await adminClient
-          .from("employee_emails")
-          .select("generated_email, password_ciphertext")
-          .eq("emp_id", caller.emp_id)
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        credential = fallback.data;
-      }
+
       if (!credential) return respond({ success: false, error: "لم يتم إنشاء بريد إلكتروني لك بعد" }, 404);
 
       if (action === "mailbox-info") {
@@ -239,17 +241,12 @@ Deno.serve(async (req: Request) => {
       return respond({ success: true, generated_email: credential.generated_email });
     }
 
-    if (!caller?.employee_role) return respond({ success: false, error: "غير مصرح بإدارة بيانات الدخول" }, 403);
-    const { data: role } = await adminClient
-      .from("user_roles")
-      .select("permissions")
-      .eq("name_ar", caller.employee_role)
-      .eq("status", "فعال")
-      .maybeSingle();
-    const permissions = role?.permissions && typeof role.permissions === "object"
-      ? role.permissions as Record<string, unknown>
-      : {};
-    if (!canManageCredentials(caller.employee_role, permissions)) {
+    // الإدارة: مدير النظام، أو دور فيه module.hr بصلاحية إدارة (بمنطق قاعدة البيانات نفسه)
+    const [{ data: isAdmin }, { data: canManage }] = await Promise.all([
+      callerClient.rpc("is_main_system_admin"),
+      callerClient.rpc("business_permission_allowed", { p_permissions: ["module.hr"], p_manage: true }),
+    ]);
+    if (isAdmin !== true && canManage !== true) {
       return respond({ success: false, error: "غير مصرح بإدارة بيانات الدخول" }, 403);
     }
 
@@ -265,7 +262,8 @@ Deno.serve(async (req: Request) => {
         emp_id: row.emp_id,
         emp_name: row.emp_name,
         generated_email: row.generated_email,
-        generated_password: await decryptPassword(row.password_ciphertext, serviceKey),
+        // كلمة المرور لا تُعرض إلا لمدير النظام
+        generated_password: isAdmin === true ? await decryptPassword(row.password_ciphertext, serviceKey) : "",
         created_at: row.created_at,
       })));
       return respond({ success: true, credentials });
@@ -301,11 +299,11 @@ Deno.serve(async (req: Request) => {
       generatedEmail = `${localPart}@alayaf.com`;
     }
 
-    const generatedPassword = `${localPart}@${randomDigits()}`;
+    const generatedPassword = strongPassword();
     const { data: existingCredential } = await adminClient
       .from("employee_emails")
       .select("id, auth_user_id")
-      .or(`employee_id.eq.${employee.id},emp_id.eq.${employee.emp_id}`)
+      .eq("employee_id", employee.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

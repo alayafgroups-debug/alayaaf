@@ -44,12 +44,17 @@ export default function EmployeeLogin() {
 
       const { data: empData, error: profileError } = await supabase
         .from("employees")
-        .select("id, emp_id, account_title, name, employee_role, permissions")
+        .select("id, emp_id, account_title, name, employee_role, permissions, status")
         .ilike("email", resolvedEmail as string)
         .maybeSingle();
 
       if (profileError || !empData) {
         toast.error("لم يتم العثور على بيانات الموظف");
+        await supabase.auth.signOut();
+        return;
+      }
+      if (["غير فعال", "منتهي"].includes(String(empData.status ?? ""))) {
+        toast.error("حسابك موقوف؛ راجع الموارد البشرية");
         await supabase.auth.signOut();
         return;
       }

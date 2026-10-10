@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import WorkLocationMap from "@/components/hr/WorkLocationMap";
 import { useI18n } from "@/i18n";
+import { exportReportExcel, printReport, type ReportColumn } from "@/lib/reportExport";
 
 type LocationRow = {
   id: string;
@@ -135,6 +136,17 @@ export default function HROrgWorkLocations() {
     );
   };
 
+  // الطباعة والتصدير لمواقع العمل المعروضة
+  const locationReport = () => {
+    const columns: ReportColumn[] = [{ key: "name", label: t("اسم الموقع"), width: 24 }, { key: "nameEn", label: t("الاسم بالإنجليزية"), width: 24 }, { key: "city", label: t("المدينة"), width: 14 }, { key: "address", label: t("العنوان"), width: 30 }, { key: "coordinates", label: t("إحداثيات الحضور"), width: 26 }, { key: "status", label: t("الحالة"), width: 12 }];
+    const reportRows = rows.map((row) => ({ name: row.name, nameEn: row.nameEn, city: row.city, address: row.address, coordinates: row.latitude != null && row.longitude != null ? `${row.latitude}, ${row.longitude}${row.isDefault ? ` (${t("الرئيسي")})` : ""}` : t("غير محدد"), status: t(row.status) }));
+    return { title: t("مواقع العمل"), columns, rows: reportRows, fileName: "work-locations", landscape: true, summary: [{ label: t("إجمالي"), value: rows.length }] };
+  };
+  const printLocations = () => {
+    if (!printReport(locationReport())) toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة لهذا الموقع"), variant: "destructive" });
+  };
+  const exportLocations = () => exportReportExcel(locationReport());
+
   const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormNameEn(""); setFormAddress(""); setFormCity(""); setFormStatus("فعال"); setFormLatitude(""); setFormLongitude(""); };
 
   return (
@@ -142,8 +154,8 @@ export default function HROrgWorkLocations() {
       <div className="p-6 max-w-[1200px] mx-auto space-y-5" dir={direction}>
         <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
           <div className="flex gap-2">
-            <Button variant="outline" size="icon" title={t("طباعة")} aria-label={t("طباعة")}><Printer className="h-4 w-4 text-blue-600" /></Button>
-            <Button variant="outline" size="icon" title={t("تصدير")} aria-label={t("تصدير")}><FileText className="h-4 w-4 text-blue-600" /></Button>
+            <Button variant="outline" size="icon" onClick={printLocations} disabled={!rows.length} title={t("طباعة")} aria-label={t("طباعة")}><Printer className="h-4 w-4 text-blue-600" /></Button>
+            <Button variant="outline" size="icon" onClick={exportLocations} disabled={!rows.length} title={t("تصدير")} aria-label={t("تصدير")}><FileText className="h-4 w-4 text-blue-600" /></Button>
             <Button className="bg-[#004e89] hover:bg-[#003d6d] text-white gap-1" onClick={() => { resetForm(); setShowForm(true); }}>
               <Plus className="h-4 w-4" /> {t("إضافة موقع")}
             </Button>

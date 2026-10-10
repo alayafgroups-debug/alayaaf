@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+
+const isPendingStatus = (status: string) => ["", "معلق", "معلقة", "pending"].includes(status.trim());
 
 type LeaveRequest = {
   id: string;
@@ -35,8 +38,12 @@ const mapRow = (r: Record<string, unknown>): LeaveRequest => ({
 
 const STATUS_COLORS: Record<string, string> = {
   "معلقة": "bg-yellow-100 text-yellow-700",
+  "معلق": "bg-yellow-100 text-yellow-700",
   "معتمدة": "bg-emerald-100 text-emerald-700",
+  "معتمد": "bg-emerald-100 text-emerald-700",
+  "موافق": "bg-emerald-100 text-emerald-700",
   "مرفوضة": "bg-red-100 text-red-700",
+  "مرفوض": "bg-red-100 text-red-700",
 };
 
 export default function HRLeavesEmployees() {
@@ -60,17 +67,22 @@ export default function HRLeavesEmployees() {
     load();
   }, [refreshKey]);
 
-  const handleApprove = async (leave: LeaveRequest) => {
-    await supabase.from("leave_requests").update({ status: "معتمدة" }).eq("id", leave.id);
-    setLeaves((prev) => prev.map((l) => l.id === leave.id ? { ...l, status: "معتمدة" } : l));
-    toast({ title: t("تمت الموافقة على الطلب") });
+  // القرار للمستلم فقط (سياسة الخادم)؛ نتحقق من أن الصف تغيّر فعلًا
+  const decide = async (leave: LeaveRequest, status: "معتمدة" | "مرفوضة") => {
+    const { error } = await supabase.from("leave_requests").update({ status }).eq("id", leave.id).select("id").single();
+    if (error) {
+      toast({
+        title: t("تعذر حفظ القرار"),
+        description: error.code === "PGRST116" ? t("القرار لمستلم الطلب (المدير المباشر) فقط") : t(hrRequestErrorText(error)),
+        variant: "destructive",
+      });
+      return;
+    }
+    setLeaves((prev) => prev.map((l) => l.id === leave.id ? { ...l, status } : l));
+    toast({ title: t(status === "معتمدة" ? "تمت الموافقة على الطلب" : "تم رفض الطلب") });
   };
-
-  const handleReject = async (leave: LeaveRequest) => {
-    await supabase.from("leave_requests").update({ status: "مرفوضة" }).eq("id", leave.id);
-    setLeaves((prev) => prev.map((l) => l.id === leave.id ? { ...l, status: "مرفوضة" } : l));
-    toast({ title: t("تم رفض الطلب") });
-  };
+  const handleApprove = (leave: LeaveRequest) => decide(leave, "معتمدة");
+  const handleReject = (leave: LeaveRequest) => decide(leave, "مرفوضة");
 
   if (showForm) {
     return <LeaveForm onBack={() => setShowForm(false)} onSaved={() => { setShowForm(false); setRefreshKey((k) => k + 1); }} />;
@@ -129,7 +141,7 @@ export default function HRLeavesEmployees() {
                       <td className="py-3 px-3 text-gray-500 max-w-[200px] truncate">{leave.notes || "—"}</td>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-1 justify-center">
-                          {leave.status === "معلقة" && (
+                          {isPendingStatus(leave.status) && (
                             <>
                               <button onClick={() => handleApprove(leave)} className="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700">{t("موافقة")}</button>
                               <button onClick={() => handleReject(leave)} className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">{t("رفض")}</button>
@@ -165,27 +177,36 @@ function LeaveForm({ onBack, onSaved }: { onBack: () => void; onSaved: () => voi
   const [endDate, setEndDate] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; empId: string; name: string }[]>([]);
 
   useEffect(() => {
     const loadEmps = async () => {
-      const { data } = await supabase.from("employees").select("id, name").eq("status", "نشط");
-      if (data) setEmployees(data.map((e) => ({ id: String(e.id), name: String(e.name) })));
+      const { data } = await supabase.from("employees").select("id, emp_id, name").in("status", ["فعال", "نشط"]).order("name");
+      if (data) setEmployees(data.map((e) => ({ id: String(e.id), empId: String(e.emp_id ?? ""), name: String(e.name) })));
     };
     loadEmps();
   }, []);
 
-  const days = startDate && endDate ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1) : 0;
+  // أيام تقويمية شاملة البداية والنهاية (بتاريخ UTC لتجنب فرق التوقيت)
+  const days = startDate && endDate && endDate >= startDate
+    ? Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86400000) + 1
+    : 0;
 
   const handleSave = async () => {
-    if (!empName || !startDate || !endDate) {
+    if (!employeeId || !startDate || !endDate) {
       toast({ title: t("خطأ"), description: t("يرجى تعبئة جميع الحقول المطلوبة"), variant: "destructive" });
+      return;
+    }
+    if (endDate < startDate) {
+      toast({ title: t("خطأ"), description: t("تاريخ النهاية قبل تاريخ البداية"), variant: "destructive" });
       return;
     }
     setSaving(true);
     try {
-      await supabase.from("leave_requests").insert([{
-        employee_id: employeeId || null,
+      const employee = employees.find((em) => em.id === employeeId);
+      const { error } = await supabase.from("leave_requests").insert([{
+        employee_id: employeeId,
+        emp_id: employee?.empId || null,
         emp_name: empName,
         leave_type: leaveType,
         start_date: startDate,
@@ -194,10 +215,11 @@ function LeaveForm({ onBack, onSaved }: { onBack: () => void; onSaved: () => voi
         status: "معلقة",
         notes,
       }]);
+      if (error) throw error;
       toast({ title: t("تم تقديم الطلب"), description: `${t("طلب إجازة")} ${empName} ${t("تم تسجيله")}` });
       onSaved();
-    } catch {
-      toast({ title: t("خطأ"), description: t("فشل في حفظ الطلب"), variant: "destructive" });
+    } catch (error) {
+      toast({ title: t("خطأ"), description: t(hrRequestErrorText(error, "فشل في حفظ الطلب")), variant: "destructive" });
     } finally { setSaving(false); }
   };
 

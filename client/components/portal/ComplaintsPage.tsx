@@ -3,6 +3,7 @@ import { ChevronLeft, Send, AlertOctagon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type Props = { empId: string; empName: string; isManager: boolean; onBack: () => void };
 type Complaint = { id: string; subject: string; message: string; status: string; created: string; admin_note?: string; emp_name?: string };
@@ -49,7 +50,7 @@ export default function ComplaintsPage({ empId, empName, isManager, onBack }: Pr
       created_at: new Date().toISOString(),
     }]);
     setSending(false);
-    if (error) { toast.error(`${t("تعذر الإرسال")}: ${error.message}`); return; }
+    if (error) { toast.error(`${t("تعذر الإرسال")}: ${t(hrRequestErrorText(error))}`); return; }
     toast.success(t("تم تقديم شكواك بنجاح"));
     setSubject("");
     setMessage("");

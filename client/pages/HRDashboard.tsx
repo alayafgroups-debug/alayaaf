@@ -17,10 +17,44 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
+import { riyadhToday, addDays, isWeekend } from "@/lib/hrDates";
+import { isSaudiNationality, ACTIVE_EMPLOYEE_STATUSES, PENDING_STATUSES, isApprovedStatus, isInactiveEmployeeStatus } from "@/lib/hrStatus";
+import { fetchAllRows } from "@/lib/fetchAll";
 
-type EmpRow = { nationality: string; totalSalary: number; status: string; department: string; name: string };
-type AttendanceAlert = { absentToday: number; lateToday: number };
+type EmpRow = { id: string; empId: string; nationality: string; totalSalary: number; status: string; branch: string; directorate: string; department: string; name: string; attendanceExempt: boolean };
+type AttendanceAlert = { notRegisteredToday: number; absentToday: number; lateToday: number; leavesUnknown: boolean };
 type LeaveAlert = { pendingLeaves: number };
+type DocumentAlert = { name: string; type: string; date: string; expired: boolean };
+type HolidayScope = { branch: string; department: string; section: string; team: string };
+
+const isActiveStatus = (status: string) => ACTIVE_EMPLOYEE_STATUSES.includes(status.trim());
+// الموظف في إجازة ما زال على رأس العمل: يدخل في إجمالي الرواتب وعدد السعوديين
+const isEmployedStatus = (status: string) => isActiveStatus(status) || status.trim() === "إجازة";
+const EMPLOYEE_SELECT = "id, emp_id, name, nationality, total_salary, base_salary, status, branch, directorate, department, id_expiry_date, passport_expiry_date, contract_end_date";
+const errorText = (error: unknown) => (error as { message?: string } | null)?.message || "حدث خطأ غير متوقع";
+
+// عطلة رسمية تشمل الموظف: كل حقل نطاق محدد يجب أن يطابق (الفرع، الإدارة = directorate، القسم = department).
+// فريق العمل لا يُخزَّن في ملف الموظف، فالعطلة المحددة بفريق لا تُطبَّق هنا.
+const holidayCovers = (holiday: HolidayScope, employee: EmpRow) => {
+  if (holiday.team) return false;
+  if (holiday.branch && holiday.branch !== employee.branch.trim()) return false;
+  if (holiday.department && holiday.department !== employee.directorate.trim()) return false;
+  if (holiday.section && holiday.section !== employee.department.trim()) return false;
+  return true;
+};
+const DOCUMENT_FIELDS: Array<{ key: string; label: string }> = [
+  { key: "id_expiry_date", label: "انتهاء الهوية / الإقامة" },
+  { key: "passport_expiry_date", label: "انتهاء جواز السفر" },
+  { key: "contract_end_date", label: "انتهاء العقد" },
+];
+
+const statusBarColor = (status: string) => {
+  if (isActiveStatus(status)) return "bg-green-500";
+  if (status === "إجازة") return "bg-blue-500";
+  if (status === "غير نشط" || status === "غير فعال") return "bg-gray-400";
+  if (status === "منتهي") return "bg-slate-500";
+  return "bg-amber-500";
+};
 
 export default function HRDashboard() {
   const navigate = useNavigate();
@@ -28,81 +62,202 @@ export default function HRDashboard() {
   const [empData, setEmpData] = useState<EmpRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, active: 0, saudi: 0, totalSalary: 0 });
-  const [attendanceAlert, setAttendanceAlert] = useState<AttendanceAlert>({ absentToday: 0, lateToday: 0 });
+  const [attendanceAlert, setAttendanceAlert] = useState<AttendanceAlert>({ notRegisteredToday: 0, absentToday: 0, lateToday: 0, leavesUnknown: false });
   const [leaveAlert, setLeaveAlert] = useState<LeaveAlert>({ pendingLeaves: 0 });
+  const [documentAlerts, setDocumentAlerts] = useState<DocumentAlert[]>([]);
+  const [documentAlertsTotal, setDocumentAlertsTotal] = useState(0);
+  const [documentAlertsExpired, setDocumentAlertsExpired] = useState(0);
   const [recentAttendance, setRecentAttendance] = useState<{ emp_name: string; check_in: string; status: string }[]>([]);
+  // فشل تحميل الموظفين أو الحضور: لا نعرض "لا توجد تنبيهات" ولا أصفارًا مضللة
+  const [loadError, setLoadError] = useState("");
+  const [employeesFailed, setEmployeesFailed] = useState(false);
 
   useEffect(() => {
     const load = async () => {
+      const errors: string[] = [];
       try {
-        // Load employees
-        const { data, error: empError } = await supabase
-          .from("employees")
-          .select("name, nationality, total_salary, status, department");
+        const today = riyadhToday();
 
-        if (empError) {
+        // Load employees (كل الصفوف، مع عمود الإعفاء من الحضور إن وُجد)
+        let rawEmployees: any[] = [];
+        let employeesLoaded = false;
+        try {
+          try {
+            rawEmployees = await fetchAllRows<any>((from, to) =>
+              supabase.from("employees").select(`${EMPLOYEE_SELECT}, attendance_exempt`).order("id").range(from, to));
+          } catch (exemptError: any) {
+            // قاعدة بيانات بلا عمود attendance_exempt: نعيد الجلب بدونه
+            if (exemptError?.code !== "42703") throw exemptError;
+            rawEmployees = await fetchAllRows<any>((from, to) =>
+              supabase.from("employees").select(EMPLOYEE_SELECT).order("id").range(from, to));
+          }
+          employeesLoaded = true;
+        } catch (empError) {
           console.error("Employees fetch error:", empError);
-          setStats({ total: 0, active: 0, saudi: 0, totalSalary: 0 });
-        } else if (data) {
-          const mapped: EmpRow[] = data.map((r: any) => ({
+          errors.push(`${t("الموظفون")}: ${t(errorText(empError))}`);
+          setEmployeesFailed(true);
+        }
+        const mapped: EmpRow[] = rawEmployees.map((r: any) => {
+          const total = Number(r.total_salary ?? 0);
+          return {
+            id: String(r.id ?? ""),
+            empId: String(r.emp_id ?? "").trim(),
             name: String(r.name ?? ""),
             nationality: String(r.nationality ?? ""),
-            totalSalary: Number(r.total_salary ?? 0),
+            totalSalary: total > 0 ? total : Number(r.base_salary ?? 0),
             status: String(r.status ?? "نشط"),
+            branch: String(r.branch ?? ""),
+            directorate: String(r.directorate ?? ""),
             department: String(r.department ?? ""),
-          }));
+            attendanceExempt: r.attendance_exempt === true,
+          };
+        });
+        const activeEmployees = mapped.filter((e) => isActiveStatus(e.status));
+        const employedEmployees = mapped.filter((e) => isEmployedStatus(e.status));
 
-          setEmpData(mapped);
-          setStats({
-            total: mapped.length,
-            active: mapped.filter((e) => e.status === "نشط" || e.status === "فعال").length,
-            saudi: mapped.filter((e) => e.nationality === "المملكة العربية السعودية").length,
-            totalSalary: mapped.reduce((s, e) => s + e.totalSalary, 0),
+        setEmpData(mapped);
+        setStats({
+          total: mapped.length,
+          active: activeEmployees.length,
+          saudi: employedEmployees.filter((e) => isSaudiNationality(e.nationality)).length,
+          totalSalary: employedEmployees.reduce((s, e) => s + e.totalSalary, 0),
+        });
+
+        // تنبيهات الوثائق والعقود: منتهية أو تنتهي خلال 30 يومًا
+        // القادمة أولًا بالأقرب تاريخًا، ثم المنتهية (الأحدث انتهاءً أولًا)
+        const alertLimit = addDays(today, 30);
+        const docs: DocumentAlert[] = [];
+        rawEmployees
+          .filter((r: any) => !isInactiveEmployeeStatus(r.status))
+          .forEach((r: any) => {
+            DOCUMENT_FIELDS.forEach(({ key, label }) => {
+              const date = String(r[key] ?? "").slice(0, 10);
+              if (/^\d{4}-\d{2}-\d{2}$/.test(date) && date <= alertLimit) {
+                docs.push({ name: String(r.name ?? ""), type: label, date, expired: date < today });
+              }
+            });
           });
+        docs.sort((a, b) => {
+          if (a.expired !== b.expired) return a.expired ? 1 : -1;
+          return a.expired ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+        });
+        setDocumentAlertsTotal(docs.length);
+        setDocumentAlertsExpired(docs.filter((doc) => doc.expired).length);
+        setDocumentAlerts(docs.slice(0, 10));
+
+        // الإجازات المعتمدة التي تشمل اليوم (الإجازة بلا تاريخ نهاية = يوم واحد)
+        const onLeave = new Set<string>();
+        let leavesUnknown = false;
+        if (employeesLoaded) {
+          const { data: leaveRows, error: leavesError } = await supabase
+            .from("leave_requests")
+            .select("employee_id, emp_id, start_date, end_date, status")
+            .lte("start_date", today)
+            .or(`end_date.gte.${today},end_date.is.null`);
+          if (leavesError) {
+            console.error("Approved leaves fetch error:", leavesError);
+            leavesUnknown = true;
+          } else {
+            const codeCount = new Map<string, number>();
+            mapped.forEach((e) => { if (e.empId) codeCount.set(e.empId, (codeCount.get(e.empId) ?? 0) + 1); });
+            const idByCode = new Map(mapped.filter((e) => e.empId && codeCount.get(e.empId) === 1).map((e) => [e.empId, e.id]));
+            (leaveRows ?? []).forEach((l: any) => {
+              if (!isApprovedStatus(l.status)) return;
+              const start = String(l.start_date ?? "").slice(0, 10);
+              const end = String(l.end_date ?? "").slice(0, 10) || start;
+              if (!start || start > today || end < today) return;
+              const employeeId = String(l.employee_id ?? "").trim();
+              // الربط بمعرّف الموظف أولًا، وبالرقم الوظيفي فقط إن كان غير مكرر
+              const matched = employeeId || idByCode.get(String(l.emp_id ?? "").trim());
+              if (matched) onLeave.add(matched);
+            });
+          }
         }
 
-        // Load today's attendance alerts
-        const today = new Date().toISOString().split("T")[0];
-        const { data: attData, error: attError } = await supabase
-          .from("attendance")
-          .select("emp_name, check_in, status, late_minutes")
-          .eq("date", today);
+        // العطل الرسمية التي تشمل اليوم (يُتجاهل الفشل: التنبيه معلوماتي)
+        let holidays: HolidayScope[] = [];
+        const { data: holidayRows, error: holidaysError } = await supabase
+          .from("official_holidays")
+          .select("start_date, end_date, branch, department, section, team")
+          .lte("start_date", today)
+          .or(`end_date.gte.${today},end_date.is.null`);
+        if (holidaysError) {
+          console.error("Official holidays fetch error:", holidaysError);
+        } else {
+          holidays = (holidayRows ?? [])
+            .filter((h: any) => {
+              const start = String(h.start_date ?? "").slice(0, 10);
+              const end = String(h.end_date ?? "").slice(0, 10) || start;
+              return start && start <= today && end >= today;
+            })
+            .map((h: any) => ({
+              branch: String(h.branch ?? "").trim(),
+              department: String(h.department ?? "").trim(),
+              section: String(h.section ?? "").trim(),
+              team: String(h.team ?? "").trim(),
+            }));
+        }
 
-        if (!attError && attData) {
-          const absentToday = (attData || []).filter((a: any) => a.status === "غائب").length;
-          const lateToday = (attData || []).filter((a: any) => (a.late_minutes ?? 0) > 0).length;
-          setAttendanceAlert({ absentToday, lateToday });
-          setRecentAttendance((attData || []).slice(0, 5).map((a: any) => ({
+        // Load today's attendance (بتوقيت الرياض)
+        try {
+          const attData = await fetchAllRows<any>((from, to) =>
+            supabase
+              .from("attendance")
+              .select("id, emp_id, emp_name, check_in, status, late_minutes")
+              .eq("date", today)
+              .order("check_in", { ascending: false, nullsFirst: false })
+              .order("id", { ascending: false })
+              .range(from, to));
+          const registered = new Set(attData.map((a: any) => String(a.emp_id ?? "").trim()));
+          // لا يُحتسب: المعفى من الحضور، ومن في إجازة معتمدة اليوم، ومن تشمله عطلة رسمية، وكل الموظفين في الجمعة والسبت
+          const notRegisteredToday = employeesLoaded && !isWeekend(today)
+            ? activeEmployees.filter((e) =>
+                !e.attendanceExempt && e.empId && !registered.has(e.empId) && !onLeave.has(e.id)
+                && !holidays.some((holiday) => holidayCovers(holiday, e))).length
+            : 0;
+          const absentToday = attData.filter((a: any) => String(a.status ?? "").includes("غائب")).length;
+          const lateToday = attData.filter((a: any) => (a.late_minutes ?? 0) > 0).length;
+          setAttendanceAlert({ notRegisteredToday, absentToday, lateToday, leavesUnknown });
+          setRecentAttendance(attData.slice(0, 5).map((a: any) => ({
             emp_name: String(a.emp_name ?? ""),
             check_in: String(a.check_in ?? "-"),
             status: String(a.status ?? ""),
           })));
+        } catch (attError) {
+          console.error("Attendance fetch error:", attError);
+          errors.push(`${t("الحضور")}: ${t(errorText(attError))}`);
         }
 
-        // Load pending leave requests
-        const { data: leaveData, error: leaveError } = await supabase
+        // Load pending leave requests (عدّ فقط بلا جلب الصفوف)
+        const { count: pendingCount, error: leaveError } = await supabase
           .from("leave_requests")
-          .select("id")
-          .in("status", ["معلقة", "معلق"]);
+          .select("id", { count: "exact", head: true })
+          // نفس عدّ لوحة التحكم الرئيسية: الحالة الفارغة معلقة أيضًا
+          .or(`status.is.null,status.eq."",status.in.(${PENDING_STATUSES.map((value) => `"${value}"`).join(",")})`);
 
-        if (!leaveError && leaveData) {
-          setLeaveAlert({ pendingLeaves: leaveData?.length ?? 0 });
+        if (leaveError) {
+          console.error("Pending leaves count error:", leaveError);
+        } else {
+          setLeaveAlert({ pendingLeaves: pendingCount ?? 0 });
         }
 
       } catch (err) {
         console.error("Error loading HR dashboard:", err);
+        errors.push(t(errorText(err)));
       } finally {
+        setLoadError(errors.join(" — "));
         setLoading(false);
       }
     };
     load();
   }, []);
 
+  const kpiValue = (value: string | number) => (employeesFailed ? "—" : value);
   const kpiCards = [
-    { label: "الموظفون الكليون", value: stats.total, icon: Users, color: "text-amber-600", bgColor: "bg-amber-50", onClick: () => navigate("/hr/employees") },
-    { label: "الموظفون النشطون", value: stats.active, icon: UserCheck, color: "text-green-600", bgColor: "bg-green-50", onClick: () => navigate("/hr/employees") },
-    { label: "الموظفون السعوديون", value: stats.saudi, icon: Building2, color: "text-blue-600", bgColor: "bg-blue-50" },
-    { label: "إجمالي الرواتب", value: stats.totalSalary > 0 ? `${formatNumber(stats.totalSalary)} ${t("ر.س")}` : "0", icon: TrendingUp, color: "text-purple-600", bgColor: "bg-purple-50", onClick: () => navigate("/hr/payroll") },
+    { label: "الموظفون الكليون", value: kpiValue(stats.total), icon: Users, color: "text-amber-600", bgColor: "bg-amber-50", onClick: () => navigate("/hr/employees") },
+    { label: "الموظفون النشطون", value: kpiValue(stats.active), icon: UserCheck, color: "text-green-600", bgColor: "bg-green-50", onClick: () => navigate("/hr/employees") },
+    { label: "الموظفون السعوديون", value: kpiValue(stats.saudi), icon: Building2, color: "text-blue-600", bgColor: "bg-blue-50" },
+    { label: "إجمالي الرواتب", value: kpiValue(stats.totalSalary > 0 ? `${formatNumber(stats.totalSalary)} ${t("ر.س")}` : "0"), icon: TrendingUp, color: "text-purple-600", bgColor: "bg-purple-50", onClick: () => navigate("/hr/payroll") },
   ];
 
   const statusDistribution = empData.reduce((acc, emp) => {
@@ -110,7 +265,7 @@ export default function HRDashboard() {
     return acc;
   }, {} as Record<string, number>);
 
-  const hasAlerts = attendanceAlert.absentToday > 0 || attendanceAlert.lateToday > 0 || leaveAlert.pendingLeaves > 0;
+  const hasAlerts = attendanceAlert.notRegisteredToday > 0 || attendanceAlert.absentToday > 0 || attendanceAlert.lateToday > 0 || leaveAlert.pendingLeaves > 0 || documentAlerts.length > 0;
 
   return (
     <Layout>
@@ -173,6 +328,8 @@ export default function HRDashboard() {
               <h2 className="text-lg font-semibold text-foreground mb-4">{t("توزيع حالات الموظفين")}</h2>
               {loading ? (
                 <p className="text-sm text-muted-foreground text-center py-4">{t("جاري التحميل...")}</p>
+              ) : employeesFailed ? (
+                <p className="text-sm text-red-600 text-center py-4">{t("تعذر تحميل بيانات الموظفين")}</p>
               ) : Object.keys(statusDistribution).length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">{t("لا يوجد موظفون بعد")}</p>
               ) : (
@@ -185,7 +342,7 @@ export default function HRDashboard() {
                       </div>
                       <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
                         <div
-                          className={`h-full ${status === "نشط" ? "bg-green-500" : status === "إجازة" ? "bg-blue-500" : status === "غير نشط" ? "bg-gray-400" : "bg-red-500"}`}
+                          className={`h-full ${statusBarColor(status)}`}
                           style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
                         />
                       </div>
@@ -231,10 +388,57 @@ export default function HRDashboard() {
                 <AlertCircle className="h-5 w-5 text-amber-600" />
                 <h3 className="font-semibold text-foreground">{t("تنبيهات مهمة")}</h3>
               </div>
-              {!hasAlerts ? (
-                <p className="text-sm text-muted-foreground">{t("لا توجد تنبيهات حالياً. جميع البيانات محدثة.")}</p>
+              {loading ? (
+                <p className="text-sm text-muted-foreground">{t("جاري التحميل...")}</p>
+              ) : !hasAlerts && !loadError ? (
+                <p className="text-sm text-muted-foreground">{t("لا توجد تنبيهات حالياً")}</p>
               ) : (
                 <div className="space-y-2">
+                  {loadError && (
+                    <div className="flex gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-red-700">
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm font-semibold">{`${t("تعذر تحميل بيانات التنبيهات")}: ${loadError}`}</p>
+                    </div>
+                  )}
+                  {documentAlerts.length > 0 && (
+                    <div className="rounded-lg border border-red-200 bg-red-50/60 p-3 text-red-700">
+                      <div className="flex gap-3">
+                        <FileText className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold">{t("وثائق وعقود منتهية أو تنتهي خلال 30 يومًا")}</p>
+                          {documentAlertsTotal > documentAlerts.length && (
+                            <p className="text-xs opacity-75">
+                              {`${t("يُعرض")} ${formatNumber(documentAlerts.length)} ${t("من")} ${formatNumber(documentAlertsTotal)}`}
+                              {documentAlertsExpired > 0 ? ` — ${t("منها")} ${formatNumber(documentAlertsExpired)} ${t("منتهية")}` : ""}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        {documentAlerts.map((doc, i) => (
+                          <div key={`${doc.name}-${doc.type}-${i}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/70 px-2.5 py-1.5 text-xs">
+                            <span className="font-semibold text-foreground">{doc.name || "-"}</span>
+                            <span className="text-muted-foreground">{t(doc.type)}</span>
+                            <span className={`font-semibold ${doc.expired ? "text-red-700" : "text-amber-700"}`}>
+                              {doc.date} {doc.expired ? `(${t("منتهي")})` : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {attendanceAlert.notRegisteredToday > 0 && (
+                    <div className="flex gap-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3 text-orange-700">
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold">{t("لم يسجلوا حضورًا حتى الآن")}</p>
+                        <p className="text-xs opacity-75">
+                          {`${formatNumber(attendanceAlert.notRegisteredToday)} ${t("موظف نشط بلا سجل حضور اليوم")}`}
+                          {attendanceAlert.leavesUnknown ? ` — ${t("تعذر استبعاد الإجازات المعتمدة")}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {attendanceAlert.absentToday > 0 && (
                     <div className="flex gap-3 rounded-lg border border-red-200 bg-red-50/60 p-3 text-red-700">
                       <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -274,7 +478,7 @@ export default function HRDashboard() {
                 <h3 className="font-semibold text-right">{t("إجراءات سريعة")}</h3>
               </div>
               <div className="p-4 space-y-2">
-                <button onClick={() => navigate("/hr/employees")} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 text-foreground text-right transition-colors">
+                <button onClick={() => navigate("/hr/employees/new")} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 text-foreground text-right transition-colors">
                   <Plus className="h-4 w-4" /><span className="text-sm font-medium">{t("إضافة موظف جديد")}</span>
                 </button>
                 <button onClick={() => navigate("/hr/employees")} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 text-foreground text-right transition-colors">

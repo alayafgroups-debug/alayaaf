@@ -361,7 +361,7 @@ export default function HREmployeeFullReport() {
                 bonus: 0,
                 deductions: 0,
                 netSalary: employee.totalSalary || employee.baseSalary,
-                notes: "",
+                notes: "تقديري: لا يوجد مسير رواتب محفوظ لهذا الشهر",
               },
             ];
           }
@@ -379,64 +379,16 @@ export default function HREmployeeFullReport() {
             { gross: 0, deductions: 0 },
           );
 
-          if (employee.nationality !== "سعودي") {
-            return {
-              employee,
-              attendance: employeeAttendance,
-              payroll: employeePayroll,
-              deductionItems: [],
-              generatedEmail: "",
-              additionalDeductionTotal: 0,
-              finalNet: payrollTotals.gross - payrollTotals.deductions,
-              isExample: false,
-            };
-          }
-
-          const { data: aiResult, error: aiError } =
-            await supabase.functions.invoke("hr-ai-deduction", {
-              body: {
-                empId: employee.empId,
-                month,
-                reportGross: payrollTotals.gross,
-                reportExistingDeductions: payrollTotals.deductions,
-              },
-            });
-          if (aiError) throw aiError;
-          if (aiResult?.error) throw new Error(String(aiResult.error));
-          if (
-            !Array.isArray(aiResult?.deductionItems) ||
-            !Number.isFinite(Number(aiResult?.finalNet))
-          ) {
-            throw new Error(
-              `استجابة الوكيل الذكي غير صالحة للموظف ${employee.name}`,
-            );
-          }
-          const generatedTotal = aiResult.deductionItems.reduce(
-            (sum: number, item: DeductionItem) =>
-              sum + Number(item.amount || 0),
-            0,
-          );
-          const expectedTotal = Number(
-            aiResult.displayedDeductionTotal ?? generatedTotal,
-          );
-          if (
-            Math.abs(generatedTotal - expectedTotal) > 0.01 ||
-            generatedTotal > payrollTotals.gross
-          ) {
-            throw new Error(
-              `قيمة الخصم لا تتطابق مع راتب الموظف ${employee.name}`,
-            );
-          }
-
+          // لا خصومات مولّدة: التقرير يعرض المسير المحفوظ فقط (أوقفنا الخصم الآلي hr-ai-deduction)
           return {
             employee,
             attendance: employeeAttendance,
             payroll: employeePayroll,
-            deductionItems: aiResult.deductionItems as DeductionItem[],
-            generatedEmail: String(aiResult.generatedEmail ?? ""),
-            additionalDeductionTotal: Number(aiResult.additionalDeductionTotal ?? 0),
-            finalNet: Number(aiResult.finalNet),
-            isExample: false,
+            deductionItems: [],
+            generatedEmail: "",
+            additionalDeductionTotal: 0,
+            finalNet: payrollTotals.gross - payrollTotals.deductions,
+            isExample: employeePayroll.some((item) => item.id.startsWith("generated-")),
           };
         }),
       );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { Search, CheckCircle, XCircle, Eye, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -7,12 +7,17 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { readUserSession } from "@/lib/authSession";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+import { isPendingStatus, normalizeRequestStatus } from "@/lib/hrStatus";
+import { daysInclusive } from "@/lib/hrDates";
+import { requestFormSchemas } from "@/components/hr/formSchemas";
 
 type RequestRow = {
   id: string; requestDate: string; empId: string; empName: string;
   moveType: string; requestType: string; status: string; lastUpdate: string;
   adminNote: string; signatureData: string; signedAt: string; source: "leave" | "request";
   details: Record<string, unknown>; senderDepartment: string; senderName: string;
+  startDate: string; endDate: string; days: number | null; notes: string;
 };
 
 type PayrollDetailRow = {
@@ -25,16 +30,40 @@ type PayrollDetailRow = {
   deductions: number;
   netSalary: number;
   status: string;
+  notes: string;
 };
 
+// الحالات غير المعروفة تبقى كما هي (لا تُعامل كمعلقة فتظهر أزرار القرار عليها)
 const normalizeStatus = (raw: string) =>
-  ["معلق", "معلقة", "pending"].includes(raw)
-    ? "معلق"
-    : ["موافق", "معتمدة", "approved"].includes(raw)
-    ? "موافق"
-    : ["مرفوض", "مرفوضة", "rejected"].includes(raw)
-    ? "مرفوض"
-    : (raw || "معلق");
+  isPendingStatus(raw) || normalizeRequestStatus(raw) !== "معلق" ? normalizeRequestStatus(raw) : raw;
+
+// مفاتيح داخلية في details لا تُعرض كمحتوى للطلب (بيانات الرواتب تُعرض في قسمها الخاص)
+const INTERNAL_DETAIL_KEYS = new Set([
+  "workflow", "review_decision", "payroll_period", "employee_ids", "active_employee_ids", "stopped_employee_ids", "active_amounts", "stopped_amounts",
+  "employee_count", "active_employee_count", "stopped_employee_count", "stop_reason",
+]);
+const isInternalDetailKey = (key: string) =>
+  key.startsWith("reviewed_") || key.startsWith("sender_") || INTERNAL_DETAIL_KEYS.has(key);
+
+const detailValueText = (value: unknown): string => {
+  if (value === null || value === undefined || String(value).trim() === "") return "—";
+  if (typeof value === "boolean") return value ? "نعم" : "لا";
+  if (Array.isArray(value)) return value.map((item) => detailValueText(item)).join("، ") || "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+/** محتوى طلب hr_requests كتسمية/قيمة باستخدام تسميات النموذج إن وُجد */
+const requestDetailEntries = (requestType: string, details: Record<string, unknown>) => {
+  const schema = Object.values(requestFormSchemas).find((item) => item.title === requestType);
+  return Object.entries(details)
+    .filter(([key]) => !isInternalDetailKey(key))
+    .map(([key, value]) => {
+      const field = schema?.fields.find((item) => item.name === key);
+      const optionLabel = field?.options?.find((option) => option.value === String(value))?.label;
+      return { key, label: field?.label ?? key, value: optionLabel ?? detailValueText(value), isOption: Boolean(optionLabel) };
+    });
+};
 
 export default function HRRequestsIncoming() {
   const { t, direction, formatDate, formatNumber } = useI18n();
@@ -46,13 +75,23 @@ export default function HRRequestsIncoming() {
   const [detailRequest, setDetailRequest] = useState<RequestRow | null>(null);
   const [payrollDetails, setPayrollDetails] = useState<PayrollDetailRow[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  // التحديث الدوري: لا تداخل بين طلبين، والاستجابة الأقدم من آخر طلب تُهمل، ولا تحديث بعد مغادرة الصفحة
+  const mountedRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const loadSeqRef = useRef(0);
 
-  const loadData = async () => {
-    setLoading(true);
+  // silent: تحديث دوري في الخلفية بلا مؤشر تحميل ودون مسح القائمة عند الخطأ
+  // force: يتجاوز حارس الطلب الجاري (بعد القرار) ويجعل أي استجابة أقدم متقادمة
+  const loadData = async (silent = false, force = false) => {
+    if (silent && !force && inFlightRef.current) return;
+    const seq = ++loadSeqRef.current;
+    inFlightRef.current = true;
+    const isCurrent = () => mountedRef.current && seq === loadSeqRef.current;
+    if (!silent) setLoading(true);
     try {
       const session = readUserSession();
       if (!session?.id) {
-        setItems([]);
+        if (isCurrent()) setItems([]);
         return;
       }
 
@@ -60,6 +99,8 @@ export default function HRRequestsIncoming() {
         supabase.from("leave_requests").select("*").eq("recipient_auth_user_id", session.id).order("created_at", { ascending: false }),
         supabase.from("hr_requests").select("*").eq("recipient_auth_user_id", session.id).order("created_at", { ascending: false }),
       ]);
+      if (!isCurrent()) return;
+      if (leaveRes.error || reqRes.error) throw leaveRes.error ?? reqRes.error;
 
       const leaveRows: RequestRow[] = (leaveRes.data ?? []).map((r: any) => ({
         id: String(r.id), requestDate: r.created_at ?? "",
@@ -69,6 +110,9 @@ export default function HRRequestsIncoming() {
         lastUpdate: r.updated_at ?? "",
         adminNote: r.admin_note ?? "", signatureData: r.signature_data ?? "", signedAt: r.signed_at ?? "", source: "leave",
         details: {}, senderDepartment: "", senderName: r.emp_name ?? "",
+        startDate: r.start_date ?? "", endDate: r.end_date ?? "",
+        days: r.days !== null && r.days !== undefined && r.days !== "" && Number.isFinite(Number(r.days)) ? Number(r.days) : null,
+        notes: String(r.notes ?? r.reason ?? ""),
       }));
 
       const reqRows: RequestRow[] = (reqRes.data ?? []).map((r: any) => {
@@ -83,36 +127,48 @@ export default function HRRequestsIncoming() {
           details,
           senderDepartment: String(details.sender_department ?? ""),
           senderName: String(details.sender_name ?? r.emp_name ?? ""),
+          startDate: r.start_date ?? "", endDate: r.end_date ?? "", days: null, notes: "",
         };
       });
 
-      setItems([...leaveRows, ...reqRows].sort((a, b) => b.requestDate.localeCompare(a.requestDate)));
-    } catch { setItems([]); } finally { setLoading(false); }
+      const rows = [...leaveRows, ...reqRows].sort((a, b) => b.requestDate.localeCompare(a.requestDate));
+      setItems(rows);
+      // تحديث نافذة التفاصيل المفتوحة بأحدث نسخة من الطلب
+      setDetailRequest((prev) => (prev ? rows.find((row) => row.id === prev.id && row.source === prev.source) ?? prev : prev));
+    } catch (error) {
+      if (!silent && isCurrent()) {
+        setItems([]);
+        toast({ title: t("تعذر تحميل الطلبات الواردة"), description: t(hrRequestErrorText(error, "حدث خطأ غير متوقع")), variant: "destructive" });
+      }
+    } finally {
+      if (seq === loadSeqRef.current) inFlightRef.current = false;
+      if (!silent && mountedRef.current) setLoading(false);
+    }
   };
 
   useEffect(() => {
-    loadData();
-    const timer = setInterval(loadData, 15000);
-    return () => clearInterval(timer);
+    mountedRef.current = true;
+    void loadData();
+    const timer = setInterval(() => void loadData(true), 15000);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(timer);
+    };
   }, []);
 
+  // القرار أولًا على الطلب (يتحقق الخادم أنك المستلم وأن الطلب معلق)، ثم أثره على الرواتب إن كان طلب اعتماد رواتب
   const updateRequestStatus = async (item: RequestRow, status: "موافق" | "مرفوض") => {
+    if (updatingId) return;
     setUpdatingId(item.id);
     try {
-      if (item.source === "request" && item.details.workflow === "payroll_approval") {
-        const period = String(item.details.payroll_period ?? "");
-        const employeeIds = Array.isArray(item.details.active_employee_ids)
-          ? item.details.active_employee_ids.map(String)
-          : [];
-        if (!period || employeeIds.length === 0) throw new Error(t("بيانات طلب اعتماد الرواتب غير مكتملة"));
-
-        const { error: payrollError } = await supabase
-          .from("payroll")
-          .update({ status: status === "موافق" ? "معتمد" : "مرفوض" })
-          .eq("month", period)
-          .in("emp_id", employeeIds);
-        if (payrollError) throw payrollError;
-      }
+      const isPayroll = item.source === "request" && item.details.workflow === "payroll_approval";
+      const period = String(item.details.payroll_period ?? "");
+      const employeeIds = Array.isArray(item.details.active_employee_ids)
+        ? item.details.active_employee_ids.map(String)
+        : [];
+      const stoppedCount = Array.isArray(item.details.stopped_employee_ids) ? item.details.stopped_employee_ids.length : 0;
+      // طلب فيه موقوفون فقط: القرار يعتمد الإيقاف نفسه ولا تتغير حالة صفوف
+      if (isPayroll && (!period || (employeeIds.length === 0 && stoppedCount === 0))) throw new Error(t("بيانات طلب اعتماد الرواتب غير مكتملة"));
 
       const reviewer = readUserSession();
       const requestUpdate = item.source === "request"
@@ -134,16 +190,40 @@ export default function HRRequestsIncoming() {
       const { error } = await supabase
         .from(item.source === "leave" ? "leave_requests" : "hr_requests")
         .update(requestUpdate)
-        .eq("id", item.id);
+        .eq("id", item.id)
+        .select("id")
+        .single();
       if (error) throw error;
 
+      if (isPayroll && employeeIds.length > 0) {
+        const { data: changed, error: payrollError } = await supabase
+          .from("payroll")
+          .update({ status: status === "موافق" ? "معتمد" : "مرفوض" })
+          .eq("month", period)
+          .in("emp_id", employeeIds)
+          .eq("status", "معلق")
+          .select("emp_id");
+        if (payrollError) throw payrollError;
+        if ((changed ?? []).length === 0) {
+          toast({
+            title: t("سُجّل القرار لكن لم تتغير صفوف الرواتب"),
+            description: t("تأكد أن لديك صلاحية إدارة الرواتب وأن صفوف الشهر ما زالت معلقة"),
+            variant: "destructive",
+          });
+        }
+      }
+
       toast({ title: t(status === "موافق" ? "تمت الموافقة على الطلب" : "تم رفض الطلب") });
+      if (!mountedRef.current) return;
+      // تحديث فوري للحالة في القائمة، ثم إعادة تحميل تتجاوز التحديث الدوري الجاري (استجابته قد تكون قبل القرار)
+      const decidedNote = requestUpdate.admin_note ?? "";
+      setItems((prev) => prev.map((row) => (row.id === item.id && row.source === item.source ? { ...row, status, adminNote: decidedNote } : row)));
       setDetailRequest(null);
-      await loadData();
+      await loadData(true, true);
     } catch (error) {
-      toast({ title: t("تعذر تحديث الطلب"), description: error instanceof Error ? error.message : t("حدث خطأ غير متوقع"), variant: "destructive" });
+      toast({ title: t("تعذر تحديث الطلب"), description: t(hrRequestErrorText(error, "حدث خطأ غير متوقع")), variant: "destructive" });
     } finally {
-      setUpdatingId(null);
+      if (mountedRef.current) setUpdatingId(null);
     }
   };
 
@@ -157,10 +237,11 @@ export default function HRRequestsIncoming() {
     const employeeIds = Array.isArray(item.details.employee_ids) ? item.details.employee_ids.map(String) : [];
     const { data, error } = await supabase
       .from("payroll")
-      .select("id, emp_id, emp_name, department, basic_salary, allowances, deductions, net_salary, status")
+      .select("id, emp_id, emp_name, department, basic_salary, allowances, deductions, net_salary, status, notes")
       .eq("month", period)
       .in("emp_id", employeeIds.length ? employeeIds : ["__none__"])
       .order("emp_name");
+    if (!mountedRef.current) return;
     setDetailsLoading(false);
     if (error) {
       toast({ title: t("تعذر تحميل تفاصيل الطلب"), description: error.message, variant: "destructive" });
@@ -176,6 +257,7 @@ export default function HRRequestsIncoming() {
       deductions: Number(row.deductions ?? 0),
       netSalary: Number(row.net_salary ?? 0),
       status: String(row.status ?? ""),
+      notes: String(row.notes ?? ""),
     })));
   };
 
@@ -287,20 +369,70 @@ export default function HRRequestsIncoming() {
                 <div><span className="block text-xs text-gray-500">{t("نوع الطلب")}</span><strong>{t(detailRequest.requestType)}</strong></div>
                 <div><span className="block text-xs text-gray-500">{t("تاريخ الطلب")}</span><strong>{formatRequestDate(detailRequest.requestDate)}</strong></div>
                 <div><span className="block text-xs text-gray-500">{t("الحالة")}</span><strong>{t(detailRequest.status)}</strong></div>
+                {detailRequest.details.workflow !== "payroll_approval" && <>
+                  <div><span className="block text-xs text-gray-500">{t("الموظف")}</span><strong>{detailRequest.empName || "—"}{detailRequest.empId ? ` (${detailRequest.empId})` : ""}</strong></div>
+                  <div><span className="block text-xs text-gray-500">{t("تاريخ البداية")}</span><strong>{detailRequest.startDate || "—"}</strong></div>
+                  <div><span className="block text-xs text-gray-500">{t("تاريخ النهاية")}</span><strong>{detailRequest.endDate || "—"}</strong></div>
+                </>}
+                {detailRequest.source === "leave" && (
+                  <div><span className="block text-xs text-gray-500">{t("عدد الأيام")}</span><strong>{detailRequest.days !== null ? formatNumber(detailRequest.days) : detailRequest.startDate && detailRequest.endDate ? formatNumber(daysInclusive(detailRequest.startDate, detailRequest.endDate)) : "—"}</strong></div>
+                )}
                 {detailRequest.details.workflow === "payroll_approval" && <>
                   <div><span className="block text-xs text-gray-500">{t("فترة الرواتب")}</span><strong>{String(detailRequest.details.payroll_period ?? "—")}</strong></div>
                   <div><span className="block text-xs text-gray-500">{t("عدد الموظفين")}</span><strong>{formatNumber(Number(detailRequest.details.employee_count ?? 0))}</strong></div>
                   <div><span className="block text-xs text-gray-500">{t("رواتب قيد الاعتماد")}</span><strong>{formatNumber(Number(detailRequest.details.active_employee_count ?? 0))}</strong></div>
                   <div><span className="block text-xs text-gray-500">{t("رواتب موقوفة")}</span><strong>{formatNumber(Number(detailRequest.details.stopped_employee_count ?? 0))}</strong></div>
+                  {String(detailRequest.details.stop_reason ?? "").trim() && (
+                    <div className="sm:col-span-2"><span className="block text-xs text-gray-500">{t("سبب إيقاف الرواتب")}</span><strong>{String(detailRequest.details.stop_reason)}</strong></div>
+                  )}
                 </>}
+              </div>
+              <div className="space-y-4 border-b p-5 text-sm">
+                {detailRequest.source === "leave" ? (
+                  <div>
+                    <h3 className="mb-2 font-semibold text-gray-800">{t("ملاحظات الطلب")}</h3>
+                    <p className="whitespace-pre-line rounded-lg border bg-white p-3 text-gray-700">{detailRequest.notes ? detailRequest.notes.split(" | ").join("\n") : "—"}</p>
+                  </div>
+                ) : (() => {
+                  const entries = requestDetailEntries(detailRequest.requestType, detailRequest.details);
+                  if (entries.length === 0) return detailRequest.details.workflow === "payroll_approval" ? null : <p className="text-gray-400">{t("لا توجد بيانات إضافية في الطلب")}</p>;
+                  return (
+                    <div>
+                      <h3 className="mb-2 font-semibold text-gray-800">{t("بيانات الطلب")}</h3>
+                      <dl className="grid gap-3 sm:grid-cols-2">
+                        {entries.map((entry) => (
+                          <div key={entry.key} className="rounded-lg border bg-white p-3">
+                            <dt className="text-xs text-gray-500">{t(entry.label)}</dt>
+                            <dd className="mt-1 whitespace-pre-line font-medium text-gray-900">{entry.isOption ? t(entry.value) : entry.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  );
+                })()}
+                <div>
+                  <h3 className="mb-2 font-semibold text-gray-800">{t("ملاحظة الإدارة")}</h3>
+                  <p className="whitespace-pre-line text-gray-700">{detailRequest.adminNote || t("لا توجد ملاحظة")}</p>
+                </div>
+                {detailRequest.details.workflow !== "payroll_approval" && <div>
+                  <h3 className="mb-2 font-semibold text-gray-800">{t("توقيع الموظف")}</h3>
+                  {detailRequest.signatureData ? (
+                    <div className="inline-flex flex-col items-start gap-1">
+                      <img src={detailRequest.signatureData} alt={`${t("توقيع الموظف")} ${detailRequest.empName}`} className="h-20 w-48 rounded border bg-white object-contain" />
+                      {detailRequest.signedAt && <span className="text-xs text-gray-400">{t("وقت التوقيع")}: {formatRequestDate(detailRequest.signedAt)}</span>}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">{t("طلب قديم بلا توقيع إلكتروني")}</span>
+                  )}
+                </div>}
               </div>
               {detailRequest.details.workflow === "payroll_approval" && (
                 <div className="p-5">
                   {detailsLoading ? <p className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</p> : (
                     <div className="overflow-x-auto rounded-lg border">
                       <table className="min-w-full text-sm">
-                        <thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("رقم الموظف")}</th><th className="px-3 py-3">{t("اسم الموظف")}</th><th className="px-3 py-3">{t("القسم")}</th><th className="px-3 py-3">{t("الراتب الأساسي")}</th><th className="px-3 py-3">{t("البدلات")}</th><th className="px-3 py-3">{t("الاستقطاعات")}</th><th className="px-3 py-3">{t("صافي الراتب")}</th><th className="px-3 py-3">{t("الحالة")}</th></tr></thead>
-                        <tbody>{payrollDetails.map((row) => <tr key={row.id} className="border-b"><td className="px-3 py-3">{row.empId}</td><td className="px-3 py-3 font-medium">{row.empName}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{formatNumber(row.basicSalary, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.allowances, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.deductions, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3 font-semibold">{formatNumber(row.netSalary, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{t(row.status)}</td></tr>)}</tbody>
+                        <thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("رقم الموظف")}</th><th className="px-3 py-3">{t("اسم الموظف")}</th><th className="px-3 py-3">{t("القسم")}</th><th className="px-3 py-3">{t("الراتب الأساسي")}</th><th className="px-3 py-3">{t("البدلات")}</th><th className="px-3 py-3">{t("الاستقطاعات")}</th><th className="px-3 py-3">{t("صافي الراتب")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("تفاصيل الحساب")}</th></tr></thead>
+                        <tbody>{payrollDetails.map((row) => <tr key={row.id} className="border-b"><td className="px-3 py-3">{row.empId}</td><td className="px-3 py-3 font-medium">{row.empName}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{formatNumber(row.basicSalary, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.allowances, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.deductions, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3 font-semibold">{formatNumber(row.netSalary, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{t(row.status)}</td><td className="min-w-64 px-3 py-3 text-xs text-gray-600">{row.notes || "—"}</td></tr>)}</tbody>
                       </table>
                     </div>
                   )}

@@ -7,6 +7,7 @@ import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
+import { readUserSession } from "@/lib/authSession";
 
 // ─── Request Types Grid ───────────────────────────────────────────────────────
 const REQUEST_TYPES = [
@@ -66,8 +67,12 @@ export default function HRRequestsSend() {
   useEffect(() => {
     const loadAdminUser = async () => {
       try {
+        // المرسل هو صاحب الجلسة نفسه (لا أول موظف في الجدول)
+        const session = readUserSession();
         const [employeeResult, departmentResult] = await Promise.all([
-          supabase.from("employees").select("emp_id, name, department_id, directorate, department, direct_manager").order("id").limit(1).single(),
+          session?.empId
+            ? supabase.from("employees").select("emp_id, name, department_id, directorate, department, direct_manager").eq("emp_id", session.empId).maybeSingle()
+            : Promise.resolve({ data: null, error: null }),
           supabase.from("departments").select("id, name").order("name"),
         ]);
         const departmentRows = (departmentResult.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) }));

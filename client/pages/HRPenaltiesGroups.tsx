@@ -6,8 +6,15 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type PenaltyGroup = { id: string; name: string; description: string };
+
+const NO_ROWS_MESSAGE = "لم يُحفظ شيء: السجل غير موجود أو لا تملك صلاحية هذه العملية";
+const penaltyErrorText = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "23503"
+    ? "مرتبط بمخالفات أو سجلات أخرى؛ لا يمكن حذفه"
+    : hrRequestErrorText(error, "تعذر حفظ البيانات");
 
 export default function HRPenaltiesGroups() {
   const { t, direction } = useI18n();
@@ -23,7 +30,8 @@ export default function HRPenaltiesGroups() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("penalty_groups").select("*").order("id");
+      const { data, error } = await supabase.from("penalty_groups").select("*").order("id");
+      if (error) toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
       if (data) setItems(data.map((r: any) => ({ id: String(r.id), name: r.name ?? "", description: r.description ?? "" })));
     } catch {} finally { setLoading(false); }
   };
@@ -42,19 +50,28 @@ export default function HRPenaltiesGroups() {
     try {
       const payload = { name: formName, description: formDesc };
       if (editingId) {
-        await supabase.from("penalty_groups").update(payload).eq("id", editingId);
-        toast({ title: t("تم التعديل") });
+        // select() يكشف التعديل الذي منعته الصلاحيات (0 صفوف) بدل إظهار نجاح وهمي
+        const { data, error } = await supabase.from("penalty_groups").update(payload).eq("id", editingId).select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error(NO_ROWS_MESSAGE);
       } else {
-        await supabase.from("penalty_groups").insert([payload]);
-        toast({ title: t("تمت الإضافة") });
+        const { error } = await supabase.from("penalty_groups").insert([payload]);
+        if (error) throw error;
       }
+      toast({ title: editingId ? t("تم التعديل") : t("تمت الإضافة") });
       resetForm(); loadData();
-    } catch { toast({ title: t("خطأ"), variant: "destructive" }); } finally { setSaving(false); }
+    } catch (error) {
+      toast({ title: t("خطأ"), description: t(penaltyErrorText(error)), variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: PenaltyGroup) => {
     if (!confirm(`${t("حذف")} "${item.name}"؟`)) return;
-    await supabase.from("penalty_groups").delete().eq("id", item.id);
+    const { data, error } = await supabase.from("penalty_groups").delete().eq("id", item.id).select("id");
+    if (error || !data?.length) {
+      toast({ title: t("لم يتم الحذف"), description: t(error ? penaltyErrorText(error) : NO_ROWS_MESSAGE), variant: "destructive" });
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: t("تم الحذف") });
   };

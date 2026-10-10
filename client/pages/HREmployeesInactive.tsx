@@ -270,8 +270,8 @@ export default function HREmployeesInactive() {
               className={cn("rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:outline-none", direction === "rtl" ? "text-right" : "text-left")}
             >
               <option value="">{t("جميع الحالات")}</option>
-              {INACTIVE_STATUSES.map((s) => (
-                <option key={s}>{t(s)}</option>
+              {["غير فعال", "منتهي"].map((s) => (
+                <option key={s} value={s}>{t(s)}</option>
               ))}
             </select>
             <button

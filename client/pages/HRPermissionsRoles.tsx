@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 type RoleRow = {
   id: string;
@@ -65,9 +66,9 @@ export default function HRPermissionsRoles() {
 
   const handleDelete = async (role: RoleRow) => {
     if (!confirm(`${t("حذف الدور")} "${role.nameAr}"؟`)) return;
-    const { error } = await supabase.from("user_roles").delete().eq("id", role.id);
+    const { error } = await supabase.from("user_roles").delete().eq("id", role.id).select("id").single();
     if (error) {
-      toast.error(`${t("تعذر حذف الدور")}: ${error.message}`);
+      toast.error(`${t("تعذر حذف الدور")}: ${t(hrRequestErrorText(error))}`);
     } else {
       setRoles((prev) => prev.filter((r) => r.id !== role.id));
       toast.success(t("تم حذف الدور بنجاح"));

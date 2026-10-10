@@ -3,6 +3,7 @@ import { ChevronLeft, Edit2, Save, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
+import { EmployeePhoto } from "@/components/hr/employeeFiles";
 
 type Props = { empId: string; onBack: () => void };
 
@@ -113,7 +114,7 @@ export default function ProfilePage({ empId, onBack }: Props) {
         {/* Profile Header */}
         <div className="bg-[#004e89] text-white p-6 pb-12 text-center">
           <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3 overflow-hidden">
-            {(data as any)?.photo_url ? <img src={(data as any).photo_url} alt={t("الملف الشخصي")} className="w-full h-full object-cover" /> : (data?.name ?? "").charAt(0)}
+            <EmployeePhoto value={(data as any)?.photo_url} name={data?.name ?? ""} />
           </div>
           <h3 className="text-xl font-bold">{data?.name ?? "—"}</h3>
           <p className="text-blue-100 text-sm mt-1">{(data as any)?.job_title ?? ""}</p>

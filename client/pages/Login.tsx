@@ -36,9 +36,15 @@ export default function Login() {
       // Fetch employee profile for role + permissions
       const { data: empData, error: empError } = await supabase
         .from("employees")
-        .select("id, emp_id, name, employee_role, permissions")
+        .select("id, emp_id, name, employee_role, permissions, status")
         .eq("email", email.toLowerCase())
         .maybeSingle();
+
+      if (empData && ["غير فعال", "منتهي"].includes(String(empData.status ?? ""))) {
+        toast.error("حسابك موقوف؛ راجع الموارد البشرية");
+        await supabase.auth.signOut();
+        return;
+      }
 
       let accountName = empData?.name ?? "";
       let accountRole = empData?.employee_role ?? "";

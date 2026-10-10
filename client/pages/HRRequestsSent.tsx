@@ -6,8 +6,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { readUserSession } from "@/lib/authSession";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
-type Request = { id: string; type: string; date: string; status: string; notes: string; approver: string; senderDepartment: string; senderName: string; source: "leave" | "request" };
+type Request = { id: string; type: string; date: string; status: string; rawStatus: string; notes: string; approver: string; senderDepartment: string; senderName: string; source: "leave" | "request" };
 
 const normalizeStatus = (raw: string) =>
   ["معلق", "معلقة", "pending"].includes(raw)
@@ -48,7 +49,7 @@ export default function HRRequestsSent() {
       const leaveRows: Request[] = (leaveRes.data ?? []).map((r: any) => ({
         id: String(r.id), type: r.leave_type ?? "إجازة",
         date: r.created_at ?? "",
-        status: normalizeStatus(String(r.status ?? "").trim()), notes: r.admin_note ?? r.notes ?? "-",
+        status: normalizeStatus(String(r.status ?? "").trim()), rawStatus: String(r.status ?? ""), notes: r.admin_note ?? r.notes ?? "-",
         approver: r.approver_name ?? "-", senderDepartment: "", senderName: r.emp_name ?? "", source: "leave",
       }));
 
@@ -58,6 +59,7 @@ export default function HRRequestsSent() {
           id: String(r.id), type: r.request_type ?? "طلب",
           date: r.created_at ?? "",
           status: normalizeStatus(String(r.status ?? "").trim()),
+          rawStatus: String(r.status ?? ""),
           notes: r.admin_note ?? "-",
           approver: String(details.reviewed_by_name ?? "-"),
           senderDepartment: String(details.sender_department ?? ""),
@@ -76,9 +78,18 @@ export default function HRRequestsSent() {
     return () => clearInterval(timer);
   }, []);
 
+  // الحذف للطلب المعلق فقط (سياسة الخادم)؛ نتحقق من أن الصف حُذف فعلًا
   const handleDelete = async (item: Request) => {
     if (!confirm(t("حذف هذا الطلب؟"))) return;
-    await supabase.from(item.source === "leave" ? "leave_requests" : "hr_requests").delete().eq("id", item.id);
+    const { error } = await supabase.from(item.source === "leave" ? "leave_requests" : "hr_requests").delete().eq("id", item.id).select("id").single();
+    if (error) {
+      toast({
+        title: t("تعذر الحذف"),
+        description: error.code === "PGRST116" ? t("يُحذف الطلب المعلق فقط") : t(hrRequestErrorText(error)),
+        variant: "destructive",
+      });
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast({ title: t("تم الحذف") });
   };
@@ -152,7 +163,9 @@ export default function HRRequestsSent() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title={t("عرض")}><Eye className="h-4 w-4" /></button>
-                        <button onClick={() => handleDelete(r)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title={t("حذف")}><Trash2 className="h-4 w-4" /></button>
+                        {["معلق", "معلقة", "pending", ""].includes(String(r.rawStatus ?? "").trim()) && (
+                          <button onClick={() => handleDelete(r)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title={t("حذف")}><Trash2 className="h-4 w-4" /></button>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">

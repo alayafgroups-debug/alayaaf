@@ -13,6 +13,8 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
+import { fetchAllRows } from "@/lib/fetchAll";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 import { useI18n } from "@/i18n";
 
 type ArchiveRow = {
@@ -33,6 +35,18 @@ type ArchiveRow = {
 };
 
 const ALL = "الكل";
+const POSTED = "مرحّل";
+// راتب مرحّل محاسبيًا (مستحق في القيد) وصرفه محبوس حتى يُرفع إيقافه من صفحة الترحيل
+const HELD_POSTED = "موقوف الصرف";
+// الرواتب المعتمدة أو المرحّلة أو المدفوعة لا تُحذف من الأرشيف
+// والموقوف لا يُحذف: إيقافه قرار إدارة، وحذفه يُسقط استحقاقه من قيد الشهر
+const LOCKED_STATUSES = ["معتمد", POSTED, HELD_POSTED, "مدفوع", "موقوف"];
+const canDeletePayroll = (record: { status: string }) => !LOCKED_STATUSES.includes(record.status);
+const payrollDeleteErrorText = (error: unknown) => {
+  const text = `${(error as { message?: string } | null)?.message ?? ""}`;
+  if (text.includes("POSTED_PAYROLL_IMMUTABLE")) return "رواتب الشهر مرحّلة محاسبيًا ولا تُعدَّل";
+  return hrRequestErrorText(error, "تعذر الحذف");
+};
 const parseMonthYear = (month: string) => {
   const [year = "", mon = ""] = String(month ?? "").split("-");
   return { year, mon };
@@ -62,17 +76,21 @@ export default function HRPayrollArchive() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from("payroll").select("*").order("month", { ascending: false });
-      if (error) {
-        toast({ title: t("تعذّر تحميل الأرشيف"), description: error.message });
+      let data: Record<string, any>[] = [];
+      try {
+        data = await fetchAllRows<Record<string, any>>((from, to) =>
+          supabase.from("payroll").select("*").order("month", { ascending: false }).order("id").range(from, to));
+      } catch (error) {
+        toast({ title: t("تعذّر تحميل الأرشيف"), description: t(hrRequestErrorText(error)), variant: "destructive" });
         return;
       }
-      setRecords((data ?? []).map((r) => ({
+      setRecords(data.map((r) => ({
         id: String(r.id ?? ""), month: String(r.month ?? ""), empName: String(r.emp_name ?? "-"),
         department: String(r.department ?? "-"), basicSalary: Number(r.basic_salary ?? 0), allowances: Number(r.allowances ?? 0),
         overtime: Number((r as Record<string, unknown>).overtime ?? 0), bonus: Number((r as Record<string, unknown>).bonus ?? 0),
         socialInsurance: Number((r as Record<string, unknown>).social_insurance_deduction ?? 0), deductions: Number(r.deductions ?? 0),
-        netSalary: Number(r.net_salary ?? 0), status: String(r.status ?? "معلق"), paidDate: String(r.paid_date ?? ""), notes: String(r.notes ?? ""),
+        // الراتب المرحّل محاسبيًا يُعرض ويُصفّى بحالة «مرحّل»
+        netSalary: Number(r.net_salary ?? 0), status: r.accounting_status === "posted" ? (String(r.status ?? "") === "موقوف" ? HELD_POSTED : POSTED) : String(r.status ?? "معلق"), paidDate: String(r.paid_date ?? ""), notes: String(r.notes ?? ""),
       })));
     } catch {
       toast({ title: t("تعذّر تحميل الأرشيف") });
@@ -132,14 +150,16 @@ export default function HRPayrollArchive() {
   const printArchive = () => { if (archiveRows.length) printReport({ title: t("أرشيف الرواتب"), subtitle: reportSubtitle, columns: archiveColumns, rows: archiveRows, fileName: "payroll-archive", landscape: true, summary: archiveSummary }); };
   const printSingle = (rec: ArchiveRow) => printReport({ title: `${t("سجل راتب")} — ${rec.empName}`, subtitle: `${t("تفاصيل راتب شهر")} ${formatMonth(rec.month)}`, columns: archiveColumns, rows: [toArchiveRow(rec)], fileName: `payroll-${rec.month}`, landscape: true, summary: [{ label: t("صافي الراتب"), value: money(rec.netSalary) }] });
   const handleDelete = async (rec: ArchiveRow) => {
+    if (!canDeletePayroll(rec)) { toast({ title: t("تعذر الحذف"), description: t("لا يُحذف راتب معتمد أو موقوف أو مرحّل أو مدفوع"), variant: "destructive" }); return; }
     if (!confirm(`${t("حذف سجل")} ${rec.empName}؟`)) return;
-    const { error } = await supabase.from("payroll").delete().eq("id", rec.id);
-    if (error) { toast({ title: t("تعذر الحذف"), description: error.message }); return; }
+    const { data, error } = await supabase.from("payroll").delete().eq("id", rec.id).select("id");
+    if (error) { toast({ title: t("تعذر الحذف"), description: t(payrollDeleteErrorText(error)), variant: "destructive" }); return; }
+    if (!data?.length) { toast({ title: t("تعذر الحذف"), description: t("لم يُحذف شيء: السجل مرحّل أو لا تملك صلاحية حذفه"), variant: "destructive" }); return; }
     setRecords((prev) => prev.filter((r) => r.id !== rec.id));
     toast({ title: t("تم الحذف") });
   };
 
-  const statusOptions = [ALL, "مدفوع", "معلق", "ملغي"];
+  const statusOptions = [ALL, "معلق", "معتمد", POSTED, HELD_POSTED, "مدفوع", "موقوف", "مرفوض", "ملغي"];
   return (
     <Layout>
       <div className="p-6 max-w-full mx-auto space-y-4" dir={direction}>
@@ -155,7 +175,7 @@ export default function HRPayrollArchive() {
           </div>
           <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center gap-3 flex-wrap"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("بحث بالاسم / الإدارة / رقم السجل")} className="h-9 w-80 max-w-full rounded border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500" /><div className="ms-auto flex items-center gap-2 text-sm text-slate-600"><span>{t("عدد السجلات في الصفحة")}</span><select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value) || 10)} className="h-8 rounded border border-slate-300 bg-white px-2">{[10, 25, 50, 100].map((size) => <option key={size} value={size}>{formatNumber(size)}</option>)}</select></div></div>
           <div className="overflow-x-auto"><table className="w-full text-xs text-center whitespace-nowrap min-w-[1500px]"><thead className="bg-slate-100 text-slate-700 border-b border-slate-200"><tr>{["الإجراءات", "الحالة", "صافي الراتب", "إجمالي الاستقطاعات", "التأمينات الاجتماعية 9.75%", "إجمالي الاستحقاقات", "مكافآت", "ساعات إضافية", "البدلات", "الراتب الأساسي", "الإدارة", "الاسم", "الشهر"].map((label) => <th key={label} className="py-2 px-2 font-medium">{t(label)}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
-            {loading ? <tr><td colSpan={13} className="py-10 text-slate-400">{t("جاري التحميل...")}</td></tr> : pageData.length === 0 ? <tr><td colSpan={13} className="py-10 text-slate-400">{t("لا توجد سجلات")}</td></tr> : pageData.map((rec) => { const entitlements = rec.basicSalary + rec.allowances + rec.overtime + rec.bonus; return <tr key={rec.id} className="hover:bg-slate-50 transition-colors"><td className="py-2 px-2"><div className="flex items-center justify-center gap-2"><button onClick={() => setSelectedRecord(rec)} className="text-slate-500 hover:text-[#0a5a92]" title={t("عرض")}><Eye className="h-4 w-4" /></button><button onClick={() => printSingle(rec)} className="text-slate-500 hover:text-indigo-600" title={t("طباعة السجل")}><Printer className="h-4 w-4" /></button><button onClick={() => handleDelete(rec)} className="text-red-400 hover:text-red-600" title={t("حذف")}><XCircle className="h-4 w-4" /></button></div></td><td className="py-2 px-2"><span className={`px-2 py-0.5 rounded text-[11px] font-medium ${rec.status === "مدفوع" ? "bg-green-100 text-green-700" : rec.status === "ملغي" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>{t(rec.status)}</span></td><td className="py-2 px-2 font-semibold text-green-700">{money(rec.netSalary)}</td><td className="py-2 px-2 font-semibold text-red-600">{money(rec.deductions)}</td><td className="py-2 px-2 font-semibold text-orange-600">{money(rec.socialInsurance)}</td><td className="py-2 px-2 font-semibold text-[#0a5a92]">{money(entitlements)}</td><td className="py-2 px-2">{money(rec.bonus)}</td><td className="py-2 px-2">{money(rec.overtime)}</td><td className="py-2 px-2">{money(rec.allowances)}</td><td className="py-2 px-2">{money(rec.basicSalary)}</td><td className="py-2 px-2 text-slate-700">{rec.department}</td><td className="py-2 px-2 font-medium">{rec.empName}</td><td className="py-2 px-2 text-slate-600">{formatMonth(rec.month)}</td></tr>; })}
+            {loading ? <tr><td colSpan={13} className="py-10 text-slate-400">{t("جاري التحميل...")}</td></tr> : pageData.length === 0 ? <tr><td colSpan={13} className="py-10 text-slate-400">{t("لا توجد سجلات")}</td></tr> : pageData.map((rec) => { const entitlements = rec.basicSalary + rec.allowances + rec.overtime + rec.bonus; return <tr key={rec.id} className="hover:bg-slate-50 transition-colors"><td className="py-2 px-2"><div className="flex items-center justify-center gap-2"><button onClick={() => setSelectedRecord(rec)} className="text-slate-500 hover:text-[#0a5a92]" title={t("عرض")}><Eye className="h-4 w-4" /></button><button onClick={() => printSingle(rec)} className="text-slate-500 hover:text-indigo-600" title={t("طباعة السجل")}><Printer className="h-4 w-4" /></button>{canDeletePayroll(rec) && <button onClick={() => handleDelete(rec)} className="text-red-400 hover:text-red-600" title={t("حذف")}><XCircle className="h-4 w-4" /></button>}</div></td><td className="py-2 px-2"><span className={`px-2 py-0.5 rounded text-[11px] font-medium ${rec.status === "مدفوع" || rec.status === "معتمد" ? "bg-green-100 text-green-700" : rec.status === POSTED ? "bg-blue-100 text-blue-700" : rec.status === "ملغي" || rec.status === "مرفوض" ? "bg-red-100 text-red-700" : rec.status === HELD_POSTED ? "bg-orange-100 text-orange-700" : rec.status === "موقوف" ? "bg-slate-200 text-slate-700" : "bg-yellow-100 text-yellow-700"}`}>{t(rec.status)}</span></td><td className="py-2 px-2 font-semibold text-green-700">{money(rec.netSalary)}</td><td className="py-2 px-2 font-semibold text-red-600">{money(rec.deductions)}</td><td className="py-2 px-2 font-semibold text-orange-600">{money(rec.socialInsurance)}</td><td className="py-2 px-2 font-semibold text-[#0a5a92]">{money(entitlements)}</td><td className="py-2 px-2">{money(rec.bonus)}</td><td className="py-2 px-2">{money(rec.overtime)}</td><td className="py-2 px-2">{money(rec.allowances)}</td><td className="py-2 px-2">{money(rec.basicSalary)}</td><td className="py-2 px-2 text-slate-700">{rec.department}</td><td className="py-2 px-2 font-medium">{rec.empName}</td><td className="py-2 px-2 text-slate-600">{formatMonth(rec.month)}</td></tr>; })}
           </tbody></table></div>
           <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-sm"><div className="text-slate-600">{t("عرض")} {formatNumber(filtered.length === 0 ? 0 : pageStart + 1)} - {formatNumber(Math.min(pageStart + pageSize, filtered.length))} {t("من")} {formatNumber(filtered.length)}</div><div className="flex items-center gap-2"><button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="h-8 w-8 rounded border border-slate-300 bg-white disabled:opacity-40 flex items-center justify-center" title={t("السابق")}><ChevronRight className="h-4 w-4" /></button><span className="px-2 py-1 rounded bg-white border border-slate-300 min-w-[70px] text-center">{formatNumber(safePage)} / {formatNumber(totalPages)}</span><button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="h-8 w-8 rounded border border-slate-300 bg-white disabled:opacity-40 flex items-center justify-center" title={t("التالي")}><ChevronLeft className="h-4 w-4" /></button></div><div className="font-semibold text-slate-800">{t("إجمالي صافي الرواتب")}: {money(totalNet)}</div></div>
         </div>

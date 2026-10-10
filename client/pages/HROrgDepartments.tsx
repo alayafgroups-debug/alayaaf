@@ -7,6 +7,21 @@ import { Printer, FileText, Plus, Trash2, Edit, Save, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+import { exportReportExcel, printReport } from "@/lib/reportExport";
+
+const NO_ROWS_MESSAGE = "لم يُحفظ شيء: السجل غير موجود أو لا تملك صلاحية هذه العملية";
+const orgErrorText = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "23503"
+    ? "مرتبط بموظفين أو سجلات أخرى؛ لا يمكن حذفه"
+    : hrRequestErrorText(error, "تعذر حفظ البيانات");
+
+// عدد الموظفين المرتبطين قبل الحذف (قاعدة البيانات تمنع الحذف أيضًا برمز ORG_ITEM_IN_USE)
+const countLinkedEmployees = async (column: string, value: string) => {
+  const { count, error } = await supabase.from("employees").select("id", { count: "exact", head: true }).eq(column, value);
+  if (error) throw error;
+  return count ?? 0;
+};
 
 type DeptRow = { id: string; name: string; nameEn: string; branchId: string; branch: string; manager: string; status: string };
 type BranchOption = { id: string; name: string };
@@ -22,6 +37,7 @@ export default function HROrgDepartments() {
   const [formNameEn, setFormNameEn] = useState("");
   const [formBranchId, setFormBranchId] = useState("");
   const [formManager, setFormManager] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -39,14 +55,30 @@ export default function HROrgDepartments() {
         id: String(r.id), name: String(r.name ?? ""), nameEn: String(r.name_en ?? ""), branchId: String(r.branch_id ?? ""),
         branch: branchById.get(String(r.branch_id ?? "")) || String(r.branch ?? ""), manager: String(r.manager ?? ""), status: String(r.status ?? "فعال"),
       })));
-    } catch { /* no-op */ } finally { setLoading(false); }
+    } catch (error) {
+      toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, []);
 
   const handleDelete = async (dept: DeptRow) => {
     if (!confirm(`${t("حذف الإدارة")} "${dept.name}"؟`)) return;
-    await supabase.from("departments").delete().eq("id", dept.id);
+    try {
+      const linked = await countLinkedEmployees("department_id", dept.id);
+      if (linked > 0) {
+        toast({ title: t("لم يتم الحذف"), description: `${t("لا يمكن الحذف: مرتبط بـ")} ${formatNumber(linked)} ${t("موظف")}`, variant: "destructive" });
+        return;
+      }
+    } catch (error) {
+      toast({ title: t("تعذر التحقق من الموظفين المرتبطين"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      return;
+    }
+    const { data, error } = await supabase.from("departments").delete().eq("id", dept.id).select("id");
+    if (error || !data?.length) {
+      toast({ title: t("لم يتم الحذف"), description: t(error ? orgErrorText(error) : NO_ROWS_MESSAGE), variant: "destructive" });
+      return;
+    }
     setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
     toast({ title: t("تم الحذف") });
   };
@@ -55,18 +87,40 @@ export default function HROrgDepartments() {
     if (!formName.trim()) { toast({ title: t("خطأ"), description: t("اسم الإدارة مطلوب"), variant: "destructive" }); return; }
     const selectedBranch = branches.find((branch) => branch.id === formBranchId);
     const payload = { name: formName, name_en: formNameEn, branch_id: formBranchId || null, branch: selectedBranch?.name ?? "", manager: formManager };
-    if (editingId) {
-      const { error } = await supabase.from("departments").update(payload).eq("id", editingId);
-      if (error) { toast({ title: t("خطأ"), description: error.message, variant: "destructive" }); return; }
-      toast({ title: t("تم التعديل") });
-    } else {
-      const { error } = await supabase.from("departments").insert([payload]);
-      if (error) { toast({ title: t("خطأ"), description: error.message, variant: "destructive" }); return; }
-      toast({ title: t("تمت الإضافة") });
-    }
-    resetForm();
-    loadData();
+    setSaving(true);
+    try {
+      if (editingId) {
+        const { data, error } = await supabase.from("departments").update(payload).eq("id", editingId).select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error(NO_ROWS_MESSAGE);
+      } else {
+        const { error } = await supabase.from("departments").insert([payload]);
+        if (error) throw error;
+      }
+      toast({ title: editingId ? t("تم التعديل") : t("تمت الإضافة") });
+      resetForm();
+      loadData();
+    } catch (error) {
+      toast({ title: t("خطأ"), description: t(orgErrorText(error)), variant: "destructive" });
+    } finally { setSaving(false); }
   };
+
+  const reportOptions = () => ({
+    title: "قائمة الإدارات",
+    fileName: "departments",
+    columns: [
+      { key: "name", label: "اسم الإدارة", width: 26 },
+      { key: "nameEn", label: "الاسم بالإنجليزية", width: 24 },
+      { key: "branch", label: "الفرع", width: 20 },
+      { key: "manager", label: "المدير", width: 20 },
+      { key: "status", label: "الحالة", width: 12 },
+    ],
+    rows: departments.map((row) => ({ name: row.name, nameEn: row.nameEn, branch: row.branch, manager: row.manager, status: row.status })),
+  });
+  const handlePrint = () => {
+    if (!printReport(reportOptions())) toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة ثم أعد المحاولة"), variant: "destructive" });
+  };
+  const handleExport = () => exportReportExcel(reportOptions());
 
   const startEdit = (dept: DeptRow) => {
     setEditingId(dept.id); setFormName(dept.name); setFormNameEn(dept.nameEn); setFormBranchId(dept.branchId); setFormManager(dept.manager); setShowForm(true);
@@ -79,8 +133,8 @@ export default function HROrgDepartments() {
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
           <div className="flex gap-2">
-            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50"><Printer className="h-4 w-4" /></Button>
-            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50"><FileText className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50" onClick={handlePrint} disabled={departments.length === 0} title={t("طباعة")} aria-label={t("طباعة")}><Printer className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="text-blue-600 border-blue-600 hover:bg-blue-50" onClick={handleExport} disabled={departments.length === 0} title={t("تصدير Excel")} aria-label={t("تصدير Excel")}><FileText className="h-4 w-4" /></Button>
             <Button size="icon" className="bg-[#004e89] hover:bg-[#003d6d] text-white" onClick={() => { resetForm(); setShowForm(true); }}><Plus className="h-4 w-4" /></Button>
           </div>
           <div className="font-semibold text-lg text-[#004e89]">{t("قائمة الإدارات")}</div>
@@ -96,7 +150,7 @@ export default function HROrgDepartments() {
               <div><label className="block text-sm font-medium mb-1">{t("المدير")}</label><input value={formManager} onChange={(e) => setFormManager(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} className="bg-[#004e89] hover:bg-[#003d6d] text-white"><Save className="h-4 w-4 me-1" /> {t("حفظ")}</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white"><Save className="h-4 w-4 me-1" /> {saving ? t("جاري الحفظ...") : t("حفظ")}</Button>
               <Button variant="outline" onClick={resetForm}><X className="h-4 w-4 me-1" /> {t("إلغاء")}</Button>
             </div>
           </div>

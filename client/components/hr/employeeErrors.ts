@@ -6,13 +6,19 @@ const EMPLOYEE_ERROR_MESSAGES: Record<string, string> = {
   ADMIN_ROLE_ASSIGNMENT_REQUIRES_SYSTEM_ADMIN: "منح دور المدير أو سحبه يتم من مدير النظام فقط",
   SYSTEM_ADMIN_RECORD_PROTECTED: "سجل مدير النظام محمي ولا يعدّله إلا مدير النظام",
   CANNOT_CHANGE_OWN_ROLE_OR_PERMISSIONS: "لا يمكنك تغيير دورك أو صلاحياتك بنفسك",
-  EMPLOYEE_INSERT_REQUIRES_HR: "إضافة الموظفين تتطلب صلاحية إدارة الموارد البشرية",
+  EMPLOYEE_INSERT_REQUIRES_HR: "إضافة الموظفين تتطلب صلاحية إدارة الموظفين",
   EMPLOYEE_UPDATE_NOT_ALLOWED: "ليست لديك صلاحية تعديل هذا الموظف",
   EMPLOYEE_FIELD_CHANGE_REQUIRES_HR: "تعديل هذه الحقول يتطلب صلاحية الموارد البشرية",
   EMPLOYEE_EMP_ID_TAKEN: "الرقم الوظيفي مستخدم لموظف آخر",
   EMPLOYEE_EMP_ID_IMMUTABLE: "الرقم الوظيفي لا يُعدَّل بعد إنشائه",
   EMPLOYEE_ACCOUNT_TITLE_TAKEN: "الرقم الوظيفي البديل مستخدم لموظف آخر",
   EMPLOYEE_NATIONAL_ID_TAKEN: "رقم الهوية / الإقامة مسجّل لموظف آخر",
+  EMPLOYEE_ROLE_ABOVE_CALLER: "دور هذا الموظف أو صلاحياته أعلى من صلاحياتك؛ يسندها أو يعدّلها مدير النظام",
+  EMPLOYEE_FINANCIAL_CHANGE_REQUIRES_PAYROLL: "تعديل الراتب والبدلات والحساب البنكي يتطلب صلاحية إدارة الرواتب",
+  EMPLOYEE_EMAIL_USED_BY_SPECIAL_USER: "هذا البريد مستخدم لمستخدم خاص",
+  EMPLOYEE_EMAIL_LINKED_TO_OTHER_LOGIN: "هذا البريد مرتبط بحساب دخول موظف آخر",
+  EMPLOYEE_DELETE_REQUIRES_HR: "حذف الموظفين يتطلب صلاحية إدارة الموظفين",
+  EMPLOYEE_OWN_PAY_CHANGE: "لا يمكنك تعديل راتبك أو بدلاتك أو حسابك البنكي بنفسك؛ يعدّلها مسؤول رواتب آخر",
 };
 
 export const employeeErrorText = (error: unknown, fallback = "حدث خطأ أثناء الحفظ") => {

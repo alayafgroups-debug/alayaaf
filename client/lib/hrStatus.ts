@@ -1,3 +1,4 @@
+import { isEmployeeActive } from "./employeeStatus";
 // توحيد قراءة حالات الطلبات والإجازات المكتوبة بصيغ مختلفة عبر النظام
 const APPROVED = ["موافق", "معتمد", "معتمدة", "مقبول", "approved", "مدفوع"];
 const REJECTED = ["مرفوض", "مرفوضة", "rejected"];
@@ -22,8 +23,9 @@ export const isSaudiNationality = (value: unknown) =>
 export const ACTIVE_EMPLOYEE_STATUSES = ["فعال", "نشط", "active"];
 
 /** حالات الموظف غير النشط (لا يظهر في التنبيهات والقوائم التشغيلية) */
-export const INACTIVE_EMPLOYEE_STATUSES = ["غير فعال", "غير نشط", "منتهي", "منتهية", "مستقيل", "مفصول", "موقوف", "inactive", "terminated"];
-export const isInactiveEmployeeStatus = (status: unknown) => INACTIVE_EMPLOYEE_STATUSES.includes(clean(status).toLowerCase()) || INACTIVE_EMPLOYEE_STATUSES.includes(clean(status));
+// القائمة نفسها في قاعدة البيانات والدوال الطرفية (employeeStatus.ts)
+export { INACTIVE_EMPLOYEE_STATUSES } from "./employeeStatus";
+export const isInactiveEmployeeStatus = (status: unknown) => !isEmployeeActive(status);
 
 /** نوع الإجازة السنوية بأي صيغة (إجازة سنوية، الإجازة السنوية، سنوية، annual) */
 export const isAnnualLeaveType = (value: unknown) => {

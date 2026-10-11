@@ -241,10 +241,10 @@ Deno.serve(async (req: Request) => {
       return respond({ success: true, generated_email: credential.generated_email });
     }
 
-    // الإدارة: مدير النظام، أو دور فيه module.hr بصلاحية إدارة (بمنطق قاعدة البيانات نفسه)
+    // الإدارة: مدير النظام، أو إدارة الموظفين (بمنطق القسم في قاعدة البيانات: مفتاح الموظفين يحسم، وإلا الموارد البشرية العام)
     const [{ data: isAdmin }, { data: canManage }] = await Promise.all([
       callerClient.rpc("is_main_system_admin"),
-      callerClient.rpc("business_permission_allowed", { p_permissions: ["module.hr"], p_manage: true }),
+      callerClient.rpc("hr_area_allowed", { p_areas: ["hr.employees"], p_manage: true }),
     ]);
     if (isAdmin !== true && canManage !== true) {
       return respond({ success: false, error: "غير مصرح بإدارة بيانات الدخول" }, 403);

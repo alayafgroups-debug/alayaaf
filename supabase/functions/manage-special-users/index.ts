@@ -29,11 +29,54 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) return respond({ error: "Unauthorized" }, 401);
 
-    // إنشاء مستخدم خاص يمنح حساب دخول بدور كامل: لمدير النظام فقط
+    // إدارة المستخدمين الخاصين (إنشاء، إيقاف، تغيير دور): لمدير النظام فقط
     const { data: mainAdmin, error: adminError } = await caller.rpc("is_main_system_admin");
-    if (adminError || mainAdmin !== true) return respond({ error: "إنشاء المستخدمين الخاصين لمدير النظام فقط" }, 403);
+    if (adminError || mainAdmin !== true) return respond({ error: "إدارة المستخدمين الخاصين لمدير النظام فقط" }, 403);
 
     const body = await req.json().catch(() => ({}));
+    const action = String(body.action ?? "create");
+
+    // إيقاف مستخدم خاص أو إعادته: الحالة في الجدول بجلسة المدير (يُسجَّل باسمه)، ثم حظر دخوله أو رفعه
+    if (action === "set-status") {
+      const id = String(body.id ?? "").trim();
+      const status = String(body.status ?? "");
+      if (!id || !["فعال", "غير فعال"].includes(status)) return respond({ error: "المستخدم والحالة مطلوبان" }, 400);
+      const { data: target } = await admin.from("system_users").select("id, auth_user_id, status").eq("id", id).maybeSingle();
+      if (!target) return respond({ error: "المستخدم الخاص غير موجود" }, 404);
+      const { data: updated, error: updateError } = await caller.from("system_users")
+        .update({ status, updated_at: new Date().toISOString() }).eq("id", id)
+        .select("id, full_name, email, role_id, branch_id, status, created_at").single();
+      if (updateError || !updated) return respond({ error: updateError?.message ?? "تعذر تحديث الحالة" }, 400);
+      const { error: banError } = await admin.auth.admin.updateUserById(String(target.auth_user_id), {
+        ban_duration: status === "فعال" ? "none" : "876000h",
+      });
+      if (banError) {
+        // لا تبقى الحالة مخالفة للدخول: نعيدها كما كانت
+        await caller.from("system_users").update({ status: target.status }).eq("id", id);
+        return respond({ error: "تعذر تحديث حالة حساب الدخول؛ لم يتغير شيء" }, 500);
+      }
+      return respond({ user: updated }, 200);
+    }
+
+    // تغيير دور مستخدم خاص (ليس دور مدير النظام)
+    if (action === "set-role") {
+      const id = String(body.id ?? "").trim();
+      const newRoleId = String(body.roleId ?? "").trim();
+      if (!id || !newRoleId) return respond({ error: "المستخدم والدور مطلوبان" }, 400);
+      const { data: newRole } = await admin.from("user_roles").select("id, name_ar").eq("id", newRoleId).eq("status", "فعال").maybeSingle();
+      if (!newRole) return respond({ error: "الدور المحدد غير صالح" }, 400);
+      if (["مدير النظام", "مدير عام", "المدير العام"].includes(String(newRole.name_ar ?? "").trim())) {
+        return respond({ error: "لا يُمنح دور مدير النظام لمستخدم خاص" }, 400);
+      }
+      const { data: updated, error: updateError } = await caller.from("system_users")
+        .update({ role_id: newRoleId, updated_at: new Date().toISOString() }).eq("id", id)
+        .select("id, full_name, email, role_id, branch_id, status, created_at").single();
+      if (updateError || !updated) return respond({ error: updateError?.message ?? "تعذر تغيير الدور" }, 400);
+      return respond({ user: updated }, 200);
+    }
+
+    if (action !== "create") return respond({ error: "إجراء غير معروف" }, 400);
+
     const fullName = String(body.fullName ?? "").trim();
     const email = String(body.email ?? "").trim().toLowerCase();
     const password = String(body.password ?? "");

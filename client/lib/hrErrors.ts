@@ -8,6 +8,7 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   REQUEST_ALREADY_DECIDED: "صدر قرار في هذا الطلب مسبقًا",
   REQUEST_INVALID_STATUS: "حالة القرار غير صحيحة",
   REQUEST_SELF_DECISION: "لا يمكنك اتخاذ قرار في طلب يخصك أو أرسلته أنت",
+  REQUEST_PREDECIDED_NOT_ALLOWED: "لا يُسجَّل طلب أو إجازة بقرار مباشر؛ أرسله معلقًا ليقرر فيه المختص (الإجازة لإدارة الإجازات، والاستئذان لإدارة الحضور)",
   PAYROLL_NOTHING_TO_APPROVE: "كل رواتب هذا الشهر للموظفين المحددين معتمدة أو مرحّلة مسبقًا",
   PAYROLL_POSTED_LOCKED: "رواتب الشهر مرحّلة محاسبيًا ولا تُعدَّل",
   PAYROLL_INPUTS_INCOMPLETE: "تعذر تحميل بعض بيانات الحساب (إعدادات الراتب أو جداول الدوام أو العطل أو الإجازات)؛ لم يُحفظ ولم يُرسل شيء. أعد المحاولة",

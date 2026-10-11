@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Edit, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { hrRequestErrorText } from "@/lib/hrErrors";
 
 export type JobTitleRow = { id: string; name: string; nameEn: string; department: string; status: string };
 
@@ -41,11 +42,13 @@ export default function JobTitlesManager({ embedded = false }: { embedded?: bool
     if (!form.name.trim()) return toast.error("اسم المسمى الوظيفي مطلوب");
     setSaving(true);
     const payload = { name: form.name.trim(), name_en: form.nameEn.trim(), department: form.department.trim(), status: form.status, updated_at: new Date().toISOString() };
-    const { error } = editingId
-      ? await supabase.from("hr_jobs").update(payload).eq("id", editingId)
-      : await supabase.from("hr_jobs").insert(payload);
+    // select() يكشف التحديث الذي لم يمس صفًا (لا صلاحية أو السجل غير موجود) بدل نجاح كاذب
+    const { data, error } = editingId
+      ? await supabase.from("hr_jobs").update(payload).eq("id", editingId).select("id")
+      : await supabase.from("hr_jobs").insert(payload).select("id");
     setSaving(false);
-    if (error) return toast.error(`تعذر حفظ المسمى: ${error.message}`);
+    if (error) return toast.error(`تعذر حفظ المسمى: ${hrRequestErrorText(error)}`);
+    if (!data?.length) return toast.error("لم يُحفظ شيء: لا تملك صلاحية الهيكل التنظيمي أو أن المسمى حُذف");
     toast.success(editingId ? "تم تحديث المسمى الوظيفي" : "تمت إضافة المسمى الوظيفي");
     resetForm();
     await loadJobs();
@@ -53,8 +56,9 @@ export default function JobTitlesManager({ embedded = false }: { embedded?: bool
 
   const deleteJob = async (job: JobTitleRow) => {
     if (!confirm(`حذف المسمى الوظيفي «${job.name}»؟`)) return;
-    const { error } = await supabase.from("hr_jobs").delete().eq("id", job.id);
-    if (error) return toast.error(`تعذر الحذف: ${error.message}`);
+    const { data, error } = await supabase.from("hr_jobs").delete().eq("id", job.id).select("id");
+    if (error) return toast.error(`تعذر الحذف: ${hrRequestErrorText(error)}`);
+    if (!data?.length) return toast.error("لم يُحذف شيء: لا تملك صلاحية الهيكل التنظيمي أو أن المسمى حُذف مسبقًا");
     setJobs((current) => current.filter((item) => item.id !== job.id));
     toast.success("تم حذف المسمى الوظيفي");
   };

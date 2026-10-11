@@ -137,7 +137,6 @@ export function permissionForMainSubPath(path: string): string[] {
     ["/expenses/settings", "accounting.settings", "module.accounting"],
     ["/expenses/fixed-assets", "accounting.fixed_assets", "module.accounting"],
     ["/expenses", "accounting.accounts", "module.accounting"],
-    ["/admin/register-employee", "users.employee_registration", "module.users"],
     ["/fleet/vehicles", "fleet.vehicles", "module.fleet"],
     ["/fleet/drivers", "fleet.drivers", "module.fleet"],
     ["/fleet/maintenance", "fleet.maintenance", "module.fleet"],
@@ -157,9 +156,10 @@ export function permissionForMainSubPath(path: string): string[] {
 
 export function permissionForHRPath(path: string): string[] {
   if (path === "/hr" || path === "/hr/dashboard") return ["module.hr"];
+  // سجل النشاط: لمن يملك سجل المستخدمين (users.audit) أو إدارة الموظفين، كما تسمح قاعدة البيانات
+  if (path.startsWith("/hr/user-logs")) return ["users.audit", "module.users", "hr.employees", "module.hr"];
   const groups: Array<[string, string]> = [
     ["/hr/employees", "hr.employees"],
-    ["/hr/user-logs", "hr.employees"],
     ["/hr/requests", "hr.requests"],
     ["/hr/attendance", "hr.attendance"],
     ["/hr/payroll", "hr.payroll"],

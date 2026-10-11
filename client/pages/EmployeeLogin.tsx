@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import type { UserSession } from "@/lib/authSession";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
+import { isEmployeeActive } from "@/lib/employeeStatus";
 
 export default function EmployeeLogin() {
   const navigate = useNavigate();
@@ -23,18 +24,49 @@ export default function EmployeeLogin() {
     }
     setLoading(true);
     try {
-      const { data: resolvedEmail, error: empError } = await supabase.rpc(
-        "get_employee_email_by_empid",
-        { p_emp_id: empId.trim() },
-      );
-      if (empError || !resolvedEmail) {
-        toast.error("لم يتم العثور على موظف بهذا الرقم");
+      // البريد لا يُكشف إلا بكلمة المرور الصحيحة (employee_login_email)، مع حد للمحاولات.
+      // الدالة القديمة احتياط فقط: قبل تطبيق K2، أو إن لم تتعرف الجديدة على الرقم (حتى يغلقها K5 بعد التجربة).
+      let resolvedEmail = "";
+      let useLegacy = false;
+      const { data: loginData, error: loginError } = await supabase.rpc("employee_login_email", {
+        p_emp_id: empId.trim(),
+        p_password: password,
+      });
+      const missingNewLogin = Boolean(loginError && (loginError.code === "PGRST202" || loginError.code === "42883"));
+      if (loginError && !missingNewLogin) {
+        toast.error("تعذر التحقق من بيانات الدخول، حاول مرة أخرى");
         return;
+      }
+      if (!loginError) {
+        const result = (loginData ?? {}) as { status?: string; email?: string; retry_after_minutes?: number };
+        if (result.status === "locked") {
+          toast.error(`محاولات دخول كثيرة لهذا الرقم؛ حاول بعد ${result.retry_after_minutes ?? 15} دقيقة`);
+          return;
+        }
+        if (result.status === "busy") {
+          toast.error("الخادم مشغول بمحاولات دخول كثيرة؛ حاول بعد دقيقة");
+          return;
+        }
+        if (result.status === "ok" && result.email) resolvedEmail = result.email;
+        else useLegacy = true;
+      } else {
+        useLegacy = true;
+      }
+      if (useLegacy) {
+        const { data: legacyEmail, error: empError } = await supabase.rpc(
+          "get_employee_email_by_empid",
+          { p_emp_id: empId.trim() },
+        );
+        if (empError || !legacyEmail) {
+          toast.error("بيانات الدخول غير صحيحة");
+          return;
+        }
+        resolvedEmail = String(legacyEmail);
       }
 
       const { data: authData, error: authError } =
         await supabase.auth.signInWithPassword({
-          email: (resolvedEmail as string).toLowerCase(),
+          email: resolvedEmail.toLowerCase(),
           password,
         });
       if (authError) {
@@ -45,7 +77,7 @@ export default function EmployeeLogin() {
       const { data: empData, error: profileError } = await supabase
         .from("employees")
         .select("id, emp_id, account_title, name, employee_role, permissions, status")
-        .ilike("email", resolvedEmail as string)
+        .ilike("email", resolvedEmail.replace(/[\\%_]/g, (character) => `\\${character}`))
         .maybeSingle();
 
       if (profileError || !empData) {
@@ -53,7 +85,7 @@ export default function EmployeeLogin() {
         await supabase.auth.signOut();
         return;
       }
-      if (["غير فعال", "منتهي"].includes(String(empData.status ?? ""))) {
+      if (!isEmployeeActive(empData.status)) {
         toast.error("حسابك موقوف؛ راجع الموارد البشرية");
         await supabase.auth.signOut();
         return;
@@ -61,7 +93,7 @@ export default function EmployeeLogin() {
 
       const session: UserSession = {
         id: authData.user.id,
-        email: authData.user.email ?? (resolvedEmail as string).toLowerCase(),
+        email: authData.user.email ?? resolvedEmail.toLowerCase(),
         empId: empData.emp_id || empId,
         name: empData.name,
         role: empData.employee_role ?? "موظف",

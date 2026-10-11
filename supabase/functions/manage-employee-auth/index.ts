@@ -5,8 +5,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // { action: "set-login-state", employeeId, enabled }    ← إيقاف الدخول عند تعطيل الموظف أو إعادته
 // القواعد:
 // - الموظف يُحدَّد بمعرّفه، وبريده يُقرأ من سجله (لا يُقبل بريد من المتصفح).
-// - الصلاحية من قاعدة البيانات نفسها: is_main_system_admin() أو business_permission_allowed(['module.hr','hr.employees'], إدارة).
-// - غير المدير: لا يمس حساب مدير، ولا حسابًا قائمًا لدور له صلاحيات (يتطلب مديرًا)، ولا حسابه هو.
+// - الصلاحية من قاعدة البيانات نفسها: is_main_system_admin() أو hr_area_allowed(['hr.employees'], إدارة).
+// - غير المدير:
+//   * لا يمس حساب مدير، ولا حسابه هو.
+//   * لا ينشئ حساب دخول ولا يعيد تفعيله لموظف دوره فيه صلاحية أعلى من صلاحياته (grant_ceiling_violations).
+//   * لا يغيّر كلمة مرور حساب قائم لموظف دوره له صلاحيات (انتحال؛ يتطلب مديرًا).
+//   * إيقاف الدخول مسموح دائمًا لمن يدير الموظفين (حتى لا يبقى المعطّل قادرًا على الدخول).
 // - لا يمس حساب مستخدم خاص، ولا حسابًا مرتبطًا بموظف آخر.
 
 const corsHeaders = {
@@ -18,12 +22,16 @@ const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
 const adminRoles = new Set(["مدير النظام", "مدير عام", "المدير العام"]);
-const inactiveStatuses = new Set(["غير فعال", "منتهي"]);
+// نفس قائمة قاعدة البيانات (employee_status_active)
+const inactiveStatuses = new Set(["غير فعال", "غير نشط", "منتهي", "منتهية", "منتهي الخدمة", "مستقيل", "مفصول", "موقوف", "inactive", "terminated"]);
+const isInactive = (status: unknown) => inactiveStatuses.has(String(status ?? "").trim().toLowerCase());
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, (character) => `\\${character}`);
 const hasPermissions = (permissions: unknown) =>
   Boolean(permissions && typeof permissions === "object" && !Array.isArray(permissions)
     && Object.values(permissions as Record<string, unknown>).some((value) => value === true || value === "read" || value === "manage"));
+const missingFunction = (error: { code?: string; message?: string } | null) =>
+  Boolean(error && (error.code === "PGRST202" || error.code === "42883" || /could not find the function/i.test(error.message ?? "")));
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -52,11 +60,13 @@ Deno.serve(async (req: Request) => {
     }
     const employeeId = String(body?.employeeId ?? "").trim();
     if (!employeeId) return respond({ success: false, error: "الموظف مطلوب" }, 400);
+    const enabling = action === "set-login-state" && body?.enabled === true;
+    const disabling = action === "set-login-state" && body?.enabled !== true;
 
     // الصلاحية بمنطق قاعدة البيانات وبجلسة المستدعي نفسه
     const [{ data: isAdmin, error: adminError }, { data: canManage, error: manageError }] = await Promise.all([
       callerClient.rpc("is_main_system_admin"),
-      callerClient.rpc("business_permission_allowed", { p_permissions: ["module.hr", "hr.employees"], p_manage: true }),
+      callerClient.rpc("hr_area_allowed", { p_areas: ["hr.employees"], p_manage: true }),
     ]);
     if (adminError || manageError) return respond({ success: false, error: "تعذر التحقق من الصلاحية" }, 403);
     const callerIsAdmin = isAdmin === true;
@@ -92,14 +102,42 @@ Deno.serve(async (req: Request) => {
       return respond({ success: false, error: "لا تغيّر حسابك أنت من هنا" }, 400);
     }
 
+    // دور الموظف فوق صلاحيات المستدعي؟ (null = لا تجاوز)
+    // صلاحيات دور الموظف (الاسم كما هو وبلا مسافات؛ أي صف بصلاحيات يكفي)
+    let roleHasPermissions = false;
+    const roleName = String(target.employee_role ?? "").trim();
+    if (roleName) {
+      const { data: roleRows } = await admin.from("user_roles").select("name_ar, permissions").limit(500);
+      roleHasPermissions = (roleRows ?? []).some((row) =>
+        String(row.name_ar ?? "").trim() === roleName && hasPermissions(row.permissions));
+    }
+    let aboveCaller = false;
+    if (!callerIsAdmin && !disabling) {
+      const { data: violations, error: ceilingError } = await callerClient.rpc("grant_ceiling_violations", {
+        p_role: String(target.employee_role ?? ""),
+        p_permissions: null,
+      });
+      if (ceilingError && !missingFunction(ceilingError)) {
+        return respond({ success: false, error: "تعذر التحقق من صلاحيات دور الموظف" }, 403);
+      }
+      // قبل تطبيق K2 (الدالة غير موجودة): أي دور له صلاحيات يُعامل كأنه فوق المستدعي
+      aboveCaller = ceilingError ? roleHasPermissions : Boolean(violations);
+    }
+    if (aboveCaller) {
+      return respond({
+        success: false,
+        error: "دور هذا الموظف فيه صلاحيات أعلى من صلاحياتك؛ حساب دخوله يديره مدير النظام",
+      }, 403);
+    }
+
     // حساب الدخول الحالي بهذا البريد (إن وُجد)
-    let existing: { id: string; user_metadata?: Record<string, unknown> } | null = null;
+    let existing: { id: string; user_metadata?: Record<string, unknown>; banned_until?: string | null } | null = null;
     if (EMAIL_PATTERN.test(email)) {
       for (let page = 1; page <= 50 && !existing; page += 1) {
         const { data: usersPage, error: listError } = await admin.auth.admin.listUsers({ page, perPage: 200 });
         if (listError) throw listError;
         const match = usersPage.users.find((candidate) => (candidate.email ?? "").toLowerCase() === email);
-        if (match) existing = { id: match.id, user_metadata: match.user_metadata ?? {} };
+        if (match) existing = { id: match.id, user_metadata: match.user_metadata ?? {}, banned_until: (match as { banned_until?: string | null }).banned_until ?? null };
         if (usersPage.users.length < 200) break;
       }
     }
@@ -117,7 +155,7 @@ Deno.serve(async (req: Request) => {
       if ((otherLink ?? []).length) return respond({ success: false, error: "حساب الدخول بهذا البريد مرتبط بموظف آخر" }, 409);
       if ((special ?? []).length) return respond({ success: false, error: "حساب الدخول بهذا البريد مرتبط بمستخدم خاص" }, 409);
     }
-    if (email) {
+    if (email && !disabling) {
       const [{ data: sameEmail }, { data: specialEmail }] = await Promise.all([
         admin.from("employees").select("id").ilike("email", escapeLike(email)).neq("id", target.id).limit(1),
         admin.from("system_users").select("id").ilike("email", escapeLike(email)).limit(1),
@@ -126,12 +164,9 @@ Deno.serve(async (req: Request) => {
       if ((specialEmail ?? []).length) return respond({ success: false, error: "هذا البريد مستخدم لمستخدم خاص" }, 409);
     }
 
-    // غير المدير لا يعيد تعيين حساب قائم لدور له صلاحيات (منعًا لانتحال صلاحيات أوسع)
-    if (existing && !callerIsAdmin && String(target.employee_role ?? "")) {
-      const { data: role } = await admin.from("user_roles").select("permissions").eq("name_ar", target.employee_role).maybeSingle();
-      if (hasPermissions(role?.permissions)) {
-        return respond({ success: false, error: "هذا الموظف له دور بصلاحيات؛ تغيير حسابه يتم من مدير النظام" }, 403);
-      }
+    // غير المدير لا يغيّر كلمة مرور حساب قائم لموظف دوره له صلاحيات (يصبح قادرًا على الدخول باسمه)
+    if (action === "set-password" && existing && !callerIsAdmin && roleHasPermissions) {
+      return respond({ success: false, error: "هذا الموظف له دور بصلاحيات؛ تغيير كلمة مرور حسابه يتم من مدير النظام" }, 403);
     }
 
     const log = (operation: string, details: string) =>
@@ -139,13 +174,16 @@ Deno.serve(async (req: Request) => {
         .then(() => undefined, () => undefined);
 
     if (action === "set-login-state") {
-      const enabled = body?.enabled === true;
-      if (!existing) return respond({ success: true, changed: false });
-      const { error } = await admin.auth.admin.updateUserById(existing.id, { ban_duration: enabled ? "none" : "876000h" });
+      if (!existing) return respond({ success: true, changed: false, previouslyBanned: false });
+      const previouslyBanned = Boolean(existing.banned_until && new Date(existing.banned_until).getTime() > Date.now());
+      if (enabling && isInactive(target.status)) {
+        return respond({ success: false, error: "الموظف غير فعال؛ فعّله أولًا" }, 400);
+      }
+      const { error } = await admin.auth.admin.updateUserById(existing.id, { ban_duration: enabling ? "none" : "876000h" });
       if (error) throw error;
-      await log(enabled ? "employee_login_enabled" : "employee_login_disabled",
-        `${enabled ? "إعادة تفعيل" : "إيقاف"} دخول الموظف ${target.emp_id ?? ""} — ${target.name ?? ""}`);
-      return respond({ success: true, changed: true });
+      await log(enabling ? "employee_login_enabled" : "employee_login_disabled",
+        `${enabling ? "إعادة تفعيل" : "إيقاف"} دخول الموظف ${target.emp_id ?? ""} — ${target.name ?? ""}`);
+      return respond({ success: true, changed: true, previouslyBanned });
     }
 
     // set-password
@@ -153,7 +191,7 @@ Deno.serve(async (req: Request) => {
     const bytes = new TextEncoder().encode(password).length;
     if (password.length < 8 || bytes > 72) return respond({ success: false, error: "كلمة المرور 8 أحرف على الأقل ولا تزيد على 72 بايت" }, 400);
     if (!EMAIL_PATTERN.test(email)) return respond({ success: false, error: "أضف بريدًا إلكترونيًا صحيحًا للموظف أولًا" }, 400);
-    if (inactiveStatuses.has(String(target.status ?? ""))) {
+    if (isInactive(target.status)) {
       return respond({ success: false, error: "الموظف غير فعال؛ فعّله أولًا" }, 400);
     }
 

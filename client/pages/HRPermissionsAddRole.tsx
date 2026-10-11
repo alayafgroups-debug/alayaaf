@@ -71,13 +71,6 @@ const MODULE_TREE: ModuleNode[] = [
 
 const levelOf = (value: PermissionLevel | undefined): AccessLevel => value === "read" ? "read" : value === true || value === "manage" ? "manage" : "none";
 
-const crudPermissions = (prefix: string, item: string): Permission[] => [
-  { key: `${prefix}.view`, label: `view::${item}` },
-  { key: `${prefix}.add`, label: `add::${item}` },
-  { key: `${prefix}.edit`, label: `edit::${item}` },
-  { key: `${prefix}.delete`, label: `delete::${item}` },
-  { key: `${prefix}.export`, label: `export::${item}` },
-];
 
 const CRUD_ACTION_LABELS: Record<string, string> = {
   view: "استعراض",
@@ -177,49 +170,6 @@ const PERMISSION_GROUPS: Record<string, PermissionGroup[]> = {
       ],
     },
   ],
-  "قائمة الموظفين": [
-    {
-      title: "نطاق عرض الموظفين",
-      permissions: [
-        { key: "employees.scope.all", label: "استعراض جميع الموظفين" },
-        { key: "employees.scope.management", label: "استعراض موظفي الإدارة" },
-        { key: "employees.scope.branch", label: "استعراض موظفي الفرع" },
-        { key: "employees.scope.department", label: "استعراض موظفي القسم" },
-        { key: "employees.scope.direct", label: "استعراض الموظفين تحت الإدارة المباشرة" },
-      ],
-    },
-    {
-      title: "إجراءات الموظفين",
-      permissions: [
-        { key: "add_employee", label: "إضافة موظف جديد" },
-        { key: "employees.edit", label: "تعديل بيانات موظف" },
-        { key: "employees.delete", label: "حذف موظف" },
-        { key: "employees.inactive", label: "استعراض الموظفين غير الفعالين" },
-        { key: "employees.movements", label: "عرض حركات الموظفين" },
-        { key: "employees.terminate", label: "إنهاء الخدمة" },
-        { key: "employees.link_account", label: "ربط حساب الموظف" },
-        { key: "employees.financial", label: "عرض البيانات المالية" },
-        { key: "employees.financial_edit", label: "تعديل البيانات المالية" },
-        { key: "employees.attendance", label: "عرض حالة الحضور" },
-      ],
-    },
-  ],
-  "قسم التقارير": [{ title: "صلاحيات التقارير", permissions: crudPermissions("reports", "التقارير") }],
-  "حساب الدوام": [{ title: "صلاحيات الدوام", permissions: crudPermissions("attendance", "سجلات الدوام") }],
-  "حساب الراتب": [{ title: "صلاحيات الرواتب", permissions: [...crudPermissions("payroll", "الرواتب"), { key: "payroll.approve", label: "اعتماد الرواتب" }] }],
-  "قياس الأداء": [{ title: "صلاحيات الأداء", permissions: crudPermissions("performance", "تقييمات الأداء") }],
-  "إرسال الطلبات": [{ title: "صلاحيات إرسال الطلبات", permissions: crudPermissions("requests.sent", "الطلبات المرسلة") }],
-  "الطلبات الواردة": [{ title: "صلاحيات الطلبات الواردة", permissions: [...crudPermissions("requests.incoming", "الطلبات الواردة"), { key: "requests.approve", label: "اعتماد أو رفض الطلبات" }] }],
-  "التأمينات": [{ title: "صلاحيات التأمينات", permissions: crudPermissions("insurance", "التأمينات") }],
-  "المساءلات والإنذارات": [{ title: "صلاحيات المساءلات والإنذارات", permissions: crudPermissions("penalties", "المساءلات والإنذارات") }],
-  "قسم الإعلانات": [{ title: "صلاحيات الإعلانات", permissions: crudPermissions("announcements", "الإعلانات") }],
-  "قسم السلفيات": [{ title: "صلاحيات السلف", permissions: [...crudPermissions("advances", "السلف"), { key: "advances.approve", label: "اعتماد السلف" }] }],
-  "النظام المالي": [{ title: "صلاحيات النظام المالي", permissions: crudPermissions("finance", "البيانات المالية") }],
-  "تواصل مع الإدارة": [{ title: "صلاحيات التواصل", permissions: crudPermissions("communication", "رسائل الإدارة") }],
-  "الإجازات": [{ title: "صلاحيات الإجازات", permissions: [...crudPermissions("leaves", "الإجازات"), { key: "leaves.approve", label: "اعتماد الإجازات" }] }],
-  "عمولات الموظفين": [{ title: "صلاحيات العمولات", permissions: crudPermissions("commissions", "العمولات") }],
-  "إدارة المشاريع والمهام": [{ title: "صلاحيات المشاريع والمهام", permissions: crudPermissions("projects", "المشاريع والمهام") }],
-  "إدارة التدريب": [{ title: "صلاحيات التدريب", permissions: crudPermissions("training", "الدورات التدريبية") }],
 };
 
 const PERMISSION_TABS = Object.keys(PERMISSION_GROUPS);
@@ -374,6 +324,10 @@ export default function HRPermissionsAddRole() {
               <div className="space-y-3">
                 <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                   <strong>{t("قراءة فقط")}:</strong> {t("يسمح بعرض البيانات والبحث والطباعة دون الإضافة أو التعديل أو الحذف")}. <strong>{t("إدارة كاملة")}:</strong> {t("تسمح بجميع العمليات")}.
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {t("مستوى القسم الفرعي يحسم إن حُدد، وإلا يسري مستوى القسم الرئيسي عليه. مثال: الموارد البشرية «إدارة كاملة» والرواتب «لا وصول» = لا يفتح صفحات الرواتب ولا يعدّلها ولا يعتمدها، ويبقى ما تعرضه تقارير الموارد البشرية لمن له التقارير.")}{" "}
+                  {t("لا يمنح أحد دورًا صلاحية أعلى من صلاحياته هو، ولا يُسند لموظف دورًا فوق صلاحياته؛ ذلك لمدير النظام.")}
                 </div>
                 {MODULE_TREE.map((module) => {
                   const expanded = expandedModules.has(module.key);

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Lock, Mail, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { isEmployeeActive } from "@/lib/employeeStatus";
 import { toast } from "sonner";
 import type { UserSession } from "@/lib/authSession";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
@@ -40,7 +41,7 @@ export default function Login() {
         .eq("email", email.toLowerCase())
         .maybeSingle();
 
-      if (empData && ["غير فعال", "منتهي"].includes(String(empData.status ?? ""))) {
+      if (empData && !isEmployeeActive(empData.status)) {
         toast.error("حسابك موقوف؛ راجع الموارد البشرية");
         await supabase.auth.signOut();
         return;

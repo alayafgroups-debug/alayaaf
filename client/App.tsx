@@ -58,7 +58,6 @@ import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeePortal from "./pages/EmployeePortal";
 import EmployeeApp from "./pages/EmployeeApp";
-import AdminEmployeeRegistration from "./pages/AdminEmployeeRegistration";
 import HRPayrollStatement from "./pages/HRPayrollStatement";
 import HRPayrollFullReport from "./pages/HRPayrollFullReport";
 import HRPayrollArchive from "./pages/HRPayrollArchive";
@@ -166,7 +165,6 @@ const App = () => (
           <Route path="/hr/employee-dashboard" element={<EmployeePortal />} />
 
           {/* Admin - Employee Registration */}
-          <Route path="/admin/register-employee" element={<AdminEmployeeRegistration />} />
 
           {/* Admin Routes */}
           <Route path="/" element={<Dashboard />} />

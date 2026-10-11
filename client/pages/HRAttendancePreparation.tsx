@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { canManagePerm, readUserSession } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { CheckCheck, Clock3, Loader2, MapPin, Navigation, Search, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
@@ -32,8 +33,10 @@ const currentTime = () => {
 export default function HRAttendancePreparation() {
   const { t, direction, locale, formatNumber } = useI18n();
   const session = readUserSession();
-  const canPrepare = canManagePerm(session?.permissions ?? {}, "hr.attendance.individual-group", "hr.attendance", "module.hr");
-  const canManageLocations = Boolean(session && (["مدير النظام", "مدير عام", "المدير العام"].includes(session.role) || session.permissions["hr.attendance.location.manage"] === true || session.permissions["hr.attendance.location.manage"] === "manage"));
+  // الصلاحيات الحية من قاعدة البيانات (لا نسخة الدخول المحفوظة في المتصفح)؛ مواقع الحضور لإدارة الحضور كما في القاعدة
+  const { permissions: livePerms } = useRolePermissions();
+  const canPrepare = canManagePerm(livePerms, "hr.attendance.individual-group", "hr.attendance", "module.hr");
+  const canManageLocations = canManagePerm(livePerms, "hr.attendance", "module.hr");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [attendanceLocations, setAttendanceLocations] = useState<AttendanceLocation[]>([]);

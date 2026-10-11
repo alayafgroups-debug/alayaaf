@@ -10,7 +10,7 @@ import { useI18n } from "@/i18n";
 import { toast } from "sonner";
 
 type Option = { id: string; label: string };
-type SpecialUser = { id: string; full_name: string; email: string; status: string; created_at: string };
+type SpecialUser = { id: string; full_name: string; email: string; status: string; created_at: string; role_id?: string | null };
 
 export default function HRSpecialUser() {
   const navigate = useNavigate();
@@ -19,19 +19,67 @@ export default function HRSpecialUser() {
   const [branches, setBranches] = useState<Option[]>([]);
   const [users, setUsers] = useState<SpecialUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [form, setForm] = useState({ fullName: "", email: "", password: "", roleId: "", branchId: "" });
 
   useEffect(() => {
     void Promise.all([
       supabase.from("user_roles").select("id, name_ar").eq("status", "فعال").order("name_ar"),
       supabase.from("branches").select("id, name").eq("status", "فعال").order("name"),
-      supabase.from("system_users").select("id, full_name, email, status, created_at").order("created_at", { ascending: false }),
+      supabase.from("system_users").select("id, full_name, email, status, created_at, role_id").order("created_at", { ascending: false }),
     ]).then(([roleResult, branchResult, userResult]) => {
       setRoles((roleResult.data ?? []).map((row) => ({ id: String(row.id), label: String(row.name_ar) })));
       setBranches((branchResult.data ?? []).map((row) => ({ id: String(row.id), label: String(row.name) })));
       setUsers((userResult.data ?? []) as SpecialUser[]);
     });
   }, []);
+
+  // استدعاء دالة المستخدمين الخاصين بجلسة محدّثة؛ يرجع رسالة الخطأ أو البيانات
+  const callFunction = async (payload: Record<string, unknown>): Promise<{ data?: { user?: SpecialUser }; error?: string }> => {
+    const { data: sessionData, error: sessionError } = await supabase.auth.refreshSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) return { error: t("انتهت جلسة الدخول، يرجى تسجيل الدخول مرة أخرى") };
+    const { data, error } = await supabase.functions.invoke("manage-special-users", {
+      body: payload,
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (error || data?.error) {
+      let message = String(data?.error ?? error?.message ?? t("تعذر تنفيذ العملية"));
+      const response = (error as { context?: Response } | null)?.context;
+      if (response) {
+        const errorBody = await response.clone().json().catch(() => null) as { error?: string } | null;
+        if (errorBody?.error) message = errorBody.error;
+      }
+      return { error: message };
+    }
+    return { data };
+  };
+
+  const changeStatus = async (user: SpecialUser) => {
+    const next = user.status === "فعال" ? "غير فعال" : "فعال";
+    const question = next === "فعال"
+      ? `${t("إعادة تفعيل المستخدم")} "${user.full_name}" ${t("وإعادة دخوله؟")}`
+      : `${t("إيقاف المستخدم")} "${user.full_name}" ${t("ومنع دخوله؟")}`;
+    if (!confirm(question)) return;
+    setBusyId(user.id);
+    const result = await callFunction({ action: "set-status", id: user.id, status: next });
+    setBusyId(null);
+    if (result.error) { toast.error(result.error); return; }
+    setUsers((current) => current.map((row) => row.id === user.id ? { ...row, ...(result.data?.user ?? {}), status: next } : row));
+    toast.success(next === "فعال" ? t("أُعيد تفعيل المستخدم ودخوله") : t("أُوقف المستخدم ومُنع دخوله"));
+  };
+
+  const changeRole = async (user: SpecialUser, roleId: string) => {
+    if (!roleId || roleId === user.role_id) return;
+    const roleName = roles.find((role) => role.id === roleId)?.label ?? "";
+    if (!confirm(`${t("تغيير دور")} "${user.full_name}" ${t("إلى")} "${roleName}"؟`)) return;
+    setBusyId(user.id);
+    const result = await callFunction({ action: "set-role", id: user.id, roleId });
+    setBusyId(null);
+    if (result.error) { toast.error(result.error); return; }
+    setUsers((current) => current.map((row) => row.id === user.id ? { ...row, role_id: roleId } : row));
+    toast.success(t("تم تغيير الدور"));
+  };
 
   const save = async () => {
     if (!form.fullName.trim() || !form.email.trim() || !form.roleId || form.password.length < 8) {
@@ -103,7 +151,7 @@ export default function HRSpecialUser() {
 
         <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
           <div className="bg-slate-900 px-4 py-3 font-bold text-white">{t("المستخدمون الخاصون")}</div>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-start">{t("الاسم")}</th><th className="px-4 py-3 text-start">{t("البريد الإلكتروني")}</th><th className="px-4 py-3 text-start">{t("الحالة")}</th><th className="px-4 py-3 text-start">{t("تاريخ الإضافة")}</th></tr></thead><tbody>{users.map((user) => <tr key={user.id} className="border-t"><td className="px-4 py-3 font-medium">{user.full_name}</td><td className="px-4 py-3" dir="ltr">{user.email}</td><td className="px-4 py-3">{t(user.status)}</td><td className="px-4 py-3">{formatDate(user.created_at)}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-start">{t("الاسم")}</th><th className="px-4 py-3 text-start">{t("البريد الإلكتروني")}</th><th className="px-4 py-3 text-start">{t("الدور")}</th><th className="px-4 py-3 text-start">{t("الحالة")}</th><th className="px-4 py-3 text-start">{t("تاريخ الإضافة")}</th><th className="px-4 py-3 text-start">{t("إجراء")}</th></tr></thead><tbody>{users.map((user) => <tr key={user.id} className="border-t"><td className="px-4 py-3 font-medium">{user.full_name}</td><td className="px-4 py-3" dir="ltr">{user.email}</td><td className="px-4 py-3"><select className="h-9 rounded-md border px-2" value={user.role_id ?? ""} disabled={busyId === user.id} onChange={(e) => void changeRole(user, e.target.value)}><option value="" disabled>{t("اختر الدور")}</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></td><td className="px-4 py-3"><span className={user.status === "فعال" ? "rounded-full bg-green-100 px-2 py-0.5 text-green-800" : "rounded-full bg-gray-200 px-2 py-0.5 text-gray-700"}>{t(user.status)}</span></td><td className="px-4 py-3">{formatDate(user.created_at)}</td><td className="px-4 py-3"><Button type="button" size="sm" variant="outline" disabled={busyId === user.id} onClick={() => void changeStatus(user)}>{busyId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : user.status === "فعال" ? t("إيقاف") : t("إعادة تفعيل")}</Button></td></tr>)}</tbody></table></div>
         </div>
       </div>
     </Layout>

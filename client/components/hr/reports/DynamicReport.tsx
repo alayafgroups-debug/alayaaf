@@ -29,9 +29,11 @@ type EmployeeReportRow = Employee & {
 };
 
 // dateFieldMayBeMissing: عمود التاريخ غير مؤكد في قاعدة البيانات؛ إن لم يوجد يُعرض التقرير بلا فلتر تاريخ
-const SOURCE_CONFIG: Record<string, { table: string; dateField?: string; dateFieldMayBeMissing?: boolean }> = {
+// monthField: عمود التاريخ نص شهر "YYYY-MM" (شهر الاستحقاق في الرواتب)، فيُقارن بشهر بداية ونهاية الفترة
+const SOURCE_CONFIG: Record<string, { table: string; dateField?: string; dateFieldMayBeMissing?: boolean; monthField?: boolean }> = {
   leaves: { table: "leave_requests", dateField: "start_date" },
-  payroll_expenses: { table: "payroll", dateField: "paid_date" },
+  // مصروف الرواتب بشهر الاستحقاق (لا بتاريخ الصرف)، والمرفوض لا يُحسب
+  payroll_expenses: { table: "payroll", dateField: "month", monthField: true },
   disbursement_reports: { table: "payroll", dateField: "paid_date" },
   attendance_departure: { table: "attendance", dateField: "date" },
   end_of_service: { table: "hr_terminations", dateField: "termination_date" },
@@ -92,8 +94,9 @@ function recordDetail(schemaId: string, record: ReportRecord) {
     case "penalties_warnings":
       return `${valueText(record.subject)} — ${valueText(record.status)}`;
     case "payroll_expenses":
+      return `${valueText(record.month)} — ${valueText(record.status)} — صافي ${valueText(record.net_salary)} ر.س`;
     case "disbursement_reports":
-      return `${valueText(record.month)} — صافي ${valueText(record.net_salary)} ر.س`;
+      return `${valueText(record.month)} — صافي ${valueText(record.net_salary)} ر.س — صُرف ${valueText(record.paid_date)}`;
     case "attendance_departure":
       return `${valueText(record.date)} — ${valueText(record.status)}`;
     case "end_of_service":
@@ -154,11 +157,12 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     const { from: queryFrom, to: queryTo } = queryDates;
 
     // جلب كل الصفوف على دفعات، مع تصفية التاريخ في الخادم عند تحديد فترة
+    const monthField = !!SOURCE_CONFIG[schema.id]?.monthField;
     const fetchSource = (table: string, dateField?: string) =>
       fetchAllRows<ReportRecord>((from, to) => {
         let query = supabase.from(table).select("*");
-        if (dateField && queryFrom) query = query.gte(dateField, queryFrom);
-        if (dateField && queryTo) query = query.lte(dateField, queryTo);
+        if (dateField && queryFrom) query = query.gte(dateField, monthField ? queryFrom.slice(0, 7) : queryFrom);
+        if (dateField && queryTo) query = query.lte(dateField, monthField ? queryTo.slice(0, 7) : queryTo);
         return query.order("id").range(from, to);
       });
 
@@ -235,14 +239,20 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     }
 
     if (isFilterApplied(schema.id, "from_date") && !dateFilterUnavailable && (queryDates.from || queryDates.to)) {
+      const byMonth = !!SOURCE_CONFIG[schema.id]?.monthField;
+      const fromKey = byMonth ? queryDates.from.slice(0, 7) : queryDates.from;
+      const toKey = byMonth ? queryDates.to.slice(0, 7) : queryDates.to;
       relevantRecords = relevantRecords.filter((record) => {
         const field = recordDateField(schema.id, record);
-        const date = field ? String(record[field] ?? "").slice(0, 10) : "";
-        if (queryDates.from && date < queryDates.from) return false;
-        if (queryDates.to && date > queryDates.to) return false;
+        const date = field ? String(record[field] ?? "").slice(0, byMonth ? 7 : 10) : "";
+        if (fromKey && date < fromKey) return false;
+        if (toKey && date > toKey) return false;
         return true;
       });
     }
+    // الرواتب: مصروف الرواتب للمعتمد والمرحّل والمدفوع والموقوف بقرار الإدارة (لا المسودات المعلقة ولا المرفوضة)، وتقرير الصرف للمدفوع فقط
+    if (schema.id === "payroll_expenses") relevantRecords = relevantRecords.filter((record) => ["معتمد", "مرحّل", "مدفوع", "موقوف", "موقوف الصرف"].includes(String(record.status ?? "").trim()) || record.accounting_status === "posted");
+    if (schema.id === "disbursement_reports") relevantRecords = relevantRecords.filter((record) => String(record.status ?? "").trim() === "مدفوع");
 
     if (schema.id === "leaves" && filterValues.leave_type && filterValues.leave_type !== "الكل") {
       relevantRecords = relevantRecords.filter((record) => String(record.leave_type ?? "").includes(filterValues.leave_type));
@@ -274,6 +284,10 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     const employeeRows = baseEmployees.map((employee) => {
       const matches = recordsByEmployee.get(employee.id) ?? recordsByEmployee.get(employee.emp_id ?? "") ?? [];
       let details = matches.slice(0, 2).map((record) => recordDetail(schema.id, record)).join(" | ");
+      if ((schema.id === "payroll_expenses" || schema.id === "disbursement_reports") && matches.length > 1) {
+        const net = matches.reduce((sum, record) => sum + (Number(record.net_salary) || 0), 0);
+        details = `${matches.length} شهر — إجمالي الصافي ${net.toFixed(2)} ر.س | ${details}`;
+      }
       if (EMPLOYEE_REPORTS.has(schema.id)) {
         if (schema.id === "financial_data") details = `الراتب والبيانات المالية للموظف`;
         if (schema.id === "personal_details") details = "البيانات الشخصية والوظيفية";

@@ -187,7 +187,8 @@ Deno.serve(async (req: Request) => {
         if (!messageId) return respond({ success: false, error: "الرسالة مطلوبة" }, 400);
         const { data: message } = await adminClient
           .from("employee_mail_messages")
-          .select("id, from_email, to_email, deleted_by_sender_at, deleted_by_recipient_at, purged_by_sender_at, purged_by_recipient_at")
+          // "*" لا اسم عمود بعينه: عمود deduction_assignment_id قد لا يوجد في قاعدة قديمة، وطلب عمود غير موجود يُفشل القراءة
+          .select("*")
           .eq("id", messageId)
           .maybeSingle();
         if (!message || ![message.from_email, message.to_email].includes(credential.generated_email)) {
@@ -217,7 +218,8 @@ Deno.serve(async (req: Request) => {
 
         const senderPurged = Boolean(message.purged_by_sender_at || changes.purged_by_sender_at);
         const recipientPurged = Boolean(message.purged_by_recipient_at || changes.purged_by_recipient_at);
-        if (senderPurged && recipientPurged) {
+        // رسائل الخصم الآلي القديم محفوظة للمراجعة القانونية: تُخفى من الصندوقين ولا تُحذف من قاعدة البيانات
+        if (senderPurged && recipientPurged && !message.deduction_assignment_id) {
           const { error: hardDeleteError } = await adminClient
             .from("employee_mail_messages")
             .delete()

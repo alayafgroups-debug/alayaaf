@@ -35,7 +35,6 @@ import InventoryOpeningBalances from "./pages/InventoryOpeningBalances";
 import HR from "./pages/HR";
 import HRDashboard from "./pages/HRDashboard";
 import HREmployees from "./pages/HREmployees";
-import HRPayroll from "./pages/HRPayroll";
 import HRCertificates from "./pages/HRCertificates";
 import HRReports from "./pages/HRReports";
 import HREmployeeFullReport from "./pages/HREmployeeFullReport";
@@ -49,20 +48,20 @@ import HRRequestsIncoming from "./pages/HRRequestsIncoming";
 import HRRequestsSent from "./pages/HRRequestsSent";
 import HRRequestFormSettings from "./pages/HRRequestFormSettings";
 import HRAttendanceCalculate from "./pages/HRAttendanceCalculate";
+import HRAttendanceOvertime from "./pages/HRAttendanceOvertime";
 import HRAttendanceReport from "./pages/HRAttendanceReport";
 import HRAttendancePreparation from "./pages/HRAttendancePreparation";
 import HRAttendanceMonthlyReport from "./pages/HRAttendanceMonthlyReport";
 import HRAttendanceSchedules from "./pages/HRAttendanceSchedules";
 import Login from "./pages/Login";
 import EmployeeLogin from "./pages/EmployeeLogin";
-import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeePortal from "./pages/EmployeePortal";
-import EmployeeApp from "./pages/EmployeeApp";
 import HRPayrollStatement from "./pages/HRPayrollStatement";
 import HRPayrollFullReport from "./pages/HRPayrollFullReport";
 import HRPayrollArchive from "./pages/HRPayrollArchive";
 import HRPayrollFinancialData from "./pages/HRPayrollFinancialData";
 import HRPayrollTransfer from "./pages/HRPayrollTransfer";
+import HRPayrollAdvances from "./pages/HRPayrollAdvances";
 import HRPayrollSettings from "./pages/HRPayrollSettings";
 import HRPenaltiesInvestigations from "./pages/HRPenaltiesInvestigations";
 import HRPenaltiesArchive from "./pages/HRPenaltiesArchive";
@@ -85,7 +84,6 @@ import HRTerminationReasons from "./pages/HRTerminationReasons";
 import HRTerminationSettings from "./pages/HRTerminationSettings";
 import HRTerminationInterviewSetup from "./pages/HRTerminationInterviewSetup";
 import HRInsuranceSocial from "./pages/HRInsuranceSocial";
-import HRInsuranceOvertime from "./pages/HRInsuranceOvertime";
 import HRInsuranceList from "./pages/HRInsuranceList";
 import HRInsuranceMedical from "./pages/HRInsuranceMedical";
 import HRApprovalsList from "./pages/HRApprovalsList";
@@ -206,9 +204,11 @@ const App = () => (
           <Route path="/hr/payroll/archive" element={<HRPayrollArchive />} />
           <Route path="/hr/payroll/financial-data" element={<HRPayrollFinancialData />} />
           <Route path="/hr/payroll/transfer" element={<HRPayrollTransfer />} />
+          <Route path="/hr/payroll/advances" element={<HRPayrollAdvances />} />
           <Route path="/hr/payroll/settings" element={<HRPayrollSettings />} />
           <Route path="/hr/attendance" element={<Navigate to="/hr/attendance/calculate" replace />} />
           <Route path="/hr/attendance/calculate" element={<HRAttendanceCalculate />} />
+          <Route path="/hr/attendance/overtime" element={<HRAttendanceOvertime />} />
           <Route path="/hr/attendance/report" element={<HRAttendanceReport />} />
           <Route path="/hr/attendance/individual-group" element={<HRAttendancePreparation />} />
           <Route path="/hr/attendance/monthly" element={<HRAttendanceMonthlyReport />} />
@@ -238,7 +238,7 @@ const App = () => (
           <Route path="/hr/termination/interview-setup" element={<HRTerminationInterviewSetup />} />
           <Route path="/hr/insurance" element={<Navigate to="/hr/insurance/social" replace />} />
           <Route path="/hr/insurance/social" element={<HRInsuranceSocial />} />
-          <Route path="/hr/insurance/overtime" element={<HRInsuranceOvertime />} />
+          <Route path="/hr/insurance/overtime" element={<Navigate to="/hr/insurance/social" replace />} />
           <Route path="/hr/insurance/list" element={<HRInsuranceList />} />
           <Route path="/hr/insurance/medical" element={<HRInsuranceMedical />} />
           <Route path="/hr/approvals" element={<Navigate to="/hr/approvals/list" replace />} />

@@ -41,6 +41,7 @@ import {
   Wrench,
   Boxes,
   Truck,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -180,6 +181,7 @@ const hrNavItems: HRNavItem[] = [
     hasChildren: true,
     children: [
       { icon: Clock, label: "حساب الدوام", href: "/hr/attendance/calculate" },
+      { icon: CheckCircle2, label: "اعتماد الساعات الإضافية", href: "/hr/attendance/overtime" },
       {
         icon: FileBarChart,
         label: "الحضور والغياب للموظفين",
@@ -215,6 +217,7 @@ const hrNavItems: HRNavItem[] = [
         label: "البيانات المالية للموظفين",
         href: "/hr/payroll/financial-data",
       },
+      { icon: BadgeDollarSign, label: "سلف الموظفين", href: "/hr/payroll/advances" },
       {
         icon: Receipt,
         label: "ترحيل حساب الراتب إلى النظام المحاسبي",
@@ -330,11 +333,6 @@ const hrNavItems: HRNavItem[] = [
         icon: ShieldCheck,
         label: "التأمينات الاجتماعية",
         href: "/hr/insurance/social",
-      },
-      {
-        icon: Clock,
-        label: "التأمينات للساعات الإضافية",
-        href: "/hr/insurance/overtime",
       },
       {
         icon: FileText,

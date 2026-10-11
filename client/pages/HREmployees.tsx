@@ -1167,7 +1167,7 @@ function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData
                 /></Fragment>
               ))}
               <InfoRow label={t("إجمالي الراتب الشهري")} value={money(total)} />
-              <InfoRow label={t("التأمينات الاجتماعية")} value={emp.socialInsurance === "نعم" ? `${t("نعم")} — ${emp.socialInsuranceType || "—"}` : t("لا")} />
+              <InfoRow label={t("التأمينات الاجتماعية")} value={emp.socialInsurance === "نعم" ? `${t("نعم")} — ${emp.socialInsuranceType || "—"}` : emp.socialInsurance === "" ? t("غير محدد") : t("لا")} />
               <InfoRow label={t("البنك")} value={emp.bankName} />
               <InfoRow label={t("الآيبان")} value={emp.iban} />
             </InfoGroup>

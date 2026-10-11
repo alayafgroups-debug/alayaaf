@@ -4,12 +4,14 @@
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { eachDate, monthRange, riyadhToday } from "@/lib/hrDates";
-import { isSaudiNationality } from "@/lib/hrStatus";
-import { classifyAttendanceDay, type DayRecord } from "@/lib/attendanceRules";
+import { isApprovedStatus } from "@/lib/hrStatus";
+import { advanceInstallmentDue, allocateAdvanceRepayments, isCancelledPayrollStatus, parseApprovedAdvance, type AdvanceRecord } from "@/lib/advances";
+import { GOSI_EMPLOYEE_RATE_SAUDI, gosiContributionWage, gosiDeductsFromEmployee, gosiSaudiRates, isHousingAllowance } from "@/lib/gosi";
+import { classifyAttendanceDay, type DayCategory, type DayRecord } from "@/lib/attendanceRules";
 import { isScheduledWorkDay, lateMinutesFor, loadWorkSchedules, scheduleForEmployee, type WorkSchedule } from "@/lib/workSchedule";
 import { approvedLeaveDatesByEmployee, loadApprovedLeaves, loadOfficialHolidays, officialHolidayDates, type HolidayScope } from "@/lib/attendanceManual";
 
-export const SOCIAL_INSURANCE_RATE = 0.0975;
+export const SOCIAL_INSURANCE_RATE = GOSI_EMPLOYEE_RATE_SAUDI;
 export const PAYROLL_SETTINGS_KEY = "payroll_settings";
 /** حالات صف الرواتب التي ما زالت مفتوحة للتعديل وإعادة الإرسال */
 export const OPEN_PAYROLL_STATUSES = ["معلق", "مرفوض", "موقوف"];
@@ -27,6 +29,10 @@ export type PayrollPolicy = {
   excludeAdvances: boolean;
   /** الراتب المكتسب حسب الحضور: يوم العمل الماضي بلا تسجيل يُعد غيابًا */
   countUnrecordedAsAbsent: boolean;
+  /** اتباع حقل التأمينات في ملف الموظف: السعودي المسجّل "لا" لا يُخصم منه (الافتراضي: يُخصم من كل سعودي كما كان) */
+  gosiFollowEmployeeFlag: boolean;
+  /** أجر الاشتراك = الأساسي + بدل السكن (نظام التأمينات)؛ الافتراضي الأساسي فقط كما كان، حتى يطابق الأجر المسجّل في التأمينات */
+  gosiIncludeHousing: boolean;
 };
 
 export const DEFAULT_PAYROLL_POLICY: PayrollPolicy = {
@@ -34,6 +40,8 @@ export const DEFAULT_PAYROLL_POLICY: PayrollPolicy = {
   dayDivisor: "fixed30",
   excludeAdvances: false,
   countUnrecordedAsAbsent: false,
+  gosiFollowEmployeeFlag: false,
+  gosiIncludeHousing: false,
 };
 
 /** من قيم صفحة "إعدادات حساب الراتب" إلى سياسة الحساب */
@@ -48,6 +56,8 @@ export const payrollPolicyFromSettings = (settings: Record<string, unknown> | nu
     // مفتاح جديد عمدًا: القيمة القديمة earnedSalary حُفظت سابقًا "نعم" افتراضيًا ولم تكن مطبّقة،
     // فلا تُفعَّل إلا إذا اختارها مسؤول الرواتب من جديد بعد هذا الإصدار
     countUnrecordedAsAbsent: settings.earnedSalaryApplied === true,
+    gosiFollowEmployeeFlag: settings.gosiFollowEmployeeFlag === true,
+    gosiIncludeHousing: settings.gosiIncludeHousing === true,
   };
 };
 
@@ -68,10 +78,11 @@ export async function loadPayrollPolicy(): Promise<{ policy: PayrollPolicy; erro
 type AllowanceItem = { amount?: unknown; value?: unknown; effect?: unknown; from?: unknown; to?: unknown };
 
 /** البدلات السارية في أي يوم من الفترة: المضافة والمخصومة (نفس قاعدة الراتب الإجمالي في ملف الموظف) */
-export const allowancesForPeriod = (items: unknown, from: string, to: string): { added: number; deducted: number } => {
+export const allowancesForPeriod = (items: unknown, from: string, to: string): { added: number; deducted: number; housing: number } => {
   const list = Array.isArray(items) ? (items as AllowanceItem[]) : [];
   let added = 0;
   let deducted = 0;
+  let housing = 0;
   list.forEach((item) => {
     if (!item || typeof item !== "object") return;
     const start = String(item.from ?? "").slice(0, 10);
@@ -81,9 +92,12 @@ export const allowancesForPeriod = (items: unknown, from: string, to: string): {
     const amount = Number(item.amount ?? item.value ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) return;
     if (String(item.effect ?? "").trim() === "مخصوم") deducted += amount;
-    else added += amount;
+    else {
+      added += amount;
+      if (isHousingAllowance((item as { type?: unknown }).type)) housing += amount;
+    }
   });
-  return { added: round2(added), deducted: round2(deducted) };
+  return { added: round2(added), deducted: round2(deducted), housing: round2(housing) };
 };
 
 // ---------------------------------------------------------------------------
@@ -99,6 +113,9 @@ export type PayrollEmployeeInput = {
   dailyHours: number;
   attendanceExempt: boolean;
   schedule: WorkSchedule | null;
+  /** مشمول بالتأمينات (نعم/لا؛ الفارغ = مشمول) ونوعه (سعودي قابل/غير قابل للخصم) */
+  socialInsurance?: string;
+  socialInsuranceType?: string;
 };
 
 export type PayrollAttendanceRecord = DayRecord & { date: string };
@@ -118,13 +135,29 @@ export type PayrollLineInput = {
    * مثل المرضية حسب المادة 117 (0 ثم 0.25 ثم 1)، أو نوع إجازة له "نسبة خصم".
    */
   leaveDeductionFactors?: Map<string, number>;
+  /** الجزاءات المعتمدة المستحقة حتى نهاية الشهر ولم تُخصم بعد (يُخصم منها حتى سقف المادة 72) */
   penalties: number;
   overtime: { hours: number; amount: number };
   advanceInstallment: number;
   policy: PayrollPolicy;
 };
 
+/** تصنيف كل يوم في الشهر كما حسبه الكشف (لتقرير الموظف الكامل وغيره) */
+export type PayrollDay = {
+  date: string;
+  category: DayCategory;
+  deductibleAbsence: boolean;
+  unrecorded: boolean;
+  workDay: boolean;
+  holiday: boolean;
+  beforeHire: boolean;
+  /** نسبة خصم الإجازة في هذا اليوم (0 مدفوعة، 1 بدون راتب) */
+  leaveCut: number;
+  status: string;
+};
+
 export type PayrollLine = {
+  days: PayrollDay[];
   workDays: number;
   presentDays: number;
   absentDays: number;
@@ -156,8 +189,19 @@ export type PayrollLine = {
   /** ما لم يُستحق من الأساسي والبدلات لأيام ما قبل التعيين (تخفيض للاستحقاق وليس استقطاعًا) */
   proratedReduction: number;
   socialInsurance: number;
+  /** نسبة حصة الموظف في التأمينات المطبّقة (0 إن لم يُخصم) */
+  socialInsuranceRate: number;
   penalties: number;
+  /** الجزاءات المستحقة قبل السقف، وسقف المادة 72 (أجر 5 أيام)، وما يُرحَّل للشهر التالي */
+  penaltiesOutstanding: number;
+  penaltyCap: number;
+  penaltiesCarried: number;
+  /** قسط السلف المستحق قبل الحدود، والمخصوم فعلًا */
+  loansDue: number;
   loans: number;
+  /** حد المادة 93 (نصف الأجر المستحق) وما خُفّض بسببه من السلف والجزاءات (يبقى مستحقًا للأشهر التالية) */
+  halfWageCap: number;
+  halfWageReduction: number;
   allowanceDeductions: number;
   totalDeductions: number;
   net: number;
@@ -200,6 +244,7 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
   let unpaidLeaveWorkDays = 0;
   let notEmployedDays = 0;
   let earnedAnyDay = false;
+  const days: PayrollDay[] = [];
   const leaveFactors = new Map<string, number>(input.leaveDeductionFactors ?? []);
   (input.unpaidLeaveDates ?? new Set<string>()).forEach((date) => leaveFactors.set(date, 1));
   eachDate(from, to).forEach((date) => {
@@ -228,6 +273,7 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
       computedLateMinutes: record ? lateMinutesFor(record.checkIn, employee.schedule) : 0,
     });
     const attended = day.category === "present" || day.category === "late";
+    days.push({ date, category: beforeHire ? "none" : day.category, deductibleAbsence: day.deductibleAbsence, unrecorded: day.unrecorded, workDay, holiday, beforeHire, leaveCut: onLeave && !attended ? leaveCut : 0, status: String(record?.status ?? "") });
     if (day.deductibleAbsence) absentDays += 1;
     else if (day.counted && attended && workDay && !holiday) presentDays += 1;
     if (attended && !beforeHire) earnedAnyDay = true;
@@ -245,7 +291,7 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
   });
 
   const fullBasic = round2(Math.max(0, Number(employee.baseSalary) || 0));
-  const { added: fullAllowances, deducted: fullAllowanceDeductions } = allowancesForPeriod(employee.allowances, from, to);
+  const { added: fullAllowances, deducted: fullAllowanceDeductions, housing: fullHousing } = allowancesForPeriod(employee.allowances, from, to);
   const monthDays = Number(to.slice(8, 10));
   const factor = employedFactor(policy, monthDays, notEmployedDays);
   // المعيَّن خلال الشهر يستحق نصيب أيام خدمته من الأساسي والبدلات؛ يُخفَّض الاستحقاق نفسه
@@ -288,10 +334,32 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
       unpaidLeaveDeduction = round2(unpaidLeaveDeduction - Math.min(unpaidLeaveDeduction, over));
     }
   }
-  let socialInsurance = isSaudiNationality(employee.nationality) ? round2(basic * SOCIAL_INSURANCE_RATE) : 0;
-  let penalties = round2(Math.max(0, input.penalties));
+  // التأمينات: حصة الموظف السعودي (9.75%، أو نسبة النظام الجديد حسب الشهر) من أجر الاشتراك
+  // (الأساسي، أو الأساسي + بدل السكن بإعداد الرواتب؛ بحد 45,000) بنسبة أيام الخدمة
+  const socialInsuranceRate = gosiDeductsFromEmployee(employee.nationality, employee.socialInsurance, employee.socialInsuranceType, policy.gosiFollowEmployeeFlag)
+    ? gosiSaudiRates(employee.socialInsuranceType, period).employee
+    : 0;
+  let socialInsurance = round2(gosiContributionWage(fullBasic, policy.gosiIncludeHousing ? fullHousing : 0) * factor * socialInsuranceRate);
+  // المادة 72: لا يُقتطع للغرامات أكثر من أجر خمسة أيام في الشهر؛ والباقي يُخصم في الأشهر التالية
+  const penaltiesOutstanding = round2(Math.max(0, input.penalties));
+  const penaltyCap = round2(((fullBasic + fullAllowances) / 30) * 5);
+  let penalties = round2(Math.min(penaltiesOutstanding, penaltyCap));
   let loans = policy.excludeAdvances ? 0 : round2(Math.max(0, input.advanceInstallment));
   let allowanceDeductions = round2(fullAllowanceDeductions * factor);
+  // المادة 93: لا تزيد المبالغ المحسومة (التأمينات والبدلات المخصومة والجزاءات والسلف) على نصف الأجر المستحق
+  // (الاستحقاقات بعد الغياب والإجازة بدون راتب). يُخفَّض قسط السلفة أولًا ثم الجزاء، والمخفَّض يبقى مستحقًا للأشهر التالية
+  const earnedWage = round2(Math.max(0, grossEarnings - absenceDeduction - unpaidLeaveDeduction));
+  const halfWageCap = round2(earnedWage / 2);
+  let halfWageReduction = 0;
+  if (round2(socialInsurance + allowanceDeductions + penalties + loans) > halfWageCap) {
+    let over = round2(socialInsurance + allowanceDeductions + penalties + loans - halfWageCap);
+    const cutLoans = Math.min(loans, over);
+    loans = round2(loans - cutLoans);
+    over = round2(over - cutLoans);
+    const cutPenalties = Math.min(penalties, over);
+    penalties = round2(penalties - cutPenalties);
+    halfWageReduction = round2(cutLoans + cutPenalties);
+  }
 
   // لا صافي سالب: تُخفَّض الاستقطاعات بالترتيب (السلف، الجزاءات، البدلات المخصومة، الغياب، الإجازة بدون راتب، التأمينات)
   // حتى تساوي إجمالي الاستحقاقات؛ فيبقى: الاستحقاقات − الاستقطاعات = الصافي (شرط الترحيل المحاسبي)
@@ -316,6 +384,7 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
   const net = round2(grossEarnings - total);
 
   return {
+    days,
     workDays,
     presentDays,
     absentDays,
@@ -338,8 +407,15 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
     unpaidLeaveDeduction,
     proratedReduction,
     socialInsurance,
+    socialInsuranceRate,
     penalties,
+    penaltiesOutstanding,
+    penaltyCap,
+    penaltiesCarried: round2(penaltiesOutstanding - penalties),
+    loansDue: round2(policy.excludeAdvances ? 0 : Math.max(0, input.advanceInstallment)),
     loans,
+    halfWageCap,
+    halfWageReduction,
     allowanceDeductions,
     totalDeductions: total,
     net,
@@ -358,7 +434,10 @@ export const payrollLineNotes = (line: PayrollLine): string => {
   if (line.fullPeriodUnearned && line.socialInsurance > 0) parts.push(`حصة الموظف في التأمينات ${line.socialInsurance.toFixed(2)} تتحملها المنشأة لعدم وجود أجر`);
   if (line.notEmployedDays) parts.push(`قبل التعيين ${line.notEmployedDays} يوم (المستحق ${line.basic.toFixed(2)} أساسي + ${line.allowances.toFixed(2)} بدلات من ${line.fullBasic.toFixed(2)} + ${line.fullAllowances.toFixed(2)})`);
   if (line.penalties) parts.push(`جزاءات ${line.penalties.toFixed(2)}`);
+  if (line.penaltiesCarried > 0) parts.push(`جزاءات متبقية تُخصم في الأشهر التالية ${line.penaltiesCarried.toFixed(2)} (لا يُخصم في الشهر أكثر من أجر 5 أيام ${line.penaltyCap.toFixed(2)} — المادة 72)`);
   if (line.loans) parts.push(`سلف ${line.loans.toFixed(2)}`);
+  if (line.loansDue > line.loans) parts.push(`لم يُخصم من قسط السلف ${(line.loansDue - line.loans).toFixed(2)}؛ يبقى في رصيد السلفة ويمتد السداد`);
+  if (line.halfWageReduction) parts.push(`خُفّضت السلف والجزاءات ${line.halfWageReduction.toFixed(2)} حتى لا يتجاوز المحسوم نصف الأجر المستحق (المادة 93: ${line.halfWageCap.toFixed(2)})`);
   if (line.allowanceDeductions) parts.push(`بدلات مخصومة ${line.allowanceDeductions.toFixed(2)}`);
   if (line.overtime) parts.push(`إضافي ${line.overtime.toFixed(2)}`);
   if (line.cappedDeductions) parts.push(`خُفّضت الاستقطاعات ${line.cappedDeductions.toFixed(2)} حتى لا يكون الصافي سالبًا`);
@@ -444,7 +523,7 @@ const ID_CHUNK = 100;
 const chunk = <T,>(items: T[]) => Array.from({ length: Math.ceil(items.length / ID_CHUNK) }, (_, index) => items.slice(index * ID_CHUNK, (index + 1) * ID_CHUNK));
 const errorCode = (error: unknown) => String((error as { code?: unknown } | null)?.code ?? "");
 
-const EMPLOYEE_COLUMNS = "id, emp_id, name, nationality, base_salary, allowances, hire_date, daily_hours, work_schedule, branch, branch_id, directorate, department, department_id, section_id";
+const EMPLOYEE_COLUMNS = "id, emp_id, name, nationality, base_salary, allowances, hire_date, daily_hours, work_schedule, branch, branch_id, directorate, department, department_id, section_id, social_insurance, social_insurance_type";
 
 async function loadEmployees(ids: string[]): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
@@ -524,23 +603,92 @@ export async function computePayroll(employeeIds: string[], period: string): Pro
     });
   }
 
+  // ما خُصم من الجزاءات والسلف في صفوف الأشهر الأخرى (قبل هذا الشهر وبعده، بأي حالة إلا الملغى):
+  // صف معلق أو مرفوض قد يُعاد إرساله بالمبلغ نفسه، وحساب الأشهر بغير ترتيبها لا يكرر الخصم.
+  // إن خُصم مبلغ في شهر لاحق فإعادة حساب شهر سابق تخصم أقل، ويُستكمل الباقي في الشهر المفتوح التالي.
+  const penaltiesDeductedOther = new Map<string, number>();
+  const advanceDeductionsOther = new Map<string, Map<string, number>>();
+  // عمود penalty_deduction يضيفه HR-7؛ قبله تُقرأ السلف فقط (لا جزاءات مخصومة سابقًا)
+  let historyColumns = "id, emp_id, month, status, penalty_deduction, advance_deduction";
+  for (const part of chunk(codes)) {
+    const page = (columns: string) => fetchAllRows<Record<string, unknown>>((start, end) => supabase
+      .from("payroll")
+      .select(columns)
+      .in("emp_id", part)
+      .neq("month", period)
+      .order("month")
+      .order("id")
+      .range(start, end) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: unknown }>);
+    let rows: Record<string, unknown>[];
+    try {
+      rows = await page(historyColumns);
+    } catch (historyError) {
+      if (errorCode(historyError) !== "42703" || !historyColumns.includes("penalty_deduction")) throw historyError;
+      historyColumns = "id, emp_id, month, status, advance_deduction";
+      rows = await page(historyColumns);
+    }
+    rows.forEach((row) => {
+      if (isCancelledPayrollStatus(row.status)) return;
+      const code = String(row.emp_id ?? "").trim();
+      const month = String(row.month ?? "").slice(0, 7);
+      penaltiesDeductedOther.set(code, round2((penaltiesDeductedOther.get(code) ?? 0) + (Number(row.penalty_deduction) || 0)));
+      const advance = Number(row.advance_deduction) || 0;
+      if (advance > 0 && month) {
+        const months = advanceDeductionsOther.get(code) ?? new Map<string, number>();
+        months.set(month, round2((months.get(month) ?? 0) + advance));
+        advanceDeductionsOther.set(code, months);
+      }
+    });
+  }
+  const codeById = new Map(employeeRows.map((row) => [String(row.id), String(row.emp_id ?? "").trim()] as [string, string]));
+
   const penaltiesById = new Map<string, number>();
   const overtimeById = new Map<string, { hours: number; amount: number }>();
   const advancesById = new Map<string, number>();
   for (const part of chunk(ids)) {
-    const [penaltyResult, overtimeResult, advanceResult] = await Promise.all([
-      supabase.from("penalties").select("employee_id, amount, date").gte("date", from).lte("date", to).in("employee_id", part),
-      supabase.from("overtime_records").select("employee_id, hours, amount, status, date").gte("date", from).lte("date", to).in("employee_id", part),
-      supabase.from("hr_advances").select("*").in("employee_id", part),
+    const [penaltyRows, overtimeResult, advanceResult] = await Promise.all([
+      // كل الجزاءات حتى نهاية الشهر: المعتمد منها فقط يُخصم، والمتبقي بعد سقف المادة 72 يُرحَّل
+      fetchAllRows<Record<string, unknown>>((start, end) => supabase
+        .from("penalties")
+        .select("id, employee_id, amount, date, status")
+        .lte("date", to)
+        .in("employee_id", part)
+        .order("date")
+        .order("id")
+        .range(start, end)),
+      // سجلات يومية قد تتجاوز 1000 صف لمئة موظف في شهر: تُجلب على دفعات
+      fetchAllRows<Record<string, unknown>>((start, end) => supabase
+        .from("overtime_records")
+        .select("id, employee_id, hours, amount, status, date")
+        .gte("date", from)
+        .lte("date", to)
+        .in("employee_id", part)
+        .order("date")
+        .order("id")
+        .range(start, end)),
+      fetchAllRows<Record<string, unknown>>((start, end) => supabase
+        .from("hr_advances")
+        .select("*")
+        .in("employee_id", part)
+        .order("id")
+        .range(start, end))
+        .then((data) => ({ data, error: null as unknown }), (error: unknown) => ({ data: [] as Record<string, unknown>[], error })),
     ]);
-    if (penaltyResult.error) throw penaltyResult.error;
-    if (overtimeResult.error) throw overtimeResult.error;
-    (penaltyResult.data ?? []).forEach((row: Record<string, unknown>) => {
+    const approvedPenalties = new Map<string, number>();
+    penaltyRows.forEach((row) => {
+      // لا يُخصم جزاء معلق أو مرفوض أو ملغى أو بلا قرار
+      if (!isApprovedStatus(row.status)) return;
       const id = String(row.employee_id ?? "");
-      penaltiesById.set(id, (penaltiesById.get(id) ?? 0) + (Number(row.amount) || 0));
+      approvedPenalties.set(id, (approvedPenalties.get(id) ?? 0) + Math.max(0, Number(row.amount) || 0));
     });
-    (overtimeResult.data ?? []).forEach((row: Record<string, unknown>) => {
-      if (String(row.status ?? "").includes("مرفوض")) return;
+    approvedPenalties.forEach((total, id) => {
+      const already = penaltiesDeductedOther.get(codeById.get(id) ?? "") ?? 0;
+      const outstanding = round2(Math.max(0, total - already));
+      if (outstanding > 0) penaltiesById.set(id, outstanding);
+    });
+    overtimeResult.forEach((row: Record<string, unknown>) => {
+      // الإضافي المعتمد فقط (المعلق ينتظر قرار من يعتمده)
+      if (!isApprovedStatus(row.status)) return;
       const id = String(row.employee_id ?? "");
       const current = overtimeById.get(id) ?? { hours: 0, amount: 0 };
       current.hours += Number(row.hours) || 0;
@@ -551,16 +699,18 @@ export async function computePayroll(employeeIds: string[], period: string): Pro
       if (["42P01", "42703"].includes(errorCode(advanceResult.error))) warnings.push("جدول السلف غير متاح؛ لم تُخصم سلف");
       else throw advanceResult.error;
     } else {
+      // السلف المعتمدة: المسدَّد من كل سلفة يُعاد توزيعه شهرًا بشهر من أقساط الأشهر الأخرى (lib/advances)،
+      // والمستحق هذا الشهر لكل سلفة بدأت فيه أو قبله = الأقل من قسطها ومتبقيها
+      const advancesByEmployee = new Map<string, AdvanceRecord[]>();
       (advanceResult.data ?? []).forEach((row: Record<string, unknown>) => {
-        const status = String(row.status ?? "").trim();
-        // لا تُخصم سلفة معلقة أو مرفوضة أو مسددة أو ملغاة
-        if (["معلق", "معلقة", "مرفوض", "مرفوضة", "مسدد", "مسددة", "ملغي", "ملغى", "ملغاة"].includes(status)) return;
-        const installment = Number(row.monthly_installment) || 0;
-        const remaining = row.remaining_amount === null || row.remaining_amount === undefined ? installment : Number(row.remaining_amount) || 0;
-        const due = Math.max(0, Math.min(installment, remaining));
-        if (!due) return;
-        const id = String(row.employee_id ?? "");
-        advancesById.set(id, (advancesById.get(id) ?? 0) + due);
+        const advance = parseApprovedAdvance(row);
+        if (!advance) return;
+        advancesByEmployee.set(advance.employeeId, [...(advancesByEmployee.get(advance.employeeId) ?? []), advance]);
+      });
+      advancesByEmployee.forEach((list, id) => {
+        const repaid = allocateAdvanceRepayments(list, advanceDeductionsOther.get(codeById.get(id) ?? "") ?? new Map());
+        const due = advanceInstallmentDue(list, repaid, period);
+        if (due > 0) advancesById.set(id, due);
       });
     }
   }
@@ -622,6 +772,8 @@ export async function computePayroll(employeeIds: string[], period: string): Pro
         dailyHours: Number(row.daily_hours ?? 8),
         attendanceExempt: row.attendance_exempt === true,
         schedule,
+        socialInsurance: String(row.social_insurance ?? ""),
+        socialInsuranceType: String(row.social_insurance_type ?? ""),
       },
       period,
       today,
@@ -665,13 +817,14 @@ export const payrollRowValues = (line: PayrollLine, employee: PayrollEmployeeRow
   // عمود allowances في الرواتب = البدلات + الإضافي (كما كان)، فيبقى: الأساسي + البدلات − الاستقطاعات = الصافي
   allowances: round2(line.allowances + line.overtime),
   social_insurance_deduction: line.socialInsurance,
-  social_insurance_rate: line.socialInsurance > 0 ? SOCIAL_INSURANCE_RATE : 0,
+  social_insurance_rate: line.socialInsurance > 0 ? line.socialInsuranceRate : 0,
   nationality_snapshot: employee.nationality,
   deductions: line.totalDeductions,
   // تفصيل للترحيل المحاسبي: الغياب والإجازات غير المدفوعة والبدلات المخصومة تخفّض مصروف الرواتب
   // (لم يُستحق أجرها)، والسلف تُسدِّد حساب سلف الموظفين؛ والجزاءات التزام في حساب الاستقطاعات
   expense_reduction: round2(line.absenceDeduction + line.unpaidLeaveDeduction + line.allowanceDeductions),
   advance_deduction: line.loans,
+  penalty_deduction: line.penalties,
   net_salary: line.net,
   notes: payrollLineNotes(line),
 });
@@ -685,6 +838,7 @@ const NOT_STARTED_ROW_VALUES = {
   deductions: 0,
   expense_reduction: 0,
   advance_deduction: 0,
+  penalty_deduction: 0,
   net_salary: 0,
   notes: "تاريخ التعيين بعد نهاية الشهر؛ لا راتب لهذه الفترة",
 };

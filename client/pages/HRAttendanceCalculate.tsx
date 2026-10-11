@@ -515,10 +515,17 @@ export default function HRAttendanceCalculate() {
         message = manualAttendanceResultText(result, t, formatNumber);
       } else if (attendanceAction === "overtime") {
         const hours = Number(actionHours);
-        if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));
+        if (!Number.isFinite(hours) || hours <= 0 || hours > 24) throw new Error(t("أدخل عدد ساعات صحيح"));
+        if (!actionDate || actionDate > riyadhToday()) throw new Error(t("لا تُسجَّل ساعات إضافية بتاريخ مستقبلي"));
+        // لا يسجّل المستخدم ساعات إضافية لنفسه (قاعدة البيانات ترفضها أيضًا)
+        const session = readUserSession() as { empId?: unknown; name?: unknown } | null;
+        const ownEmpId = String(session?.empId ?? "").trim();
+        const ownName = String(session?.name ?? "").trim();
+        const selfEmployees = ownEmpId ? actionEmployees.filter((employee) => employee.empId.trim() === ownEmpId && (!ownName || employee.name.trim() === ownName)) : [];
+        const otherEmployees = actionEmployees.filter((employee) => !selfEmployees.includes(employee));
         // من لم يُسجَّل راتبه الأساسي يُتخطى ولا يوقف حفظ الباقين
-        const withoutSalary = actionEmployees.filter((employee) => !(employee.baseSalary > 0));
-        const withSalary = actionEmployees.filter((employee) => employee.baseSalary > 0);
+        const withoutSalary = otherEmployees.filter((employee) => !(employee.baseSalary > 0));
+        const withSalary = otherEmployees.filter((employee) => employee.baseSalary > 0);
         // لا تكرار: من لديه سجل ساعات إضافية غير مرفوض في نفس التاريخ يُتخطى
         const recordedIds = new Set<string>();
         for (const ids of chunkIds(withSalary.map((employee) => employee.id))) {
@@ -529,16 +536,25 @@ export default function HRAttendanceCalculate() {
         const alreadyRecorded = withSalary.filter((employee) => recordedIds.has(employee.id));
         const eligible = withSalary.filter((employee) => !recordedIds.has(employee.id));
         const skippedText = [
+          selfEmployees.length ? t("لا تسجّل ساعات إضافية لنفسك؛ يسجّلها لك مسؤول آخر") : "",
           withoutSalary.length ? `${t("تم تخطي")} ${formatNumber(withoutSalary.length)} ${t("موظف لعدم تسجيل الراتب الأساسي")}: ${nameList(withoutSalary)}` : "",
           alreadyRecorded.length ? `${t("تم تخطي")} ${formatNumber(alreadyRecorded.length)} ${t("موظف لديه ساعات إضافية مسجلة في هذا التاريخ")}: ${nameList(alreadyRecorded)}` : "",
         ].filter(Boolean).join("، ");
         if (!eligible.length) throw new Error(`${t("لم تُسجَّل أي ساعات إضافية")}${skippedText ? `: ${skippedText}` : ""}`);
-        // المادة 107: الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي)
-        const payload = eligible.map((employee) => ({ employee_id: employee.id, emp_name: employee.name, date: actionDate, hours, rate: OVERTIME_RATE, amount: overtimeAmount(employee, hours), status: "معتمدة" }));
-        const { error: saveError } = await supabase.from("overtime_records").insert(payload);
-        if (saveError) throw saveError;
-        changed = true;
-        message = `${t("تم تسجيل الساعات الإضافية لـ")} ${formatNumber(payload.length)} ${t("موظف")}${skippedText ? `، ${skippedText}` : ""}`;
+        // المادة 107: الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي)؛ المبلغ يعيد الخادم حسابه.
+        // تُسجَّل "معلقة" وتدخل الراتب بعد اعتمادها من مسؤول آخر في صفحة "اعتماد الساعات الإضافية"
+        // كل موظف على حدة: رفض واحد (شهر رواتبه معتمد مثلًا) لا يوقف تسجيل الباقين
+        let savedCount = 0;
+        const failures: string[] = [];
+        for (const employee of eligible) {
+          const { error: saveError } = await supabase.from("overtime_records").insert({ employee_id: employee.id, emp_name: employee.name, date: actionDate, hours, rate: OVERTIME_RATE, amount: overtimeAmount(employee, hours), status: "معلق", notes: actionReason || null });
+          if (saveError) failures.push(`${employee.name}: ${t(hrRequestErrorText(saveError, "تعذر الحفظ"))}`);
+          else savedCount += 1;
+        }
+        changed = savedCount > 0;
+        const failureText = failures.length ? `${t("لم يُسجَّل لـ")} ${formatNumber(failures.length)} ${t("موظف")}: ${failures.slice(0, NAME_LIST_LIMIT).join("، ")}${failures.length > NAME_LIST_LIMIT ? "…" : ""}` : "";
+        if (!savedCount) throw new Error(failureText || t("لم تُسجَّل أي ساعات إضافية"));
+        message = [`${t("تم تسجيل الساعات الإضافية بانتظار الاعتماد لـ")} ${formatNumber(savedCount)} ${t("موظف")}`, skippedText, failureText].filter(Boolean).join("، ");
       } else if (attendanceAction === "permission") {
         const hours = Number(actionHours);
         if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));

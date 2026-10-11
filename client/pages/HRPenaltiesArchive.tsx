@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { hrRequestErrorText } from "@/lib/hrErrors";
+import { isApprovedStatus } from "@/lib/hrStatus";
 
 type PenaltyRow = {
   id: string;
@@ -22,9 +23,12 @@ type PenaltyRow = {
 // رواتب الشهر المعتمدة أو المرحّلة أو المدفوعة (أو المرحّلة محاسبيًا) مقفلة
 const LOCKED_PAYROLL_FILTER = "status.in.(معتمد,مرحّل,مدفوع),accounting_status.eq.posted";
 
-// هل دخل هذا الجزاء في رواتب شهر مقفل؟ مسير الرواتب يجمع الجزاءات بتاريخها (penalties.date)
-// ويربطها بالموظف بمعرّفه (penalties.employee_id = employees.id)، بينما payroll.emp_id هو الرقم الوظيفي.
+// هل دخل هذا الجزاء في رواتب شهر مقفل؟ مسير الرواتب يخصم الجزاء المعتمد من شهر تاريخه (penalties.date)
+// وما زاد على سقف المادة 72 يُرحَّل للأشهر التالية، فيُفحص شهره وما بعده.
+// يربطه بالموظف بمعرّفه (penalties.employee_id = employees.id)، بينما payroll.emp_id هو الرقم الوظيفي.
+// الجزاء غير المعتمد (معلق أو مرفوض) لم يُخصم قط، فيُحذف بلا فحص.
 const isPenaltyPayrollLocked = async (row: PenaltyRow): Promise<boolean> => {
+  if (!isApprovedStatus(row.status)) return false;
   const date = String(row.date ?? "").slice(0, 10);
   // الجزاء بلا تاريخ لا يدخل أي مسير رواتب
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
@@ -37,7 +41,7 @@ const isPenaltyPayrollLocked = async (row: PenaltyRow): Promise<boolean> => {
     if (error && (error as { code?: string }).code !== "22P02") throw error;
     empCode = String(data?.emp_id ?? "").trim();
   }
-  let query = supabase.from("payroll").select("id", { count: "exact", head: true }).eq("month", month).or(LOCKED_PAYROLL_FILTER);
+  let query = supabase.from("payroll").select("id", { count: "exact", head: true }).gte("month", month).or(LOCKED_PAYROLL_FILTER);
   // إن تعذر تحديد الموظف نمنع الحذف إذا كان أي راتب في ذلك الشهر مقفلًا
   if (empCode) query = query.eq("emp_id", empCode);
   const { count, error } = await query;

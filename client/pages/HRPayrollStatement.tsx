@@ -272,7 +272,7 @@ export default function HRPayrollStatement() {
     { key: "workDays", label: t("أيام الحضور/العمل"), width: 14 }, { key: "absentDays", label: t("أيام الغياب"), width: 11 },
     { key: "basic", label: t("الراتب الأساسي"), width: 15 }, { key: "allowances", label: t("البدلات"), width: 13 },
     { key: "overtime", label: t("الإضافي"), width: 12 }, { key: "absenceDeduction", label: t("خصم الغياب والإجازات غير المدفوعة"), width: 16 },
-    { key: "socialInsurance", label: t("التأمينات الاجتماعية 9.75%"), width: 18 }, { key: "otherDeductions", label: t("جزاءات وسلف وأخرى"), width: 16 },
+    { key: "socialInsurance", label: t("التأمينات الاجتماعية (حصة الموظف)"), width: 18 }, { key: "otherDeductions", label: t("جزاءات وسلف وأخرى"), width: 16 },
     { key: "deductions", label: t("إجمالي الاستقطاعات"), width: 17 }, { key: "net", label: t("صافي الراتب"), width: 15 },
   ];
   const reportEmployees = selectedEmployees.filter((employee) => calc[employee.id]);
@@ -601,7 +601,7 @@ export default function HRPayrollStatement() {
                     <th className="px-2 py-2">{t("البدلات")}</th>
                     <th className="px-2 py-2">{t("إضافي")}</th>
                     <th className="px-2 py-2">{t("خصم الغياب والإجازات غير المدفوعة")}</th>
-                    <th className="px-2 py-2">{t("التأمينات الاجتماعية 9.75%")}</th>
+                    <th className="px-2 py-2">{t("التأمينات الاجتماعية (حصة الموظف)")}</th>
                     <th className="px-2 py-2">{t("جزاءات وسلف وأخرى")}</th>
                     <th className="px-2 py-2">{t("إجمالي الاستقطاعات")}</th>
                     <th className="px-2 py-2">{t("صافي الراتب")}</th>

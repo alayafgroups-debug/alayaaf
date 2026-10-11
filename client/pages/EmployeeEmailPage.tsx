@@ -15,12 +15,13 @@ interface MailMessage {
   deleted_by_recipient_at?: string | null;
   purged_by_sender_at?: string | null;
   purged_by_recipient_at?: string | null;
+  /** رسالة أنشأها نظام الخصم الآلي القديم (موقوف): محفوظة للمراجعة ولا تُعدَّل */
+  deduction_assignment_id?: string | null;
   created_at: string;
 }
 
 type Folder = "inbox" | "sent" | "trash" | "settings";
 
-const AUTO_READ_AFTER_MS = 60 * 60 * 1000;
 
 export default function EmployeeEmailPage({
   onBack,
@@ -74,7 +75,7 @@ export default function EmployeeEmailPage({
       }
       const { data, error } = await supabase
         .from("employee_mail_messages")
-        .select("id, from_email, to_email, subject, body, read_at, deleted_by_sender_at, deleted_by_recipient_at, purged_by_sender_at, purged_by_recipient_at, created_at")
+        .select("id, from_email, to_email, subject, body, read_at, deleted_by_sender_at, deleted_by_recipient_at, purged_by_sender_at, purged_by_recipient_at, deduction_assignment_id, created_at")
         .or(`to_email.eq.${employeeEmail},from_email.eq.${employeeEmail}`)
         .order("created_at", { ascending: false });
       if (!error && data) setMessages(data as MailMessage[]);
@@ -122,35 +123,7 @@ export default function EmployeeEmailPage({
     ));
   };
 
-  useEffect(() => {
-    if (!mailboxAuthenticated || !employeeEmail) return;
-    const unreadMessages = messages.filter((message) =>
-      message.to_email === employeeEmail &&
-      !message.read_at &&
-      !message.deleted_by_recipient_at &&
-      !message.purged_by_recipient_at,
-    );
-    if (unreadMessages.length === 0) return;
-
-    const now = Date.now();
-    const dueAt = (message: MailMessage) => new Date(message.created_at).getTime() + AUTO_READ_AFTER_MS;
-    const overdueIds = unreadMessages
-      .filter((message) => dueAt(message) <= now)
-      .map((message) => message.id);
-    if (overdueIds.length > 0) {
-      void markMessagesRead(overdueIds);
-      return;
-    }
-
-    const nearestDueAt = Math.min(...unreadMessages.map(dueAt));
-    const timer = window.setTimeout(() => {
-      const ids = unreadMessages
-        .filter((message) => dueAt(message) <= Date.now())
-        .map((message) => message.id);
-      void markMessagesRead(ids);
-    }, Math.max(250, nearestDueAt - now));
-    return () => window.clearTimeout(timer);
-  }, [mailboxAuthenticated, employeeEmail, messages]);
+  // لا قراءة تلقائية: الرسالة تُعلَّم مقروءة عند فتحها فقط (لا وقت قراءة لم يحدث، خاصة إشعارات الخصم الآلي المحفوظة للمراجعة)
 
   const handleMailboxLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -357,6 +330,7 @@ export default function EmployeeEmailPage({
                               {activeFolder === "inbox" ? message.from_email : activeFolder === "sent" ? message.to_email : message.from_email === employeeEmail ? message.to_email : message.from_email}
                             </p>
                             <p className="mt-1 truncate text-sm text-gray-300">{message.subject}</p>
+                            {message.deduction_assignment_id && <p className="mt-1 text-xs text-amber-400">{t("رسالة آلية من نظام خصم موقوف — ليست صادرة من شخص")}</p>}
                             <p className="mt-2 truncate text-xs text-gray-500">{message.body}</p>
                           </div>
                           <span className="whitespace-nowrap text-xs text-gray-500">{formatDate(message.created_at, { dateStyle: "medium" })}</span>
@@ -419,6 +393,11 @@ export default function EmployeeEmailPage({
                     </button>
                   </div>
                   <h2 className="text-xl font-bold mb-2">{selectedEmail.subject}</h2>
+                  {selectedEmail.deduction_assignment_id && (
+                    <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-300">
+                      {t("هذه رسالة أنشأها آليًا نظام خصم قديم أُوقف، وليست صادرة من شخص، وهي محفوظة للمراجعة. لأي استفسار عن راتبك راجع الموارد البشرية.")}
+                    </div>
+                  )}
                   <div className="text-sm text-gray-400 mb-6">{formatDate(selectedEmail.created_at, { dateStyle: "medium", timeStyle: "short" })}</div>
                   <div className="bg-gray-900 p-4 rounded text-white leading-relaxed whitespace-pre-line">{selectedEmail.body}</div>
                 </div>

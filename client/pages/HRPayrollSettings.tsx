@@ -20,6 +20,10 @@ type PayrollSettings = {
   earnedSalary: boolean;
   /** المطبّق فعلًا في كشف الرواتب (مفتاح جديد؛ earnedSalary القديم لم يكن مطبّقًا ولا يُقرأ) */
   earnedSalaryApplied: boolean;
+  /** اتباع حقل التأمينات في ملف الموظف عند خصم حصة الموظف (مطبّق) */
+  gosiFollowEmployeeFlag: boolean;
+  /** أجر الاشتراك في التأمينات يشمل بدل السكن (مطبّق) */
+  gosiIncludeHousing: boolean;
   monthDaysMethod: string;
   month31Policy: string;
 };
@@ -39,6 +43,10 @@ const DEFAULTS: PayrollSettings = {
   earnedSalary: false,
   // يُطبَّق في كشف الرواتب: تشغيله يجعل كل يوم عمل بلا تسجيل حضور غيابًا مخصومًا، فالافتراضي إيقافه
   earnedSalaryApplied: false,
+  // الافتراضي: حصة الموظف تُخصم من كل سعودي كما كان قبل HR-7 (حقل "لا" القديم كان يُحفظ تلقائيًا)
+  gosiFollowEmployeeFlag: false,
+  // الافتراضي: الأساسي فقط كما كان قبل HR-7
+  gosiIncludeHousing: false,
   monthDaysMethod: "30 يوم ثابت (افتراضي حسب نظام العمل السعودي)",
   month31Policy: "لصالح الموظف (متساهل)",
 };
@@ -204,7 +212,7 @@ export default function HRPayrollSettings() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-gray-100">
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">{t("تفعيل التأمين على الساعات الإضافية")}</label>
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("تفعيل التأمين على الساعات الإضافية")} <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{t("غير مطبّق")}</span></label>
                 <select value={s.overtimeInsurance ? "نعم" : "لا"} onChange={(e) => set("overtimeInsurance", e.target.value === "نعم")} className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-sm focus:ring-2 focus:ring-[#004e89] outline-none">
                   <option value="لا">{t("لا")}</option>
                   <option value="نعم">{t("نعم")}</option>
@@ -233,6 +241,17 @@ export default function HRPayrollSettings() {
                 <YesNo name="earned_salary" value={s.earnedSalaryApplied} onChange={(v) => set("earnedSalaryApplied", v)} />
                 <p className="text-xs text-gray-500 mt-2">{t("لا: يُخصم الغياب المسجَّل في الحضور فقط (حالة «غائب»). نعم: كل يوم عمل ماضٍ ليس فيه تسجيل حضور ولا إجازة معتمدة ولا عطلة يُحتسب غيابًا ويُخصم، إلا للموظف المعفى من الحضور.")}</p>
                 {s.earnedSalaryApplied && <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("تنبيه: فعّله فقط إذا كان كل الموظفين يسجلون حضورهم يوميًا؛ وإلا خُصمت أيام موظفين لا يستخدمون البصمة.")}</p>}
+              </div>
+              <div className="space-y-3 mt-6">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("اتباع حقل التأمينات الاجتماعية في ملف الموظف")} <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
+                <YesNo name="gosi_follow_flag" value={s.gosiFollowEmployeeFlag} onChange={(v) => set("gosiFollowEmployeeFlag", v)} />
+                <p className="text-xs text-gray-500 mt-2">{t("لا (الافتراضي): تُخصم حصة الموظف في التأمينات من كل موظف سعودي، إلا نوع «سعودي غير قابل للخصم». نعم: الموظف السعودي المسجّل في ملفه «غير مشمول» لا يُخصم منه.")}</p>
+                {s.gosiFollowEmployeeFlag && <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("تنبيه: نموذج الموظف القديم كان يحفظ «لا» تلقائيًا. راجع صفحة التأمينات الاجتماعية وصحّح ملفات السعوديين قبل التفعيل.")}</p>}
+              </div>
+              <div className="space-y-3 mt-6">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("أجر الاشتراك في التأمينات يشمل بدل السكن")} <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
+                <YesNo name="gosi_include_housing" value={s.gosiIncludeHousing} onChange={(v) => set("gosiIncludeHousing", v)} />
+                <p className="text-xs text-gray-500 mt-2">{t("لا (الافتراضي): حصة الموظف من الراتب الأساسي فقط كما كانت. نعم: من الأساسي + بدل السكن بحد 45,000 كما في نظام التأمينات. اختر ما يطابق الأجر المسجّل لموظفيك في التأمينات الاجتماعية، فالخصم يجب أن يساوي ما تطالب به التأمينات.")}</p>
               </div>
             </div>
 

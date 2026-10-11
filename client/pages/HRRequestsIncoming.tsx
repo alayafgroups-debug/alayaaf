@@ -170,6 +170,48 @@ export default function HRRequestsIncoming() {
       // طلب فيه موقوفون فقط: القرار يعتمد الإيقاف نفسه ولا تتغير حالة صفوف
       if (isPayroll && (!period || (employeeIds.length === 0 && stoppedCount === 0))) throw new Error(t("بيانات طلب اعتماد الرواتب غير مكتملة"));
 
+      // طلب اعتماد الرواتب: القرار وأثره على صفوف الرواتب في عملية واحدة على الخادم (decide_payroll_request)،
+      // فلا يبقى الطلب "موافق" وصفوفه معلقة إن لم يكن للمعتمِد صلاحية الرواتب. قبل تطبيق دفعة HR-7 يعود للطريقة السابقة.
+      if (isPayroll) {
+        const { data: decided, error: decideError } = await supabase.rpc("decide_payroll_request", {
+          p_request_id: item.id,
+          p_decision: status,
+          p_note: reviewNotes[item.id]?.trim() || null,
+          // الطلب الذي فتحه المعتمد نفسه (لا طلبًا أُعيد إرساله بالمعرّف نفسه)
+          p_created_at: item.requestDate || null,
+        });
+        const missingRpc = Boolean(decideError && (decideError.code === "PGRST202" || decideError.code === "42883"));
+        if (decideError && !missingRpc) throw decideError;
+        if (!decideError) {
+          const changedRows = Number((decided as { updated_rows?: unknown } | null)?.updated_rows ?? 0);
+          const mismatchedRows = Number((decided as { mismatched_rows?: unknown } | null)?.mismatched_rows ?? 0);
+          const selfSkipped = Number((decided as { self_skipped?: unknown } | null)?.self_skipped ?? 0);
+          if (selfSkipped > 0) {
+            toast({ title: t("راتبك ضمن الطلب لم يُعتمد"), description: t("لا يعتمد المعتمد راتبه؛ يعتمده مسؤول آخر"), variant: "destructive" });
+          }
+          if (mismatchedRows > 0) {
+            toast({
+              title: t("لم تُعتمد رواتب تغيّرت بعد إرسال الطلب"),
+              description: `${formatNumber(mismatchedRows)} ${t("صف تغيّر صافيه عن المعروض عليك فبقي معلقًا؛ اطلب من مسؤول الرواتب إعادة الإرسال")}`,
+              variant: "destructive",
+            });
+          } else if (employeeIds.length > 0 && changedRows === 0) {
+            toast({
+              title: t("سُجّل القرار لكن لم تتغير صفوف الرواتب"),
+              description: t("صفوف الشهر لم تعد معلقة (أُعيد حسابها أو قُرّر فيها)؛ راجع مسؤول الرواتب"),
+              variant: "destructive",
+            });
+          }
+          toast({ title: t(status === "موافق" ? "تمت الموافقة على الطلب" : "تم رفض الطلب") });
+          if (!mountedRef.current) return;
+          const decidedNote = reviewNotes[item.id]?.trim() || item.adminNote || "";
+          setItems((prev) => prev.map((row) => (row.id === item.id && row.source === item.source ? { ...row, status, adminNote: decidedNote } : row)));
+          setDetailRequest(null);
+          await loadData(true, true);
+          return;
+        }
+      }
+
       const reviewer = readUserSession();
       const requestUpdate = item.source === "request"
         ? {
@@ -235,19 +277,24 @@ export default function HRRequestsIncoming() {
     setDetailsLoading(true);
     const period = String(item.details.payroll_period ?? "");
     const employeeIds = Array.isArray(item.details.employee_ids) ? item.details.employee_ids.map(String) : [];
-    const { data, error } = await supabase
-      .from("payroll")
-      .select("id, emp_id, emp_name, department, basic_salary, allowances, deductions, net_salary, status, notes")
-      .eq("month", period)
-      .in("emp_id", employeeIds.length ? employeeIds : ["__none__"])
-      .order("emp_name");
+    // صفوف الطلب من دالة الخادم (يراها المستلم ولو لم تكن له صلاحية قراءة الرواتب)؛ وقبل HR-7 من الجدول مباشرة
+    const viaRpc = await supabase.rpc("get_payroll_request_rows", { p_request_id: item.id });
+    const missingRpc = Boolean(viaRpc.error && (viaRpc.error.code === "PGRST202" || viaRpc.error.code === "42883"));
+    const { data, error } = missingRpc
+      ? await supabase
+          .from("payroll")
+          .select("id, emp_id, emp_name, department, basic_salary, allowances, deductions, net_salary, status, notes")
+          .eq("month", period)
+          .in("emp_id", employeeIds.length ? employeeIds : ["__none__"])
+          .order("emp_name")
+      : { data: viaRpc.data as Record<string, unknown>[] | null, error: viaRpc.error };
     if (!mountedRef.current) return;
     setDetailsLoading(false);
     if (error) {
       toast({ title: t("تعذر تحميل تفاصيل الطلب"), description: error.message, variant: "destructive" });
       return;
     }
-    setPayrollDetails((data ?? []).map((row) => ({
+    setPayrollDetails(((data ?? []) as Record<string, unknown>[]).map((row) => ({
       id: String(row.id),
       empId: String(row.emp_id ?? ""),
       empName: String(row.emp_name ?? ""),

@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { INACTIVE_EMPLOYEE_STATUSES, setEmployeeLoginState } from "@/components/hr/employeeActions";
 import { employeeErrorText } from "@/components/hr/employeeErrors";
+import { GOSI_INSURANCE_TYPES } from "@/lib/gosi";
+import { isSaudiNationality } from "@/lib/hrStatus";
 
 export { employeeErrorText };
 import {
@@ -178,7 +180,8 @@ export const emptyForm = (): EmpFormData => ({
   baseSalary: 0,
   currency: "SAR",
   allowances: [],
-  socialInsurance: "لا",
+  // جديد: غير محدد حتى يختار المستخدم (لا يُحفظ "لا" تلقائيًا)
+  socialInsurance: "",
   socialInsuranceType: "",
   socialInsuranceStartDate: "",
   insuranceOther: "",
@@ -258,7 +261,8 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
         effect: String(item.effect ?? ""),
       }))
     : [],
-  socialInsurance: ["نعم", "مشمول"].includes(String(r.social_insurance ?? "")) ? "نعم" : "لا",
+  // الحقل الفارغ في السجلات القديمة يبقى "غير محدد" (لا يتحول إلى "لا" عند الحفظ)؛ مسير الرواتب يعامله مشمولًا للسعودي
+  socialInsurance: ["نعم", "مشمول"].includes(String(r.social_insurance ?? "").trim()) ? "نعم" : String(r.social_insurance ?? "").trim() === "" ? "" : "لا",
   socialInsuranceType: String(r.social_insurance_type ?? ""),
   socialInsuranceStartDate: String(r.social_insurance_start_date ?? ""),
   insuranceOther: String(r.insurance_other ?? ""),
@@ -310,7 +314,8 @@ const EMPLOYEE_CATEGORIES = ["دوام", "عقد", "جزئي", "مؤقت"];
 const DEFAULT_WORK_SCHEDULES = ["جدول الشركة الأساسي", "جدول مرن", "عمل من المنزل", "نظام ورديات"];
 const DEFAULT_WORK_LOCATIONS = ["المقر الرئيسي", "فرع التشغيل والصيانة", "فرع المبيعات"];
 const ALLOWANCE_TYPES = ["بدل السكن", "بدل النقل", "بدل الأطفال", "بدل الطعام", "بدل الهاتف", "بدل اللباس", "أخرى"];
-const SOCIAL_INSURANCE_TYPES = ["سعودي قابل للخصم", "سعودي غير قابل للخصم"];
+// "النظام الجديد": أول تسجيل للموظف في التأمينات من 3 يوليو 2024 (نسبة المعاشات ترتفع كل يوليو)
+const SOCIAL_INSURANCE_TYPES = GOSI_INSURANCE_TYPES;
 
 type OrganizationOptions = {
   departments: string[];
@@ -492,8 +497,8 @@ const buildEmployeePayload = (form: EmpFormData): Record<string, unknown> => ({
   currency: form.currency,
   allowances: form.allowances.map((a) => ({ ...a, amount: round2(Number(a.amount)) })),
   social_insurance: form.socialInsurance,
-  social_insurance_type: form.socialInsurance === "نعم" ? form.socialInsuranceType : "",
-  social_insurance_start_date: form.socialInsurance === "نعم" ? form.socialInsuranceStartDate || null : null,
+  social_insurance_type: form.socialInsurance === "لا" ? "" : form.socialInsuranceType,
+  social_insurance_start_date: form.socialInsurance === "لا" ? null : form.socialInsuranceStartDate || null,
   insurance_other: form.insuranceOther,
   bank_name: form.bankName,
   bank_branch: form.bankBranch,
@@ -1307,10 +1312,15 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
               <span className="text-sm">{t("نعم")}</span>
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
-              <input type="radio" name="socialInsurance" checked={form.socialInsurance !== "نعم"} onChange={() => set("socialInsurance", "لا")} className="accent-blue-600" />
+              <input type="radio" name="socialInsurance" checked={form.socialInsurance === "لا"} onChange={() => set("socialInsurance", "لا")} className="accent-blue-600" />
               <span className="text-sm">{t("لا")}</span>
             </label>
           </div>
+          {form.socialInsurance === "" && isSaudiNationality(form.nationality) && (
+            <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+              {t("التأمينات الاجتماعية غير محددة في ملف الموظف؛ اختر نعم أو لا. مسير الرواتب يخصم حصة الموظف من كل سعودي ما لم يُفعَّل إعداد «اتباع حقل التأمينات» في إعدادات حساب الراتب")}
+            </p>
+          )}
           {form.socialInsurance === "نعم" && (
             <div className="bg-blue-50 rounded-lg p-4 space-y-4 border border-blue-200">
               <FSelect label="نوع التأمين *" value={form.socialInsuranceType} onChange={(v) => set("socialInsuranceType", v)} options={SOCIAL_INSURANCE_TYPES} placeholder="اختر نوع التأمين" />

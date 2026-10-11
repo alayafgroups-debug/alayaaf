@@ -31,7 +31,8 @@ export const WEEKDAY_LABELS = ["الأحد", "الاثنين", "الثلاثاء
 export const MAX_PERIODS = 4;
 export const DEFAULT_DAILY_MINUTES = 8 * 60;
 
-const TIME_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+// الثواني قد تحمل كسورًا ("08:05:12.345678") في سجلات بصمة البوابة القديمة (وقت PostgreSQL محفوظ نصًا)
+const TIME_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.\d+)?)?$/;
 
 /** "HH:MM" أو "HH:MM:SS" إلى دقائق من منتصف الليل؛ null إن لم يكن وقتًا صحيحًا */
 export const timeToMinutes = (value: unknown): number | null => {
@@ -163,6 +164,15 @@ export const lateMinutesFor = (checkIn: unknown, schedule: WorkSchedule | null |
   return diff > schedule.lateGraceMinutes ? diff : 0;
 };
 
+/**
+ * دقائق التأخير للعرض والتصنيف: من جدول الدوام الثابت الحالي إن وُجد (المخزنة في السجل حُسبت بجدول وقت الحفظ
+ * وقد يتغير الجدول بعدها)، وإلا المخزنة. "applies": يوم عمل غير عطلة رسمية.
+ */
+export const effectiveLateMinutes = (stored: unknown, checkIn: unknown, schedule: WorkSchedule | null | undefined, applies: boolean): number =>
+  schedule && !schedule.flexible && schedule.periods.length
+    ? (applies ? lateMinutesFor(checkIn, schedule) : 0)
+    : Math.max(0, Math.round(Number(stored) || 0));
+
 /** دقائق الخروج المبكر: قبل نهاية آخر فترة بأكثر من فترة السماح */
 export const earlyLeaveMinutesFor = (checkOut: unknown, schedule: WorkSchedule | null | undefined): number => {
   if (!schedule || schedule.flexible || !schedule.periods.length) return 0;
@@ -171,6 +181,65 @@ export const earlyLeaveMinutesFor = (checkOut: unknown, schedule: WorkSchedule |
   if (actual === null || expected === null) return 0;
   const diff = signedDiff(expected, actual);
   return diff > schedule.earlyLeaveGraceMinutes ? diff : 0;
+};
+
+/** أقصى مدة لحضور يعبر منتصف الليل (وردية ليلية)؛ أطول منها غالبًا خطأ في الوقتين. والخادم يقبل الانصراف من حضور أمس المفتوح خلالها */
+export const MAX_SHIFT_MINUTES = 16 * 60;
+/** نظام العمل (المادة 101): لا يعمل العامل أكثر من خمس ساعات متتالية دون فترة راحة لا تُحسب من ساعات العمل */
+export const CONTINUOUS_WORK_MINUTES = 5 * 60;
+
+/** "HH:MM" أو "HH:MM:SS" إلى ثوانٍ من منتصف الليل؛ null إن لم يكن وقتًا صحيحًا */
+export const timeToSeconds = (value: unknown): number | null => {
+  const match = TIME_PATTERN.exec(String(value ?? "").trim());
+  if (!match) return null;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3] ?? 0);
+};
+
+/** المدة بين الدخول والخروج بالثواني؛ الخروج قبل الدخول = حضور يعبر منتصف الليل */
+export const attendanceSpanSeconds = (checkIn: unknown, checkOut: unknown): number => {
+  const start = timeToSeconds(checkIn);
+  const end = timeToSeconds(checkOut);
+  if (start === null || end === null) return 0;
+  return end >= start ? end - start : 86400 - start + end;
+};
+
+/**
+ * ساعات العمل الفعلية بالثواني بين الدخول والخروج، بقاعدة الساعات المطلوبة نفسها (الفترات ناقص الاستراحة):
+ * - الجدول الثابت متعدد الفترات (وردية مقسمة): الوقت الواقع بين فترتين لا يُحسب عملًا.
+ * - استراحة الجدول الثابت: لا تُحسب عملًا متى تجاوز الحضور خمس ساعات (المادة 101)، وبما لا يُنزله عن خمس ساعات.
+ * - الجدول المتغير ومن لا جدول له: المدة كما هي (كما كانت).
+ */
+export const workedSecondsFor = (checkIn: unknown, checkOut: unknown, schedule: WorkSchedule | null | undefined): number => {
+  const span = attendanceSpanSeconds(checkIn, checkOut);
+  if (!span || !schedule || schedule.flexible || !schedule.periods.length) return span;
+  let unpaid = 0;
+  if (schedule.periods.length > 1) {
+    // الفترات على خط زمني يبدأ من بداية الفترة الأولى (فترة تعبر منتصف الليل تمتد لليوم التالي)
+    const intervals: Array<[number, number]> = [];
+    let cursor = (timeToMinutes(schedule.periods[0].start) ?? 0) * 60;
+    schedule.periods.forEach((period) => {
+      let start = (timeToMinutes(period.start) ?? 0) * 60;
+      while (start < cursor) start += 86400;
+      let end = (timeToMinutes(period.end) ?? 0) * 60;
+      while (end <= start) end += 86400;
+      intervals.push([start, end]);
+      cursor = end;
+    });
+    // الدخول يُقرَن ببداية الدوام الأقرب إليه (لا يبعد عنها أكثر من 12 ساعة)
+    const anchor = intervals[0][0];
+    let from = timeToSeconds(checkIn) ?? anchor;
+    if (from - anchor > 43200) from -= 86400;
+    if (anchor - from > 43200) from += 86400;
+    const to = from + span;
+    for (let index = 1; index < intervals.length; index += 1) {
+      const gapStart = intervals[index - 1][1];
+      const gapEnd = intervals[index][0];
+      unpaid += Math.max(0, Math.min(to, gapEnd) - Math.max(from, gapStart));
+    }
+  }
+  const worked = Math.max(0, span - unpaid);
+  const breakSeconds = Math.max(0, schedule.breakMinutes) * 60;
+  return worked - Math.min(breakSeconds, Math.max(0, worked - CONTINUOUS_WORK_MINUTES * 60));
 };
 
 export type ScheduleDraft = {

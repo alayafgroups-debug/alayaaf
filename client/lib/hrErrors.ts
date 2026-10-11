@@ -82,6 +82,26 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   REQUEST_NOT_FOUND: "الطلب غير موجود",
   REQUEST_CHANGED: "تغيّر الطلب بعد فتحه (أُعيد إرساله)؛ أعد فتح الطلب وراجع أرقامه ثم قرّر",
   MAIL_EVIDENCE_FROZEN: "رسائل الخصم الآلي القديمة محفوظة للمراجعة ولا تُعدَّل ولا تُحذف",
+  // HR-8: الحضور والانصراف
+  ATTENDANCE_MANAGE_REQUIRED: "تسجيل الحضور وتعديله وحذفه يتطلب صلاحية إدارة الحضور",
+  ATTENDANCE_SELF_EDIT: "لا تسجّل حضورك ولا تعدّله بنفسك؛ يسجّله لك مسؤول آخر",
+  ATTENDANCE_VERIFIED_LOCKED: "سجل فيه بصمة موثّقة من بوابة الموظف؛ لا يُعدَّل ما سجّله الموظف ولا يُحذف (تُعدَّل الملاحظات، ويُكمَل الانصراف المنسي من «إضافة دخول وخروج» لموظف واحد)",
+  ATTENDANCE_SOURCE_FORGED: "لا يُسجَّل حضور موثّق جغرافيًا أو من البوابة إلا من بوابة الموظف نفسه",
+  ATTENDANCE_MONTH_LOCKED: "رواتب هذا الشهر للموظف معتمدة أو مرحّلة؛ لا يُعدَّل حضوره فيه",
+  ATTENDANCE_FUTURE_DATE: "لا يُسجَّل حضور لتاريخ بعد اليوم إلا بحالة إجازة",
+  ATTENDANCE_INVALID_TIME: "وقت الحضور أو الانصراف غير صحيح (الصيغة HH:MM)",
+  ATTENDANCE_EMPLOYEE_NOT_FOUND: "لا يوجد ملف موظف فعال مرتبط بحسابك؛ راجع الموارد البشرية",
+  ATTENDANCE_EMPLOYEE_AMBIGUOUS: "حسابك مرتبط بأكثر من ملف موظف فعال؛ راجع الموارد البشرية",
+  ATTENDANCE_ALREADY_CHECKED_IN: "تم تسجيل حضورك مسبقاً لهذا اليوم",
+  ATTENDANCE_OPEN_SHIFT: "لديك حضور مفتوح لم تسجّل انصرافه؛ سجّل الانصراف أولًا",
+  ATTENDANCE_ALREADY_CHECKED_OUT: "تم تسجيل انصرافك مسبقاً لهذا اليوم",
+  ATTENDANCE_NO_OPEN_CHECKIN: "لا يوجد حضور مفتوح لتسجيل الانصراف عليه؛ إن نسيت الانصراف أمس يكمله لك مسؤول الحضور",
+  ATTENDANCE_NOTE_REQUIRED: "اكتب سبب إضافة الانصراف في الملاحظات",
+  ATTENDANCE_INVALID_SHIFT: "وقت الانصراف لا يطابق وقت الحضور المسجل (المدة صفر أو أكثر من 16 ساعة)",
+  ATTENDANCE_WRITE_RANGE_TOO_LONG: "الفترة طويلة؛ اختر سنة أو أقل",
+  ATTENDANCE_PORTAL_NOT_ALLOWED: "تسجيل الحضور من البوابة غير مفعّل لك؛ يسجّله لك مسؤول الحضور",
+  EMPLOYEE_OWN_ATTENDANCE_SETTINGS: "لا يمكنك تعديل جدول دوامك أو موقع حضورك أو إذن تسجيل الحضور من البوابة في سجلك؛ يعدّلها مسؤول آخر",
+  ATTENDANCE_RANGE_TOO_LONG: "الفترة طويلة؛ اختر شهرين أو أقل",
 };
 
 export const hrRequestErrorText = (error: unknown, fallback = "حدث خطأ غير متوقع") => {

@@ -45,6 +45,9 @@ import AboutPage from "@/components/portal/AboutPage";
 import PrivacyPage from "@/components/portal/PrivacyPage";
 import EmployeeEmailPage from "./EmployeeEmailPage";
 import { isPendingStatus, normalizeRequestStatus } from "@/lib/hrStatus";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+import { monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
+import { MY_ATTENDANCE_UNAVAILABLE, loadMyAttendance, loadMyAttendanceState } from "@/lib/myAttendance";
 
 interface UserSession {
   id: string;
@@ -84,22 +87,6 @@ const EMPTY_ATTENDANCE_OVERVIEW: AttendanceOverview = {
   overtimeSeconds: 0,
   workedSeconds: 0,
   latestRecord: null,
-};
-
-const timeToSeconds = (value: string | null | undefined) => {
-  if (!value) return null;
-  const [hours, minutes, seconds = "0"] = value.split(":");
-  const total = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
-  return Number.isFinite(total) ? total : null;
-};
-
-const durationBetween = (start: string | null, end: string | null) => {
-  const startSeconds = timeToSeconds(start);
-  const endSeconds = timeToSeconds(end);
-  if (startSeconds === null || endSeconds === null) return 0;
-  return endSeconds >= startSeconds
-    ? endSeconds - startSeconds
-    : 86400 - startSeconds + endSeconds;
 };
 
 const formatDuration = (totalSeconds: number) => {
@@ -243,9 +230,6 @@ const formatRequestReason = (requestType: string, rawReason: unknown) => {
   }
 };
 
-const getLocalDate = (date = new Date()) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
 type AttendancePosition = {
   latitude: number;
   longitude: number;
@@ -258,6 +242,8 @@ type AttendanceLocationCheck = {
   accuracyMeters: number;
   radiusMeters: number;
   locationName: string;
+  /** إعداد الموظف "السماح بتسجيل الحضور من الموقع والتطبيق" = لا: يسجّل حضوره مسؤول الحضور فقط */
+  portalBlocked?: boolean;
 };
 
 const EMPLOYEE_MORE_OPTION_NAMES = new Set([
@@ -449,27 +435,30 @@ export default function EmployeePortal() {
       verifiedPositionRef.current = check.allowed ? currentPosition : null;
       setLocationAllowed(check.allowed);
       setLocationMessage(
-        check.allowed
+        check.portalBlocked
+          ? t("تسجيل الحضور من البوابة غير مفعّل لك؛ يسجّله لك مسؤول الحضور")
+          : check.allowed
           ? `${t("أنت داخل نطاق")} ${check.locationName} — ${t("المسافة")} ${Number(check.distanceMeters).toFixed(1)} ${t("متر")}`
           : `${t("خارج النطاق أو دقة GPS غير كافية")} — ${t("المسافة")} ${Number(check.distanceMeters).toFixed(1)} ${t("متر")}، ${t("الدقة")} ${Number(check.accuracyMeters).toFixed(1)} ${t("متر")}`,
       );
       if (!check.allowed && showError)
         toast.error(
-          t("زر الحضور يظهر فقط داخل نطاق موقع العمل المحدد وبدقة مناسبة"),
+          check.portalBlocked
+            ? t("تسجيل الحضور من البوابة غير مفعّل لك؛ يسجّله لك مسؤول الحضور")
+            : t("زر الحضور يظهر فقط داخل نطاق موقع العمل المحدد وبدقة مناسبة"),
         );
       return check.allowed;
     } catch (locationError) {
       verifiedPositionRef.current = null;
       setLocationAllowed(false);
+      // خطأ الموقع من المتصفح (GeolocationPositionError) رمزه رقم؛ خطأ الخادم رمزه نص
       const isGeolocationError =
         typeof locationError === "object" &&
         locationError !== null &&
-        "code" in locationError;
+        typeof (locationError as { code?: unknown }).code === "number";
       const message = isGeolocationError
         ? t("يرجى السماح بالوصول إلى الموقع وتفعيل الموقع الدقيق")
-        : locationError instanceof Error
-          ? locationError.message
-          : t("تعذر التحقق من موقع الحضور");
+        : t(hrRequestErrorText(locationError, "تعذر التحقق من موقع الحضور"));
       setLocationMessage(message);
       if (showError) toast.error(message);
       return false;
@@ -538,39 +527,36 @@ export default function EmployeePortal() {
       };
     } catch (error: any) {
       console.error("Attendance save failed:", error);
-      toast.error(error?.message || t("تعذر حفظ الحضور في قاعدة البيانات"));
+      toast.error(t(hrRequestErrorText(error, "تعذر حفظ الحضور في قاعدة البيانات")));
       return null;
     }
   };
 
-  const handleVerifyFace = () => {
+  // تأكيد التسجيل: التحقق الفعلي هو الموقع (في الخادم)؛ الكاميرا للعرض فقط ولا تطابق الوجه ولا تحفظ صورة
+  const handleVerifyFace = async () => {
     setVerifyStatus("verifying");
-    // Simulate face scan
-    setTimeout(async () => {
-      const saved = await saveAttendance(cameraMode);
-      if (!saved) {
-        setVerifyStatus("idle");
-        return;
-      }
-      if (user?.empId) await loadAttendanceOverview(user.empId);
-
-      if (cameraMode === "in") {
-        setCheckInTime(`${saved.time} ${saved.date}`);
-      } else {
-        setCheckOutTime(`${saved.time} ${saved.date}`);
-      }
-
-      setVerifyStatus("success");
-      toast.success(
-        cameraMode === "in"
-          ? t("تم التحقق من الوجه وتسجيل الحضور بنجاح")
-          : t("تم التحقق من الوجه وتسجيل الانصراف بنجاح"),
-      );
-
-      setTimeout(() => {
-        closeCamera();
-      }, 1500);
-    }, 2500);
+    const saved = await saveAttendance(cameraMode);
+    if (!saved) {
+      setVerifyStatus("idle");
+      return;
+    }
+    if (cameraMode === "in") {
+      setCheckInTime(`${saved.time} ${saved.date}`);
+    } else {
+      setCheckOutTime(`${saved.time} ${saved.date}`);
+    }
+    if (user?.empId) {
+      await Promise.all([loadTodayAttendanceState(), loadAttendanceOverview(user.empId)]);
+    }
+    setVerifyStatus("success");
+    toast.success(
+      cameraMode === "in"
+        ? t("تم تسجيل الحضور بنجاح")
+        : t("تم تسجيل الانصراف بنجاح"),
+    );
+    setTimeout(() => {
+      closeCamera();
+    }, 1200);
   };
 
   // Cleanup camera on unmount
@@ -800,74 +786,52 @@ export default function EmployeePortal() {
     else toast.info(`سيتم فتح ${option.name} قريباً`);
   };
 
-  const loadAttendanceOverview = async (empId: string) => {
-    const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const startDate = `${month}-01`;
-    const endDate = getLocalDate(now);
-    const [employeeResult, attendanceResult] = await Promise.all([
-      supabase
-        .from("employees")
-        .select("daily_hours")
-        .eq("emp_id", empId)
-        .maybeSingle(),
-      supabase
-        .from("attendance")
-        .select("date, check_in, check_out, status, entry_source")
-        .eq("emp_id", empId)
-        .gte("date", startDate)
-        .lte("date", endDate)
-        .order("date", { ascending: false }),
-    ]);
-    if (employeeResult.error || attendanceResult.error) return;
-
-    const dailySeconds = Number(employeeResult.data?.daily_hours ?? 8) * 3600;
-    const records = attendanceResult.data ?? [];
-    const byDate = new Map(
-      records.map((record: any) => [String(record.date), record]),
-    );
-    let requiredSeconds = 0;
-    let absenceSeconds = 0;
-    let overtimeSeconds = 0;
-    let workedSeconds = 0;
-
-    for (let day = 1; day <= now.getDate(); day += 1) {
-      const current = new Date(now.getFullYear(), now.getMonth(), day);
-      if (current.getDay() === 5 || current.getDay() === 6) continue;
-      requiredSeconds += dailySeconds;
-      const dateKey = `${month}-${String(day).padStart(2, "0")}`;
-      const record: any = byDate.get(dateKey);
-      const isToday = day === now.getDate();
-      if (!record || record.status === "غائب") {
-        if (!isToday || record?.status === "غائب")
-          absenceSeconds += dailySeconds;
-        continue;
-      }
-      if (["إجازة", "عطلة", "عطلة رسمية"].includes(String(record.status)))
-        continue;
-      if (isToday && !record.check_out) continue;
-      const worked = durationBetween(record.check_in, record.check_out);
-      workedSeconds += worked;
-      absenceSeconds += Math.max(dailySeconds - worked, 0);
-      overtimeSeconds += Math.max(worked - dailySeconds, 0);
+  // ملخص الشهر بالقاعدة نفسها في حساب الدوام وكشف الرواتب (جدول الدوام والعطل والإجازات المعتمدة وإعداد الراتب المكتسب)
+  const loadAttendanceOverview = async (_empId: string) => {
+    const { from, to } = monthRange(riyadhMonth());
+    const { data, error } = await loadMyAttendance(from, to);
+    if (error || !data) {
+      if (error) console.error("Attendance overview failed:", error);
+      return;
     }
-
-    const latest: any = records[0];
+    const latest = data.latest;
     setAttendanceOverview({
-      requiredSeconds,
-      absenceSeconds,
-      overtimeSeconds,
-      workedSeconds,
+      requiredSeconds: data.summary.requiredSeconds,
+      absenceSeconds: data.summary.deficitSeconds,
+      overtimeSeconds: data.summary.overtimeSeconds,
+      workedSeconds: data.summary.workedSeconds,
       latestRecord: latest
         ? {
-            date: String(latest.date),
-            checkIn: latest.check_in,
-            checkOut: latest.check_out,
-            status: String(latest.status ?? ""),
-            source: String(latest.entry_source ?? "employee"),
+            date: latest.date,
+            checkIn: latest.checkIn || null,
+            checkOut: latest.checkOut || null,
+            status: latest.status,
+            source: latest.source || "employee",
           }
         : null,
     });
+  };
+
+  // حالة اليوم بتوقيت الرياض من الخادم: سجل اليوم، أو حضور مفتوح من أمس (وردية ليلية) يُسجَّل عليه الانصراف
+  const loadTodayAttendanceState = async () => {
+    const { data, error } = await loadMyAttendanceState();
+    if (error instanceof Error && error.message === MY_ATTENDANCE_UNAVAILABLE && user?.empId) {
+      // قاعدة بيانات قبل دفعة الحضور: سجل اليوم (بتوقيت الرياض) كما كان
+      const today = riyadhToday();
+      const { data: rows, error: rowsError } = await supabase.from("attendance").select("check_in, check_out").eq("emp_id", user.empId).eq("date", today).limit(1);
+      if (rowsError) { console.error("Attendance load failed:", rowsError); return; }
+      const record = rows?.[0];
+      setCheckInTime(record?.check_in ? `${record.check_in} ${today}` : null);
+      setCheckOutTime(record?.check_out ? `${record.check_out} ${today}` : null);
+      return;
+    }
+    if (error || !data) {
+      if (error) console.error("Attendance load failed:", error);
+      return;
+    }
+    const shownDate = data.date ?? data.today;
+    setCheckInTime(data.checkIn ? `${data.checkIn} ${shownDate}` : null);
+    setCheckOutTime(data.checkOut ? `${data.checkOut} ${shownDate}` : null);
   };
 
   // Fetch employee permissions and live attendance from DB
@@ -894,28 +858,8 @@ export default function EmployeePortal() {
         setAllowedRequests([]);
       }
     };
-    const loadTodayAttendance = async () => {
-      const today = getLocalDate();
-      const { data, error } = await supabase
-        .from("attendance")
-        .select("check_in, check_out")
-        .eq("emp_id", user.empId)
-        .eq("date", today)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (error) {
-        console.error("Attendance load failed:", error);
-        return;
-      }
-      const record = data?.[0];
-      setCheckInTime(record?.check_in ? `${record.check_in} ${today}` : null);
-      setCheckOutTime(
-        record?.check_out ? `${record.check_out} ${today}` : null,
-      );
-    };
-
     fetchPermissions();
-    loadTodayAttendance();
+    loadTodayAttendanceState();
     loadAttendanceOverview(user.empId);
     loadEmployeeRequests(user.empId);
 
@@ -930,7 +874,7 @@ export default function EmployeePortal() {
           filter: `emp_id=eq.${user.empId}`,
         },
         () => {
-          loadTodayAttendance();
+          loadTodayAttendanceState();
           loadAttendanceOverview(user.empId);
         },
       )
@@ -2257,7 +2201,7 @@ export default function EmployeePortal() {
         />
       )}
 
-      {/* ===== FACE VERIFICATION CAMERA MODAL ===== */}
+      {/* ===== نافذة تأكيد الحضور/الانصراف (الكاميرا للعرض فقط؛ التحقق بالموقع في الخادم) ===== */}
       {cameraOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
@@ -2265,8 +2209,8 @@ export default function EmployeePortal() {
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h3 className="font-bold text-gray-900">
                 {cameraMode === "in"
-                  ? t("التحقق لتسجيل الحضور")
-                  : t("التحقق لتسجيل الانصراف")}
+                  ? t("تأكيد تسجيل الحضور")
+                  : t("تأكيد تسجيل الانصراف")}
               </h3>
               <button
                 onClick={closeCamera}
@@ -2315,7 +2259,7 @@ export default function EmployeePortal() {
                     <>
                       <Loader2 className="h-5 w-5 text-yellow-400 animate-spin" />
                       <span className="text-white font-medium">
-                        {t("جاري التحقق من الوجه...")}
+                        {t("جاري التسجيل...")}
                       </span>
                     </>
                   )}
@@ -2323,7 +2267,7 @@ export default function EmployeePortal() {
                     <>
                       <CheckCircle className="h-5 w-5 text-green-400" />
                       <span className="text-white font-medium">
-                        {t("تم التحقق بنجاح")}
+                        {t("تم التسجيل بنجاح")}
                       </span>
                     </>
                   )}
@@ -2335,7 +2279,7 @@ export default function EmployeePortal() {
             <div className="p-4">
               {verifyStatus === "idle" && (
                 <p className="text-sm text-gray-600 text-center mb-4">
-                  {t("ضع وجهك داخل الإطار ثم اضغط على زر التحقق")}
+                  {t("تم التحقق من موقعك. اضغط «تأكيد» لتسجيل الوقت. الكاميرا للعرض فقط: لا تتحقق من الوجه ولا تحفظ صورة")}
                 </p>
               )}
               <Button
@@ -2350,7 +2294,7 @@ export default function EmployeePortal() {
                 {verifyStatus === "verifying" ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {t("جاري التحقق...")}
+                    {t("جاري التسجيل...")}
                   </>
                 ) : verifyStatus === "success" ? (
                   <>
@@ -2360,7 +2304,7 @@ export default function EmployeePortal() {
                 ) : (
                   <>
                     <ScanFace className="h-4 w-4" />
-                    {t("تحقق")}
+                    {t("تأكيد")}
                   </>
                 )}
               </Button>

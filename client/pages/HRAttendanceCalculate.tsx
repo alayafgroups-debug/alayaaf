@@ -10,9 +10,9 @@ import { ACTIVE_EMPLOYEE_STATUSES, isApprovedStatus, isRejectedStatus } from "@/
 import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { readUserSession } from "@/lib/authSession";
-import { MANUAL_ATTENDANCE_SOURCE, VERIFIED_ATTENDANCE_SOURCE, approvedLeaveDatesByEmployee, loadApprovedLeaves, loadOfficialHolidays, manualAttendanceDatesFor, manualAttendanceFutureError, manualAttendanceResultText, manualAttendanceTimeError, officialHolidayDates, saveManualAttendance, scheduleWorkDates, type HolidayScope, type ManualAttendanceRow } from "@/lib/attendanceManual";
+import { MANUAL_ATTENDANCE_SOURCE, OWN_ATTENDANCE_NOTE, PROTECTED_ATTENDANCE_FILTER, VERIFIED_ATTENDANCE_SOURCE, approvedLeaveDatesByEmployee, employeeHolidayScope, loadApprovedLeaves, loadAttendanceWriteBlocks, loadOfficialHolidays, lockedKey, manualAttendanceDatesFor, manualAttendanceFutureError, manualAttendanceResultText, manualAttendanceTimeError, officialHolidayDates, permissionHoursFromDetails, saveManualAttendance, scheduleWorkDates, splitOwnEmployees, type ManualAttendanceRow } from "@/lib/attendanceManual";
 import { classifyAttendanceDay, type DayCategory, type DayClassification } from "@/lib/attendanceRules";
-import { WEEKDAY_LABELS, earlyLeaveMinutesFor, isScheduledWorkDay, lateMinutesFor, loadWorkSchedules, requiredDailyMinutes, scheduleForEmployee, type WorkSchedule } from "@/lib/workSchedule";
+import { WEEKDAY_LABELS, earlyLeaveMinutesFor, effectiveLateMinutes, isScheduledWorkDay, loadWorkSchedules, requiredDailyMinutes, scheduleForEmployee, workedSecondsFor, type WorkSchedule } from "@/lib/workSchedule";
 import { loadPayrollPolicy } from "@/lib/payrollCalc";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
@@ -82,18 +82,6 @@ const loadActiveEmployees = async () => {
   const result = await page(`${EMPLOYEE_COLUMNS}, attendance_exempt`);
   return errorCode(result.error) === "42703" ? page(EMPLOYEE_COLUMNS) : result;
 };
-const timeToSeconds = (value: string) => {
-  if (!value) return null;
-  const [hours, minutes, seconds = "0"] = value.split(":");
-  const total = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
-  return Number.isFinite(total) ? total : null;
-};
-const durationBetween = (start: string, end: string) => {
-  const startSeconds = timeToSeconds(start);
-  const endSeconds = timeToSeconds(end);
-  if (startSeconds === null || endSeconds === null) return 0;
-  return endSeconds >= startSeconds ? endSeconds - startSeconds : 86400 - startSeconds + endSeconds;
-};
 const formatDuration = (seconds: number) => {
   const safeSeconds = Math.max(0, Math.round(seconds));
   const hours = Math.floor(safeSeconds / 3600);
@@ -112,11 +100,12 @@ type DayInput = { today: string; holiday: boolean; onLeave: boolean; countUnreco
  */
 const classifyEmployeeDay = (employee: Employee, date: string, record: AttendanceRecord | undefined, { today, holiday, onLeave, countUnrecordedAsAbsent }: DayInput): DayClassification & { workDay: boolean; computedLateMinutes: number } => {
   const workDay = isScheduledWorkDay(date, employee.schedule);
-  // التأخير المحسوب من الجدول يخص أيام العمل فقط: العمل في يوم راحة أو عطلة رسمية لا موعد بداية له
-  const computedLateMinutes = record && workDay && !holiday ? lateMinutesFor(record.checkIn, employee.schedule) : 0;
+  // التأخير من جدول الدوام الحالي في أيام العمل فقط (العمل في يوم راحة أو عطلة رسمية لا موعد بداية له)،
+  // ومن السجل لمن لا جدول ثابتًا له
+  const computedLateMinutes = record ? effectiveLateMinutes(record.lateMinutes, record.checkIn, employee.schedule, workDay && !holiday) : 0;
   const day = classifyAttendanceDay({
     date,
-    record: record ? { status: record.status, checkIn: record.checkIn, lateMinutes: record.lateMinutes } : undefined,
+    record: record ? { status: record.status, checkIn: record.checkIn, lateMinutes: computedLateMinutes } : undefined,
     workDay,
     holiday,
     onLeave,
@@ -149,13 +138,6 @@ const overtimeAmount = (employee: Employee, hours: number) => {
 const ID_CHUNK = 100;
 const chunkIds = (ids: string[]) => Array.from({ length: Math.ceil(ids.length / ID_CHUNK) }, (_, index) => ids.slice(index * ID_CHUNK, (index + 1) * ID_CHUNK));
 /** ساعات الاستئذان من details.hours أو من وقتي البداية والنهاية */
-const permissionHoursFromDetails = (details: Record<string, unknown>) => {
-  const hours = Number(details.hours);
-  if (Number.isFinite(hours) && hours > 0) return hours;
-  const start = timeToSeconds(String(details.from_time ?? details.from ?? ""));
-  const end = timeToSeconds(String(details.to_time ?? details.to ?? ""));
-  return start !== null && end !== null && end > start ? (end - start) / 3600 : 0;
-};
 
 function FilterSelect({ label, value, onChange, options, allLabel }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; allLabel: string }) {
   return <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"><option value={ALL}>{allLabel}</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
@@ -278,13 +260,9 @@ export default function HRAttendanceCalculate() {
       });
       // نطاق العطلة (الفرع/الإدارة/القسم) يُطابق بالأسماء العربية المخزنة أو بنصوص ملف الموظف
       const holidayMap = new Map<string, Set<string>>();
+      const orgNames = { branch: branchStoredName, department: departmentStoredName, section: sectionStoredName };
       (employeeResult.data ?? []).forEach((row) => {
-        const scope: HolidayScope = {
-          branch: [branchStoredName.get(String(row.branch_id ?? "")) ?? "", String(row.branch ?? "")],
-          department: [departmentStoredName.get(String(row.department_id ?? "")) ?? "", String(row.directorate ?? ""), String(row.department ?? "")],
-          section: [sectionStoredName.get(String(row.section_id ?? "")) ?? "", String(row.department ?? "")],
-        };
-        holidayMap.set(String(row.id), officialHolidayDates(holidayResult.holidays, scope, dateFrom, dateTo));
+        holidayMap.set(String(row.id), officialHolidayDates(holidayResult.holidays, employeeHolidayScope(row, orgNames), dateFrom, dateTo));
       });
       if (holidayResult.error) console.warn("official_holidays could not be loaded; holidays ignored", holidayResult.error);
       setHolidayDates(holidayMap);
@@ -358,15 +336,16 @@ export default function HRAttendanceCalculate() {
       const dailySeconds = requiredDailyMinutes(employee.schedule, employee.dailyHours) * 60;
       dates.forEach((date) => {
         const record = recordsByEmployeeAndDate.get(`${employee.empId}:${date}`);
-        const workedSeconds = record ? durationBetween(record.checkIn, record.checkOut) : 0;
+        // ساعات العمل الفعلية: المدة بين الدخول والخروج ناقص ما بين فترات الدوام واستراحة الجدول (مثل الساعات المستحقة)
+        const workedSeconds = record ? workedSecondsFor(record.checkIn, record.checkOut, employee.schedule) : 0;
         const manualOvertimeSeconds = overtimeByEmployeeAndDate.get(`${employee.id}:${date}`) ?? 0;
         const permissionSeconds = permissionByEmployeeAndDate.get(`${employee.empId}:${date}`) ?? 0;
         const holiday = holidayDates.get(employee.id)?.has(date) ?? false;
         const { category, counted, requiresHours, unrecorded, workDay, computedLateMinutes } = classifyEmployeeDay(employee, date, record, { today, holiday, onLeave: leaveDates.get(employee.id)?.has(date) ?? false, countUnrecordedAsAbsent });
         const requiredSeconds = requiresHours ? dailySeconds : 0;
         const attended = category === "present" || category === "late";
-        // التأخير: الأكبر بين المسجل في السجل والمحسوب من بداية الدوام وفترة السماح
-        const lateSeconds = Math.max(record?.lateMinutes ?? 0, attended ? computedLateMinutes : 0) * 60;
+        // التأخير من بداية الدوام وفترة السماح بجدول الموظف الحالي (ومن السجل لمن لا جدول ثابتًا له)
+        const lateSeconds = (attended ? computedLateMinutes : 0) * 60;
         // الخروج المبكر: قبل نهاية آخر فترة دوام بأكثر من فترة السماح، في أيام العمل فقط
         const earlyLeaveSeconds = record?.checkOut && attended && workDay && !holiday ? earlyLeaveMinutesFor(record.checkOut, employee.schedule) * 60 : 0;
         const deficitSeconds = requiresHours ? Math.max(requiredSeconds - workedSeconds - permissionSeconds, 0) : 0;
@@ -457,7 +436,7 @@ export default function HRAttendanceCalculate() {
     setActionDateFrom(dateFrom);
     // التحضير لا يقبل أيامًا بعد اليوم: الافتراضي حتى اليوم إن كانت الفترة تمتد بعده
     const today = riyadhToday();
-    setActionDateTo(action === "bulk" && dateTo > today ? (today < dateFrom ? dateFrom : today) : dateTo);
+    setActionDateTo((action === "bulk" || action === "clear-punches") && dateTo > today ? (today < dateFrom ? dateFrom : today) : dateTo);
     setActionMessage("");
   };
   // أيام العطلة الرسمية والإجازة المعتمدة لكل موظف (بمعرّفه) لا تُحضَّر ولا تُجعل غيابًا
@@ -478,7 +457,12 @@ export default function HRAttendanceCalculate() {
         throw new Error(t("تاريخ البداية يجب أن يسبق تاريخ النهاية"));
       }
       if (!rangeActions.includes(attendanceAction) && !actionDate) throw new Error(t("حدد التاريخ"));
-      const empIds = actionEmployees.map((employee) => employee.empId);
+      // سجلات الحضور: لا يسجّل المسؤول حضوره ولا يعدّله ولا يحذفه بنفسه (قاعدة البيانات ترفضه أيضًا)
+      const { own: ownTargets, others: attendanceTargets } = splitOwnEmployees(actionEmployees);
+      const attendanceAffecting = attendanceAction === "punch" || attendanceAction === "bulk" || attendanceAction === "clear-punches" || attendanceAction === "delete-bulk";
+      if (attendanceAffecting && !attendanceTargets.length) throw new Error(t(OWN_ATTENDANCE_NOTE));
+      const ownNote = attendanceAffecting && ownTargets.length ? `، ${t(OWN_ATTENDANCE_NOTE)}` : "";
+      const empIds = attendanceTargets.map((employee) => employee.empId);
       const updatedAt = new Date().toISOString();
       const nameList = (list: Employee[]) => `${list.slice(0, NAME_LIST_LIMIT).map((employee) => employee.name).join("، ")}${list.length > NAME_LIST_LIMIT ? "…" : ""}`;
       if (attendanceAction === "punch" || attendanceAction === "bulk") {
@@ -489,12 +473,12 @@ export default function HRAttendanceCalculate() {
           if (timeError) throw new Error(t(timeError));
           const futureError = manualAttendanceFutureError(actionDate, "حاضر");
           if (futureError) throw new Error(t(futureError));
-          rows = actionEmployees.map((employee) => ({ emp_id: employee.empId, emp_name: employee.name, department: employee.attendanceDepartment, date: actionDate, check_in: actionCheckIn, check_out: actionCheckOut || null, status: "حاضر", late_minutes: 0, notes: actionReason || "إضافة دخول وخروج من حساب الدوام", prepared_by: "الإدارة", updated_at: updatedAt }));
+          rows = attendanceTargets.map((employee) => ({ emp_id: employee.empId, emp_name: employee.name, department: employee.attendanceDepartment, date: actionDate, check_in: actionCheckIn, check_out: actionCheckOut || null, status: "حاضر", late_minutes: 0, notes: actionReason || "إضافة دخول وخروج من حساب الدوام", prepared_by: "الإدارة", updated_at: updatedAt }));
           // التعديل الصريح لموظف واحد يحدّث سجله غير الموثّق؛ لعدة موظفين تُضاف السجلات الناقصة فقط
-          overwriteExisting = actionEmployees.length === 1;
+          overwriteExisting = attendanceTargets.length === 1;
         } else {
           // التحضير لعدة أيام يقتصر على أيام عمل كل موظف حسب جدول دوامه، ويضيف الأيام غير المسجلة فقط
-          const datesByEmployee = actionEmployees.map((employee) => ({ employee, dates: manualAttendanceDatesFor(actionDateFrom, actionDateTo, employee.schedule) }));
+          const datesByEmployee = attendanceTargets.map((employee) => ({ employee, dates: manualAttendanceDatesFor(actionDateFrom, actionDateTo, employee.schedule) }));
           const allDates = [...new Set(datesByEmployee.flatMap((item) => item.dates))].sort();
           if (!allDates.length) throw new Error(t("لا توجد أيام عمل في الفترة المحددة حسب جداول دوام الموظفين المختارين"));
           const futureError = manualAttendanceFutureError(allDates[allDates.length - 1], "حاضر");
@@ -512,7 +496,7 @@ export default function HRAttendanceCalculate() {
           message = `${hrRequestErrorText(result.error, t("تعذر حفظ التحضير"))}${result.saved ? ` — ${manualAttendanceResultText(result, t, formatNumber)} ${t("قبل حدوث الخطأ")}` : ""}`;
           return;
         }
-        message = manualAttendanceResultText(result, t, formatNumber);
+        message = `${manualAttendanceResultText(result, t, formatNumber)}${ownNote}`;
       } else if (attendanceAction === "overtime") {
         const hours = Number(actionHours);
         if (!Number.isFinite(hours) || hours <= 0 || hours > 24) throw new Error(t("أدخل عدد ساعات صحيح"));
@@ -574,8 +558,19 @@ export default function HRAttendanceCalculate() {
       } else if (attendanceAction === "clear-punches") {
         // أيام عمل كل موظف حسب جدول دوامه فقط (لا أيام راحته)، وسجلات الحضور فقط (لا الإجازة والمأمورية والعمل عن بعد والعطل)،
         // ولا تُمس البصمات الموثّقة من البوابة (entry_source أو location_verified)
-        const workDatesByEmployee = actionEmployees.map((employee) => ({ employee, dates: scheduleWorkDates(actionDateFrom, actionDateTo, employee.schedule) }));
-        if (workDatesByEmployee.every((item) => !item.dates.length)) throw new Error(t("لا توجد أيام عمل في الفترة المحددة حسب جداول دوام الموظفين المختارين"));
+        // لا تُجعل أيام بعد اليوم غيابًا (قاعدة البيانات ترفضها)، ولا يُمس شهر رواتبه معتمدة أو مرحّلة للموظف
+        const clearTo = actionDateTo > riyadhToday() ? riyadhToday() : actionDateTo;
+        if (actionDateFrom > clearTo) throw new Error(t("لا يُمسح الحضور لأيام بعد اليوم"));
+        const { blocks, error: blocksError } = await loadAttendanceWriteBlocks(attendanceTargets.map((employee) => employee.empId), actionDateFrom, clearTo);
+        if (blocksError) throw blocksError;
+        let lockedSkipped = 0;
+        const workDatesByEmployee = attendanceTargets.filter((employee) => !blocks.own.has(employee.empId.trim())).map((employee) => {
+          const all = scheduleWorkDates(actionDateFrom, clearTo, employee.schedule);
+          const open = all.filter((date) => !blocks.locked.has(lockedKey(employee.empId, date)));
+          lockedSkipped += all.length - open.length;
+          return { employee, dates: open };
+        });
+        if (workDatesByEmployee.every((item) => !item.dates.length)) throw new Error(t(lockedSkipped ? "كل الأيام المحددة في أشهر رواتبها معتمدة أو مرحّلة" : "لا توجد أيام عمل في الفترة المحددة حسب جداول دوام الموظفين المختارين"));
         // أيام العطلة الرسمية والإجازة المعتمدة لكل موظف تُستثنى؛ يُجمع الموظفون ذوو الأيام نفسها في طلب واحد
         const groups = new Map<string, { dates: string[]; empIds: string[] }>();
         workDatesByEmployee.forEach(({ employee, dates: workDates }) => {
@@ -591,10 +586,10 @@ export default function HRAttendanceCalculate() {
         let updated = 0;
         for (const group of groups.values()) {
           for (const ids of chunkIds([...new Set(group.empIds)])) {
-            const { count, error: countError } = await supabase.from("attendance").select("id", { count: "exact", head: true }).in("emp_id", ids).in("date", group.dates).in("status", CLEARABLE_ATTENDANCE_STATUSES).or(`entry_source.eq.${VERIFIED_ATTENDANCE_SOURCE},location_verified.is.true`);
+            const { count, error: countError } = await supabase.from("attendance").select("id", { count: "exact", head: true }).in("emp_id", ids).in("date", group.dates).in("status", CLEARABLE_ATTENDANCE_STATUSES).or(PROTECTED_ATTENDANCE_FILTER);
             if (countError) throw countError;
             verifiedCount += count ?? 0;
-            const { data, error: saveError } = await supabase.from("attendance").update({ check_in: null, check_out: null, status: "غائب", notes: actionReason || "حذف الدخول والخروج من حساب الدوام", updated_at: updatedAt }).in("emp_id", ids).in("date", group.dates).in("status", CLEARABLE_ATTENDANCE_STATUSES).eq("location_verified", false).or(`entry_source.is.null,entry_source.neq.${VERIFIED_ATTENDANCE_SOURCE}`).select("id");
+            const { data, error: saveError } = await supabase.from("attendance").update({ check_in: null, check_out: null, status: "غائب", notes: actionReason || "حذف الدخول والخروج من حساب الدوام", updated_at: updatedAt }).in("emp_id", ids).in("date", group.dates).in("status", CLEARABLE_ATTENDANCE_STATUSES).eq("location_verified", false).is("check_in_latitude", null).is("check_out_latitude", null).or(`entry_source.is.null,entry_source.neq.${VERIFIED_ATTENDANCE_SOURCE}`).select("id");
             if (saveError) throw saveError;
             updated += data?.length ?? 0;
           }
@@ -602,21 +597,40 @@ export default function HRAttendanceCalculate() {
         changed = updated > 0;
         message = updated ? `${t("تم مسح الدخول والخروج من")} ${formatNumber(updated)} ${t("سجل")}` : t("لم يُعدَّل أي سجل: لا توجد سجلات حضور إدارية في أيام العمل ضمن الفترة أو لا تملك صلاحية التعديل");
         if (verifiedCount) message += `، ${t("وتُرك")} ${formatNumber(verifiedCount)} ${t("سجل بصمة موثّقة من بوابة الموظف دون تعديل")}`;
+        if (lockedSkipped) message += `، ${t("ولم تُمس")} ${formatNumber(lockedSkipped)} ${t("يوم في أشهر رواتبها معتمدة أو مرحّلة")}`;
+        message += ownNote;
       } else {
         // سجل أنشأه المدير ثم سجّل الموظف عليه انصرافًا موثّقًا من البوابة لا يُحذف
         let keptCount = 0;
         let deleted = 0;
-        for (const ids of chunkIds([...new Set(empIds)])) {
-          const { count, error: countError } = await supabase.from("attendance").select("id", { count: "exact", head: true }).in("emp_id", ids).gte("date", actionDateFrom).lte("date", actionDateTo).eq("entry_source", MANUAL_ATTENDANCE_SOURCE).eq("location_verified", true);
-          if (countError) throw countError;
-          keptCount += count ?? 0;
-          const { data, error: saveError } = await supabase.from("attendance").delete().in("emp_id", ids).gte("date", actionDateFrom).lte("date", actionDateTo).eq("entry_source", MANUAL_ATTENDANCE_SOURCE).eq("location_verified", false).select("id");
-          if (saveError) throw saveError;
-          deleted += data?.length ?? 0;
+        // الحذف شهرًا بشهر: لا يُمس شهر رواتبه معتمدة أو مرحّلة للموظف (قاعدة البيانات ترفضه فيُرفض الطلب كله)
+        const { blocks, error: blocksError } = await loadAttendanceWriteBlocks(empIds, actionDateFrom, actionDateTo);
+        if (blocksError) throw blocksError;
+        const months: { from: string; to: string; month: string }[] = [];
+        for (let month = actionDateFrom.slice(0, 7); month <= actionDateTo.slice(0, 7); ) {
+          const range = monthRange(month);
+          months.push({ month, from: range.from < actionDateFrom ? actionDateFrom : range.from, to: range.to > actionDateTo ? actionDateTo : range.to });
+          const [year, monthNumber] = month.split("-").map(Number);
+          month = monthNumber === 12 ? `${year + 1}-01` : `${year}-${String(monthNumber + 1).padStart(2, "0")}`;
+        }
+        let lockedMonths = 0;
+        for (const segment of months) {
+          const segmentIds = [...new Set(empIds)].filter((empId) => !blocks.own.has(empId.trim()) && !blocks.locked.has(`${empId.trim()}|${segment.month}`));
+          lockedMonths += [...new Set(empIds)].filter((empId) => !blocks.own.has(empId.trim()) && blocks.locked.has(`${empId.trim()}|${segment.month}`)).length;
+          for (const ids of chunkIds(segmentIds)) {
+            const { count, error: countError } = await supabase.from("attendance").select("id", { count: "exact", head: true }).in("emp_id", ids).gte("date", segment.from).lte("date", segment.to).eq("entry_source", MANUAL_ATTENDANCE_SOURCE).or("location_verified.is.true,check_in_latitude.not.is.null,check_out_latitude.not.is.null");
+            if (countError) throw countError;
+            keptCount += count ?? 0;
+            const { data, error: saveError } = await supabase.from("attendance").delete().in("emp_id", ids).gte("date", segment.from).lte("date", segment.to).eq("entry_source", MANUAL_ATTENDANCE_SOURCE).eq("location_verified", false).is("check_in_latitude", null).is("check_out_latitude", null).select("id");
+            if (saveError) throw saveError;
+            deleted += data?.length ?? 0;
+          }
         }
         changed = deleted > 0;
         message = deleted ? `${t("تم حذف")} ${formatNumber(deleted)} ${t("سجل تحضير إداري")}` : t("لم يُحذف أي سجل: لا توجد سجلات تحضير إداري في الفترة أو لا تملك صلاحية الحذف");
         if (keptCount) message += `، ${t("وتُرك")} ${formatNumber(keptCount)} ${t("سجل يحمل بصمة موثّقة من بوابة الموظف دون حذف")}`;
+        if (lockedMonths) message += `، ${t("ولم يُمس")} ${formatNumber(lockedMonths)} ${t("شهر رواتبه معتمدة أو مرحّلة لموظف")}`;
+        message += ownNote;
       }
       setAttendanceAction(null);
     } catch (actionError) {

@@ -13,7 +13,7 @@ import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { approvedLeaveDatesByEmployee, loadApprovedLeaves, loadOfficialHolidays, officialHolidayDates } from "@/lib/attendanceManual";
 import { classifyAttendanceDay, type DayCategory } from "@/lib/attendanceRules";
-import { isScheduledWorkDay, lateMinutesFor, loadWorkSchedules, scheduleForEmployee } from "@/lib/workSchedule";
+import { effectiveLateMinutes, isScheduledWorkDay, loadWorkSchedules, scheduleForEmployee } from "@/lib/workSchedule";
 import { loadPayrollPolicy } from "@/lib/payrollCalc";
 
 /** status: نص الخلية المعروض، category: تصنيف اليوم بالقاعدة الموحدة مع حساب الدوام وكشف الرواتب */
@@ -180,9 +180,11 @@ export function AttendanceMonthlyReportContent({ embedded = false }: { embedded?
             const onLeave = leaves?.has(date) ?? false;
             // نفس تصنيف حساب الدوام وكشف الرواتب: أيام العمل من جدول الموظف، والغياب المسجّل صراحة فقط
             // (أو يوم العمل الماضي بلا تسجيل إن فُعّل إعداد الراتب المكتسب حسب الحضور)
+            // التأخير من جدول الدوام الحالي في أيام العمل (كما في حساب الدوام)، ومن السجل لمن لا جدول ثابتًا له
+            const lateMinutes = saved ? effectiveLateMinutes(saved.lateMinutes, saved.checkIn, schedule, workDay && !holiday) : 0;
             const classification = classifyAttendanceDay({
               date,
-              record: saved ? { status: saved.status, checkIn: saved.checkIn, lateMinutes: saved.lateMinutes } : undefined,
+              record: saved ? { status: saved.status, checkIn: saved.checkIn, lateMinutes } : undefined,
               workDay,
               holiday,
               onLeave,
@@ -190,8 +192,7 @@ export function AttendanceMonthlyReportContent({ embedded = false }: { embedded?
               today,
               exempt,
               countUnrecordedAsAbsent: countUnrecorded,
-              // التأخير المحسوب من الجدول يخص أيام العمل فقط (كما في حساب الدوام)
-              computedLateMinutes: saved && workDay && !holiday ? lateMinutesFor(saved.checkIn, schedule) : 0,
+              computedLateMinutes: lateMinutes,
             });
             const { category } = classification;
             const status = cellStatus(category, saved?.status ?? "");

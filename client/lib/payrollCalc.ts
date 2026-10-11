@@ -8,7 +8,7 @@ import { isApprovedStatus } from "@/lib/hrStatus";
 import { advanceInstallmentDue, allocateAdvanceRepayments, isCancelledPayrollStatus, parseApprovedAdvance, type AdvanceRecord } from "@/lib/advances";
 import { GOSI_EMPLOYEE_RATE_SAUDI, gosiContributionWage, gosiDeductsFromEmployee, gosiSaudiRates, isHousingAllowance } from "@/lib/gosi";
 import { classifyAttendanceDay, type DayCategory, type DayRecord } from "@/lib/attendanceRules";
-import { isScheduledWorkDay, lateMinutesFor, loadWorkSchedules, scheduleForEmployee, type WorkSchedule } from "@/lib/workSchedule";
+import { effectiveLateMinutes, isScheduledWorkDay, loadWorkSchedules, scheduleForEmployee, type WorkSchedule } from "@/lib/workSchedule";
 import { approvedLeaveDatesByEmployee, loadApprovedLeaves, loadOfficialHolidays, officialHolidayDates, type HolidayScope } from "@/lib/attendanceManual";
 
 export const SOCIAL_INSURANCE_RATE = GOSI_EMPLOYEE_RATE_SAUDI;
@@ -260,9 +260,11 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
     const leaveCut = input.leaveDates.has(date) ? 0 : Math.min(1, Math.max(0, leaveFactors.get(date) ?? 0));
     const onLeave = input.leaveDates.has(date) || leaveFactors.has(date);
     const record = recordsByDate.get(date);
+    // التأخير من جدول الدوام الحالي في أيام العمل (كما في حساب الدوام)؛ لا يؤثر في أي مبلغ
+    const lateMinutes = record ? effectiveLateMinutes(record.lateMinutes, record.checkIn, employee.schedule, workDay && !holiday) : 0;
     const day = classifyAttendanceDay({
       date,
-      record,
+      record: record ? { ...record, lateMinutes } : undefined,
       workDay,
       holiday,
       onLeave,
@@ -270,7 +272,7 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
       today,
       exempt: employee.attendanceExempt,
       countUnrecordedAsAbsent: policy.countUnrecordedAsAbsent,
-      computedLateMinutes: record ? lateMinutesFor(record.checkIn, employee.schedule) : 0,
+      computedLateMinutes: lateMinutes,
     });
     const attended = day.category === "present" || day.category === "late";
     days.push({ date, category: beforeHire ? "none" : day.category, deductibleAbsence: day.deductibleAbsence, unrecorded: day.unrecorded, workDay, holiday, beforeHire, leaveCut: onLeave && !attended ? leaveCut : 0, status: String(record?.status ?? "") });

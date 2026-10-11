@@ -19,6 +19,7 @@ const EMPLOYEE_ERROR_MESSAGES: Record<string, string> = {
   EMPLOYEE_EMAIL_LINKED_TO_OTHER_LOGIN: "هذا البريد مرتبط بحساب دخول موظف آخر",
   EMPLOYEE_DELETE_REQUIRES_HR: "حذف الموظفين يتطلب صلاحية إدارة الموظفين",
   EMPLOYEE_OWN_PAY_CHANGE: "لا يمكنك تعديل راتبك أو بدلاتك أو حسابك البنكي بنفسك؛ يعدّلها مسؤول رواتب آخر",
+  EMPLOYEE_OWN_ATTENDANCE_SETTINGS: "لا يمكنك تعديل جدول دوامك أو موقع حضورك أو إذن تسجيل الحضور من البوابة في سجلك؛ يعدّلها مسؤول آخر",
 };
 
 export const employeeErrorText = (error: unknown, fallback = "حدث خطأ أثناء الحفظ") => {

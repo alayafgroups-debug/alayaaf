@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ClipboardList, Users, CalendarDays, BarChart3, Megaphone, BadgeDollarSign } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
+import { riyadhMonth } from "@/lib/hrDates";
 
 type Mode = "performance" | "team" | "attendance" | "my-reports" | "reports" | "circulars" | "commissions" | "announcements";
 type Props = {
@@ -75,7 +76,8 @@ export default function PortalDataPage({ mode, empId, employeeName, isManager, o
             status: String(row.status ?? "—"),
           }));
         } else if (mode === "performance") {
-          const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
+          // بداية الشهر بتوقيت الرياض (toISOString بتوقيت غرينتش يعطي الشهر السابق في أول ساعات الشهر)
+          const monthStart = `${riyadhMonth()}-01`;
           let query = supabase.from("attendance").select("emp_id, emp_name, status, late_minutes").gte("date", monthStart);
           if (!isManager) query = query.eq("emp_id", empId);
           const { data, error: queryError } = await query;

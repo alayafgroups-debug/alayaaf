@@ -101,6 +101,11 @@ export default function HRLeavesHolidays() {
       toast({ title: t("خطأ"), description: t("تاريخ النهاية يجب أن يكون في يوم البداية أو بعده"), variant: "destructive" });
       return;
     }
+    // لا يوجد في ملف الموظف ما يربطه بفريق عمل، فالعطلة المحددة بفريق لا تُطبَّق على أحد في الحضور والرواتب
+    if (String(form.team ?? "").trim()) {
+      toast({ title: t("خطأ"), description: t("تحديد العطلة بفريق عمل غير مدعوم (لا يُربط الموظف بفريق)، فلن تُطبَّق على أحد؛ اترك فريق العمل فارغًا وحدد الفرع أو الإدارة أو القسم"), variant: "destructive" });
+      return;
+    }
     setSaving(true);
     const payload = {
       name: form.name,
@@ -305,7 +310,7 @@ export default function HRLeavesHolidays() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t("فريق العمل")}</label>
-                  <Input value={form.team ?? ""} onChange={(e) => set("team", e.target.value)} />
+                  <Input value={form.team ?? ""} onChange={(e) => set("team", e.target.value)} placeholder={t("غير مدعوم — اتركه فارغًا")} />
                 </div>
               </div>
               <div>

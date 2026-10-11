@@ -1,53 +1,64 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Clock, CheckCircle, XCircle } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { ChevronLeft, Clock } from "lucide-react";
 import { useI18n } from "@/i18n";
+import { monthRange, riyadhMonth } from "@/lib/hrDates";
+import { hrRequestErrorText } from "@/lib/hrErrors";
+import { MY_ATTENDANCE_UNAVAILABLE, loadMyAttendance, type MyAttendanceDay, type MyAttendanceSummary } from "@/lib/myAttendance";
+import type { DayCategory } from "@/lib/attendanceRules";
 
 type Props = { empId: string; onBack: () => void };
 
-type Record_ = {
-  id: string;
-  date: string;
-  check_in: string | null;
-  check_out: string | null;
-  status: string;
-  late_minutes: number;
+const EMPTY_SUMMARY: MyAttendanceSummary = { present: 0, late: 0, absent: 0, leave: 0, unrecorded: 0, workedSeconds: 0, requiredSeconds: 0, deficitSeconds: 0, overtimeSeconds: 0 };
+
+const CATEGORY_LABEL: Record<DayCategory, string> = {
+  present: "حاضر",
+  late: "متأخر",
+  leave: "إجازة",
+  absent: "غائب",
+  weekend: "راحة",
+  holiday: "عطلة رسمية",
+  none: "لا يوجد تسجيل",
 };
 
-export default function AttendanceReportPage({ empId, onBack }: Props) {
-  const { t, formatDate } = useI18n();
-  const [records, setRecords] = useState<Record_[]>([]);
+const categoryColor = (category: DayCategory) =>
+  category === "present" ? "text-green-600 bg-green-50"
+    : category === "absent" ? "text-red-600 bg-red-50"
+    : category === "late" ? "text-orange-600 bg-orange-50"
+    : category === "leave" ? "text-sky-700 bg-sky-50"
+    : "text-gray-600 bg-gray-100";
+
+// دوامي: أيام الشهر بالقاعدة نفسها في حساب الدوام وكشف الرواتب (جدول الدوام والعطل والإجازات المعتمدة)
+export default function AttendanceReportPage({ onBack }: Props) {
+  const { t, formatDate, formatNumber } = useI18n();
+  const [days, setDays] = useState<MyAttendanceDay[]>([]);
+  const [summary, setSummary] = useState<MyAttendanceSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
-  const [monthFilter, setMonthFilter] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [error, setError] = useState("");
+  const [monthFilter, setMonthFilter] = useState(riyadhMonth);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       setLoading(true);
-      const start = `${monthFilter}-01`;
-      const [year, month] = monthFilter.split("-").map(Number);
-      const end = `${monthFilter}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
-      const { data } = await supabase
-        .from("attendance")
-        .select("id, date, check_in, check_out, status, late_minutes")
-        .eq("emp_id", empId)
-        .gte("date", start)
-        .lte("date", end)
-        .order("date", { ascending: false });
-      setRecords((data ?? []) as Record_[]);
+      setError("");
+      const { from, to } = monthRange(monthFilter);
+      const { data, error: loadError } = await loadMyAttendance(from, to);
+      if (cancelled) return;
+      if (loadError || !data) {
+        setDays([]);
+        setSummary(EMPTY_SUMMARY);
+        const unavailable = loadError instanceof Error && loadError.message === MY_ATTENDANCE_UNAVAILABLE;
+        setError(unavailable ? t("تقرير الدوام غير متاح حاليًا؛ تواصل مع الموارد البشرية") : t(hrRequestErrorText(loadError, "تعذر تحميل سجلات الحضور")));
+      } else {
+        // الأيام التي لها سجل، والغياب المحتسب بلا تسجيل (يُخصم من الراتب)، الأحدث أولًا
+        setDays(data.days.filter((day) => day.record || day.deductibleAbsence).reverse());
+        setSummary(data.summary);
+      }
       setLoading(false);
     }
-    load();
-  }, [empId, monthFilter]);
-
-  const totalPresent = records.filter((r) => r.status === "حاضر").length;
-  const totalAbsent = records.filter((r) => r.status === "غائب").length;
-  const totalLate = records.filter((r) => (r.late_minutes ?? 0) > 0).length;
-
-  const statusColor = (s: string) =>
-    s === "حاضر" ? "text-green-600 bg-green-50" : s === "غائب" ? "text-red-600 bg-red-50" : "text-orange-600 bg-orange-50";
+    void load();
+    return () => { cancelled = true; };
+  }, [monthFilter, t]);
 
   return (
     <div className="flex flex-col h-full">
@@ -57,7 +68,7 @@ export default function AttendanceReportPage({ empId, onBack }: Props) {
           <h2 className="font-bold text-lg text-gray-900">{t("دوامي")}</h2>
         </div>
         <div className="px-4 pb-3">
-          <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e89]" />
+          <input type="month" value={monthFilter} onChange={(e) => e.target.value && setMonthFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e89]" />
         </div>
       </div>
 
@@ -65,43 +76,53 @@ export default function AttendanceReportPage({ empId, onBack }: Props) {
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-3 p-4">
           <div className="bg-white rounded-xl shadow-sm p-3 text-center border border-gray-100">
-            <p className="text-2xl font-bold text-green-600">{totalPresent}</p>
+            <p className="text-2xl font-bold text-green-600">{formatNumber(summary.present + summary.late)}</p>
             <p className="text-xs text-gray-500 mt-1">{t("يوم حضور")}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm p-3 text-center border border-gray-100">
-            <p className="text-2xl font-bold text-red-500">{totalAbsent}</p>
+            <p className="text-2xl font-bold text-red-500">{formatNumber(summary.absent)}</p>
             <p className="text-xs text-gray-500 mt-1">{t("يوم غياب")}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm p-3 text-center border border-gray-100">
-            <p className="text-2xl font-bold text-orange-500">{totalLate}</p>
+            <p className="text-2xl font-bold text-orange-500">{formatNumber(summary.late)}</p>
             <p className="text-xs text-gray-500 mt-1">{t("تأخر")}</p>
           </div>
         </div>
+        {!loading && !error && (summary.leave > 0 || summary.unrecorded > 0) && (
+          <div className="px-4 pb-3 text-xs text-gray-500">
+            {summary.leave > 0 && <span>{t("إجازة")}: {formatNumber(summary.leave)} </span>}
+            {summary.unrecorded > 0 && <span>· {t("أيام عمل بلا تسجيل لا تُحتسب غيابًا")}: {formatNumber(summary.unrecorded)}</span>}
+          </div>
+        )}
 
         {/* Records */}
         <div className="px-4">
           {loading ? (
             <div className="text-center py-12 text-gray-400">{t("جاري التحميل...")}</div>
-          ) : records.length === 0 ? (
+          ) : error ? (
+            <div className="bg-red-50 text-red-700 rounded-xl p-4 text-center text-sm">{error}</div>
+          ) : days.length === 0 ? (
             <div className="text-center py-12 text-gray-400">{t("لا توجد سجلات لهذا الشهر")}</div>
           ) : (
-            records.map((rec) => (
-              <div key={rec.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-3">
+            days.map((day) => (
+              <div key={day.date} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-gray-800 text-sm">{formatDate(rec.date, { dateStyle: "medium" })}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(rec.status)}`}>{t(rec.status)}</span>
+                  <span className="font-semibold text-gray-800 text-sm">{formatDate(day.date, { dateStyle: "medium" })}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor(day.category)}`}>
+                    {day.record ? t(day.record.status || CATEGORY_LABEL[day.category]) : t("غائب (بلا تسجيل)")}
+                  </span>
                 </div>
                 <div className="flex gap-6 text-sm">
                   <div className="flex items-center gap-1 text-gray-600">
                     <Clock className="h-4 w-4 text-green-500" />
-                    <span>{rec.check_in ?? "—"}</span>
+                    <span>{day.record?.checkIn || "—"}</span>
                   </div>
                   <div className="flex items-center gap-1 text-gray-600">
                     <Clock className="h-4 w-4 text-red-400" />
-                    <span>{rec.check_out ?? "—"}</span>
+                    <span>{day.record?.checkOut || "—"}</span>
                   </div>
-                  {(rec.late_minutes ?? 0) > 0 && (
-                    <div className="text-orange-500 text-xs font-medium self-center">{t("تأخر")} {rec.late_minutes} {t("د")}</div>
+                  {day.lateMinutes > 0 && (
+                    <div className="text-orange-500 text-xs font-medium self-center">{t("تأخر")} {formatNumber(day.lateMinutes)} {t("د")}</div>
                   )}
                 </div>
               </div>

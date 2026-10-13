@@ -493,6 +493,12 @@ const hrNavItems: HRNavItem[] = [
       { icon: Plus, label: "إضافة دور جديد", href: "/hr/permissions/add-role" },
     ],
   },
+  {
+    icon: Wrench,
+    label: "إيميلات الموظفين",
+    href: "/hr/deductions-emails",
+    hasChildren: false,
+  },
 ];
 
 function getActiveHRParent(pathname: string) {

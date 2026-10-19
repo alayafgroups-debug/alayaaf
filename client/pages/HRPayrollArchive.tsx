@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Layout from "@/components/Layout";
 import {
   Printer,
@@ -51,15 +52,26 @@ const parseMonthYear = (month: string) => {
   const [year = "", mon = ""] = String(month ?? "").split("-");
   return { year, mon };
 };
+const statusOptions = [ALL, "معلق", "معتمد", POSTED, HELD_POSTED, "مدفوع", "موقوف", "مرفوض", "ملغي"];
+// فلاتر مسبقة من الرابط (مثل ?period=2026-10&status=معتمد من صفحة مسير الرواتب)
+const urlPeriod = (params: URLSearchParams) => {
+  const period = (params.get("period") ?? "").trim();
+  return /^\d{4}-\d{2}$/.test(period) ? parseMonthYear(period) : null;
+};
+const urlStatus = (params: URLSearchParams) => {
+  const status = (params.get("status") ?? "").trim();
+  return statusOptions.includes(status) ? status : null;
+};
 
 export default function HRPayrollArchive() {
   const { t, direction, formatDate, formatNumber } = useI18n();
+  const [searchParams] = useSearchParams();
   const [records, setRecords] = useState<ArchiveRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [yearFilter, setYearFilter] = useState(ALL);
-  const [monthFilter, setMonthFilter] = useState(ALL);
-  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [yearFilter, setYearFilter] = useState(() => urlPeriod(searchParams)?.year ?? ALL);
+  const [monthFilter, setMonthFilter] = useState(() => urlPeriod(searchParams)?.mon ?? ALL);
+  const [statusFilter, setStatusFilter] = useState(() => urlStatus(searchParams) ?? ALL);
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [selectedRecord, setSelectedRecord] = useState<ArchiveRow | null>(null);
@@ -101,14 +113,26 @@ export default function HRPayrollArchive() {
 
   useEffect(() => { void loadData(); }, []);
 
+  // تغيّر الرابط والصفحة مفتوحة (مثل الرجوع في المتصفح) يطبّق فلاتره من جديد
+  const searchKey = searchParams.toString();
+  useEffect(() => {
+    const period = urlPeriod(searchParams);
+    const status = urlStatus(searchParams);
+    if (period) { setYearFilter(period.year); setMonthFilter(period.mon); }
+    if (status) setStatusFilter(status);
+  }, [searchKey]);
+
+  // السنة/الشهر المختاران يبقيان في القائمة حتى لو لم توجد لهما سجلات (فلتر من الرابط)
   const years = useMemo(() => {
     const unique = new Set(records.map((r) => parseMonthYear(r.month).year).filter(Boolean));
+    if (yearFilter !== ALL) unique.add(yearFilter);
     return [ALL, ...Array.from(unique).sort((a, b) => Number(b) - Number(a))];
-  }, [records]);
+  }, [records, yearFilter]);
   const months = useMemo(() => {
     const unique = new Set(records.map((r) => parseMonthYear(r.month).mon).filter(Boolean));
+    if (monthFilter !== ALL) unique.add(monthFilter);
     return [ALL, ...Array.from(unique).sort((a, b) => Number(a) - Number(b))];
-  }, [records]);
+  }, [records, monthFilter]);
   const filtered = useMemo(() => records.filter((r) => {
     const keyword = search.trim();
     const { year, mon } = parseMonthYear(r.month);
@@ -159,7 +183,6 @@ export default function HRPayrollArchive() {
     toast({ title: t("تم الحذف") });
   };
 
-  const statusOptions = [ALL, "معلق", "معتمد", POSTED, HELD_POSTED, "مدفوع", "موقوف", "مرفوض", "ملغي"];
   return (
     <Layout>
       <div className="p-6 max-w-full mx-auto space-y-4" dir={direction}>
@@ -173,7 +196,7 @@ export default function HRPayrollArchive() {
             </div>
             <div className="flex items-center gap-2"><button onClick={loadData} className="p-1.5 hover:bg-white/15 rounded" title={t("تحديث")}><RefreshCw className="h-4 w-4" /></button><button onClick={printArchive} className="p-1.5 hover:bg-white/15 rounded" title={t("طباعة")}><Printer className="h-4 w-4" /></button><button onClick={exportCsv} className="p-1.5 hover:bg-white/15 rounded" title={t("تصدير Excel")}><Download className="h-4 w-4" /></button><span className="bg-white rounded px-2 py-1 text-black text-sm font-semibold">{formatNumber(filtered.length)}</span></div>
           </div>
-          <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center gap-3 flex-wrap"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("بحث بالاسم / الإدارة / رقم السجل")} className="h-9 w-80 max-w-full rounded border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500" /><div className="ms-auto flex items-center gap-2 text-sm text-slate-600"><span>{t("عدد السجلات في الصفحة")}</span><select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value) || 10)} className="h-8 rounded border border-slate-300 bg-white px-2">{[10, 25, 50, 100].map((size) => <option key={size} value={size}>{formatNumber(size)}</option>)}</select></div></div>
+          <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center gap-3 flex-wrap"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("بحث بالاسم / الإدارة / رقم السجل")} className="h-9 w-80 max-w-full rounded border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500" /><div className="ms-auto flex items-center gap-2 text-sm text-slate-600"><span>{t("عدد السجلات في الصفحة")}</span><select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value) || 10)} className="h-8 rounded border border-slate-300 bg-white px-2">{[10, 25, 50, 100, 250, 500].map((size) => <option key={size} value={size}>{formatNumber(size)}</option>)}</select></div></div>
           <div className="overflow-x-auto"><table className="w-full text-xs text-center whitespace-nowrap min-w-[1500px]"><thead className="bg-slate-100 text-slate-700 border-b border-slate-200"><tr>{["الإجراءات", "الحالة", "صافي الراتب", "إجمالي الاستقطاعات", "التأمينات الاجتماعية (حصة الموظف)", "إجمالي الاستحقاقات", "مكافآت", "ساعات إضافية", "البدلات", "الراتب الأساسي", "الإدارة", "الاسم", "الشهر"].map((label) => <th key={label} className="py-2 px-2 font-medium">{t(label)}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
             {loading ? <tr><td colSpan={13} className="py-10 text-slate-400">{t("جاري التحميل...")}</td></tr> : pageData.length === 0 ? <tr><td colSpan={13} className="py-10 text-slate-400">{t("لا توجد سجلات")}</td></tr> : pageData.map((rec) => { const entitlements = rec.basicSalary + rec.allowances + rec.overtime + rec.bonus; return <tr key={rec.id} className="hover:bg-slate-50 transition-colors"><td className="py-2 px-2"><div className="flex items-center justify-center gap-2"><button onClick={() => setSelectedRecord(rec)} className="text-slate-500 hover:text-[#0a5a92]" title={t("عرض")}><Eye className="h-4 w-4" /></button><button onClick={() => printSingle(rec)} className="text-slate-500 hover:text-indigo-600" title={t("طباعة السجل")}><Printer className="h-4 w-4" /></button>{canDeletePayroll(rec) && <button onClick={() => handleDelete(rec)} className="text-red-400 hover:text-red-600" title={t("حذف")}><XCircle className="h-4 w-4" /></button>}</div></td><td className="py-2 px-2"><span className={`px-2 py-0.5 rounded text-[11px] font-medium ${rec.status === "مدفوع" || rec.status === "معتمد" ? "bg-green-100 text-green-700" : rec.status === POSTED ? "bg-blue-100 text-blue-700" : rec.status === "ملغي" || rec.status === "مرفوض" ? "bg-red-100 text-red-700" : rec.status === HELD_POSTED ? "bg-orange-100 text-orange-700" : rec.status === "موقوف" ? "bg-slate-200 text-slate-700" : "bg-yellow-100 text-yellow-700"}`}>{t(rec.status)}</span></td><td className="py-2 px-2 font-semibold text-green-700">{money(rec.netSalary)}</td><td className="py-2 px-2 font-semibold text-red-600">{money(rec.deductions)}</td><td className="py-2 px-2 font-semibold text-orange-600">{money(rec.socialInsurance)}</td><td className="py-2 px-2 font-semibold text-[#0a5a92]">{money(entitlements)}</td><td className="py-2 px-2">{money(rec.bonus)}</td><td className="py-2 px-2">{money(rec.overtime)}</td><td className="py-2 px-2">{money(rec.allowances)}</td><td className="py-2 px-2">{money(rec.basicSalary)}</td><td className="py-2 px-2 text-slate-700">{rec.department}</td><td className="py-2 px-2 font-medium">{rec.empName}</td><td className="py-2 px-2 text-slate-600">{formatMonth(rec.month)}</td></tr>; })}
           </tbody></table></div>

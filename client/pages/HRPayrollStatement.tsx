@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { ArrowRight, Download, Printer, Search, Send, X } from "lucide-react";
+import { ArrowRight, Archive, Download, Printer, Search, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchAllRows } from "@/lib/fetchAll";
 import { toast } from "@/hooks/use-toast";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 import { useI18n } from "@/i18n";
@@ -51,6 +52,36 @@ const monthNames: Record<string, string> = {
   "10": "أكتوبر",
   "11": "نوفمبر",
   "12": "ديسمبر",
+};
+
+// حالة صفوف الرواتب المحفوظة للفترة (طلب الاعتماد/الاعتماد/الترحيل) — للعرض فقط
+type SavedPayrollKind = "approved" | "posted" | "pending" | "stopped" | "other";
+type SavedPayrollRow = { empId: string; status: string; kind: SavedPayrollKind };
+const SAVED_KIND_ORDER: SavedPayrollKind[] = ["approved", "posted", "pending", "stopped", "other"];
+// «معتمد» وحدها تُترجم Approver في القاموس، فنستخدم وصفًا أدق: المرحّل له خانته المستقلة
+const SAVED_KIND_LABEL: Record<SavedPayrollKind, string> = {
+  approved: "معتمد (غير مرحّل)",
+  posted: "مرحّل",
+  pending: "معلق",
+  stopped: "موقوف",
+  other: "أخرى",
+};
+const SAVED_KIND_STYLE: Record<SavedPayrollKind, string> = {
+  approved: "bg-green-100 text-green-700",
+  posted: "bg-blue-100 text-blue-700",
+  pending: "bg-yellow-100 text-yellow-700",
+  stopped: "bg-slate-200 text-slate-700",
+  other: "bg-red-100 text-red-700",
+};
+// عند تعدد صفوف الموظف في الشهر تُعرض الحالة الأبعد في دورة الاعتماد
+const SAVED_KIND_RANK: Record<SavedPayrollKind, number> = { posted: 5, approved: 4, stopped: 3, pending: 2, other: 1 };
+const savedPayrollKind = (status: string, accountingStatus: string): SavedPayrollKind => {
+  if (accountingStatus === "posted") return "posted";
+  const value = status.trim();
+  if (value === "معتمد") return "approved";
+  if (!value || value === "معلق") return "pending";
+  if (value === "موقوف") return "stopped";
+  return "other";
 };
 
 const current = new Date();
@@ -99,6 +130,8 @@ export default function HRPayrollStatement() {
   const [approvalLocation, setApprovalLocation] = useState("الكل");
   const [approvalStopKeyword, setApprovalStopKeyword] = useState("");
   const [stoppedEmployeeIds, setStoppedEmployeeIds] = useState<Set<string>>(new Set());
+  // null: لم تُحمَّل أو تعذر تحميلها (لا يظهر الشريط)
+  const [savedRows, setSavedRows] = useState<SavedPayrollRow[] | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -180,6 +213,42 @@ export default function HRPayrollStatement() {
   }, [employees, t]);
 
   const period = `${yearFilter}-${monthFilter}`;
+
+  // الرواتب المحفوظة للفترة؛ يُعاد التحميل بعد انتهاء أي إرسال لطلب الاعتماد
+  useEffect(() => {
+    setSavedRows(null);
+    if (approvalSubmitting) return;
+    let active = true;
+    fetchAllRows<Record<string, unknown>>((from, to) =>
+      supabase.from("payroll").select("emp_id, status, accounting_status").eq("month", period).order("id").range(from, to))
+      .then((rows) => {
+        if (!active) return;
+        setSavedRows(rows.map((row) => {
+          const status = String(row.status ?? "");
+          return { empId: String(row.emp_id ?? "").trim(), status, kind: savedPayrollKind(status, String(row.accounting_status ?? "")) };
+        }));
+      })
+      .catch(() => { if (active) setSavedRows(null); });
+    return () => { active = false; };
+  }, [period, approvalSubmitting]);
+
+  const savedCounts = useMemo(() => {
+    const counts: Record<SavedPayrollKind, number> = { approved: 0, posted: 0, pending: 0, stopped: 0, other: 0 };
+    (savedRows ?? []).forEach((row) => { counts[row.kind] += 1; });
+    return counts;
+  }, [savedRows]);
+
+  const savedByEmpId = useMemo(() => {
+    const map = new Map<string, SavedPayrollRow>();
+    (savedRows ?? []).forEach((row) => {
+      if (!row.empId) return;
+      const previous = map.get(row.empId);
+      if (!previous || SAVED_KIND_RANK[row.kind] > SAVED_KIND_RANK[previous.kind]) map.set(row.empId, row);
+    });
+    return map;
+  }, [savedRows]);
+
+  const openArchive = (status: string) => navigate(`/hr/payroll/archive?${new URLSearchParams({ period, status }).toString()}`);
 
   const filtered = useMemo(() => {
     return employees.filter((e) => {
@@ -507,6 +576,29 @@ export default function HRPayrollStatement() {
           </div>
         </div>
 
+        {savedRows && savedRows.length > 0 && (
+          <div className="payroll-no-print print:hidden flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{t("الرواتب المحفوظة لهذه الفترة")} ({period}): {formatNumber(savedRows.length)}</span>
+              {SAVED_KIND_ORDER.filter((kind) => savedCounts[kind] > 0).map((kind) => (
+                <span key={kind} className={`rounded px-2 py-0.5 text-xs font-medium ${SAVED_KIND_STYLE[kind]}`}>
+                  {t(SAVED_KIND_LABEL[kind])}: {formatNumber(savedCounts[kind])}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => openArchive("معتمد")}>
+                <><Archive className="h-4 w-4" /> {t("عرض مسير الرواتب المعتمد")}</>
+              </Button>
+              {savedCounts.posted > 0 && (
+                <Button variant="outline" size="sm" onClick={() => openArchive("مرحّل")}>
+                  <><Archive className="h-4 w-4" /> {t("عرض الرواتب المرحّلة")}</>
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {pageMode === "setup" ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="space-y-4 border-b border-gray-100 p-4">
@@ -560,7 +652,18 @@ export default function HRPayrollStatement() {
                             <AvatarFallback className="bg-[#004e89] text-white text-xs">{emp.name.charAt(0)}</AvatarFallback>
                           </Avatar>
                         </td>
-                        <td className="py-3 px-4 font-medium text-gray-900">{emp.name}</td>
+                        <td className="py-3 px-4 font-medium text-gray-900">
+                          {emp.name}
+                          {(() => {
+                            const saved = savedByEmpId.get(emp.empId.trim());
+                            if (!saved) return null;
+                            return (
+                              <span className={`ms-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${SAVED_KIND_STYLE[saved.kind]}`} title={t("حالة الراتب المحفوظ لهذه الفترة")}>
+                                {saved.kind === "other" && saved.status.trim() ? t(saved.status.trim()) : t(SAVED_KIND_LABEL[saved.kind])}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="py-3 px-4">{emp.jobTitle || t("غير متوفر")}</td>
                         <td className="py-3 px-4">{emp.department || t("غير متوفر")}</td>
                         <td className="py-3 px-4">{emp.section || t("غير متوفر")}</td>

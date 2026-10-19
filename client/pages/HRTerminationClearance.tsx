@@ -8,7 +8,7 @@ import { useI18n } from "@/i18n";
 type Row = { id: string; requestNumber: string; jobId: string; name: string; terminationDate: string; amount: string; employeeReply: string; replyDate: string; status: string; addedDate: string };
 
 export default function HRTerminationClearance() {
-  const { t, direction } = useI18n();
+  const { t, direction, locale } = useI18n();
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -23,7 +23,7 @@ export default function HRTerminationClearance() {
           name: r.emp_name ?? "", terminationDate: r.termination_date ?? "",
           amount: String(r.total ?? "0"), employeeReply: r.clearance_reply ?? "معلق",
           replyDate: r.clearance_reply_date ?? "-", status: r.status ?? "معلق",
-          addedDate: r.created_at ? new Date(r.created_at).toLocaleString("ar-SA") : "-",
+          addedDate: r.created_at ?? "",
         })));
       } catch { setItems([]); } finally { setLoading(false); }
     })();
@@ -75,7 +75,7 @@ export default function HRTerminationClearance() {
                     <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs ${row.employeeReply === "موافق عليه" ? "bg-emerald-100 text-emerald-800" : "bg-yellow-100 text-yellow-800"}`}>{t(row.employeeReply)}</span></td>
                     <td className="py-3 px-4">{row.replyDate}</td>
                     <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs ${row.status === "موافق عليه" ? "bg-emerald-100 text-emerald-800" : "bg-yellow-100 text-yellow-800"}`}>{t(row.status)}</span></td>
-                    <td className="py-3 px-4">{row.addedDate}</td>
+                    <td className="py-3 px-4">{row.addedDate ? new Date(row.addedDate).toLocaleString(locale === "ar" ? "ar-SA" : "en-US") : "-"}</td>
                   </tr>
                 ))}
               </tbody>

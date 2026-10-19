@@ -380,7 +380,7 @@ export default function HREmployeesInactive() {
                 onChange={(e) => setPageSize(Number(e.target.value) || 10)}
                 className="rounded border border-gray-300 bg-white px-2 py-1 text-xs focus:outline-none"
               >
-                {[10, 25, 50, 100].map((n) => (
+                {[10, 25, 50, 100, 250, 500].map((n) => (
                   <option key={n} value={n}>{formatNumber(n)}</option>
                 ))}
               </select>

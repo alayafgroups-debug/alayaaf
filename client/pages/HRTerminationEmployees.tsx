@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
-import { riyadhToday, serviceYears } from "@/lib/hrDates";
+import { addDays, riyadhToday, serviceYears } from "@/lib/hrDates";
 import { ACTIVE_EMPLOYEE_STATUSES, isApprovedStatus, isPendingStatus } from "@/lib/hrStatus";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 
@@ -62,6 +62,41 @@ const isOpenTermination = (status: unknown) =>
 
 const CONTRACT_TYPES = ["دائم", "مؤقت", "موسمي", "جزئي"];
 
+// إعدادات إنهاء الخدمة الرئيسية (تُحفظ من صفحة إعدادات إنهاء الخدمة بنفس المفتاح والقيم الافتراضية)
+const TERMINATION_SETTINGS_KEY = "termination_main_settings";
+const TERMINATION_SETTINGS_DEFAULT = {
+  autoApprove: "no",
+  approver1: "",
+  approver2: "",
+  approver3: "",
+  // الأجر الإجمالي افتراضيًا (الأجر الفعلي في المادة 84، وهو الحساب السابق) ما لم تُختر الإعدادات غيره
+  gratuityBase: "total",
+  calcLessThanYear: "no",
+  rate5andBelow: "half",
+  rateAbove5: "full",
+  calcDayOfEnd: "no",
+};
+type TerminationSettings = typeof TERMINATION_SETTINGS_DEFAULT;
+
+/** setting_value قد يكون كائنًا أو نص JSON؛ يُدمج فوق القيم الافتراضية، وأي قيمة تالفة تعود للافتراضي */
+const parseTerminationSettings = (value: unknown): TerminationSettings => {
+  try {
+    const raw = typeof value === "string" ? JSON.parse(value) : value;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) return { ...TERMINATION_SETTINGS_DEFAULT, ...(raw as Partial<TerminationSettings>) };
+  } catch {
+    // نص غير صالح: الافتراضي
+  }
+  return TERMINATION_SETTINGS_DEFAULT;
+};
+
+/** نهاية مدة الخدمة: يُضاف يوم الإنهاء نفسه إن كان الإعداد يحتسبه ضمن المدة */
+const serviceEndDate = (terminationDate: string, settings: TerminationSettings) =>
+  settings.calcDayOfEnd === "yes" && /^\d{4}-\d{2}-\d{2}$/.test(terminationDate) ? addDays(terminationDate, 1) : terminationDate;
+
+/** أشهر الأجر عن كل سنة: نصف شهر أو شهر كامل */
+const monthsPerYear = (rate: string) => (rate === "full" ? 1 : 0.5);
+const rateLabel = (rate: string) => (rate === "full" ? "راتب شهر لكل سنة" : "نصف راتب لكل سنة");
+
 function calcServiceDuration(hireDateStr: string, endDateStr: string, t: (s: string) => string): string {
   if (!hireDateStr || !endDateStr) return "";
   const hire = new Date(hireDateStr);
@@ -79,9 +114,15 @@ function calcServiceDuration(hireDateStr: string, endDateStr: string, t: (s: str
   return parts.join(" ");
 }
 
-/** الأجر المعتمد للمكافأة: آخر أجر فعلي (الإجمالي)، وإن لم يوجد فالأساسي */
-const rewardWage = (employee: { totalSalary: number; baseSalary: number }) =>
+/** الأجر الفعلي (الإجمالي)، وإن لم يوجد فالأساسي — أساس قيمة الإجازات */
+const totalWage = (employee: { totalSalary: number; baseSalary: number }) =>
   employee.totalSalary > 0 ? employee.totalSalary : employee.baseSalary;
+
+/** أجر المكافأة حسب إعداد «مكافأة إنهاء الخدمة تحتسب من»: الأساسي، أو الإجمالي (وإن لم يوجد فالأساسي) */
+const rewardWage = (employee: { totalSalary: number; baseSalary: number }, settings: TerminationSettings) => {
+  const useTotal = settings.gratuityBase === "total" && employee.totalSalary > 0;
+  return { wage: useTotal ? employee.totalSalary : employee.baseSalary, label: useTotal ? "الراتب الإجمالي" : "الراتب الأساسي" };
+};
 
 /** نسبة المكافأة عند الاستقالة (المادة 85): أقل من سنتين لا شيء، 2–5 الثلث، 5–10 الثلثان، 10 فأكثر كاملة */
 function resignationFactor(years: number): number {
@@ -91,23 +132,30 @@ function resignationFactor(years: number): number {
   return 1;
 }
 
-/** مكافأة نهاية الخدمة (المادة 84): نصف شهر عن كل سنة من الخمس الأولى، وشهر عن كل سنة بعدها، وبالنسبة لأجزاء السنة */
-function calcGratuity(wage: number, hireDateStr: string, endDateStr: string, resignation: boolean): number {
+/** مكافأة نهاية الخدمة (المادة 84) حسب الإعدادات: معدل الخمس الأولى ومعدل ما بعدها، وبالنسبة لأجزاء السنة.
+ * endDateStr هو نهاية مدة الخدمة (بعد احتساب يوم الإنهاء إن لزم). نسبة الاستقالة تُطبَّق بعد ذلك. */
+function calcGratuity(wage: number, hireDateStr: string, endDateStr: string, resignation: boolean, settings: TerminationSettings): number {
   if (!hireDateStr || !endDateStr || wage <= 0) return 0;
   const years = serviceYears(hireDateStr, endDateStr);
   if (years <= 0) return 0;
-  const full = years <= 5 ? (wage / 2) * years : (wage / 2) * 5 + wage * (years - 5);
+  if (settings.calcLessThanYear === "no" && years < 1) return 0;
+  const firstRate = monthsPerYear(settings.rate5andBelow);
+  const laterRate = monthsPerYear(settings.rateAbove5);
+  const full = years <= 5 ? wage * firstRate * years : wage * firstRate * 5 + wage * laterRate * (years - 5);
   const gratuity = resignation ? full * resignationFactor(years) : full;
   return Math.round(gratuity * 100) / 100;
 }
 
-function rewardRuleText(years: number, resignation: boolean, deprived: boolean): string {
-  if (deprived) return "السبب المختار يحرم الموظف من المكافأة حسب إعداد أسباب إنهاء الخدمة";
-  if (!resignation) return "مكافأة كاملة: نصف شهر عن كل سنة من الخمس الأولى وشهر عن كل سنة بعدها، على الأجر الإجمالي";
-  if (years < 2) return "استقالة قبل إكمال سنتين: لا مكافأة";
-  if (years < 5) return "استقالة بعد سنتين وقبل خمس سنوات: ثلث المكافأة";
-  if (years < 10) return "استقالة بعد خمس سنوات وقبل عشر: ثلثا المكافأة";
-  return "استقالة بعد عشر سنوات فأكثر: المكافأة كاملة";
+function rewardRuleText(years: number, resignation: boolean, deprived: boolean, settings: TerminationSettings, wageLabel: string, t: (s: string) => string): string {
+  if (deprived) return t("السبب المختار يحرم الموظف من المكافأة حسب إعداد أسباب إنهاء الخدمة");
+  if (settings.calcLessThanYear === "no" && years < 1) return t("خدمة أقل من سنة: لا مكافأة حسب إعدادات إنهاء الخدمة");
+  if (!resignation) {
+    return `${t("مكافأة كاملة حسب إعدادات إنهاء الخدمة")} — ${t("الخمس سنوات الأولى")}: ${t(rateLabel(settings.rate5andBelow))} — ${t("ما بعد الخمس سنوات")}: ${t(rateLabel(settings.rateAbove5))} — ${t("أساس الاحتساب")}: ${t(wageLabel)}`;
+  }
+  if (years < 2) return t("استقالة قبل إكمال سنتين: لا مكافأة");
+  if (years < 5) return t("استقالة بعد سنتين وقبل خمس سنوات: ثلث المكافأة");
+  if (years < 10) return t("استقالة بعد خمس سنوات وقبل عشر: ثلثا المكافأة");
+  return t("استقالة بعد عشر سنوات فأكثر: المكافأة كاملة");
 }
 
 function calcLeaveValue(totalSalary: number, leaveRemaining: number): number {
@@ -141,6 +189,9 @@ export default function HRTerminationEmployees() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [reasons, setReasons] = useState<TermReason[]>(TERM_REASONS);
+  const [terminationSettings, setTerminationSettings] = useState<TerminationSettings>(TERMINATION_SETTINGS_DEFAULT);
+  // الحفظ ينتظر تحميل الإعدادات حتى لا تُحسب المكافأة بالقيم الافتراضية قبل وصولها
+  const [settingsReady, setSettingsReady] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -211,21 +262,43 @@ export default function HRTerminationEmployees() {
     loadData();
   }, []);
 
+  // تعذّر التحميل أو عدم وجود الإعداد: تبقى القيم الافتراضية دون رسالة
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.from("hr_settings").select("setting_value").eq("setting_key", TERMINATION_SETTINGS_KEY).limit(1);
+        const row = (data as { setting_value?: unknown }[] | null)?.[0];
+        if (!active) return;
+        if (!error && row && row.setting_value !== null && row.setting_value !== undefined) {
+          setTerminationSettings(parseTerminationSettings(row.setting_value));
+        }
+      } catch {
+        // الافتراضي
+      } finally {
+        if (active) setSettingsReady(true);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
   const selectedEmployee = employees.find((emp) => emp.id === form.employeeId);
   const selectedReason = reasons.find((item) => item.reason === form.endReason);
   const isResignation = isResignationReason(form.endReason);
   const deprived = Boolean(selectedReason?.deprivesReward);
-  const yearsOfService = selectedEmployee ? serviceYears(selectedEmployee.hireDate, form.terminationDate) : 0;
+  const serviceEnd = serviceEndDate(form.terminationDate, terminationSettings);
+  const yearsOfService = selectedEmployee ? serviceYears(selectedEmployee.hireDate, serviceEnd) : 0;
+  const gratuityWage = selectedEmployee ? rewardWage(selectedEmployee, terminationSettings) : null;
 
   // Auto-compute fields when employee or date changes
   const computedReward = useMemo(() => {
     if (!selectedEmployee || deprived) return 0;
-    return calcGratuity(rewardWage(selectedEmployee), selectedEmployee.hireDate, form.terminationDate, isResignation);
-  }, [selectedEmployee, form.terminationDate, isResignation, deprived]);
+    return calcGratuity(rewardWage(selectedEmployee, terminationSettings).wage, selectedEmployee.hireDate, serviceEnd, isResignation, terminationSettings);
+  }, [selectedEmployee, serviceEnd, isResignation, deprived, terminationSettings]);
 
   const computedLeaveValue = useMemo(() => {
     if (!selectedEmployee) return 0;
-    return calcLeaveValue(rewardWage(selectedEmployee), Number(form.leaveRemaining));
+    return calcLeaveValue(totalWage(selectedEmployee), Number(form.leaveRemaining));
   }, [selectedEmployee, form.leaveRemaining]);
 
   const computedTotal = useMemo(() => {
@@ -239,8 +312,8 @@ export default function HRTerminationEmployees() {
 
   const serviceDuration = useMemo(() => {
     if (!selectedEmployee) return "";
-    return calcServiceDuration(selectedEmployee.hireDate, form.terminationDate, t);
-  }, [selectedEmployee, form.terminationDate, t]);
+    return calcServiceDuration(selectedEmployee.hireDate, serviceEnd, t);
+  }, [selectedEmployee, serviceEnd, t]);
 
   const handleEmployeeChange = (employeeId: string) => {
     const emp = employees.find((e) => e.id === employeeId);
@@ -339,9 +412,9 @@ export default function HRTerminationEmployees() {
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <h2 className="font-bold text-gray-900">{t("إنهاء خدمة الموظف")}</h2>
-              {selectedEmployee && (
+              {gratuityWage && (
                 <span className="text-sm text-emerald-700 font-medium bg-emerald-50 px-3 py-1 rounded-full">
-                  {t("الأجر الفعلي (الإجمالي)")}: SAR {rewardWage(selectedEmployee).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  {t(gratuityWage.label)}: SAR {gratuityWage.wage.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </span>
               )}
             </div>
@@ -399,7 +472,7 @@ export default function HRTerminationEmployees() {
                 <Field label={t("مكافأة نهاية الخدمة")}>
                   <Input type="number" value={computedReward.toFixed(2)} readOnly className="bg-gray-50 font-medium" placeholder={t("تُحسب تلقائياً")} />
                   {selectedEmployee && form.endReason && (
-                    <p className="text-xs text-gray-500 mt-1">{t(rewardRuleText(yearsOfService, isResignation, deprived))}</p>
+                    <p className="text-xs text-gray-500 mt-1">{rewardRuleText(yearsOfService, isResignation, deprived, terminationSettings, gratuityWage?.label ?? "الراتب الأساسي", t)}</p>
                   )}
                 </Field>
 
@@ -451,7 +524,7 @@ export default function HRTerminationEmployees() {
 
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
                 <Button variant="outline" onClick={() => setPreviewOpen(true)}>{t("معاينة")}</Button>
-                <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
+                <Button onClick={handleSave} disabled={saving || !settingsReady} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
                   {saving ? t("جاري الحفظ...") : t("حفظ")}
                 </Button>
               </div>
@@ -541,7 +614,7 @@ export default function HRTerminationEmployees() {
               </div>
               <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
                 <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t("رجوع")}</Button>
-                <Button onClick={handleSave} disabled={saving} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
+                <Button onClick={handleSave} disabled={saving || !settingsReady} className="bg-[#004e89] hover:bg-[#003d6d] text-white">
                   {saving ? t("جاري الحفظ...") : t("حفظ")}
                 </Button>
               </div>

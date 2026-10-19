@@ -6,6 +6,7 @@ import { useI18n } from "@/i18n";
 import EmployeeSignatureField, {
   EmployeeSignature,
 } from "./EmployeeSignatureField";
+import ApproverPreview from "@/components/hr/ApproverPreview";
 
 import {
   Dialog,
@@ -407,6 +408,7 @@ export default function LeaveRequestForm({
               />
             </div>
 
+            {open && <ApproverPreview kind="leave" empId={employeeInfo?.empId} />}
             <EmployeeSignatureField onChange={setSignature} />
 
             {/* Attachments */}

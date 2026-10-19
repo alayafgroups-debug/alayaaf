@@ -13,7 +13,8 @@ const MAIN_SETTINGS_DEFAULT = {
   approver1: "",
   approver2: "",
   approver3: "",
-  gratuityBase: "basic",
+  // الأجر الإجمالي افتراضيًا: الأجر الفعلي في المادة 84، وهو ما تحسبه صفحة إنهاء الخدمة إن لم تُحفظ الإعدادات
+  gratuityBase: "total",
   calcLessThanYear: "no",
   rate5andBelow: "half",
   rateAbove5: "full",

@@ -63,21 +63,6 @@ type EmployeeReport = {
   notes: string;
 };
 
-const money = (value: number) =>
-  value.toLocaleString("ar-SA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-const formatDate = (value: string) => {
-  if (!value) return "-";
-  return new Date(`${value}T00:00:00`).toLocaleDateString("ar-SA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-};
-
 const escapeHtml = (value: unknown) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -177,7 +162,23 @@ const deductionLines = (figures: Figures) => [
 ].filter((item) => item.value >= 0.01);
 
 export default function HREmployeeFullReport() {
-  const { t, direction } = useI18n();
+  const { t, direction, locale } = useI18n();
+  // نفس منطق useI18n: ar-SA بالعربية و en-US بالإنجليزية (بدل ar-SA الثابت)
+  const displayLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const money = (value: number) =>
+    value.toLocaleString(displayLocale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const formatDate = (value: string) => {
+    if (!value) return "-";
+    return new Date(`${value}T00:00:00`).toLocaleDateString(displayLocale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

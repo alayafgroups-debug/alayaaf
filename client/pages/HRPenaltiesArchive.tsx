@@ -57,7 +57,7 @@ const csvCell = (value: unknown) => {
 };
 
 export default function HRPenaltiesArchive() {
-  const { t, direction } = useI18n();
+  const { t, direction, locale } = useI18n();
   const [rows, setRows] = useState<PenaltyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("الكل");
@@ -226,7 +226,7 @@ export default function HRPenaltiesArchive() {
                       <td className="py-2.5 px-2 text-gray-600">{r.employee_id || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.reason || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.penalty_type || "-"}</td>
-                      <td className="py-2.5 px-2 text-red-600 font-medium">{Number(r.amount ?? 0).toLocaleString()}</td>
+                      <td className="py-2.5 px-2 text-red-600 font-medium">{Number(r.amount ?? 0).toLocaleString(locale === "ar" ? "ar-SA" : "en-US")}</td>
                       <td className="py-2.5 px-2">
                         <span
                           className={
@@ -242,7 +242,7 @@ export default function HRPenaltiesArchive() {
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-gray-500">
-                        {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString("ar-EG") : "-")}
+                        {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US") : "-")}
                       </td>
                       <td className="py-2.5 px-2">
                         <button onClick={() => handleDelete(r)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>

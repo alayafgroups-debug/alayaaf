@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { hrRequestErrorText } from "@/lib/hrErrors";
+import RequestDetailsDialog, { loadRecipientNames } from "@/components/hr/RequestDetailsDialog";
 
 const isPendingStatus = (status: string) => ["", "معلق", "معلقة", "pending"].includes(status.trim());
 
@@ -21,6 +22,10 @@ type LeaveRequest = {
   status: string;
   notes: string;
   createdAt: string;
+  empId: string;
+  adminNote: string;
+  signatureData: string;
+  signedAt: string;
 };
 
 const mapRow = (r: Record<string, unknown>): LeaveRequest => ({
@@ -34,6 +39,10 @@ const mapRow = (r: Record<string, unknown>): LeaveRequest => ({
   status: String(r.status ?? "معلقة"),
   notes: String(r.notes ?? ""),
   createdAt: String(r.created_at ?? ""),
+  empId: String(r.emp_id ?? ""),
+  adminNote: String(r.admin_note ?? ""),
+  signatureData: String(r.signature_data ?? ""),
+  signedAt: String(r.signed_at ?? ""),
 });
 
 const STATUS_COLORS: Record<string, string> = {
@@ -52,6 +61,11 @@ export default function HRLeavesEmployees() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [detail, setDetail] = useState<LeaveRequest | null>(null);
+  // لمن أُرسل كل طلب (اسم صاحب حساب المستلم)
+  const [recipients, setRecipients] = useState<Record<string, string>>({});
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+  const [recipientsError, setRecipientsError] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -61,7 +75,14 @@ export default function HRLeavesEmployees() {
           .from("leave_requests")
           .select("*")
           .order("created_at", { ascending: false });
-        if (!error && data) setLeaves(data.map(mapRow));
+        if (!error && data) {
+          const rows = data.map(mapRow);
+          setLeaves(rows);
+          setRecipientsLoading(true);
+          void loadRecipientNames(supabase, "leave_requests", rows.map((row) => row.id))
+            .then((result) => { setRecipients(result.names); setRecipientsError(!result.ok); })
+            .finally(() => setRecipientsLoading(false));
+        }
       } catch { /* no-op */ } finally { setLoading(false); }
     };
     load();
@@ -147,7 +168,7 @@ export default function HRLeavesEmployees() {
                               <button onClick={() => handleReject(leave)} className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">{t("رفض")}</button>
                             </>
                           )}
-                          <button className="text-gray-400 hover:text-[#004e89]" title={t("عرض")} aria-label={t("عرض")}>
+                          <button onClick={() => setDetail(leave)} className="text-gray-400 hover:text-[#004e89]" title={t("عرض")} aria-label={t("عرض")}>
                             <Eye className="h-4 w-4" />
                           </button>
                         </div>
@@ -164,6 +185,16 @@ export default function HRLeavesEmployees() {
           </div>
         </div>
       </div>
+      <RequestDetailsDialog
+        request={detail ? {
+          source: "leave", requestType: detail.leaveType || "إجازة", status: detail.status, requestDate: detail.createdAt,
+          empId: detail.empId, empName: detail.empName, senderDepartment: "", senderName: detail.empName,
+          startDate: detail.startDate, endDate: detail.endDate, days: detail.days || null, notes: detail.notes,
+          adminNote: detail.adminNote, signatureData: detail.signatureData, signedAt: detail.signedAt, details: {},
+          recipientName: recipients[detail.id] ?? "", recipientLoading: recipientsLoading, recipientError: recipientsError,
+        } : null}
+        onClose={() => setDetail(null)}
+      />
     </Layout>
   );
 }

@@ -23,7 +23,8 @@ import EmployeeForm, { computeTotalSalary, emptyForm, mapRowToForm } from "./Emp
 import type { EmpFormData } from "./EmployeeForm";
 import { EmployeePhoto, employeeFileName, isEmployeeStoragePath, openEmployeeFile } from "@/components/hr/employeeFiles";
 import { printReport } from "@/lib/reportExport";
-import { deleteOrDeactivateEmployee } from "@/components/hr/employeeActions";
+import EmployeeDeleteDialog, { type DeletableEmployee } from "@/components/hr/EmployeeDeleteDialog";
+import { fetchAllRows } from "@/lib/fetchAll";
 import { useI18n } from "@/i18n";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -90,12 +91,22 @@ const EXPORT_ENGLISH_VALUES: Record<string, string> = {
   "نيوزيلندا": "New Zealand", "أخرى": "Other",
 };
 
+const toDeletable = (employee: EmpFormData): DeletableEmployee => ({
+  id: employee.id,
+  empId: employee.empId,
+  name: employee.name || employee.firstName,
+  email: employee.email,
+  status: employee.status,
+});
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HREmployees() {
   const { t, direction, locale, formatNumber } = useI18n();
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<{ id: string; name: string; nameEn: string }[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  // من سيُحذف (موظف واحد من زر الحذف، أو المحددون من زر الحذف الجماعي)
+  const [deleteTargets, setDeleteTargets] = useState<DeletableEmployee[] | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const isNewRoute = location.pathname.replace(/\/+$/, "").endsWith("/employees/new");
@@ -135,8 +146,11 @@ export default function HREmployees() {
     const load = async () => {
       setLoading(true);
       try {
+        // كل الموظفين على دفعات (لا يُقطع العدد عند حد 1000 صف)
         const [employeeResult, departmentResult] = await Promise.all([
-          supabase.from("employees").select("*").order("created_at", { ascending: false }),
+          fetchAllRows<Record<string, any>>((from, to) =>
+            supabase.from("employees").select("*").order("created_at", { ascending: false }).order("id").range(from, to))
+            .then((data) => ({ data, error: null }), (error) => ({ data: null, error })),
           supabase.from("org_sections").select("id, name, name_en").order("name"),
         ]);
         if (!employeeResult.error && employeeResult.data) setEmployees(employeeResult.data.map(mapRowToForm));
@@ -910,6 +924,13 @@ export default function HREmployees() {
               <span className="flex items-center gap-2 text-xs text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
                 {formatNumber(selectedIds.size)} {t("محدد")} — {t("الطباعة والتصدير للمحددين فقط")}
                 <button type="button" onClick={() => setSelectedIds(new Set())} className="text-rose-600 hover:underline">{t("إلغاء التحديد")}</button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargets(employees.filter((employee) => selectedIds.has(employee.id)).map(toDeletable))}
+                  className="flex items-center gap-1 rounded border border-rose-300 bg-white px-2 py-0.5 text-rose-700 hover:bg-rose-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />{t("حذف المحددين")}
+                </button>
               </span>
             )}
           </div>
@@ -1022,7 +1043,7 @@ export default function HREmployees() {
                 onChange={(e) => setPageSize(Number(e.target.value) || 10)}
                 className="rounded border border-gray-300 bg-white px-2 py-1 text-xs focus:outline-none"
               >
-                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                {[10, 25, 50, 100, 250, 500].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
               <span>{t("من أصل")} {formatNumber(filtered.length)}</span>
             </div>
@@ -1072,17 +1093,21 @@ export default function HREmployees() {
           </div>
         </div>
       </div>
+      <EmployeeDeleteDialog
+        open={deleteTargets !== null}
+        employees={deleteTargets ?? []}
+        onClose={() => setDeleteTargets(null)}
+        onDeleted={(deletedIds) => {
+          const removed = new Set(deletedIds);
+          setEmployees((prev) => prev.filter((e) => !removed.has(e.id)));
+          setSelectedIds((prev) => new Set(Array.from(prev).filter((id) => !removed.has(id))));
+        }}
+      />
     </Layout>
   );
 
-  async function handleDelete(emp: EmpFormData) {
-    const result = await deleteOrDeactivateEmployee(emp, t);
-    if (result === "deleted") {
-      setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
-      setSelectedIds((prev) => { const next = new Set(prev); next.delete(emp.id); return next; });
-    } else if (result === "deactivated") {
-      setEmployees((prev) => prev.map((e) => e.id === emp.id ? { ...e, status: "غير فعال" } : e));
-    }
+  function handleDelete(emp: EmpFormData) {
+    setDeleteTargets([toDeletable(emp)]);
   }
 }
 

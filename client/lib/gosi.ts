@@ -19,7 +19,15 @@ const HAZARDS_RATE = 0.02;
 export const GOSI_TYPE_DEDUCTIBLE = "سعودي قابل للخصم";
 export const GOSI_TYPE_NEW_SYSTEM = "سعودي قابل للخصم (النظام الجديد)";
 export const GOSI_TYPE_NOT_DEDUCTIBLE = "سعودي غير قابل للخصم";
-export const GOSI_INSURANCE_TYPES = [GOSI_TYPE_DEDUCTIBLE, GOSI_TYPE_NEW_SYSTEM, GOSI_TYPE_NOT_DEDUCTIBLE];
+// غير السعودي: لا يُخصم منه شيء، وعلى المنشأة 2% (الأخطار المهنية). الحساب يتبع الجنسية لا هذا الاسم.
+export const GOSI_TYPE_NON_SAUDI = "غير سعودي (أخطار مهنية)";
+export const GOSI_SAUDI_TYPES = [GOSI_TYPE_DEDUCTIBLE, GOSI_TYPE_NEW_SYSTEM, GOSI_TYPE_NOT_DEDUCTIBLE];
+export const GOSI_INSURANCE_TYPES = [...GOSI_SAUDI_TYPES, GOSI_TYPE_NON_SAUDI];
+/** أنواع التأمين المناسبة لجنسية الموظف (الجنسية غير المحددة: كل الأنواع) */
+export const gosiTypesFor = (nationality: unknown) => {
+  if (!String(nationality ?? "").trim()) return GOSI_INSURANCE_TYPES;
+  return isSaudiNationality(nationality) ? GOSI_SAUDI_TYPES : [GOSI_TYPE_NON_SAUDI];
+};
 
 const round2 = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
 const clean = (value: unknown) => String(value ?? "").trim();

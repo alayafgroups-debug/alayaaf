@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { Search, Eye, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -7,8 +7,11 @@ import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { readUserSession } from "@/lib/authSession";
 import { hrRequestErrorText } from "@/lib/hrErrors";
+import RequestDetailsDialog, { loadRecipientNames, type RequestDetailsView } from "@/components/hr/RequestDetailsDialog";
 
-type Request = { id: string; type: string; date: string; status: string; rawStatus: string; notes: string; approver: string; senderDepartment: string; senderName: string; source: "leave" | "request" };
+type Request = { id: string; type: string; date: string; status: string; rawStatus: string; notes: string; approver: string; senderDepartment: string; senderName: string; source: "leave" | "request"; view: Omit<RequestDetailsView, "recipientName" | "recipientLoading"> };
+
+const recipientKey = (source: "leave" | "request", id: string) => `${source}:${id}`;
 
 const normalizeStatus = (raw: string) =>
   ["معلق", "معلقة", "pending"].includes(raw)
@@ -31,6 +34,12 @@ export default function HRRequestsSent() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
+  // من استلم كل طلب (اسم صاحب حساب المستلم من قاعدة البيانات)، يُحمَّل مرة لكل طلب
+  const [recipients, setRecipients] = useState<Record<string, string>>({});
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+  const [recipientsError, setRecipientsError] = useState(false);
+  const knownRecipients = useRef(new Set<string>());
+  const [detail, setDetail] = useState<Request | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -51,6 +60,13 @@ export default function HRRequestsSent() {
         date: r.created_at ?? "",
         status: normalizeStatus(String(r.status ?? "").trim()), rawStatus: String(r.status ?? ""), notes: r.admin_note ?? r.notes ?? "-",
         approver: r.approver_name ?? "-", senderDepartment: "", senderName: r.emp_name ?? "", source: "leave",
+        view: {
+          source: "leave", requestType: String(r.leave_type ?? "إجازة"), status: String(r.status ?? ""), requestDate: String(r.created_at ?? ""),
+          empId: String(r.emp_id ?? ""), empName: String(r.emp_name ?? ""), senderDepartment: "", senderName: String(r.emp_name ?? ""),
+          startDate: String(r.start_date ?? ""), endDate: String(r.end_date ?? ""), days: r.days === null || r.days === undefined ? null : Number(r.days),
+          notes: String(r.notes ?? ""), adminNote: String(r.admin_note ?? ""), signatureData: String(r.signature_data ?? ""), signedAt: String(r.signed_at ?? ""),
+          details: {},
+        },
       }));
 
       const reqRows: Request[] = (reqRes.data ?? []).map((r: any) => {
@@ -65,11 +81,52 @@ export default function HRRequestsSent() {
           senderDepartment: String(details.sender_department ?? ""),
           senderName: String(details.sender_name ?? r.emp_name ?? ""),
           source: "request" as const,
+          view: {
+            source: "request" as const, requestType: String(r.request_type ?? "طلب"), status: String(r.status ?? ""), requestDate: String(r.created_at ?? ""),
+            empId: String(r.emp_id ?? ""), empName: String(r.emp_name ?? ""), senderDepartment: String(details.sender_department ?? ""),
+            senderName: String(details.sender_name ?? r.emp_name ?? ""), startDate: String(r.start_date ?? ""), endDate: String(r.end_date ?? ""), days: null,
+            notes: "", adminNote: String(r.admin_note ?? ""), signatureData: String(r.signature_data ?? ""), signedAt: String(r.signed_at ?? ""),
+            details,
+          },
         };
       });
 
       setItems([...leaveRows, ...reqRows].sort((a, b) => b.date.localeCompare(a.date)));
+      void loadRecipients(leaveRows, reqRows);
     } catch { setItems([]); } finally { setLoading(false); }
+  };
+
+  const loadRecipients = async (leaveRows: Request[], reqRows: Request[]) => {
+    const newLeaves = leaveRows.filter((row) => !knownRecipients.current.has(recipientKey("leave", row.id))).map((row) => row.id);
+    const newRequests = reqRows.filter((row) => !knownRecipients.current.has(recipientKey("request", row.id))).map((row) => row.id);
+    if (!newLeaves.length && !newRequests.length) return;
+    setRecipientsLoading(true);
+    try {
+      const empty = { names: {} as Record<string, string>, ok: true };
+      const [leaveNames, requestNames] = await Promise.all([
+        newLeaves.length ? loadRecipientNames(supabase, "leave_requests", newLeaves) : Promise.resolve(empty),
+        newRequests.length ? loadRecipientNames(supabase, "hr_requests", newRequests) : Promise.resolve(empty),
+      ]);
+      // ما تعذر جلبه يُعاد طلبه في التحديث التالي
+      if (leaveNames.ok) newLeaves.forEach((id) => knownRecipients.current.add(recipientKey("leave", id)));
+      if (requestNames.ok) newRequests.forEach((id) => knownRecipients.current.add(recipientKey("request", id)));
+      setRecipientsError(!leaveNames.ok || !requestNames.ok);
+      setRecipients((current) => {
+        const next = { ...current };
+        Object.entries(leaveNames.names).forEach(([id, name]) => { next[recipientKey("leave", id)] = name; });
+        Object.entries(requestNames.names).forEach(([id, name]) => { next[recipientKey("request", id)] = name; });
+        return next;
+      });
+    } finally {
+      setRecipientsLoading(false);
+    }
+  };
+
+  // المعتمد: بعد القرار من راجع الطلب، وقبله من استلمه (بانتظار)
+  const approverText = (r: Request) => {
+    const recipient = recipients[recipientKey(r.source, r.id)] ?? "";
+    if (r.status === "معلق") return recipient ? `${t("بانتظار")}: ${recipient}` : "-";
+    return r.approver !== "-" ? r.approver : recipient || "-";
   };
 
   useEffect(() => {
@@ -96,7 +153,7 @@ export default function HRRequestsSent() {
 
   const filtered = items.filter((r) => {
     if (filter && r.status !== filter) return false;
-    if (search && !r.type.includes(search) && !r.approver.includes(search) && !r.senderDepartment.includes(search) && !r.senderName.includes(search)) return false;
+    if (search && !r.type.includes(search) && !approverText(r).includes(search) && !r.senderDepartment.includes(search) && !r.senderName.includes(search)) return false;
     return true;
   });
 
@@ -147,7 +204,7 @@ export default function HRRequestsSent() {
                   <th className="px-4 py-3 text-right font-semibold text-gray-700">{t("إجراءات")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("الحالة")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("المرسل (القسم أو الموظف)")}</th>
-                  <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("تمت المراجعة بواسطة")}</th>
+                  <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("المعتمد")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("الملاحظات")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("تاريخ الإرسال")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("نوع الطلب")}</th>
@@ -162,7 +219,7 @@ export default function HRRequestsSent() {
                   <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/60">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title={t("عرض")}><Eye className="h-4 w-4" /></button>
+                        <button onClick={() => setDetail(r)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title={t("معاينة الإجراءات")}><Eye className="h-4 w-4" /></button>
                         {["معلق", "معلقة", "pending", ""].includes(String(r.rawStatus ?? "").trim()) && (
                           <button onClick={() => handleDelete(r)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title={t("حذف")}><Trash2 className="h-4 w-4" /></button>
                         )}
@@ -172,7 +229,7 @@ export default function HRRequestsSent() {
                       <span className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border", STATUS_STYLE[r.status] ?? "bg-gray-100 text-gray-600")}>{t(r.status)}</span>
                     </td>
                     <td className="px-4 py-3 text-gray-600"><div>{r.senderDepartment || r.senderName}</div>{r.senderDepartment && r.senderName && <div className="mt-1 text-xs text-gray-400">{r.senderName}</div>}</td>
-                    <td className="px-4 py-3 text-gray-600">{r.approver === "-" ? "-" : r.approver}</td>
+                    <td className="px-4 py-3 text-gray-600">{approverText(r)}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px] truncate">{r.notes}</td>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{r.date ? formatDate(r.date) : "-"}</td>
                     <td className="px-4 py-3 font-medium text-gray-700">{t(r.type)}</td>
@@ -183,6 +240,15 @@ export default function HRRequestsSent() {
           </div>
         </div>
       </div>
+      <RequestDetailsDialog
+        request={detail ? {
+          ...detail.view,
+          recipientName: recipients[recipientKey(detail.source, detail.id)] ?? "",
+          recipientLoading: recipientsLoading && !knownRecipients.current.has(recipientKey(detail.source, detail.id)),
+          recipientError: recipientsError && !knownRecipients.current.has(recipientKey(detail.source, detail.id)),
+        } : null}
+        onClose={() => setDetail(null)}
+      />
     </Layout>
   );
 }

@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // حسابات دخول الموظفين (Supabase Auth).
 // { action: "set-password", employeeId, password }      ← إنشاء الحساب أو تغيير كلمة مروره
 // { action: "set-login-state", employeeId, enabled }    ← إيقاف الدخول عند تعطيل الموظف أو إعادته
+// { action: "change-email", employeeId, newEmail }      ← تغيير بريد الموظف وبريد حساب دخوله معًا (مدير النظام فقط)
 // القواعد:
 // - الموظف يُحدَّد بمعرّفه، وبريده يُقرأ من سجله (لا يُقبل بريد من المتصفح).
 // - الصلاحية من قاعدة البيانات نفسها: is_main_system_admin() أو hr_area_allowed(['hr.employees'], إدارة).
@@ -55,7 +56,7 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
-    if (action !== "set-password" && action !== "set-login-state") {
+    if (action !== "set-password" && action !== "set-login-state" && action !== "change-email") {
       return respond({ success: false, error: "إجراء غير معروف" }, 400);
     }
     const employeeId = String(body?.employeeId ?? "").trim();
@@ -130,32 +131,49 @@ Deno.serve(async (req: Request) => {
       }, 403);
     }
 
-    // حساب الدخول الحالي بهذا البريد (إن وُجد)
-    let existing: { id: string; user_metadata?: Record<string, unknown>; banned_until?: string | null } | null = null;
-    if (EMAIL_PATTERN.test(email)) {
-      for (let page = 1; page <= 50 && !existing; page += 1) {
+    // حساب دخول بالبريد (إن وُجد)
+    type AuthAccount = { id: string; user_metadata?: Record<string, unknown>; banned_until?: string | null };
+    const findAccountByEmail = async (address: string): Promise<AuthAccount | null> => {
+      if (!EMAIL_PATTERN.test(address)) return null;
+      for (let page = 1; page <= 50; page += 1) {
         const { data: usersPage, error: listError } = await admin.auth.admin.listUsers({ page, perPage: 200 });
         if (listError) throw listError;
-        const match = usersPage.users.find((candidate) => (candidate.email ?? "").toLowerCase() === email);
-        if (match) existing = { id: match.id, user_metadata: match.user_metadata ?? {}, banned_until: (match as { banned_until?: string | null }).banned_until ?? null };
+        const match = usersPage.users.find((candidate) => (candidate.email ?? "").toLowerCase() === address);
+        if (match) return { id: match.id, user_metadata: match.user_metadata ?? {}, banned_until: (match as { banned_until?: string | null }).banned_until ?? null };
         if (usersPage.users.length < 200) break;
       }
-    }
+      return null;
+    };
+    let existing = await findAccountByEmail(email);
 
-    // الحساب القائم يجب أن يكون لهذا الموظف وحده
+    // الحساب القائم يجب أن يكون لهذا الموظف وحده. حساب بقي من موظف محذوف (معرّفه في بياناته غير موجود) يُعد حرًا.
+    // البريد المشترك مع موظف آخر: الحساب قد يكون له، فلا يُغيَّر بريده ولا يُوقف من هنا.
+    let sharedEmail = false;
     if (existing) {
       const metadataEmployee = String(existing.user_metadata?.employee_id ?? "");
+      let foreignOwner = false;
       if (metadataEmployee && metadataEmployee !== target.id) {
-        return respond({ success: false, error: "حساب الدخول بهذا البريد مرتبط بموظف آخر" }, 409);
+        const { data: ownerRow } = await admin.from("employees").select("id").eq("id", metadataEmployee).maybeSingle();
+        foreignOwner = Boolean(ownerRow);
       }
-      const [{ data: otherLink }, { data: special }] = await Promise.all([
+      const [{ data: otherLink }, { data: special }, { data: sameEmailOthers }] = await Promise.all([
         admin.from("employee_emails").select("employee_id").eq("auth_user_id", existing.id).neq("employee_id", target.id).limit(1),
         admin.from("system_users").select("id").eq("auth_user_id", existing.id).limit(1),
+        admin.from("employees").select("id").ilike("email", escapeLike(email)).neq("id", target.id).limit(1),
       ]);
-      if ((otherLink ?? []).length) return respond({ success: false, error: "حساب الدخول بهذا البريد مرتبط بموظف آخر" }, 409);
-      if ((special ?? []).length) return respond({ success: false, error: "حساب الدخول بهذا البريد مرتبط بمستخدم خاص" }, 409);
+      foreignOwner = foreignOwner || (otherLink ?? []).length > 0;
+      sharedEmail = !metadataEmployee && (sameEmailOthers ?? []).length > 0;
+      if ((special ?? []).length) {
+        if (action === "change-email") existing = null;
+        else return respond({ success: false, error: "حساب الدخول بهذا البريد مرتبط بمستخدم خاص" }, 409);
+      } else if (foreignOwner) {
+        // تغيير البريد يصحح السجل وحده (الحساب لموظف آخر)، وغيره يُرفض
+        if (action === "change-email") existing = null;
+        else return respond({ success: false, error: "حساب الدخول بهذا البريد مرتبط بموظف آخر" }, 409);
+      }
     }
-    if (email && !disabling) {
+    // تغيير البريد يفحص البريد الجديد بدل الحالي (قد يكون الحالي مكررًا وهو ما يُصحَّح)
+    if (email && !disabling && action !== "change-email") {
       const [{ data: sameEmail }, { data: specialEmail }] = await Promise.all([
         admin.from("employees").select("id").ilike("email", escapeLike(email)).neq("id", target.id).limit(1),
         admin.from("system_users").select("id").ilike("email", escapeLike(email)).limit(1),
@@ -173,8 +191,56 @@ Deno.serve(async (req: Request) => {
       admin.from("user_logs").insert({ user_name: callerName, module: "hr.employees", module_label: "الموظفون", operation, details })
         .then(() => undefined, () => undefined);
 
+    if (action === "change-email") {
+      // البريد هوية الدخول وتوجيه الطلبات: يغيّره مدير النظام فقط، ويتغيّر في السجل وحساب الدخول معًا
+      if (!callerIsAdmin) return respond({ success: false, error: "تغيير بريد الموظف لمدير النظام فقط" }, 403);
+      const newEmail = String(body?.newEmail ?? "").trim().toLowerCase();
+      if (!EMAIL_PATTERN.test(newEmail)) return respond({ success: false, error: "البريد الجديد غير صحيح" }, 400);
+      if (newEmail === email) return respond({ success: false, error: "البريد الجديد مطابق للحالي" }, 400);
+      const [{ data: sameEmployee }, { data: sameSpecial }, newAccount] = await Promise.all([
+        admin.from("employees").select("id").ilike("email", escapeLike(newEmail)).neq("id", target.id).limit(1),
+        admin.from("system_users").select("id").ilike("email", escapeLike(newEmail)).limit(1),
+        findAccountByEmail(newEmail),
+      ]);
+      if ((sameEmployee ?? []).length) return respond({ success: false, error: "هذا البريد مسجّل لموظف آخر" }, 409);
+      if ((sameSpecial ?? []).length) return respond({ success: false, error: "هذا البريد مستخدم لمستخدم خاص" }, 409);
+      if (newAccount && newAccount.id !== existing?.id) {
+        return respond({ success: false, error: "يوجد حساب دخول آخر بهذا البريد" }, 409);
+      }
+
+      // 1) حساب الدخول أولًا (إن وُجد وكان لهذا الموظف وحده)، 2) ثم سجل الموظف، وإن فشل الثاني يعود الحساب لبريده القديم
+      if (sharedEmail) existing = null;
+      if (existing) {
+        const { error: accountError } = await admin.auth.admin.updateUserById(existing.id, {
+          email: newEmail,
+          email_confirm: true,
+          user_metadata: { ...(existing.user_metadata ?? {}), employee_id: target.id, emp_id: target.emp_id, name: target.name },
+        });
+        if (accountError) throw accountError;
+      }
+      const { error: employeeError } = await admin.from("employees").update({ email: newEmail }).eq("id", target.id);
+      if (employeeError) {
+        if (existing) {
+          const { error: revertError } = await admin.auth.admin.updateUserById(existing.id, { email, email_confirm: true });
+          if (revertError) {
+            console.error(revertError);
+            return respond({
+              success: false,
+              error: `تعذر حفظ البريد في سجل الموظف، وتعذر إرجاع بريد حساب الدخول إلى ${email}. راجع حساب الدخول من لوحة Supabase`,
+            }, 500);
+          }
+        }
+        throw employeeError;
+      }
+      await log("employee_email_changed",
+        `تغيير بريد الموظف ${target.emp_id ?? ""} — ${target.name ?? ""} من ${email || "—"} إلى ${newEmail}${existing ? " (مع حساب الدخول)" : ""}`);
+      return respond({ success: true, email: newEmail, accountUpdated: Boolean(existing) });
+    }
+
     if (action === "set-login-state") {
       if (!existing) return respond({ success: true, changed: false, previouslyBanned: false });
+      // حساب ببريد مشترك مع موظف آخر وبلا ربط صريح بهذا الموظف: لا يُوقف ولا يُفعَّل من ملف هذا الموظف
+      if (sharedEmail) return respond({ success: true, changed: false, previouslyBanned: false, sharedEmail: true });
       const previouslyBanned = Boolean(existing.banned_until && new Date(existing.banned_until).getTime() > Date.now());
       if (enabling && isInactive(target.status)) {
         return respond({ success: false, error: "الموظف غير فعال؛ فعّله أولًا" }, 400);

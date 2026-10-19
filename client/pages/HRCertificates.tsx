@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { ArrowRight, Award, Eye, Plus, Save, Trash2, X, Edit, Search } from "lucide-react";
+import { ArrowRight, Award, Eye, Plus, Printer, Save, Trash2, X, Edit, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { escapeReportHtml } from "@/lib/reportExport";
+import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
@@ -41,6 +43,9 @@ type Certificate = {
   notes: string;
   status: string;
 };
+
+/** جزء من نص الشهادة: نص عادي أو قيمة بخط عريض */
+type LetterPart = { text: string; bold?: boolean };
 
 type NewCertificateForm = {
   employeeId: string;
@@ -182,7 +187,7 @@ const mapCertificateRow = (row: Record<string, unknown>): Certificate => {
 };
 
 export default function HRCertificates() {
-  const { t, direction } = useI18n();
+  const { t, direction, locale } = useI18n();
   const [mode, setMode] = useState<"list" | "create">("list");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -363,6 +368,65 @@ export default function HRCertificates() {
   function discardLocalCertificate(certificate: Certificate) {
     removeLegacyLocalCertificate(certificate.id);
     setLocalOnly((rows) => rows.filter((c) => c.id !== certificate.id));
+  }
+
+  // نص الشهادة مبني في مكان واحد: المعاينة والطباعة تعرضان النص نفسه
+  const certificateLetter = (certificate: Certificate) => {
+    const paragraphs: LetterPart[][] = [
+      [
+        { text: t("تشهد إدارة الشركة بأن الموظف/ة") },
+        { text: certificate.empName, bold: true },
+        { text: t("رقم الموظف") },
+        { text: certificate.empId || "-", bold: true },
+        { text: t("عمل لدينا بمسمى") },
+        { text: certificate.jobTitle || "-", bold: true },
+        { text: "." },
+      ],
+      [
+        { text: `${t("وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى")}:` },
+        { text: certificate.directedTo || "-", bold: true },
+      ],
+      [
+        { text: `${t("الغرض من الشهادة")}:` },
+        { text: certificate.purpose || "-", bold: true },
+      ],
+    ];
+    if (certificate.notes) paragraphs.push([{ text: `${t("ملاحظات")}: ${certificate.notes}` }]);
+    return {
+      title: t("شهادة خبرة"),
+      dateLine: `${t("التاريخ")}: ${certificate.issueDate || "-"}`,
+      paragraphs,
+      closing: t("وتفضلوا بقبول فائق الاحترام."),
+      signature: t("ختم وتوقيع الموارد البشرية"),
+    };
+  };
+
+  function printCertificate(certificate: Certificate) {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast({ title: t("تعذر فتح نافذة الطباعة؛ اسمح بالنوافذ المنبثقة"), variant: "destructive" });
+      return;
+    }
+    const letter = certificateLetter(certificate);
+    // escapeReportHtml يكتب "-" للقيمة الفارغة؛ نص الشهادة يبقى مطابقًا للمعاينة
+    const letterText = (value: string) => (value ? escapeReportHtml(value) : "");
+    const paragraphsHtml = letter.paragraphs
+      .map((parts) => `<p>${parts.map((part) => (part.bold ? `<strong>${letterText(part.text)}</strong>` : letterText(part.text))).join("")}</p>`)
+      .join("");
+    const logoHtml = COMPANY_PROFILE.logoUrl ? `<img class="logo" src="${escapeReportHtml(COMPANY_PROFILE.logoUrl)}" alt="">` : "";
+
+    printWindow.document.write(`<!doctype html>
+<html dir="${direction}" lang="${locale}"><head><meta charset="utf-8"><title>${escapeReportHtml(`${letter.title} ${certificate.certificateNo}`)}</title>
+<style>
+@page{size:A4 portrait;margin:15mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#e8eef4;color:#1f2937;font-family:"Tajawal","Tahoma",Arial,sans-serif}.letter{width:180mm;min-height:267mm;margin:14px auto;background:#fff;padding:14mm;display:flex;flex-direction:column}.letterhead{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:3px solid #b45309}.logo{max-height:70px;max-width:160px;object-fit:contain}.company-ar{font-size:18px;font-weight:800;color:#111827}.company-en{font-size:11px;color:#6b7280;margin-top:3px}.meta{display:flex;justify-content:space-between;gap:12px;margin:16px 0 0;font-size:12px;color:#4b5563}.meta strong{color:#111827}h1{text-align:center;font-size:26px;color:#b45309;margin:34px 0 26px}.body{font-size:15px;line-height:2.1}.body p{margin:0 0 14px}.body strong{margin:0 4px;color:#111827}.closing{margin-top:34px;font-size:15px}.signature{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-end}.signature div{width:65mm;min-height:32mm;border:1px dashed #9ca3af;border-radius:10px;display:flex;align-items:flex-end;justify-content:center;padding:8px;font-size:12px;color:#4b5563}@media print{body{background:#fff}.letter{width:auto;min-height:265mm;margin:0;padding:0}}
+</style></head><body><main class="letter">
+<header class="letterhead">${logoHtml}<div><div class="company-ar">${escapeReportHtml(COMPANY_PROFILE.companyNameAr)}</div><div class="company-en">${escapeReportHtml(COMPANY_PROFILE.companyNameEn)}</div></div></header>
+<div class="meta"><span>${escapeReportHtml(t("رقم الشهادة"))}: <strong>${escapeReportHtml(certificate.certificateNo)}</strong></span><span>${escapeReportHtml(letter.dateLine)}</span></div>
+<h1>${escapeReportHtml(letter.title)}</h1>
+<section class="body">${paragraphsHtml}<p class="closing">${escapeReportHtml(letter.closing)}</p></section>
+<footer class="signature"><div>${escapeReportHtml(letter.signature)}</div></footer>
+</main><script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`);
+    printWindow.document.close();
   }
 
   const totalCertificates = certificates.length;
@@ -626,6 +690,13 @@ export default function HRCertificates() {
                                 {t("عرض")}
                               </button>
                               <button
+                                onClick={() => printCertificate(certificate)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-amber-600 text-white text-xs hover:bg-amber-700"
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                                {t("طباعة / PDF")}
+                              </button>
+                              <button
                                 onClick={() => handleDelete(certificate)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-red-600 text-white text-xs hover:bg-red-700"
                               >
@@ -649,39 +720,46 @@ export default function HRCertificates() {
                     <p className="text-sm text-gray-500">{t("رقم الشهادة")}</p>
                     <p className="font-bold text-gray-800">{selected.certificateNo}</p>
                   </div>
-                  <button
-                    onClick={() => setSelected(null)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-gray-300 text-xs hover:bg-gray-50"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    {t("إغلاق")}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => printCertificate(selected)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-amber-600 text-white text-xs hover:bg-amber-700"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      {t("طباعة / PDF")}
+                    </button>
+                    <button
+                      onClick={() => setSelected(null)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-gray-300 text-xs hover:bg-gray-50"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      {t("إغلاق")}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-4 leading-8 text-gray-700">
-                  <h3 className="text-center text-2xl font-bold text-amber-700">{t("شهادة خبرة")}</h3>
-                  <p className="text-center text-sm">{t("التاريخ")}: {selected.issueDate || "-"}</p>
-                  <p>
-                    {t("تشهد إدارة الشركة بأن الموظف/ة")}
-                    <span className="font-bold mx-1">{selected.empName}</span>
-                    {t("رقم الموظف")}
-                    <span className="font-bold mx-1">{selected.empId || "-"}</span>
-                    {t("عمل لدينا بمسمى")}
-                    <span className="font-bold mx-1">{selected.jobTitle || "-"}</span>
-                    .
-                  </p>
-                  <p>
-                    {t("وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى")}:
-                    <span className="font-bold mx-1">{selected.directedTo || "-"}</span>
-                  </p>
-                  <p>
-                    {t("الغرض من الشهادة")}:
-                    <span className="font-bold mx-1">{selected.purpose || "-"}</span>
-                  </p>
-                  {selected.notes ? <p>{t("ملاحظات")}: {selected.notes}</p> : null}
-                  <p className="pt-8">{t("وتفضلوا بقبول فائق الاحترام.")}</p>
-                  <p className="pt-8 text-left">{t("ختم وتوقيع الموارد البشرية")}</p>
-                </div>
+                {(() => {
+                  const letter = certificateLetter(selected);
+                  return (
+                    <div className="space-y-4 leading-8 text-gray-700">
+                      <h3 className="text-center text-2xl font-bold text-amber-700">{letter.title}</h3>
+                      <p className="text-center text-sm">{letter.dateLine}</p>
+                      {letter.paragraphs.map((parts, paragraphIndex) => (
+                        <p key={paragraphIndex}>
+                          {parts.map((part, partIndex) =>
+                            part.bold ? (
+                              <span key={partIndex} className="font-bold mx-1">{part.text}</span>
+                            ) : (
+                              <Fragment key={partIndex}>{part.text}</Fragment>
+                            ),
+                          )}
+                        </p>
+                      ))}
+                      <p className="pt-8">{letter.closing}</p>
+                      <p className="pt-8 text-left">{letter.signature}</p>
+                    </div>
+                  );
+                })()}
               </div>
             ) : null}
           </div>

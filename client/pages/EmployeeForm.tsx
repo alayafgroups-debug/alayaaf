@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { INACTIVE_EMPLOYEE_STATUSES, setEmployeeLoginState } from "@/components/hr/employeeActions";
 import { employeeErrorText } from "@/components/hr/employeeErrors";
-import { GOSI_INSURANCE_TYPES } from "@/lib/gosi";
+import { GOSI_TYPE_NON_SAUDI, gosiTypesFor } from "@/lib/gosi";
 import { isSaudiNationality } from "@/lib/hrStatus";
 
 export { employeeErrorText };
@@ -315,7 +315,6 @@ const DEFAULT_WORK_SCHEDULES = ["جدول الشركة الأساسي", "جدو�
 const DEFAULT_WORK_LOCATIONS = ["المقر الرئيسي", "فرع التشغيل والصيانة", "فرع المبيعات"];
 const ALLOWANCE_TYPES = ["بدل السكن", "بدل النقل", "بدل الأطفال", "بدل الطعام", "بدل الهاتف", "بدل اللباس", "أخرى"];
 // "النظام الجديد": أول تسجيل للموظف في التأمينات من 3 يوليو 2024 (نسبة المعاشات ترتفع كل يوليو)
-const SOCIAL_INSURANCE_TYPES = GOSI_INSURANCE_TYPES;
 
 type OrganizationOptions = {
   departments: string[];
@@ -381,8 +380,8 @@ const normalizeDigits = (value: string) =>
 
 type FormIssue = { step: number; message: string };
 
-// الإضافة: كل الحقول الإلزامية. التعديل: لا يُسمح بإفراغ حقل إلزامي كان معبأً، وتُفحص صيغة ما تغيّر فقط،
-// حتى لا يُمنع تعديل بسيط بسبب نقص قديم في بيانات موظف حالي.
+// الإلزامي: الاسم فقط (وقوائم لها قيمة افتراضية: نوع التوظيف والحالة والدور). باقي البيانات اختيارية لأنها قد لا تتوفر
+// (خاصة للموظفين المؤقتين)، ويُفحص فقط شكل ما يُدخل. التعديل: لا يُسمح بإفراغ حقل إلزامي كان معبأً، وتُفحص صيغة ما تغيّر فقط.
 const validateEmployeeForm = (form: EmpFormData, mode: "create" | "edit", initial: EmpFormData): FormIssue[] => {
   const issues: FormIssue[] = [];
   const add = (step: number, message: string) => issues.push({ step, message });
@@ -393,15 +392,17 @@ const validateEmployeeForm = (form: EmpFormData, mode: "create" | "edit", initia
     if (!filled(form[key]) && (isCreate || filled(initial[key]))) add(step, message);
   };
   const check = <K extends keyof EmpFormData>(key: K) => isCreate || changed(key);
+  // اختياري عند الإضافة، لكن لا يُفرَّغ في التعديل إن كان معبأً: يعتمد عليه الراتب والتأمينات ومكافأة نهاية الخدمة
+  const keep = <K extends keyof EmpFormData>(step: number, key: K, message: string) => {
+    if (!isCreate && filled(initial[key]) && !filled(form[key])) add(step, message);
+  };
   const nationalId = normalizeDigits(form.nationalId.trim());
   const phone = normalizeDigits(form.phone.replace(/[\s-]/g, ""));
 
   need(0, "name", "الاسم الكامل بالعربي مطلوب");
-  need(0, "gender", "الجنس مطلوب");
-  need(0, "nationality", "الجنسية مطلوبة");
-  need(0, "nationalId", "رقم الهوية / الإقامة مطلوب");
+  keep(0, "nationality", "لا تُفرَّغ الجنسية بعد تسجيلها: عليها تُحسب التأمينات الاجتماعية");
+  keep(0, "nationalId", "لا يُفرَّغ رقم الهوية / الإقامة بعد تسجيله");
   if (nationalId && check("nationalId") && !/^[1-4]\d{9}$/.test(nationalId)) add(0, "رقم الهوية / الإقامة / الحدود يجب أن يكون 10 أرقام ويبدأ بـ 1 أو 2 أو 3 أو 4");
-  need(0, "phone", "رقم الجوال مطلوب");
   if (phone && check("phone") && !/^(05\d{8}|\+?\d{8,15})$/.test(phone)) add(0, "رقم الجوال غير صحيح (مثال: 05xxxxxxxx أو رقم دولي)");
   if (form.email.trim() && check("email") && !EMAIL_PATTERN.test(form.email.trim())) add(0, "البريد الإلكتروني غير صحيح");
   if (form.birthDate && check("birthDate") && form.birthDate >= riyadhToday()) add(0, "تاريخ الميلاد غير صحيح");
@@ -409,12 +410,9 @@ const validateEmployeeForm = (form: EmpFormData, mode: "create" | "edit", initia
     add(0, "تغيير البريد لموظف له بريد مسجّل يتم من مدير النظام فقط؛ أعد البريد كما كان");
   }
 
-  need(1, "jobTitle", "المسمى الوظيفي مطلوب");
   need(1, "employmentType", "نوع التوظيف مطلوب");
-  need(1, "branchId", "الفرع مطلوب");
   need(1, "status", "الحالة مطلوبة");
-  need(1, "departmentId", "الإدارة مطلوبة");
-  need(1, "hireDate", "تاريخ التعيين مطلوب");
+  keep(1, "hireDate", "لا يُفرَّغ تاريخ التعيين بعد تسجيله: عليه يُحسب الراتب والإجازات ومكافأة نهاية الخدمة");
   if (form.isContractEnd && !form.contractEndDate) add(1, "تاريخ انتهاء العقد مطلوب للعقد محدد المدة");
   if (form.contractEndDate && form.hireDate && (check("contractEndDate") || check("hireDate")) && form.contractEndDate < form.hireDate) {
     add(1, "تاريخ انتهاء العقد قبل تاريخ التعيين");
@@ -422,8 +420,8 @@ const validateEmployeeForm = (form: EmpFormData, mode: "create" | "edit", initia
   if (check("dailyHours") && !(form.dailyHours > 0 && form.dailyHours <= 24)) add(1, "عدد ساعات اليوم يجب أن يكون بين 1 و24");
   if (form.managementDaysAfter < 0) add(1, "أيام الإجازة السنوية لا تكون سالبة");
 
-  if (form.employmentType !== "متعاون") need(2, "baseSalary", "الراتب الأساسي يجب أن يكون أكبر من صفر");
   if (form.baseSalary < 0) add(2, "الراتب الأساسي لا يكون سالبًا");
+  if (form.employmentType !== "متعاون") keep(2, "baseSalary", "لا يُصفَّر الراتب الأساسي بعد تسجيله");
   if (check("allowances")) {
     form.allowances.forEach((a, index) => {
       const row = index + 1;
@@ -436,9 +434,12 @@ const validateEmployeeForm = (form: EmpFormData, mode: "create" | "edit", initia
   if ((check("allowances") || check("baseSalary")) && computeTotalSalary(form.baseSalary, form.allowances) < 0) {
     add(2, "إجمالي الراتب بعد البدلات المخصومة سالب");
   }
-  if (form.socialInsurance === "نعم" && (check("socialInsurance") || check("socialInsuranceType") || check("socialInsuranceStartDate"))) {
-    if (!form.socialInsuranceType) add(2, "نوع التأمينات الاجتماعية مطلوب");
-    if (!form.socialInsuranceStartDate) add(2, "تاريخ الاشتراك في التأمينات مطلوب");
+  if (form.socialInsurance === "نعم" && form.socialInsuranceType && form.nationality.trim()
+      && (check("socialInsuranceType") || check("nationality"))
+      && !gosiTypesFor(form.nationality).includes(form.socialInsuranceType)) {
+    add(2, form.socialInsuranceType === GOSI_TYPE_NON_SAUDI
+      ? "نوع التأمين «غير سعودي» لا يناسب موظفًا سعوديًا"
+      : "نوع التأمين السعودي لا يناسب موظفًا غير سعودي؛ اختر «غير سعودي (أخطار مهنية)»");
   }
   if (form.iban && check("iban") && !/^SA\d{22}$/.test(form.iban.toUpperCase().replace(/\s/g, ""))) add(2, "رقم الآيبان يجب أن يبدأ بـ SA ويتبعه 22 رقمًا");
 
@@ -562,6 +563,14 @@ export default function EmployeeForm({
   const [form, setForm] = useState<EmpFormData>(initialRef.current);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  // مدير النظام وحده يغيّر بريد موظف له بريد مسجّل (الخادم يتحقق أيضًا)
+  const [isMainAdmin, setIsMainAdmin] = useState(false);
+  useEffect(() => {
+    if (mode !== "edit") return;
+    let cancelled = false;
+    void supabase.rpc("is_main_system_admin").then(({ data }) => { if (!cancelled) setIsMainAdmin(data === true); });
+    return () => { cancelled = true; };
+  }, [mode]);
   const savingRef = useRef(false);
   const [issues, setIssues] = useState<FormIssue[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFiles>({ docs: {} });
@@ -637,6 +646,23 @@ export default function EmployeeForm({
     set("permissions", form.permissions.includes(perm)
       ? form.permissions.filter((p) => p !== perm)
       : [...form.permissions, perm]);
+  };
+
+  // تغيير البريد لموظف له بريد مسجّل: من مدير النظام فقط، عبر الخادم (السجل وحساب الدخول معًا)
+  const changeEmployeeEmail = async (newEmail: string): Promise<string> => {
+    const { data, error } = await supabase.functions.invoke("manage-employee-auth", {
+      body: { action: "change-email", employeeId: form.id, newEmail },
+    });
+    const body = data as { success?: boolean; email?: string; accountUpdated?: boolean; error?: string } | null;
+    if (error || body?.success !== true) return await readFunctionError(error, data);
+    const saved = String(body.email ?? newEmail);
+    initialRef.current = { ...initialRef.current, email: saved };
+    set("email", saved);
+    toast({
+      title: t("تم تغيير البريد"),
+      description: body.accountUpdated ? t("تغيّر بريد حساب الدخول أيضًا؛ يدخل الموظف بالبريد الجديد") : t("لا يوجد حساب دخول لهذا الموظف بعد"),
+    });
+    return "";
   };
 
   // الخادم يقرأ البريد من سجل الموظف نفسه؛ المتصفح يرسل المعرّف وكلمة المرور فقط
@@ -807,11 +833,12 @@ export default function EmployeeForm({
               initialEmail={initialRef.current.email}
               pendingPhoto={pendingFiles.photo}
               onPickPhoto={(file) => setPendingFiles((current) => ({ ...current, photo: file }))}
+              onChangeEmail={mode === "edit" && isMainAdmin && form.id ? changeEmployeeEmail : undefined}
             />
           )}
           {step === 1 && <Step2Job form={form} set={set} departments={orgDepartments} sections={orgSections} jobs={jobTitles} branches={orgBranches} workLocations={orgWorkLocations} workSchedules={orgWorkSchedules} subunits={subunits} managerNames={managerNames} />}
           {step === 2 && <Step3Financial form={form} set={set} />}
-          {step === 3 && <Step4Permissions form={form} togglePermission={togglePermission} />}
+          {step === 3 && <Step4Permissions form={form} togglePermission={togglePermission} setPermissions={(permissions) => set("permissions", permissions)} />}
           {step === 4 && <Step5Insurance form={form} set={set} />}
           {step === 5 && (
             <Step6Documents
@@ -898,7 +925,7 @@ function StepperHeader({ steps, current, onStepClick, errorSteps }: { steps: typ
 
 // ─── Step 1: Personal Details ────────────────────────────────────────────────
 function Step1Personal({
-  form, set, mode, initialEmail, pendingPhoto, onPickPhoto,
+  form, set, mode, initialEmail, pendingPhoto, onPickPhoto, onChangeEmail,
 }: {
   form: EmpFormData;
   set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void;
@@ -906,9 +933,38 @@ function Step1Personal({
   initialEmail: string;
   pendingPhoto?: File;
   onPickPhoto: (file: File) => void;
+  /** لمدير النظام فقط: يغيّر البريد في السجل وحساب الدخول معًا، ويعيد رسالة الخطأ أو "" */
+  onChangeEmail?: (newEmail: string) => Promise<string>;
 }) {
   const { t } = useI18n();
   const photoInput = useRef<HTMLInputElement>(null);
+  const [emailEditing, setEmailEditing] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailError, setEmailError] = useState("");
+
+  // الجنسية: السعودي الجديد مشمول بالتأمينات افتراضيًا، ونوع التأمين يتبع الجنسية
+  const onNationalityChange = (nationality: string) => {
+    set("nationality", nationality);
+    const saudi = isSaudiNationality(nationality);
+    if (mode === "create" && saudi && form.socialInsurance === "") set("socialInsurance", "نعم");
+    if (form.socialInsuranceType && nationality.trim() && !gosiTypesFor(nationality).includes(form.socialInsuranceType)) {
+      set("socialInsuranceType", saudi ? "" : GOSI_TYPE_NON_SAUDI);
+    }
+  };
+
+  const saveNewEmail = async () => {
+    if (!onChangeEmail) return;
+    const value = newEmail.trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(value)) { setEmailError("البريد الجديد غير صحيح"); return; }
+    setEmailSaving(true);
+    setEmailError("");
+    const message = await onChangeEmail(value);
+    setEmailSaving(false);
+    if (message) { setEmailError(message); return; }
+    setEmailEditing(false);
+    setNewEmail("");
+  };
   const [previewUrl, setPreviewUrl] = useState("");
   useEffect(() => {
     if (!pendingPhoto) { setPreviewUrl(""); return; }
@@ -968,7 +1024,7 @@ function Step1Personal({
 
       {/* Row 2: Gender / Birthdate */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الجنس *" value={form.gender} onChange={(v) => set("gender", v)} options={GENDERS} placeholder="--" />
+        <FSelect label="الجنس" value={form.gender} onChange={(v) => set("gender", v)} options={GENDERS} placeholder="--" />
         <FInput label="تاريخ الميلاد" value={form.birthDate} onChange={(v) => set("birthDate", v)} type="date" />
       </div>
 
@@ -985,21 +1041,48 @@ function Step1Personal({
           />
           <p className="mt-1 text-xs text-gray-400">
             {emailLocked ? t("البريد مرتبط بحساب الدخول؛ تغييره من مدير النظام فقط") : t("مطلوب إذا أردت إنشاء حساب دخول للموظف")}
+            {emailLocked && onChangeEmail && !emailEditing && (
+              <button type="button" onClick={() => { setEmailEditing(true); setEmailError(""); }} className="ms-2 font-semibold text-blue-700 hover:underline">
+                {t("تغيير البريد")}
+              </button>
+            )}
           </p>
+          {emailLocked && onChangeEmail && emailEditing && (
+            <div className="mt-2 space-y-2 rounded-md border border-blue-200 bg-blue-50 p-2">
+              <input
+                type="email"
+                dir="ltr"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="new@email.com"
+                className="h-9 w-full rounded border border-gray-300 bg-white px-2 text-sm outline-none focus:border-blue-400"
+              />
+              <p className="text-[11px] text-blue-800">{t("يتغير البريد في ملف الموظف وفي حساب دخوله معًا، ويدخل الموظف بعدها بالبريد الجديد وكلمة المرور نفسها.")}</p>
+              {emailError && <p className="text-xs text-rose-700">{t(emailError)}</p>}
+              <div className="flex gap-2">
+                <button type="button" disabled={emailSaving} onClick={() => void saveNewEmail()} className="rounded bg-blue-700 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
+                  {emailSaving ? t("جارٍ الحفظ...") : t("حفظ البريد الجديد")}
+                </button>
+                <button type="button" disabled={emailSaving} onClick={() => { setEmailEditing(false); setNewEmail(""); setEmailError(""); }} className="rounded border border-gray-300 bg-white px-3 py-1 text-xs hover:bg-gray-50">
+                  {t("إلغاء")}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <FInput label="رقم الجوال *" value={form.phone} onChange={(v) => set("phone", v)} placeholder="05xxxxxxxx" />
+        <FInput label="رقم الجوال" value={form.phone} onChange={(v) => set("phone", v)} placeholder="05xxxxxxxx" />
       </div>
 
       {/* Row 4: Nationality / Address */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الجنسية *" value={form.nationality} onChange={(v) => set("nationality", v)} options={NATIONALITIES} placeholder="حدد الدولة..." />
+        <FSelect label="الجنسية" value={form.nationality} onChange={onNationalityChange} options={NATIONALITIES} placeholder="حدد الدولة..." />
         <FInput label="العنوان" value={form.address2} onChange={(v) => set("address2", v)} placeholder="" />
       </div>
 
       {/* Row 5: Marital / National ID */}
       <div className="grid grid-cols-2 gap-4">
         <FSelect label="الحالة الاجتماعية" value={form.maritalStatus} onChange={(v) => set("maritalStatus", v)} options={MARITAL_STATUSES} placeholder="--" />
-        <FInput label="رقم الهوية / الإقامة *" value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1xxxxxxxxx / 2xxxxxxxxx" />
+        <FInput label="رقم الهوية / الإقامة" value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1xxxxxxxxx / 2xxxxxxxxx" />
       </div>
 
       {/* Row 6: Work Contact Type / ID Expiry */}
@@ -1081,15 +1164,15 @@ function Step2Job({
     <div className="space-y-5">
       {/* Row 1: Job Title / Division */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="المسمى الوظيفي *" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={jobs} placeholder={jobs.length ? "--" : "أضف الوظائف من الهيكل التنظيمي"} />
+        <FSelect label="المسمى الوظيفي" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={jobs} placeholder={jobs.length ? "--" : "أضف الوظائف من الهيكل التنظيمي"} />
         <FSelect label="الشعبة" value={form.division} onChange={(v) => set("division", v)} options={subunits} placeholder={subunits.length ? "--" : "أضف الشعب من الهيكل التنظيمي"} />
       </div>
 
       {/* Row 2: Employment Type / Branch */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="نوع التوظيف *" value={form.employmentType} onChange={(v) => set("employmentType", v)} options={EMPLOYMENT_TYPES} placeholder="--" />
+        <FSelect label="نوع التوظيف" value={form.employmentType} onChange={(v) => set("employmentType", v)} options={EMPLOYMENT_TYPES} placeholder="--" />
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الفرع")} *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الفرع")}</label>
           <select value={form.branchId} onChange={(e) => onBranchChange(e.target.value)} className={inputCls}>
             <option value="">{branches.length ? "--" : t("أضف الفروع من الهيكل التنظيمي")}</option>
             {missingBranch && <option value={form.branchId}>{form.branch || form.branchId} ({t("غير فعال")})</option>}
@@ -1100,14 +1183,14 @@ function Step2Job({
 
       {/* Status Row */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الحالة *" value={form.status} onChange={(v) => set("status", v)} options={EMPLOYEE_STATUSES} placeholder="--" />
-        <FInput label="تاريخ التعيين *" value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
+        <FSelect label="الحالة" value={form.status} onChange={(v) => set("status", v)} options={EMPLOYEE_STATUSES} placeholder="--" />
+        <FInput label="تاريخ التعيين" value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
       </div>
 
       {/* Row 3: Directorate / Department (real FK links) */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الإدارة")} *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الإدارة")}</label>
           <select value={form.departmentId} onChange={(e) => onDirectorateChange(e.target.value)} className={inputCls}>
             <option value="">{availableDepartments.length ? "--" : t("أضف الإدارات من الهيكل التنظيمي")}</option>
             {missingDepartment && <option value={form.departmentId}>{form.directorate || t("إدارة غير فعالة")}</option>}
@@ -1226,7 +1309,7 @@ function Step2Job({
 
 // ─── Step 3: Financial ───────────────────────────────────────────────────────
 function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyof EmpFormData>(k: K, v: EmpFormData[K]) => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const addAllowance = () => {
     const newAllowance: Allowance = { id: crypto.randomUUID(), type: "", amount: 0, from: "", to: "", effect: "مضاف" };
     set("allowances", [...form.allowances, newAllowance]);
@@ -1243,7 +1326,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
       {/* Base Salary / Currency */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الراتب الأساسي *")}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("الراتب الأساسي")}</label>
           <input
             type="number"
             value={form.baseSalary}
@@ -1306,7 +1389,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
         <h3 className="text-sm font-semibold text-gray-800 mb-3">{t("معلومات التأمين")}</h3>
         <div className="space-y-4">
           <div className="flex items-center gap-6">
-            <span className="text-sm font-medium text-gray-700">{t("التأمينات الاجتماعية *")}</span>
+            <span className="text-sm font-medium text-gray-700">{t("التأمينات الاجتماعية")}</span>
             <label className="flex items-center gap-1 cursor-pointer">
               <input type="radio" name="socialInsurance" checked={form.socialInsurance === "نعم"} onChange={() => set("socialInsurance", "نعم")} className="accent-blue-600" />
               <span className="text-sm">{t("نعم")}</span>
@@ -1323,9 +1406,14 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
           )}
           {form.socialInsurance === "نعم" && (
             <div className="bg-blue-50 rounded-lg p-4 space-y-4 border border-blue-200">
-              <FSelect label="نوع التأمين *" value={form.socialInsuranceType} onChange={(v) => set("socialInsuranceType", v)} options={SOCIAL_INSURANCE_TYPES} placeholder="اختر نوع التأمين" />
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ الاشتراك (ميلادي) *")}</label>
+                <FSelect label="نوع التأمين" value={form.socialInsuranceType} onChange={(v) => set("socialInsuranceType", v)} options={gosiTypesFor(form.nationality)} placeholder="اختر نوع التأمين" />
+                {!form.socialInsuranceType && isSaudiNationality(form.nationality) && (
+                  <p className="mt-1 text-xs text-gray-500">{t("إن تُرك فارغًا تُحسب حصة السعودي بنسب النظام السابق (قابل للخصم)")}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("تاريخ الاشتراك (ميلادي)")}</label>
                 <input
                   type="date"
                   value={form.socialInsuranceStartDate}
@@ -1338,7 +1426,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
                       (() => {
                         try {
                           const d = new Date(form.socialInsuranceStartDate);
-                          return d.toLocaleDateString("ar-SA-u-ca-islamic", { year: "numeric", month: "long", day: "numeric" });
+                          return d.toLocaleDateString(`${locale === "en" ? "en-US" : "ar-SA"}-u-ca-islamic-umalqura`, { year: "numeric", month: "long", day: "numeric" });
                         } catch { return ""; }
                       })()
                     }
@@ -1365,11 +1453,24 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
 }
 
 // ─── Step 4: Permissions ─────────────────────────────────────────────────────
-function Step4Permissions({ form, togglePermission }: { form: EmpFormData; togglePermission: (p: string) => void }) {
+function Step4Permissions({ form, togglePermission, setPermissions }: { form: EmpFormData; togglePermission: (p: string) => void; setPermissions: (permissions: string[]) => void }) {
   const { t } = useI18n();
+  const allPermissions = PERMISSIONS_COLUMNS.flat();
+  const allSelected = allPermissions.every((permission) => form.permissions.includes(permission));
 
   return (
     <div className="space-y-4">
+      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={() => setPermissions(allSelected
+            ? form.permissions.filter((permission) => !allPermissions.includes(permission))
+            : Array.from(new Set([...form.permissions, ...allPermissions])))}
+          className="rounded border-gray-300 accent-blue-600"
+        />
+        {t("تحديد الكل")}
+      </label>
       <p className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800">
         {form.permissions.length
           ? `${t("يظهر للموظف في بوابته هذه الطلبات فقط")}: ${form.permissions.length}`
@@ -1584,7 +1685,7 @@ function Step7Account({
 
       {/* Employee Role */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="صلاحية الموظف (الدور) *" value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={roles} placeholder="--" />
+        <FSelect label="صلاحية الموظف (الدور)" value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={roles} placeholder="--" />
         <div />
       </div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">

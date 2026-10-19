@@ -16,7 +16,7 @@ import { PageHeader } from "@/components/SalesPageUI";
 import EmployeeForm, { emptyForm, mapRowToForm } from "./EmployeeForm";
 import type { EmpFormData } from "./EmployeeForm";
 import { useI18n } from "@/i18n";
-import { deleteOrDeactivateEmployee } from "@/components/hr/employeeActions";
+import EmployeeDeleteDialog, { type DeletableEmployee } from "@/components/hr/EmployeeDeleteDialog";
 
 const STATUS_COLORS: Record<string, string> = {
   نشط: "bg-green-100 text-green-700 border-green-200",
@@ -97,10 +97,10 @@ export default function HREmployeesCooperative() {
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
-  const handleDelete = async (emp: EmpFormData) => {
-    const result = await deleteOrDeactivateEmployee(emp, t);
-    if (result === "deleted") setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
-    if (result === "deactivated") setEmployees((prev) => prev.map((e) => e.id === emp.id ? { ...e, status: "غير فعال" } : e));
+  // الحذف نهائي بعد معاينة السجلات المرتبطة (نفس نافذة صفحة الموظفين)
+  const [deleteTargets, setDeleteTargets] = useState<DeletableEmployee[] | null>(null);
+  const handleDelete = (emp: EmpFormData) => {
+    setDeleteTargets([{ id: emp.id, empId: emp.empId, name: emp.name || emp.firstName, email: emp.email, status: emp.status }]);
   };
 
   if (mode === "create") {
@@ -299,6 +299,15 @@ export default function HREmployeesCooperative() {
           />
         )}
       </div>
+      <EmployeeDeleteDialog
+        open={deleteTargets !== null}
+        employees={deleteTargets ?? []}
+        onClose={() => setDeleteTargets(null)}
+        onDeleted={(deletedIds) => {
+          const removed = new Set(deletedIds);
+          setEmployees((prev) => prev.filter((e) => !removed.has(e.id)));
+        }}
+      />
     </Layout>
   );
 }

@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
 import EmployeeSignatureField, { EmployeeSignature } from "./EmployeeSignatureField";
+import ApproverPreview from "@/components/hr/ApproverPreview";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { riyadhToday } from "@/lib/hrDates";
 
@@ -328,7 +329,8 @@ export default function DynamicRequestForm({ open, onOpenChange, schema, employe
             ))}
           </div>
 
-          <div className="pt-8">
+          <div className="space-y-4 pt-8">
+            {open && <ApproverPreview kind="request" empId={employeeInfo?.empId} />}
             <EmployeeSignatureField onChange={setSignature} />
           </div>
 

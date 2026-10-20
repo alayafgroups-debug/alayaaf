@@ -317,6 +317,7 @@ const invoiceTranslations: Record<string, string> = {
   "يرجى المحاولة لاحقاً": "Please try again later",
   "تسديد الفاتورة": "Invoice payment",
   "حفظ السداد": "Save payment",
+  "الفاتورة مسددة بالكامل؛ لا يوجد مبلغ متبقٍ": "The invoice is fully paid; there is no remaining amount",
   "بنود الفاتورة غير مكتملة": "Invoice lines are incomplete",
   "كل بند يحتاج وصفًا وكمية وسعرًا أكبر من صفر، والخصم لا يتجاوز قيمة البند":
     "Each line needs a description, quantity and price above zero, and the discount cannot exceed the line value",
@@ -429,6 +430,12 @@ type CustomerOption = {
 
 const parseCurrency = (value: string) =>
   Number(value.replace(/[^0-9.]/g, "")) || 0;
+
+// المتبقي بإشارته (المتبقي السالب بعد إشعار دائن يُعد مسددًا)؛ لإخفاء «تسديد» فقط ولا يغيّر الحسابات
+const remainingToPay = (value: string) => {
+  const amount = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(amount) ? amount : 0;
+};
 
 const hasCompleteNationalAddress = (value: string) => {
   const parts = value
@@ -1196,12 +1203,15 @@ function InvoicesList({
                     onEdit(invoice);
                   }}
                 />
-                <ActionBtn
-                  icon={CreditCard}
-                  label={t("تسديد")}
-                  color="indigo"
-                  onClick={() => onPayment(invoice)}
-                />
+                {/* الفاتورة المسددة بالكامل لا تُسدَّد مرة أخرى */}
+                {remainingToPay(invoice.remaining) > 0.005 && (
+                  <ActionBtn
+                    icon={CreditCard}
+                    label={t("تسديد")}
+                    color="indigo"
+                    onClick={() => onPayment(invoice)}
+                  />
+                )}
                 {invoice.accountingStatus !== "posted" && (
                   <ActionBtn
                     icon={FileText}
@@ -2279,6 +2289,7 @@ function InvoicePayment({
 }) {
   const { t, direction, formatNumber } = useSalesInvoicesI18n();
   const remainingValue = parseCurrency(invoice.remaining);
+  const fullyPaid = remainingToPay(invoice.remaining) <= 0.005;
   const [amount, setAmount] = useState(remainingValue.toFixed(2));
   const [paymentMethod, setPaymentMethod] = useState("تحويل بنكي");
   const [paymentReference, setPaymentReference] = useState("");
@@ -2287,7 +2298,7 @@ function InvoicePayment({
   const [savingPayment, setSavingPayment] = useState(false);
 
   const handleSave = async () => {
-    if (paymentInFlight.current) return;
+    if (paymentInFlight.current || fullyPaid) return;
     const paymentAmount = Math.round((Math.max(Number(amount) || 0, 0)) * 100) / 100;
     if (paymentAmount <= 0 || paymentAmount > remainingValue) {
       toast({
@@ -2362,13 +2373,18 @@ function InvoicePayment({
         </div>
         <button
           onClick={handleSave}
-          disabled={savingPayment}
+          disabled={savingPayment || fullyPaid}
           className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {savingPayment && <Loader2 className="inline h-4 w-4 animate-spin me-1" />}
           {t("حفظ السداد")}
         </button>
       </div>
+      {fullyPaid && (
+        <div className="mx-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-start text-sm font-semibold text-emerald-800">
+          {t("الفاتورة مسددة بالكامل؛ لا يوجد مبلغ متبقٍ")}
+        </div>
+      )}
 
       <div className="p-4">
         <div className="rounded-2xl bg-white border border-border/50 shadow-sm overflow-hidden animate-fade-in-up">

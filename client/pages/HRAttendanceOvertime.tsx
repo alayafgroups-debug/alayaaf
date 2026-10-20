@@ -22,6 +22,8 @@ type OvertimeRow = {
   name: string;
   department: string;
   date: string;
+  /** بداية فترة الساعات الإضافية (HR-11)، وdate نهايتها؛ فارغ = يوم واحد */
+  periodFrom: string;
   hours: number;
   amount: number;
   status: string;
@@ -100,6 +102,7 @@ export default function HRAttendanceOvertime() {
           name: String(employee?.name ?? row.emp_name ?? ""),
           department: String(employee?.department ?? ""),
           date: String(row.date ?? "").slice(0, 10),
+          periodFrom: String(row.period_from ?? "").slice(0, 10),
           hours: Number(row.hours) || 0,
           amount: Number(row.amount) || 0,
           status: String(row.status ?? "").trim() || "معلق",
@@ -267,7 +270,7 @@ export default function HRAttendanceOvertime() {
                   <th className="px-3 py-3 font-medium">{t("الرقم الوظيفي")}</th>
                   <th className="px-3 py-3 font-medium">{t("الاسم")}</th>
                   <th className="px-3 py-3 font-medium">{t("الإدارة")}</th>
-                  <th className="px-3 py-3 font-medium">{t("التاريخ")}</th>
+                  <th className="px-3 py-3 font-medium">{t("التاريخ / الفترة")}</th>
                   <th className="px-3 py-3 font-medium">{t("الساعات")}</th>
                   <th className="px-3 py-3 font-medium">{t("المبلغ")}</th>
                   <th className="px-3 py-3 font-medium">{t("الحالة")}</th>
@@ -293,7 +296,7 @@ export default function HRAttendanceOvertime() {
                       <td className="px-3 py-2">{row.empId || "—"}</td>
                       <td className="px-3 py-2 font-medium">{row.name || "—"}{own && <span className="ms-2 text-xs text-amber-700">({t("أنت")})</span>}</td>
                       <td className="px-3 py-2">{row.department || "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.date ? formatDate(row.date) : "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{row.periodFrom && row.periodFrom < row.date ? `${formatDate(row.periodFrom)} — ${formatDate(row.date)}` : row.date ? formatDate(row.date) : "—"}</td>
                       <td className="px-3 py-2">{formatNumber(row.hours)}</td>
                       <td className="px-3 py-2">{money(row.amount)}</td>
                       <td className="px-3 py-2">{statusBadge(row.status)}</td>

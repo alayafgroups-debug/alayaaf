@@ -14,6 +14,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowRight,
+  CalendarClock,
+  Wallet,
+  CheckSquare,
+  MinusSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -24,6 +28,10 @@ import type { EmpFormData } from "./EmployeeForm";
 import { EmployeePhoto, employeeFileName, isEmployeeStoragePath, openEmployeeFile } from "@/components/hr/employeeFiles";
 import { printReport } from "@/lib/reportExport";
 import EmployeeDeleteDialog, { type DeletableEmployee } from "@/components/hr/EmployeeDeleteDialog";
+import BulkScheduleDialog from "@/components/hr/BulkScheduleDialog";
+import { isSaudiNationality } from "@/lib/hrStatus";
+import { canManagePerm } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { useI18n } from "@/i18n";
 import * as XLSX from "xlsx";
@@ -33,7 +41,9 @@ import XlsxPopulate from "xlsx-populate/browser/xlsx-populate";
 // ─── Constants ───────────────────────────────────────────────────────────────
 const STATUSES = ["فعال", "غير فعال", "إجازة", "منتهي"];
 
-type OptionalColumn = "englishName" | "directorate" | "nationality" | "nationalId" | "hireDate" | "phone" | "email";
+type OptionalColumn = "englishName" | "directorate" | "nationality" | "nationalId" | "hireDate" | "phone" | "email" | "workSchedule";
+// فلتر جدول الدوام: موظفون بلا جدول
+const NO_SCHEDULE = "__none__";
 
 const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
   { key: "englishName", label: "الاسم بالإنجليزية" },
@@ -43,6 +53,7 @@ const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
   { key: "hireDate", label: "تاريخ التعيين" },
   { key: "phone", label: "رقم الجوال" },
   { key: "email", label: "البريد الإلكتروني" },
+  { key: "workSchedule", label: "جدول الدوام" },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -102,8 +113,14 @@ const toDeletable = (employee: EmpFormData): DeletableEmployee => ({
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HREmployees() {
   const { t, direction, locale, formatNumber } = useI18n();
+  const { permissions } = useRolePermissions();
+  // تغيير جدول الدوام تعديل لملفات الموظفين: لمن يدير الموظفين (قاعدة البيانات تفرض ذلك أيضًا)
+  const canManageEmployees = canManagePerm(permissions, "hr.employees", "module.hr");
   const [employees, setEmployees] = useState<EmpFormData[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<{ id: string; name: string; nameEn: string }[]>([]);
+  // الإدارات (departments): لفلتر «الإدارة» واستثناء إدارة كاملة من التحديد
+  const [administrationOptions, setAdministrationOptions] = useState<{ id: string; name: string; nameEn: string }[]>([]);
+  const [bulkScheduleOpen, setBulkScheduleOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   // من سيُحذف (موظف واحد من زر الحذف، أو المحددون من زر الحذف الجماعي)
   const [deleteTargets, setDeleteTargets] = useState<DeletableEmployee[] | null>(null);
@@ -119,6 +136,9 @@ export default function HREmployees() {
   const [fDepartment, setFDepartment] = useState("");
   const [fNationalId, setFNationalId] = useState("");
   const [fStatus, setFStatus] = useState("");
+  const [fAdministration, setFAdministration] = useState("");
+  const [fNationality, setFNationality] = useState<"" | "saudi" | "non-saudi" | "unknown">("");
+  const [fSchedule, setFSchedule] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
@@ -131,6 +151,7 @@ export default function HREmployees() {
     hireDate: true,
     phone: true,
     email: true,
+    workSchedule: true,
   });
 
   useEffect(() => {
@@ -147,15 +168,23 @@ export default function HREmployees() {
       setLoading(true);
       try {
         // كل الموظفين على دفعات (لا يُقطع العدد عند حد 1000 صف)
-        const [employeeResult, departmentResult] = await Promise.all([
+        const [employeeResult, departmentResult, administrationResult] = await Promise.all([
           fetchAllRows<Record<string, any>>((from, to) =>
             supabase.from("employees").select("*").order("created_at", { ascending: false }).order("id").range(from, to))
             .then((data) => ({ data, error: null }), (error) => ({ data: null, error })),
           supabase.from("org_sections").select("id, name, name_en").order("name"),
+          supabase.from("departments").select("id, name, name_en").order("name"),
         ]);
         if (!employeeResult.error && employeeResult.data) setEmployees(employeeResult.data.map(mapRowToForm));
         if (!departmentResult.error) {
           setDepartmentOptions((departmentResult.data ?? []).map((row) => ({
+            id: String(row.id),
+            name: String(row.name),
+            nameEn: String(row.name_en ?? ""),
+          })));
+        }
+        if (!administrationResult.error) {
+          setAdministrationOptions((administrationResult.data ?? []).map((row) => ({
             id: String(row.id),
             name: String(row.name),
             nameEn: String(row.name_en ?? ""),
@@ -186,12 +215,30 @@ export default function HREmployees() {
     const employeeNationalId = employee.nationalId.replace(/\D/g, "");
     if (nationalIdKeyword && !employeeNationalId.includes(nationalIdKeyword)) return false;
     if (fStatus && employee.status !== fStatus) return false;
+
+    const selectedAdministration = administrationOptions.find((item) => item.id === fAdministration);
+    if (
+      fAdministration
+      && employee.departmentId !== fAdministration
+      && employee.directorate.trim() !== selectedAdministration?.name.trim()
+    ) return false;
+    if (fNationality === "saudi" && !isSaudiNationality(employee.nationality)) return false;
+    // الجنسية الفارغة «غير محددة»: لا تُعد سعودية ولا غير سعودية
+    if (fNationality === "non-saudi" && (isSaudiNationality(employee.nationality) || !employee.nationality.trim())) return false;
+    if (fNationality === "unknown" && employee.nationality.trim()) return false;
+    if (fSchedule === NO_SCHEDULE ? employee.workSchedule.trim() !== "" : fSchedule && employee.workSchedule.trim() !== fSchedule) return false;
     return true;
-  }), [departmentOptions, employees, fSearch, fDepartment, fNationalId, fStatus]);
+  }), [administrationOptions, departmentOptions, employees, fSearch, fDepartment, fNationalId, fStatus, fAdministration, fNationality, fSchedule]);
+
+  // جداول الدوام الموجودة في ملفات الموظفين (لفلتر الجدول)
+  const scheduleOptions = useMemo(
+    () => [...new Set(employees.map((employee) => employee.workSchedule.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar")),
+    [employees],
+  );
 
   useEffect(() => {
     setPage(1);
-  }, [fSearch, fDepartment, fNationalId, fStatus, pageSize]);
+  }, [fSearch, fDepartment, fNationalId, fStatus, fAdministration, fNationality, fSchedule, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -329,8 +376,8 @@ export default function HREmployees() {
     }
   };
 
-  // التصدير والطباعة: المحددون إن وُجد تحديد، وإلا كل نتائج الفلتر
-  const outputRows = selectedIds.size ? filtered.filter((employee) => selectedIds.has(employee.id)) : filtered;
+  // التصدير والطباعة: كل المحددين إن وُجد تحديد (ولو أخفاهم الفلتر الحالي؛ التحديد يبقى بين الفلاتر)، وإلا كل نتائج الفلتر
+  const outputRows = selectedIds.size ? employees.filter((employee) => selectedIds.has(employee.id)) : filtered;
 
   const printEmployees = () => {
     if (!outputRows.length) {
@@ -778,6 +825,14 @@ export default function HREmployees() {
     XLSX.writeFile(workbook, `Employee_List_${dayName}.xlsx`, { compression: true, cellStyles: true });
   };
 
+  // تحديد كل نتائج الفلترة (كل الصفحات) أو إزالتها من التحديد: مثلًا غير السعوديين ثم إزالة إدارة الموارد البشرية
+  const selectAllFiltered = () => setSelectedIds((current) => new Set([...current, ...filtered.map((employee) => employee.id)]));
+  const unselectFiltered = () => setSelectedIds((current) => {
+    const removed = new Set(filtered.map((employee) => employee.id));
+    return new Set([...current].filter((id) => !removed.has(id)));
+  });
+  const filteredSelectedCount = filtered.filter((employee) => selectedIds.has(employee.id)).length;
+
   const togglePageSelection = () => {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -914,12 +969,66 @@ export default function HREmployees() {
               <option value="">{t("جميع الحالات")}</option>
               {STATUSES.map((s) => <option key={s}>{t(s)}</option>)}
             </select>
+            <select
+              value={fAdministration}
+              onChange={(e) => setFAdministration(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
+            >
+              <option value="">{t("جميع الإدارات")}</option>
+              {administrationOptions.map((administration) => (
+                <option key={administration.id} value={administration.id}>
+                  {locale === "en" && administration.nameEn ? administration.nameEn : administration.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={fNationality}
+              onChange={(e) => setFNationality(e.target.value as "" | "saudi" | "non-saudi" | "unknown")}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
+            >
+              <option value="">{t("كل الجنسيات")}</option>
+              <option value="saudi">{t("سعودي")}</option>
+              <option value="non-saudi">{t("غير سعودي")}</option>
+              <option value="unknown">{t("جنسية غير محددة")}</option>
+            </select>
+            <select
+              value={fSchedule}
+              onChange={(e) => setFSchedule(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
+            >
+              <option value="">{t("كل جداول الدوام")}</option>
+              {scheduleOptions.map((name) => <option key={name} value={name}>{t(name)}</option>)}
+              <option value={NO_SCHEDULE}>{t("بلا جدول")}</option>
+            </select>
             <button
-              onClick={() => { setFSearch(""); setFDepartment(""); setFNationalId(""); setFStatus(""); }}
+              onClick={() => { setFSearch(""); setFDepartment(""); setFNationalId(""); setFStatus(""); setFAdministration(""); setFNationality(""); setFSchedule(""); }}
               className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-100 transition text-gray-600"
             >
               {t("مسح")}
             </button>
+            {filtered.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={selectAllFiltered}
+                  disabled={filteredSelectedCount === filtered.length}
+                  title={t("يحدد كل نتائج الفلترة في كل الصفحات")}
+                  className="flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-40"
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />{t("تحديد كل النتائج")} ({formatNumber(filtered.length)})
+                </button>
+                {filteredSelectedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={unselectFiltered}
+                    title={t("يزيل نتائج الفلترة الحالية من التحديد ويُبقي غيرها")}
+                    className="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                  >
+                    <MinusSquare className="h-3.5 w-3.5" />{t("إزالة النتائج من التحديد")} ({formatNumber(filteredSelectedCount)})
+                  </button>
+                )}
+              </>
+            )}
             {selectedIds.size > 0 && (
               <span className="flex items-center gap-2 text-xs text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
                 {formatNumber(selectedIds.size)} {t("محدد")} — {t("الطباعة والتصدير للمحددين فقط")}
@@ -931,6 +1040,15 @@ export default function HREmployees() {
                 >
                   <Trash2 className="h-3.5 w-3.5" />{t("حذف المحددين")}
                 </button>
+                {canManageEmployees && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkScheduleOpen(true)}
+                    className="flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-0.5 text-blue-700 hover:bg-blue-50"
+                  >
+                    <CalendarClock className="h-3.5 w-3.5" />{t("تغيير جدول الدوام")}
+                  </button>
+                )}
               </span>
             )}
           </div>
@@ -961,6 +1079,7 @@ export default function HREmployees() {
                   {visibleColumns.hireDate && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("تاريخ التعيين")}</th>}
                   {visibleColumns.phone && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("رقم الجوال")}</th>}
                   {visibleColumns.email && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("البريد الإلكتروني")}</th>}
+                  {visibleColumns.workSchedule && <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("جدول الدوام")}</th>}
                   <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("وضع العمل")}</th>
                   <th className="px-3 py-2.5 text-start font-semibold text-gray-600 whitespace-nowrap">{t("الحالة")}</th>
                 </tr>
@@ -1003,10 +1122,22 @@ export default function HREmployees() {
                       <div className="flex items-center justify-center gap-0.5">
                         <button onClick={() => { setSelected(emp); setMode("view"); }} className="p-1 text-blue-600 hover:bg-blue-100 rounded" title={t("عرض")}><Eye className="h-3.5 w-3.5" /></button>
                         <button onClick={() => { setSelected(emp); setMode("edit"); }} className="p-1 text-emerald-600 hover:bg-emerald-100 rounded" title={t("تعديل")}><Edit className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => navigate(`/hr/employees/${encodeURIComponent(emp.id)}/financial`)} className="p-1 text-violet-600 hover:bg-violet-100 rounded" title={t("الحركات المالية")}><Wallet className="h-3.5 w-3.5" /></button>
                         <button onClick={() => handleDelete(emp)} className="p-1 text-rose-600 hover:bg-rose-100 rounded" title={t("حذف")}><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                     </td>
-                    <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">{locale === "en" ? emp.firstName || emp.name || "—" : emp.name || emp.firstName || "—"}</td>
+                    <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">
+                      {/* الضغط على الاسم يفتح الحركات المالية للموظف (البدلات والخصومات والسلف والجزاءات) */}
+                      <button
+                        type="button"
+                        data-readonly-exempt
+                        onClick={() => navigate(`/hr/employees/${encodeURIComponent(emp.id)}/financial`)}
+                        className="text-start font-semibold text-gray-800 hover:text-blue-700 hover:underline"
+                        title={t("الحركات المالية")}
+                      >
+                        {locale === "en" ? emp.firstName || emp.name || "—" : emp.name || emp.firstName || "—"}
+                      </button>
+                    </td>
                     {visibleColumns.englishName && <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.firstName || "—"}</td>}
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || "—"}</td>
                     {visibleColumns.directorate && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.directorate || "—"}</td>}
@@ -1017,6 +1148,7 @@ export default function HREmployees() {
                     {visibleColumns.hireDate && <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.hireDate || "—"}</td>}
                     {visibleColumns.phone && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.phone || "—"}</td>}
                     {visibleColumns.email && <td className="px-3 py-2 text-gray-500 whitespace-nowrap max-w-[160px] truncate">{emp.email || "—"}</td>}
+                    {visibleColumns.workSchedule && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.workSchedule ? t(emp.workSchedule) : "—"}</td>}
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.employmentType || "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className={cn("inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600 border-gray-200")}>
@@ -1093,6 +1225,17 @@ export default function HREmployees() {
           </div>
         </div>
       </div>
+      <BulkScheduleDialog
+        open={bulkScheduleOpen}
+        employees={employees.filter((employee) => selectedIds.has(employee.id)).map((employee) => ({
+          id: employee.id,
+          empId: employee.empId,
+          name: employee.name || employee.firstName,
+          workSchedule: employee.workSchedule,
+        }))}
+        onClose={() => setBulkScheduleOpen(false)}
+        onDone={() => setRefreshKey((k) => k + 1)}
+      />
       <EmployeeDeleteDialog
         open={deleteTargets !== null}
         employees={deleteTargets ?? []}

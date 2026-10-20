@@ -104,7 +104,8 @@ function recordDetail(schemaId: string, record: ReportRecord) {
     case "advances_reports":
       return `${valueText(record.amount)} ر.س — ${valueText(record.status)}`;
     case "overtime_reports":
-      return `${valueText(record.hours)} ساعة — ${valueText(record.amount)} ر.س`;
+      // سجل الفترة (HR-11): period_from بدايتها وdate نهايتها
+      return `${valueText(record.hours)} ساعة — ${valueText(record.amount)} ر.س${record.period_from ? ` — ${valueText(record.period_from)} إلى ${valueText(record.date)}` : ""}`;
     case "social_insurance":
       return `${valueText(record.insurance_type)} — ${valueText(record.status)}`;
     default:

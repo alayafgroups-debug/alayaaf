@@ -118,9 +118,18 @@ export async function loadMyAttendance(from: string, to: string): Promise<{ data
       permissionByDate.set(key, (permissionByDate.get(key) ?? 0) + permissionHoursFromDetails(details) * 3600);
     });
     const overtimeByDate = new Map<string, number>();
+    // سجل الفترة المعتمد (period_from بدايتها وdate نهايتها): ساعاته تُوزَّع بالتساوي على أيامها
+    // وتحل محل الساعات المحسوبة من البصمة في تلك الأيام (كما في حساب الدوام)
+    const periodOvertimeByDate = new Map<string, number>();
     (Array.isArray(payload.overtime) ? payload.overtime : []).forEach((item) => {
       const row = (item ?? {}) as Record<string, unknown>;
       const key = dateKey(row.date);
+      const periodFrom = dateKey(row.period_from);
+      if (periodFrom && periodFrom < key) {
+        const periodDays = eachDate(periodFrom, key);
+        periodDays.forEach((day) => periodOvertimeByDate.set(day, (periodOvertimeByDate.get(day) ?? 0) + ((Number(row.hours) || 0) * 3600) / periodDays.length));
+        return;
+      }
       overtimeByDate.set(key, (overtimeByDate.get(key) ?? 0) + (Number(row.hours) || 0) * 3600);
     });
 
@@ -153,7 +162,8 @@ export async function loadMyAttendance(from: string, to: string): Promise<{ data
       const deficitSeconds = requiredSeconds ? Math.max(requiredSeconds - workedSeconds - permissionSeconds, 0) : 0;
       // الساعات الإضافية المسجلة لنفس اليوم غالبًا هي نفسها المحسوبة من البصمة: الأكبر لا المجموع
       const punchOvertime = !workDay || holiday ? workedSeconds : Math.max(workedSeconds - dailySeconds, 0);
-      const overtimeSeconds = pending ? 0 : Math.max(punchOvertime, overtimeByDate.get(date) ?? 0);
+      const periodOvertime = periodOvertimeByDate.get(date);
+      const overtimeSeconds = pending ? 0 : periodOvertime !== undefined ? periodOvertime + (overtimeByDate.get(date) ?? 0) : Math.max(punchOvertime, overtimeByDate.get(date) ?? 0);
       const lateMinutes = attended ? computedLateMinutes : 0;
       if (day.counted && day.category === "present") summary.present += 1;
       if (day.counted && day.category === "late") summary.late += 1;

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { Printer, FileText, Download, Trash2, Loader2 } from "lucide-react";
+import { Printer, FileText, Download, Trash2, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { hrRequestErrorText } from "@/lib/hrErrors";
-import { isApprovedStatus } from "@/lib/hrStatus";
+import { isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
+import { canManagePerm } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
+import { addDays, riyadhToday } from "@/lib/hrDates";
 
 type PenaltyRow = {
   id: string;
@@ -18,6 +21,11 @@ type PenaltyRow = {
   date: string | null;
   status: string | null;
   created_at: string | null;
+  created_by?: string | null;
+  // HR-12: من سجّل الجزاء ومن قرّر فيه (فارغة قبل تحديث قاعدة البيانات)
+  created_by_name?: string | null;
+  decided_by_name?: string | null;
+  decision_note?: string | null;
 };
 
 // رواتب الشهر المعتمدة أو المرحّلة أو المدفوعة (أو المرحّلة محاسبيًا) مقفلة
@@ -58,6 +66,25 @@ const csvCell = (value: unknown) => {
 
 export default function HRPenaltiesArchive() {
   const { t, direction, locale } = useI18n();
+  const { permissions } = useRolePermissions();
+  // الجزاء يُسجَّل معلقًا ويعتمده مسؤول جزاءات آخر (قاعدة البيانات تمنع صاحبه ومن سجّله)
+  // نفس مفتاح قاعدة البيانات (hr.penalties) حتى لا تظهر أزرار ترفضها
+  const canDecide = canManagePerm(permissions, "hr.penalties", "module.hr");
+  const [deciding, setDeciding] = useState("");
+  // من سجّل الجزاء لا يعتمده، والمعتمد لا يحذفه إلا مدير النظام: تُخفى الأزرار التي سترفضها قاعدة البيانات
+  const [myUid, setMyUid] = useState("");
+  const [isMainAdmin, setIsMainAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [{ data: sessionData }, adminResult] = await Promise.all([supabase.auth.getSession(), supabase.rpc("is_main_system_admin")]);
+      if (cancelled) return;
+      setMyUid(String(sessionData.session?.user?.id ?? ""));
+      setIsMainAdmin(!adminResult.error && adminResult.data === true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const isPendingPenalty = (status: string | null) => !isApprovedStatus(status) && !isRejectedStatus(status);
   const [rows, setRows] = useState<PenaltyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("الكل");
@@ -89,7 +116,8 @@ export default function HRPenaltiesArchive() {
   const filtered = useMemo(
     () =>
       rows.filter((r) => {
-        if (statusFilter !== "الكل" && (r.status ?? "") !== statusFilter) return false;
+        // «معلق»: كل ما لم يُعتمد ولم يُرفض (ومنه الحالة القديمة «فعال»)
+        if (statusFilter === "معلق" ? !isPendingPenalty(r.status) : statusFilter !== "الكل" && (r.status ?? "") !== statusFilter) return false;
         if (typeFilter !== "الكل" && (r.penalty_type ?? "") !== typeFilter) return false;
         return true;
       }),
@@ -119,6 +147,35 @@ export default function HRPenaltiesArchive() {
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
     toast({ title: t("تم الحذف") });
+  };
+
+  const handleDecision = async (row: PenaltyRow, decision: "معتمد" | "مرفوض") => {
+    let note: string | null = null;
+    if (decision === "مرفوض") {
+      note = window.prompt(t("سبب رفض الجزاء"))?.trim() || null;
+      if (!note) return;
+    } else {
+      // المادة 71: مهلة الاتهام بالمخالفة وتوقيع الجزاء 30 يومًا
+      const date = String(row.date ?? "").slice(0, 10);
+      const old = /^\d{4}-\d{2}-\d{2}$/.test(date) && date < addDays(riyadhToday(), -30);
+      if (!confirm(t(old
+        ? "تاريخ المخالفة قبل أكثر من 30 يومًا: راجع المادة 71 من نظام العمل (مهلة الاتهام وتوقيع الجزاء) قبل الاعتماد. اعتماد الجزاء؟"
+        : "اعتماد الجزاء؟ يُخصم في مسير الرواتب بحد المادة 72"))) return;
+    }
+    setDeciding(row.id);
+    const { data, error } = await supabase.from("penalties").update({ status: decision, decision_note: note }).eq("id", row.id).select("*");
+    setDeciding("");
+    if (error) {
+      toast({ title: t("تعذّر حفظ القرار"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      return;
+    }
+    if (!data?.length) {
+      toast({ title: t("تعذّر حفظ القرار"), description: t("لم يتغير شيء: لا تملك صلاحية القرار في الجزاءات"), variant: "destructive" });
+      return;
+    }
+    const updated = data[0] as PenaltyRow;
+    setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, ...updated } : item)));
+    toast({ title: t(decision === "معتمد" ? "اعتُمد الجزاء" : "رُفض الجزاء") });
   };
 
   const handlePrint = () => window.print();
@@ -199,19 +256,21 @@ export default function HRPenaltiesArchive() {
                   <th className="py-3 px-2 font-medium">{t("المبلغ")}</th>
                   <th className="py-3 px-2 font-medium">{t("الحالة")}</th>
                   <th className="py-3 px-2 font-medium">{t("تاريخ الإضافة")}</th>
+                  <th className="py-3 px-2 font-medium">{t("سجّله")}</th>
+                  <th className="py-3 px-2 font-medium">{t("القرار")}</th>
                   <th className="py-3 px-2 font-medium">{t("الإجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-gray-500">
+                    <td colSpan={11} className="py-12 text-center text-gray-500">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#004e89]" />
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-gray-500">
+                    <td colSpan={11} className="py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <FileText className="h-10 w-10 text-gray-300" />
                         <p>{t("لا توجد بيانات في الجدول")}</p>
@@ -231,23 +290,39 @@ export default function HRPenaltiesArchive() {
                         <span
                           className={
                             "px-2 py-0.5 rounded-full text-xs " +
-                            ((r.status ?? "") === "معتمد"
+                            (isApprovedStatus(r.status)
                               ? "bg-green-100 text-green-700"
-                              : (r.status ?? "") === "مرفوض"
+                              : isRejectedStatus(r.status)
                                 ? "bg-red-100 text-red-700"
                                 : "bg-amber-100 text-amber-700")
                           }
                         >
-                          {t(r.status || "معلق")}
+                          {t(isApprovedStatus(r.status) ? "معتمد" : isRejectedStatus(r.status) ? "مرفوض" : "معلق")}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-gray-500">
                         {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US") : "-")}
                       </td>
+                      <td className="py-2.5 px-2 text-gray-600">{r.created_by_name || "-"}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{r.decided_by_name ? `${r.decided_by_name}${r.decision_note ? ` — ${r.decision_note}` : ""}` : "-"}</td>
                       <td className="py-2.5 px-2">
-                        <button onClick={() => handleDelete(r)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
-                          <Trash2 className="h-4 w-4 mx-auto" />
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          {canDecide && isPendingPenalty(r.status) && !(r.created_by && r.created_by === myUid && !isMainAdmin) && (
+                            <>
+                              <button onClick={() => void handleDecision(r, "معتمد")} disabled={deciding === r.id} className="text-emerald-600 hover:text-emerald-800 disabled:opacity-40" title={t("اعتماد")} aria-label={t("اعتماد")}>
+                                <CheckCircle2 className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => void handleDecision(r, "مرفوض")} disabled={deciding === r.id} className="text-amber-600 hover:text-amber-800 disabled:opacity-40" title={t("رفض")} aria-label={t("رفض")}>
+                                <XCircle className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          {(!isApprovedStatus(r.status) || isMainAdmin) && (
+                            <button onClick={() => handleDelete(r)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

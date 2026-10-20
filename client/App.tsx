@@ -35,6 +35,7 @@ import InventoryOpeningBalances from "./pages/InventoryOpeningBalances";
 import HR from "./pages/HR";
 import HRDashboard from "./pages/HRDashboard";
 import HREmployees from "./pages/HREmployees";
+import HREmployeeFinance from "./pages/HREmployeeFinance";
 import HRCertificates from "./pages/HRCertificates";
 import HRReports from "./pages/HRReports";
 import HREmployeeFullReport from "./pages/HREmployeeFullReport";
@@ -193,6 +194,7 @@ const App = () => (
           <Route path="/hr/employees/new" element={<HREmployees />} />
           <Route path="/hr/employees/cooperative" element={<HREmployeesCooperative />} />
           <Route path="/hr/employees/inactive" element={<HREmployeesInactive />} />
+          <Route path="/hr/employees/:id/financial" element={<HREmployeeFinance />} />
           <Route path="/hr/user-logs" element={<HRUserLogs />} />
           <Route path="/hr/requests/send" element={<HRRequestsSend />} />
           <Route path="/hr/requests/incoming" element={<HRRequestsIncoming />} />

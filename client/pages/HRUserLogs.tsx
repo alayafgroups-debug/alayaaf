@@ -31,6 +31,7 @@ const KNOWN_MODULES: Array<[string, string]> = [
   ["audit.leave_types", "أنواع الإجازات"],
   ["audit.official_holidays", "العطل الرسمية"],
   ["audit.termination_reasons", "أسباب إنهاء الخدمة"],
+  ["audit.penalties", "الجزاءات"],
 ];
 
 const MODULE_COLORS: Record<string, string> = {

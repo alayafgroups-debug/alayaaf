@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { exportReportExcel, type ReportColumn } from "@/lib/reportExport";
-import { eachDate, monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
+import { daysInclusive, eachDate, monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
 import { ACTIVE_EMPLOYEE_STATUSES, isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
@@ -55,7 +55,8 @@ type Employee = {
   attendanceExempt: boolean;
 };
 type AttendanceRecord = { empId: string; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number; notes: string };
-type OvertimeRecord = { employeeId: string; date: string; hours: number };
+/** periodFrom: بداية فترة الساعات الإضافية (HR-11)، وdate نهايتها؛ فارغ = يوم واحد */
+type OvertimeRecord = { employeeId: string; date: string; hours: number; periodFrom: string };
 type PermissionRecord = { empId: string; date: string; hours: number };
 type DailyAttendanceDetail = Employee & { rowId: string; date: string; category: DayCategory; statusLabel: string; checkIn: string; checkOut: string; worked: string; required: string; late: string; earlyLeave: string; permission: string; deficit: string; overtime: string; notes: string; counted: boolean; unrecorded: boolean; hasRecord: boolean; workedSeconds: number; requiredSeconds: number; lateSeconds: number; earlyLeaveSeconds: number; permissionSeconds: number; deficitSeconds: number; overtimeSeconds: number };
 type EmployeeSummary = Employee & { present: number; absent: number; late: number; leave: number; unrecordedDays: number; recorded: number; attendanceRate: number };
@@ -204,8 +205,10 @@ export default function HRAttendanceCalculate() {
         // الجداول التي قد تتجاوز 1000 صف تُجلب على دفعات
         loadActiveEmployees(),
         fetchPagedRows((from, to) => supabase.from("attendance").select("emp_id, date, status, check_in, check_out, late_minutes, notes").gte("date", dateFrom).lte("date", dateTo).order("date").order("emp_id").range(from, to)),
-        // الحالة تُقرأ بـ isApprovedStatus (تشمل "موافق") بدل قائمة ثابتة
-        fetchPagedRows((from, to) => supabase.from("overtime_records").select("id, employee_id, date, hours, status").gte("date", dateFrom).lte("date", dateTo).order("date").order("id").range(from, to)),
+        // الحالة تُقرأ بـ isApprovedStatus (تشمل "موافق") بدل قائمة ثابتة.
+        // سجل الفترة يُحفظ بتاريخ نهايتها وهي داخل شهر واحد: تُجلب السجلات حتى نهاية شهر آخر يوم معروض لتدخل الفترات التي تبدأ داخله.
+        // "*" لا يفشل إن لم يُطبَّق عمود period_from بعد
+        fetchPagedRows((from, to) => supabase.from("overtime_records").select("*").gte("date", dateFrom).lte("date", monthRange(dateTo.slice(0, 7)).to).order("date").order("id").range(from, to)),
         fetchPagedRows((from, to) => supabase.from("hr_requests").select("id, emp_id, start_date, status, details").eq("request_type", "استئذان").gte("start_date", dateFrom).lte("start_date", dateTo).order("start_date").order("id").range(from, to)),
         supabase.from("departments").select("id, name, name_en, branch_id").eq("status", "فعال").order("name"),
         supabase.from("org_sections").select("id, name, name_en, department_id").eq("status", "فعال").order("name"),
@@ -279,7 +282,7 @@ export default function HRAttendanceCalculate() {
       setSections(sectionRows);
       setEmployees(loadedEmployees);
       setAttendance((attendanceResult.data ?? []).map((row) => ({ empId: String(row.emp_id ?? ""), date: String(row.date ?? "").slice(0, 10), status: String(row.status ?? ""), checkIn: String(row.check_in ?? ""), checkOut: String(row.check_out ?? ""), lateMinutes: Number(row.late_minutes ?? 0), notes: String(row.notes ?? "") })));
-      setOvertimeRecords((overtimeResult.data ?? []).filter((row) => isApprovedStatus(row.status)).map((row) => ({ employeeId: String(row.employee_id ?? ""), date: String(row.date ?? "").slice(0, 10), hours: Number(row.hours ?? 0) })));
+      setOvertimeRecords((overtimeResult.data ?? []).filter((row) => isApprovedStatus(row.status)).map((row) => ({ employeeId: String(row.employee_id ?? ""), date: String(row.date ?? "").slice(0, 10), hours: Number(row.hours ?? 0), periodFrom: String(row.period_from ?? "").slice(0, 10) })).filter((record) => (record.periodFrom || record.date) <= dateTo));
       setPermissionRecords((permissionResult.data ?? []).filter((row) => isApprovedStatus(row.status)).map((row) => { const details = row.details && typeof row.details === "object" ? row.details as Record<string, unknown> : {}; return { empId: String(row.emp_id ?? ""), date: String(row.start_date ?? "").slice(0, 10), hours: permissionHoursFromDetails(details) }; }));
       setBranches(branchRows);
       setJobTitles(unique([...(jobResult.data ?? []).map((row) => localizedName(row)), ...loadedEmployees.map((item) => item.jobTitle)]));
@@ -325,7 +328,18 @@ export default function HRAttendanceCalculate() {
   const detailedRows = useMemo<DailyAttendanceDetail[]>(() => {
     const recordsByEmployeeAndDate = new Map(attendance.map((record) => [`${record.empId}:${record.date}`, record]));
     const overtimeByEmployeeAndDate = new Map<string, number>();
-    overtimeRecords.forEach((record) => { const key = `${record.employeeId}:${record.date}`; overtimeByEmployeeAndDate.set(key, (overtimeByEmployeeAndDate.get(key) ?? 0) + record.hours * 3600); });
+    // سجل الفترة المعتمد: ساعاته تُوزَّع بالتساوي على أيامها، وتحل محل الساعات المحسوبة من البصمة في تلك الأيام
+    // (هي الساعات المعتمدة التي تدخل الراتب)، فيساوي مجموع أيام الفترة ساعاتها المعتمدة
+    const periodOvertimeByEmployeeAndDate = new Map<string, number>();
+    overtimeRecords.forEach((record) => {
+      if (record.periodFrom && record.periodFrom < record.date) {
+        const days = eachDate(record.periodFrom, record.date);
+        days.forEach((day) => { const key = `${record.employeeId}:${day}`; periodOvertimeByEmployeeAndDate.set(key, (periodOvertimeByEmployeeAndDate.get(key) ?? 0) + (record.hours * 3600) / days.length); });
+        return;
+      }
+      const key = `${record.employeeId}:${record.date}`;
+      overtimeByEmployeeAndDate.set(key, (overtimeByEmployeeAndDate.get(key) ?? 0) + record.hours * 3600);
+    });
     const permissionByEmployeeAndDate = new Map<string, number>();
     permissionRecords.forEach((record) => { const key = `${record.empId}:${record.date}`; permissionByEmployeeAndDate.set(key, (permissionByEmployeeAndDate.get(key) ?? 0) + record.hours * 3600); });
     const rows: DailyAttendanceDetail[] = [];
@@ -351,8 +365,10 @@ export default function HRAttendanceCalculate() {
         const deficitSeconds = requiresHours ? Math.max(requiredSeconds - workedSeconds - permissionSeconds, 0) : 0;
         // العمل في أيام الراحة حسب جدول الموظف والعطل الرسمية كله ساعات إضافية؛ في أيام العمل ما زاد على الساعات اليومية
         const punchOvertimeSeconds = !workDay || holiday ? workedSeconds : Math.max(workedSeconds - dailySeconds, 0);
-        // الساعات المسجلة في overtime_records لنفس اليوم غالبًا هي نفس الساعات المحسوبة من البصمة: يؤخذ الأكبر لا المجموع
-        const overtimeSeconds = Math.max(punchOvertimeSeconds, manualOvertimeSeconds);
+        // الساعات المسجلة في overtime_records لنفس اليوم غالبًا هي نفس الساعات المحسوبة من البصمة: يؤخذ الأكبر لا المجموع.
+        // يوم داخل فترة معتمدة: حصته من ساعات الفترة بدل البصمة
+        const periodOvertimeSeconds = periodOvertimeByEmployeeAndDate.get(`${employee.id}:${date}`);
+        const overtimeSeconds = periodOvertimeSeconds !== undefined ? periodOvertimeSeconds + manualOvertimeSeconds : Math.max(punchOvertimeSeconds, manualOvertimeSeconds);
         rows.push({
           ...employee,
           rowId: `${employee.id}:${date}`,
@@ -429,7 +445,9 @@ export default function HRAttendanceCalculate() {
     return allSelectableSelected ? current.filter((id) => !selectableIds.includes(id)) : [...new Set([...current, ...selectableIds])];
   });
   const actionEmployees = employees.filter((employee) => selectedEmployeeIds.includes(employee.id));
-  const rangeActions: AttendanceAction[] = ["bulk", "clear-punches", "delete-bulk"];
+  const rangeActions: AttendanceAction[] = ["bulk", "clear-punches", "delete-bulk", "overtime"];
+  // الساعات الإضافية لا تُسجَّل لأيام بعد اليوم: آخر تاريخ يُختار هو اليوم (أو أول يوم معروض إن بدأت الفترة بعده)
+  const rangeMaxDate = attendanceAction === "overtime" && dateTo > riyadhToday() ? (riyadhToday() < dateFrom ? dateFrom : riyadhToday()) : dateTo;
   const openAttendanceAction = (action: AttendanceAction) => {
     setAttendanceAction(action);
     setActionDate(dateFrom);
@@ -437,6 +455,8 @@ export default function HRAttendanceCalculate() {
     // التحضير لا يقبل أيامًا بعد اليوم: الافتراضي حتى اليوم إن كانت الفترة تمتد بعده
     const today = riyadhToday();
     setActionDateTo((action === "bulk" || action === "clear-punches") && dateTo > today ? (today < dateFrom ? dateFrom : today) : dateTo);
+    // الساعات الإضافية: الافتراضي يوم واحد (أول يوم معروض) كما كان؛ للفترة يُغيَّر «إلى تاريخ»
+    if (action === "overtime") setActionDateTo(dateFrom);
     setActionMessage("");
   };
   // أيام العطلة الرسمية والإجازة المعتمدة لكل موظف (بمعرّفه) لا تُحضَّر ولا تُجعل غيابًا
@@ -498,9 +518,17 @@ export default function HRAttendanceCalculate() {
         }
         message = `${manualAttendanceResultText(result, t, formatNumber)}${ownNote}`;
       } else if (attendanceAction === "overtime") {
+        // فترة (من / إلى): عدد الساعات مجموع الفترة كلها، ويُحفظ السجل بتاريخ نهايتها فيدخل راتب شهرها بعد اعتماده.
+        // التاريخان المتساويان = يوم واحد كما كان
+        const periodFrom = actionDateFrom;
+        const periodTo = actionDateTo;
+        const isPeriod = periodFrom < periodTo;
+        const periodDays = daysInclusive(periodFrom, periodTo);
+        if (periodTo > riyadhToday()) throw new Error(t("لا تُسجَّل ساعات إضافية بتاريخ مستقبلي"));
+        if (periodFrom.slice(0, 7) !== periodTo.slice(0, 7)) throw new Error(t("فترة الساعات الإضافية يجب أن تكون داخل شهر واحد (شهر الراتب)"));
         const hours = Number(actionHours);
-        if (!Number.isFinite(hours) || hours <= 0 || hours > 24) throw new Error(t("أدخل عدد ساعات صحيح"));
-        if (!actionDate || actionDate > riyadhToday()) throw new Error(t("لا تُسجَّل ساعات إضافية بتاريخ مستقبلي"));
+        if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));
+        if (hours > 24 * periodDays) throw new Error(`${t("عدد الساعات لا يتجاوز 24 ساعة لكل يوم من أيام الفترة")}: ${formatNumber(24 * periodDays)}`);
         // لا يسجّل المستخدم ساعات إضافية لنفسه (قاعدة البيانات ترفضها أيضًا)
         const session = readUserSession() as { empId?: unknown; name?: unknown } | null;
         const ownEmpId = String(session?.empId ?? "").trim();
@@ -510,19 +538,25 @@ export default function HRAttendanceCalculate() {
         // من لم يُسجَّل راتبه الأساسي يُتخطى ولا يوقف حفظ الباقين
         const withoutSalary = otherEmployees.filter((employee) => !(employee.baseSalary > 0));
         const withSalary = otherEmployees.filter((employee) => employee.baseSalary > 0);
-        // لا تكرار: من لديه سجل ساعات إضافية غير مرفوض في نفس التاريخ يُتخطى
+        // لا يُحسب يوم مرتين: يُتخطى من لديه ساعات إضافية غير مرفوضة (ليوم أو لفترة) في أي يوم من أيام الفترة.
+        // سجل الفترة بتاريخ نهايتها داخل شهرها: يكفي جلب السجلات من بداية الفترة إلى نهاية شهرها. "*" لا يفشل قبل عمود period_from
         const recordedIds = new Set<string>();
+        const periodMonthEnd = monthRange(periodTo.slice(0, 7)).to;
         for (const ids of chunkIds(withSalary.map((employee) => employee.id))) {
-          const { data: existingRows, error: existingError } = await supabase.from("overtime_records").select("employee_id, status").eq("date", actionDate).in("employee_id", ids);
+          const { data: existingRows, error: existingError } = await fetchPagedRows((from, to) => supabase.from("overtime_records").select("*").gte("date", periodFrom).lte("date", periodMonthEnd).in("employee_id", ids).order("date").order("id").range(from, to));
           if (existingError) throw existingError;
-          (existingRows ?? []).filter((row) => !isRejectedStatus(row.status)).forEach((row) => recordedIds.add(String(row.employee_id ?? "")));
+          (existingRows ?? []).filter((row) => !isRejectedStatus(row.status)).forEach((row) => {
+            const rowEnd = String(row.date ?? "").slice(0, 10);
+            const rowStart = String(row.period_from ?? "").slice(0, 10) || rowEnd;
+            if (rowStart <= periodTo && rowEnd >= periodFrom) recordedIds.add(String(row.employee_id ?? ""));
+          });
         }
         const alreadyRecorded = withSalary.filter((employee) => recordedIds.has(employee.id));
         const eligible = withSalary.filter((employee) => !recordedIds.has(employee.id));
         const skippedText = [
           selfEmployees.length ? t("لا تسجّل ساعات إضافية لنفسك؛ يسجّلها لك مسؤول آخر") : "",
           withoutSalary.length ? `${t("تم تخطي")} ${formatNumber(withoutSalary.length)} ${t("موظف لعدم تسجيل الراتب الأساسي")}: ${nameList(withoutSalary)}` : "",
-          alreadyRecorded.length ? `${t("تم تخطي")} ${formatNumber(alreadyRecorded.length)} ${t("موظف لديه ساعات إضافية مسجلة في هذا التاريخ")}: ${nameList(alreadyRecorded)}` : "",
+          alreadyRecorded.length ? `${t("تم تخطي")} ${formatNumber(alreadyRecorded.length)} ${t(isPeriod ? "موظف لديه ساعات إضافية مسجلة في أيام هذه الفترة" : "موظف لديه ساعات إضافية مسجلة في هذا التاريخ")}: ${nameList(alreadyRecorded)}` : "",
         ].filter(Boolean).join("، ");
         if (!eligible.length) throw new Error(`${t("لم تُسجَّل أي ساعات إضافية")}${skippedText ? `: ${skippedText}` : ""}`);
         // المادة 107: الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي)؛ المبلغ يعيد الخادم حسابه.
@@ -531,14 +565,14 @@ export default function HRAttendanceCalculate() {
         let savedCount = 0;
         const failures: string[] = [];
         for (const employee of eligible) {
-          const { error: saveError } = await supabase.from("overtime_records").insert({ employee_id: employee.id, emp_name: employee.name, date: actionDate, hours, rate: OVERTIME_RATE, amount: overtimeAmount(employee, hours), status: "معلق", notes: actionReason || null });
+          const { error: saveError } = await supabase.from("overtime_records").insert({ employee_id: employee.id, emp_name: employee.name, date: periodTo, ...(isPeriod ? { period_from: periodFrom } : {}), hours, rate: OVERTIME_RATE, amount: overtimeAmount(employee, hours), status: "معلق", notes: actionReason || null });
           if (saveError) failures.push(`${employee.name}: ${t(hrRequestErrorText(saveError, "تعذر الحفظ"))}`);
           else savedCount += 1;
         }
         changed = savedCount > 0;
         const failureText = failures.length ? `${t("لم يُسجَّل لـ")} ${formatNumber(failures.length)} ${t("موظف")}: ${failures.slice(0, NAME_LIST_LIMIT).join("، ")}${failures.length > NAME_LIST_LIMIT ? "…" : ""}` : "";
         if (!savedCount) throw new Error(failureText || t("لم تُسجَّل أي ساعات إضافية"));
-        message = [`${t("تم تسجيل الساعات الإضافية بانتظار الاعتماد لـ")} ${formatNumber(savedCount)} ${t("موظف")}`, skippedText, failureText].filter(Boolean).join("، ");
+        message = [`${t("تم تسجيل الساعات الإضافية بانتظار الاعتماد لـ")} ${formatNumber(savedCount)} ${t("موظف")}${isPeriod ? ` (${periodFrom} — ${periodTo})` : ""}`, skippedText, failureText].filter(Boolean).join("، ");
       } else if (attendanceAction === "permission") {
         const hours = Number(actionHours);
         if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));
@@ -783,17 +817,18 @@ export default function HRAttendanceCalculate() {
       {attendanceAction && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/50 p-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {rangeActions.includes(attendanceAction) ? <>
-            <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("من تاريخ")}</span><Input type="date" min={dateFrom} max={dateTo} value={actionDateFrom} onChange={(event) => setActionDateFrom(event.target.value)} /></label>
-            <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("إلى تاريخ")}</span><Input type="date" min={actionDateFrom || dateFrom} max={dateTo} value={actionDateTo} onChange={(event) => setActionDateTo(event.target.value)} /></label>
+            <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("من تاريخ")}</span><Input type="date" min={dateFrom} max={rangeMaxDate} value={actionDateFrom} onChange={(event) => setActionDateFrom(event.target.value)} /></label>
+            <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("إلى تاريخ")}</span><Input type="date" min={actionDateFrom || dateFrom} max={rangeMaxDate} value={actionDateTo} onChange={(event) => setActionDateTo(event.target.value)} /></label>
           </> : <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("التاريخ")}</span><Input type="date" min={dateFrom} max={dateTo} value={actionDate} onChange={(event) => setActionDate(event.target.value)} /></label>}
           {attendanceAction === "punch" && <><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الدخول")}</span><Input type="time" value={actionCheckIn} onChange={(event) => setActionCheckIn(event.target.value)} /></label><label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("وقت الخروج")}</span><Input type="time" value={actionCheckOut} onChange={(event) => setActionCheckOut(event.target.value)} /></label></>}
-          {(attendanceAction === "overtime" || attendanceAction === "permission") && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("عدد الساعات")}</span><Input type="number" min="0.25" step="0.25" value={actionHours} onChange={(event) => setActionHours(event.target.value)} /></label>}
+          {(attendanceAction === "overtime" || attendanceAction === "permission") && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{attendanceAction === "overtime" && actionDateFrom < actionDateTo ? `${t("مجموع ساعات الفترة")} (${formatNumber(daysInclusive(actionDateFrom, actionDateTo))} ${t("يوم")})` : t("عدد الساعات")}</span><Input type="number" min="0.25" step="0.25" value={actionHours} onChange={(event) => setActionHours(event.target.value)} /></label>}
           {attendanceAction !== "delete-bulk" && <label className="space-y-1 text-xs font-medium text-slate-600"><span className="block">{t("السبب / الملاحظات")}</span><Input value={actionReason} onChange={(event) => setActionReason(event.target.value)} /></label>}
         </div>
         <p className="mt-3 text-xs text-slate-600">{rangeActions.includes(attendanceAction) ? `${t("سيتم التطبيق على الموظفين المحددين خلال الفترة")}: ${actionDateFrom} — ${actionDateTo}` : `${t("سيتم التطبيق على الموظفين المحددين")}: ${formatNumber(actionEmployees.length)}`}</p>
         {(attendanceAction === "clear-punches" || attendanceAction === "delete-bulk") && <p className="mt-2 text-xs font-semibold text-red-700">{attendanceAction === "delete-bulk" ? t("سيتم حذف سجلات التحضير الإداري فقط ولن تُحذف بصمات الموظفين الجغرافية") : t("سيتم مسح وقت الدخول والخروج من سجلات الحضور (حاضر/متأخر) في أيام عمل كل موظف حسب جدول دوامه فقط، وتتحول حالة اليوم إلى غائب فيُخصم من الراتب؛ لا تُمس أيام الراحة ولا العطل الرسمية ولا الإجازات المعتمدة ولا سجلات الإجازة والمأمورية والعمل عن بعد، ولا بصمات الموظفين الموثّقة من البوابة")}</p>}
         {(attendanceAction === "punch" || attendanceAction === "bulk") && <p className="mt-2 text-xs text-slate-600">{t(attendanceAction === "bulk" ? "تُحضَّر أيام عمل كل موظف حسب جدول دوامه فقط (تُستثنى أيام راحته والعطل الرسمية وإجازاته المعتمدة؛ اليوم الواحد يُقبل كما هو)، وتُضاف الأيام غير المسجلة فقط: لا يُعدَّل أي سجل موجود ولا تُستبدل بصمات الموظفين الموثّقة من بوابة الموظف" : "لن تُستبدل بصمات الموظفين الموثّقة من بوابة الموظف؛ يُحدَّث السجل الموجود عند اختيار موظف واحد فقط، ولعدة موظفين تُضاف السجلات غير المسجلة فقط. وقت انصراف قبل وقت الحضور يُعد وردية ليلية")}</p>}
-        {attendanceAction === "overtime" && <p className="mt-2 text-xs text-slate-600">{t("المبلغ = الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي) وفق المادة 107 من نظام العمل؛ أجر الساعة الأساسي = الراتب الأساسي ÷ 30 ÷ ساعات العمل اليومية، وأجر الساعة الفعلي = إجمالي الراتب (أو الأساسي إن لم يُسجَّل) ÷ 30 ÷ ساعات العمل اليومية؛ ساعات العمل اليومية من جدول دوام الموظف، وإلا من ملفه. يُتخطى من لم يُسجَّل راتبه الأساسي ومن لديه ساعات إضافية مسجلة في نفس التاريخ")}</p>}
+        {attendanceAction === "overtime" && <p className="mt-2 text-xs font-medium text-slate-700">{t("عدد الساعات هو مجموع ساعات الفترة كلها (نفس التاريخ في «من» و«إلى» = يوم واحد). الفترة داخل شهر واحد وتدخل راتب ذلك الشهر بعد اعتمادها، ولا يُحسب يوم مرتين")}</p>}
+        {attendanceAction === "overtime" && <p className="mt-2 text-xs text-slate-600">{t("المبلغ = الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي) وفق المادة 107 من نظام العمل؛ أجر الساعة الأساسي = الراتب الأساسي ÷ 30 ÷ ساعات العمل اليومية، وأجر الساعة الفعلي = إجمالي الراتب (أو الأساسي إن لم يُسجَّل) ÷ 30 ÷ ساعات العمل اليومية؛ ساعات العمل اليومية من جدول دوام الموظف، وإلا من ملفه. يُتخطى من لم يُسجَّل راتبه الأساسي ومن لديه ساعات إضافية مسجلة في أيام الفترة")}</p>}
         <div className="mt-4 flex gap-2"><Button type="button" size="sm" onClick={() => void saveAttendanceAction()} disabled={actionSaving}>{actionSaving ? t("جاري الحفظ...") : t("تأكيد العملية")}</Button><Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction(null)} disabled={actionSaving}>{t("إلغاء")}</Button></div>
       </div>}
       {actionMessage && <p className="mt-3 text-sm text-slate-700">{actionMessage}</p>}

@@ -4,12 +4,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/lib/supabaseClient";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { riyadhMonth } from "@/lib/hrDates";
+import { suggestedOpeningRepaid } from "@/lib/advances";
 import { useI18n } from "@/i18n";
 
 /**
  * إجراءات السلفة المعتمدة (HR-13، كما في سمارت): تعديلها، وتأجيل قسط شهر، وحذفها.
- * قاعدة البيانات تفرض الشروط: لا تعديل لشهر البداية ولا حذف بعد أن يُخصم من الموظف قسط سلفة منذ بدايتها،
- * والتأجيل لشهر من بداية السلفة فما بعد وشهر رواتبه غير مقفل، ولا أحد يعدّل سلفته.
+ * قاعدة البيانات تفرض الشروط: لا تعديل لشهر البداية ولا حذف بعد أن يُخصم من الموظف قسط سلفة في رواتب معتمدة
+ * أو مرحّلة منذ بدايتها، والتأجيل لشهر من بداية السلفة فما بعد وشهر رواتبه غير مقفل، ولا أحد يعدّل سلفته.
+ * HR-14: شهر البداية من شهر التعيين (وحتى 24 شهرًا للخلف)، و«المسدد قبل النظام» يُعدَّل.
  */
 export type AdvanceActionTarget = {
   id: string;
@@ -18,7 +20,12 @@ export type AdvanceActionTarget = {
   installment: number;
   startMonth: string;
   notes: string;
+  /** المسدَّد كله: قبل النظام ومن الرواتب (ومن نهاية الخدمة) */
   repaid: number;
+  /** المسدد قبل النظام (HR-14) */
+  openingRepaid: number;
+  /** أول شهر بداية مسموح (شهر التعيين، وحتى 24 شهرًا للخلف) */
+  minStartMonth: string;
 };
 
 const round2 = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
@@ -41,6 +48,7 @@ export function AdvanceEditDialog({ advance, onClose, onSaved }: {
   const [installment, setInstallment] = useState("");
   const [startMonth, setStartMonth] = useState("");
   const [notes, setNotes] = useState("");
+  const [opening, setOpening] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -50,22 +58,32 @@ export function AdvanceEditDialog({ advance, onClose, onSaved }: {
     setInstallment(String(advance.installment));
     setStartMonth(advance.startMonth);
     setNotes(advance.notes);
+    setOpening(String(advance.openingRepaid || 0));
     setError("");
   }, [advance]);
 
   const money = (value: number) => `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}`;
   const newAmount = round2(Number(amount));
   const newInstallment = round2(Number(installment));
-  const remainingAfter = advance ? round2(Math.max(0, newAmount - advance.repaid)) : 0;
+  const newOpening = round2(Number(opening) || 0);
+  // المسدَّد بعد الحفظ: ما خُصم من الرواتب (ونهاية الخدمة) + المسدد قبل النظام الجديد
+  const repaidAfter = advance ? round2(advance.repaid - advance.openingRepaid + newOpening) : 0;
+  const remainingAfter = advance ? round2(Math.max(0, newAmount - repaidAfter)) : 0;
   const startChanged = Boolean(advance && startMonth !== advance.startMonth);
+  // نقل شهر البداية إلى شهر سابق بلا مسدد قبل النظام: يُقترح المسدد ويُطلب التأكيد (كالإضافة)
+  const backDated = startChanged && /^\d{4}-\d{2}$/.test(startMonth) && startMonth < riyadhMonth();
+  const suggestedOpening = backDated ? suggestedOpeningRepaid(newAmount, newInstallment, startMonth, riyadhMonth()) : 0;
 
   const save = async () => {
     if (!advance || busy) return;
     if (!(newAmount > 0)) { setError(t("أدخل مبلغ السلفة")); return; }
     if (!(newInstallment > 0) || newInstallment > newAmount) { setError(t("القسط الشهري يجب أن يكون أكبر من صفر ولا يتجاوز مبلغ السلفة")); return; }
+    if (newOpening < 0 || newOpening >= newAmount) { setError(t("المسدد قبل النظام لا يكون سالبًا، ويكون أقل من مبلغ السلفة")); return; }
     // المبلغ لا يقل عما خُصم فعلًا (وإلا انتقل الفائض إلى سلفة أخرى للموظف أو صار خصمًا زائدًا عليه)
-    if (newAmount < advance.repaid - 0.004) { setError(`${t("مبلغ السلفة لا يقل عما خُصم منها فعلًا من الرواتب")}: ${money(advance.repaid)}`); return; }
-    if (startChanged && (!/^\d{4}-\d{2}$/.test(startMonth) || startMonth < riyadhMonth())) { setError(t("شهر بداية الخصم يجب ألا يسبق الشهر الحالي")); return; }
+    if (newAmount < repaidAfter - 0.004) { setError(`${t("مبلغ السلفة لا يقل عما خُصم منها فعلًا من الرواتب")}: ${money(repaidAfter)}`); return; }
+    if (startChanged && (!/^\d{4}-\d{2}$/.test(startMonth) || startMonth < advance.minStartMonth)) { setError(`${t("شهر بداية الخصم لا يسبق شهر تعيين الموظف ولا أقدم من 24 شهرًا")}: ${advance.minStartMonth}`); return; }
+    if (backDated && newOpening === 0 && suggestedOpening > 0
+        && !window.confirm(`${t("لم تُدخل «المسدد قبل النظام» وشهر البداية سابق: ما خُصم منها في سمارت سيُخصم مرة أخرى")}. ${t("المقترح")}: ${money(suggestedOpening)}. ${t("الحفظ دون مسدد قبل النظام؟")}`)) return;
     setBusy(true); setError("");
     try {
       const changes: Record<string, unknown> = {
@@ -74,6 +92,8 @@ export function AdvanceEditDialog({ advance, onClose, onSaved }: {
         installments: Math.max(1, Math.ceil(round2(newAmount / newInstallment))),
         notes: notes.trim() || null,
       };
+      // يُرسل فقط إن تغيّر (قبل HR-14 لا يوجد العمود)
+      if (newOpening !== round2(advance.openingRepaid || 0)) changes.opening_repaid = newOpening;
       if (startChanged) changes.start_month = startMonth;
       const { data, error: updateError } = await supabase.from("hr_advances").update(changes).eq("id", advance.id).select("id");
       if (updateError) throw updateError;
@@ -99,19 +119,27 @@ export function AdvanceEditDialog({ advance, onClose, onSaved }: {
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-md bg-slate-50 p-2"><span className="block text-xs text-slate-500">{t("الموظف")}</span><span className="font-semibold">{advance.name}</span></div>
-              <div className="rounded-md bg-slate-50 p-2"><span className="block text-xs text-slate-500">{t("المخصوم فعلًا من الرواتب")}</span><span className="font-semibold">{money(advance.repaid)}</span></div>
+              <div className="rounded-md bg-slate-50 p-2"><span className="block text-xs text-slate-500">{t("المخصوم فعلًا من الرواتب")}</span><span className="font-semibold">{money(round2(advance.repaid - advance.openingRepaid))}</span></div>
               <label className="space-y-1"><span className="block text-xs font-semibold text-slate-600">{t("مبلغ السلفة")}</span>
                 <input type="number" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className={fieldClass} /></label>
               <label className="space-y-1"><span className="block text-xs font-semibold text-slate-600">{t("القسط الشهري")}</span>
                 <input type="number" min="0" step="0.01" value={installment} onChange={(event) => setInstallment(event.target.value)} className={fieldClass} /></label>
               <label className="space-y-1"><span className="block text-xs font-semibold text-slate-600">{t("شهر بداية الخصم")}</span>
-                <input type="month" value={startMonth} min={startChanged ? riyadhMonth() : undefined} onChange={(event) => setStartMonth(event.target.value)} className={fieldClass} /></label>
+                <input type="month" value={startMonth} min={advance.minStartMonth} onChange={(event) => setStartMonth(event.target.value)} className={fieldClass} /></label>
+              <label className="space-y-1"><span className="block text-xs font-semibold text-slate-600">{t("المسدد قبل النظام")}</span>
+                <input type="number" min="0" step="0.01" value={opening} onChange={(event) => setOpening(event.target.value)} className={fieldClass} /></label>
               <label className="space-y-1"><span className="block text-xs font-semibold text-slate-600">{t("ملاحظات")}</span>
                 <input value={notes} onChange={(event) => setNotes(event.target.value)} className={fieldClass} /></label>
             </div>
+            {backDated && suggestedOpening > 0 && suggestedOpening < newAmount && newOpening === 0 && (
+              <p className="flex flex-wrap items-center gap-2 text-xs text-sky-800">
+                {t("المقترح حسب القسط وشهر البداية")}: <strong>{money(suggestedOpening)}</strong>
+                <button type="button" data-readonly-exempt disabled={busy} onClick={() => setOpening(String(suggestedOpening))} className="rounded border border-sky-400 bg-white px-2 py-0.5 text-xs text-sky-800 disabled:opacity-50">{t("استخدام المقترح")}</button>
+              </p>
+            )}
             <p className="text-xs text-slate-600">{t("المتبقي المتوقع بعد الحفظ")}: <span className="font-semibold text-[#004e89]">{money(remainingAfter)}</span></p>
-            {newAmount > 0 && newAmount < advance.repaid - 0.004 && (
-              <p className="text-xs font-semibold text-rose-700">{t("مبلغ السلفة لا يقل عما خُصم منها فعلًا من الرواتب")}: {money(advance.repaid)}</p>
+            {newAmount > 0 && newAmount < repaidAfter - 0.004 && (
+              <p className="text-xs font-semibold text-rose-700">{t("مبلغ السلفة لا يقل عما خُصم منها فعلًا من الرواتب")}: {money(repaidAfter)}</p>
             )}
             {error && <p className="rounded-md border border-rose-200 bg-rose-50 p-2 text-rose-700">{error}</p>}
             <div className="flex justify-end gap-2">

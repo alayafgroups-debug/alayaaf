@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
-import { advanceSkipsById, advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, parseApprovedAdvance, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
+import { advanceMinStartMonth, advanceSkipsById, advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, parseApprovedAdvance, suggestedOpeningRepaid, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
 import { AdvanceEditDialog, AdvanceSkipsDialog, deleteAdvance, type AdvanceActionTarget } from "@/components/hr/AdvanceDialogs";
 import { isEmployeeActive } from "@/lib/employeeStatus";
 import { riyadhMonth, riyadhToday } from "@/lib/hrDates";
@@ -21,7 +21,7 @@ import { useI18n } from "@/i18n";
  * بالدالة نفسها التي يستخدمها مسير الرواتب (lib/advances). المادة 92: قسط السلفة بلا موافقة كتابية لا يزيد على 10% من الأجر،
  * والمادة 93: المحسوم كله لا يزيد على نصف الأجر (يطبقه مسير الرواتب ويؤجل الباقي).
  */
-type Employee = { id: string; empId: string; name: string; wage: number; active: boolean };
+type Employee = { id: string; empId: string; name: string; wage: number; active: boolean; hireDate: string };
 type Advance = {
   id: string;
   employeeId: string;
@@ -43,9 +43,11 @@ type Advance = {
   skips: string[];
   /** ما سُدد منها من مستحقات نهاية الخدمة («إجمالي استقطاع السلف»، HR-13) */
   terminationPart: number;
+  /** المسدد قبل النظام (HR-14) */
+  openingRepaid: number;
 };
 type AdvanceRequest = { id: string; empId: string; name: string; amount: number; installments: number; installmentAmount: number; startMonth: string; method: string; currency: string; createdAt: string };
-type Draft = { employeeId: string; amount: string; installment: string; startMonth: string; notes: string; requestId: string };
+type Draft = { employeeId: string; amount: string; installment: string; startMonth: string; opening: string; notes: string; requestId: string };
 type Tab = "pending" | "active" | "closed" | "rejected" | "all";
 
 const TABS: { key: Tab; label: string }[] = [
@@ -62,7 +64,7 @@ const nextMonth = (month: string) => {
   const [year, mon] = month.split("-").map(Number);
   return mon === 12 ? `${year + 1}-01` : `${year}-${String(mon + 1).padStart(2, "0")}`;
 };
-const emptyDraft = (): Draft => ({ employeeId: "", amount: "", installment: "", startMonth: nextMonth(riyadhMonth()), notes: "", requestId: "" });
+const emptyDraft = (): Draft => ({ employeeId: "", amount: "", installment: "", startMonth: nextMonth(riyadhMonth()), opening: "", notes: "", requestId: "" });
 const missingRpc = (error: unknown) => ["PGRST202", "42883"].includes(String((error as { code?: string } | null)?.code ?? ""));
 /** قسط يكفي لسداد المبلغ في عدد الأشهر (مقرّب للأعلى بالهللة): 1000 على 3 = 333.34 */
 const installmentFor = (amount: number, months: number) => (amount > 0 && months > 0 ? Math.ceil(round2(amount / months) * 100 - 1e-6) / 100 : 0);
@@ -104,7 +106,7 @@ export default function HRPayrollAdvances() {
     setLoading(true); setError("");
     try {
       const [employeeRows, advanceRows, payrollRows, requestRows, skipRows, terminationRows] = await Promise.all([
-        fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("employees").select("id, emp_id, name, status, base_salary, total_salary").order("name").order("id").range(from, to)),
+        fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("employees").select("id, emp_id, name, status, base_salary, total_salary, hire_date").order("name").order("id").range(from, to)),
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("hr_advances").select("*").order("id").range(from, to)),
         // أقساط السلف المخصومة في كشوف الرواتب (غير المرفوضة) — المسدَّد من كل سلفة
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("payroll").select("id, emp_id, month, status, advance_deduction").gt("advance_deduction", 0).order("month").order("id").range(from, to)),
@@ -131,6 +133,7 @@ export default function HRPayrollAdvances() {
         name: String(row.name ?? ""),
         wage: Number(row.total_salary) > 0 ? Number(row.total_salary) : Number(row.base_salary) || 0,
         active: isEmployeeActive(row.status),
+        hireDate: String(row.hire_date ?? "").slice(0, 10),
       }));
       const employeeById = new Map(employeeList.map((item) => [item.id, item]));
       // أقساط السلف المخصومة لكل موظف شهرًا بشهر (كل الصفوف عدا الملغاة، كما في مسير الرواتب)
@@ -164,6 +167,7 @@ export default function HRPayrollAdvances() {
           remaining: 0,
           skips: [...(skipsById.get(String(row.id ?? "")) ?? [])].sort(),
           terminationPart: 0,
+          openingRepaid: round2(Math.max(0, Number(row.opening_repaid) || 0)),
         };
       });
       // توزيع المسدَّد على السلف المعتمدة لكل موظف بالدالة نفسها التي يستخدمها مسير الرواتب
@@ -249,6 +253,7 @@ export default function HRPayrollAdvances() {
       // القسط الذي طلبه الموظف إن ذكره، وإلا ما يكفي للسداد في عدد الأقساط
       installment: request.installmentAmount > 0 ? String(Math.min(request.installmentAmount, request.amount || request.installmentAmount)) : request.amount && request.installments ? String(installmentFor(request.amount, request.installments)) : "",
       startMonth: /^\d{4}-\d{2}$/.test(request.startMonth) && request.startMonth >= riyadhMonth() ? request.startMonth : nextMonth(riyadhMonth()),
+      opening: "",
       notes: `${t("من طلب سلفة بتاريخ")} ${request.createdAt.slice(0, 10)}`,
       requestId: request.id,
     });
@@ -262,6 +267,11 @@ export default function HRPayrollAdvances() {
   const draftInstallment = Number(draft?.installment);
   const draftMonths = draftAmount > 0 && draftInstallment > 0 ? Math.ceil(round2(draftAmount / draftInstallment)) : 0;
   const overTenPercent = Boolean(draftEmployee && draftEmployee.wage > 0 && draftInstallment > draftEmployee.wage * 0.1);
+  // HR-14: شهر البداية من شهر تعيين الموظف (وحتى 24 شهرًا للخلف)
+  const draftMinStart = advanceMinStartMonth(draftEmployee?.hireDate, riyadhMonth());
+  const draftPastStart = Boolean(draft && /^\d{4}-\d{2}$/.test(draft.startMonth) && draft.startMonth < riyadhMonth());
+  // المقترح: القسط × الأشهر من شهر البداية حتى الشهر السابق (ما يُفترض أنه خُصم في سمارت)
+  const draftSuggestedOpening = draft && draftPastStart ? suggestedOpeningRepaid(round2(draftAmount), round2(draftInstallment), draft.startMonth, riyadhMonth()) : 0;
 
   const saveDraft = async () => {
     if (!draft || busy) return;
@@ -271,7 +281,12 @@ export default function HRPayrollAdvances() {
     if (isOwn(draftEmployee.empId, draftEmployee.name)) { setError(t("لا تسجّل سلفة لنفسك؛ يسجّلها مسؤول رواتب آخر")); return; }
     if (!(amount > 0)) { setError(t("أدخل مبلغ السلفة")); return; }
     if (!(installment > 0) || installment > amount) { setError(t("القسط الشهري يجب أن يكون أكبر من صفر ولا يتجاوز مبلغ السلفة")); return; }
-    if (!/^\d{4}-\d{2}$/.test(draft.startMonth) || draft.startMonth < riyadhMonth()) { setError(t("شهر بداية الخصم يجب ألا يسبق الشهر الحالي")); return; }
+    if (!/^\d{4}-\d{2}$/.test(draft.startMonth) || draft.startMonth < draftMinStart) { setError(`${t("شهر بداية الخصم لا يسبق شهر تعيين الموظف ولا أقدم من 24 شهرًا")}: ${draftMinStart}`); return; }
+    const opening = round2(Number(draft.opening) || 0);
+    if (opening < 0 || opening >= amount) { setError(t("المسدد قبل النظام لا يكون سالبًا، ويكون أقل من مبلغ السلفة")); return; }
+    // شهر بداية سابق بلا مسدد قبل النظام: ما خُصم في سمارت يُخصم مرة أخرى؛ يُطلب التأكيد
+    if (draftPastStart && opening === 0 && draftSuggestedOpening > 0
+        && !window.confirm(`${t("لم تُدخل «المسدد قبل النظام» وشهر البداية سابق: ما خُصم منها في سمارت سيُخصم مرة أخرى")}. ${t("المقترح")}: ${money(draftSuggestedOpening)}. ${t("الحفظ دون مسدد قبل النظام؟")}`)) return;
     setBusy(true); setError(""); setMessage("");
     try {
       const payload: Record<string, unknown> = {
@@ -286,6 +301,8 @@ export default function HRPayrollAdvances() {
         notes: draft.notes.trim() || null,
       };
       if (draft.requestId) payload.request_id = draft.requestId;
+      // يُرسل فقط إن وُجد (قبل HR-14 لا يوجد العمود)
+      if (opening > 0) payload.opening_repaid = opening;
       const { error: insertError } = await supabase.from("hr_advances").insert(payload);
       if (insertError) throw insertError;
       setMessage(t("سُجّلت السلفة معتمدة؛ يُخصم قسطها من شهر البداية"));
@@ -334,7 +351,8 @@ export default function HRPayrollAdvances() {
   };
   const actionTarget = (advance: Advance): AdvanceActionTarget => ({
     id: advance.id, name: advance.name, amount: advance.amount, installment: advance.installment,
-    startMonth: advance.startMonth, notes: advance.notes, repaid: advance.repaid,
+    startMonth: advance.startMonth, notes: advance.notes, repaid: advance.repaid, openingRepaid: advance.openingRepaid,
+    minStartMonth: advanceMinStartMonth(employees.find((employee) => employee.id === advance.employeeId)?.hireDate, riyadhMonth()),
   });
 
   const statusBadge = (advance: Advance) => {
@@ -401,13 +419,32 @@ export default function HRPayrollAdvances() {
               </div>
               <div>
                 <label className="mb-1 block text-sm text-gray-700">{t("شهر بداية الخصم")} *</label>
-                <Input type="month" value={draft.startMonth} min={riyadhMonth()} onChange={(event) => setDraft({ ...draft, startMonth: event.target.value })} />
+                <Input type="month" value={draft.startMonth} min={draftMinStart} onChange={(event) => setDraft({ ...draft, startMonth: event.target.value })} />
               </div>
-              <div className="md:col-span-3">
+              <div>
+                <label className="mb-1 block text-sm text-gray-700">{t("المسدد قبل النظام (ر.س)")}</label>
+                <Input type="number" min="0" step="0.01" value={draft.opening} onChange={(event) => setDraft({ ...draft, opening: event.target.value })} placeholder="0" />
+                <p className="mt-1 text-xs text-gray-500">{t("ما خُصم من هذه السلفة قبل النظام (في سمارت)")}</p>
+              </div>
+              <div className="md:col-span-2">
                 <label className="mb-1 block text-sm text-gray-700">{t("ملاحظات")}</label>
                 <Input value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
               </div>
             </div>
+            {draftPastStart && (
+              <div className="space-y-1 rounded border border-sky-200 bg-sky-50 p-2 text-sm text-sky-800">
+                <p>{t("شهر بداية سابق: لا يُخصم شيء عن الأشهر الماضية إلا ما في كشوف رواتبها في النظام. أدخل في «المسدد قبل النظام» ما خُصم من هذه السلفة قبل النظام (في سمارت)، فيخصم النظام الباقي فقط")}</p>
+                {draftSuggestedOpening > 0 && draftSuggestedOpening < round2(draftAmount) && (
+                  <p className="flex flex-wrap items-center gap-2">
+                    {t("المقترح حسب القسط وشهر البداية")}: <strong>{money(draftSuggestedOpening)}</strong>
+                    <button type="button" disabled={busy} onClick={() => setDraft({ ...draft, opening: String(draftSuggestedOpening) })} className="rounded border border-sky-400 bg-white px-2 py-0.5 text-xs text-sky-800 disabled:opacity-50">{t("استخدام المقترح")}</button>
+                  </p>
+                )}
+                {draftSuggestedOpening > 0 && draftSuggestedOpening >= round2(draftAmount) && (
+                  <p className="font-semibold text-amber-800">{t("حسب القسط وشهر البداية سُددت هذه السلفة كلها قبل النظام؛ لا تسجّلها، أو صحّح شهر البداية")}</p>
+                )}
+              </div>
+            )}
             {overTenPercent && (
               <p className="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
                 {t("القسط يتجاوز 10% من أجر الموظف: يلزم موافقته الكتابية على الاقتطاع (المادة 92)، مثل طلب السلفة من البوابة. ولا يُخصم في الشهر أكثر من نصف الأجر مع الجزاءات والتأمينات (المادة 93)؛ الباقي يؤجل")}
@@ -507,6 +544,7 @@ export default function HRPayrollAdvances() {
                       </td>
                       <td className="px-3 py-2">
                         {isApprovedStatus(advance.status) ? money(advance.repaid) : "—"}
+                        {isApprovedStatus(advance.status) && advance.openingRepaid > 0.004 && <span className="block text-xs text-slate-500">{t("منها قبل النظام")}: {money(Math.min(advance.openingRepaid, advance.amount))}</span>}
                         {settledOnTermination(advance) && <span className="block text-xs text-emerald-700">{t("منها من مستحقات نهاية الخدمة")}: {money(advance.terminationPart)}</span>}
                       </td>
                       <td className="px-3 py-2 font-semibold">

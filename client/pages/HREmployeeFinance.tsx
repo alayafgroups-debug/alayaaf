@@ -7,9 +7,10 @@ import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { employeeErrorText } from "@/components/hr/employeeErrors";
 import { isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
-import { advanceSkipsById, advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, isMissingTableError, parseApprovedAdvance, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
+import { advanceMinStartMonth, advanceSkipsById, advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, isMissingTableError, parseApprovedAdvance, suggestedOpeningRepaid, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
 import { AdvanceEditDialog, AdvanceSkipsDialog, deleteAdvance, type AdvanceActionTarget } from "@/components/hr/AdvanceDialogs";
 import EmployeeDeductionsPanel from "@/components/hr/EmployeeDeductionsPanel";
+import EmployeeOvertimePanel from "@/components/hr/EmployeeOvertimePanel";
 import { isEmployeeActive } from "@/lib/employeeStatus";
 import { addDays, monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
 import { canManagePerm, readUserSession } from "@/lib/authSession";
@@ -23,9 +24,11 @@ import { useI18n } from "@/i18n";
  * - الاقتطاعات (HR-13، كما في سمارت): اقتطاعات شهرية (جدول hr_deductions) بمبلغ أو نسبة من الأساسي من شهر إلى شهر،
  *   يخصمها كشف الراتب ولا تمس الراتب الإجمالي. وتُعرض تحتها للعلم بنود «البدل المخصوم» القديمة في ملف الموظف.
  * - السلف: كصفحة سلف الموظفين تمامًا (HR-13): تُسجَّل معتمدة، وتُعدَّل ويُؤجَّل قسط شهر، وتُحذف ما لم يُخصم منها شيء.
+ *   HR-14: شهر البداية من شهر التعيين (وحتى 24 شهرًا للخلف)، و«المسدد قبل النظام» لما خُصم في سمارت.
+ * - الساعات الإضافية (HR-14، كما في سمارت): سجلاته وإجماليها لكل شهر (للعرض).
  * - الجزاءات: تُسجَّل معلقة ويعتمدها مسؤول جزاءات آخر (HR-12)، ويخصمها مسير الرواتب بحد المادة 72.
  */
-type Tab = "allowances" | "deductions" | "advances" | "penalties";
+type Tab = "allowances" | "deductions" | "advances" | "overtime" | "penalties";
 type RawAllowance = Record<string, unknown>;
 /** بند من employees.allowances: index موضعه في المصفوفة كاملة، وrawJson نصه كما هو لمطابقة البنود القديمة بلا معرّف */
 type AllowanceRow = { index: number; id: string; hasId: boolean; rawJson: string; type: string; amount: number; from: string; to: string; deduction: boolean };
@@ -42,6 +45,7 @@ type Employee = {
   baseSalary: number;
   totalSalary: number;
   allowances: RawAllowance[];
+  hireDate: string;
 };
 type Advance = {
   id: string;
@@ -61,6 +65,8 @@ type Advance = {
   skips: string[];
   /** ما سُدد منها من مستحقات نهاية الخدمة («إجمالي استقطاع السلف»، HR-13) */
   terminationPart: number;
+  /** المسدد قبل النظام (HR-14) */
+  openingRepaid: number;
 };
 type Penalty = {
   id: string;
@@ -75,13 +81,14 @@ type Penalty = {
   decisionNote: string;
 };
 type ItemDraft = { type: string; amount: string; from: string; to: string };
-type AdvanceDraft = { amount: string; installment: string; startMonth: string; notes: string };
+type AdvanceDraft = { amount: string; installment: string; startMonth: string; opening: string; notes: string };
 type PenaltyDraft = { type: string; amount: string; date: string; reason: string };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "allowances", label: "البدلات" },
   { key: "deductions", label: "الاقتطاعات" },
   { key: "advances", label: "السلف" },
+  { key: "overtime", label: "الساعات الإضافية" },
   { key: "penalties", label: "الجزاءات" },
 ];
 const ALLOWANCE_TYPES = ["بدل السكن", "بدل النقل", "بدل الأطفال", "بدل الطعام", "بدل الهاتف", "بدل اللباس", "أخرى"];
@@ -168,6 +175,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
   const [editingAdvance, setEditingAdvance] = useState<AdvanceActionTarget | null>(null);
   const [skippingAdvance, setSkippingAdvance] = useState<AdvanceActionTarget | null>(null);
   const [deductionCount, setDeductionCount] = useState(0);
+  const [overtimeCount, setOvertimeCount] = useState(0);
   // من سجّل السلفة أو الجزاء لا يعتمده (إلا مدير النظام): تُخفى أزرار القرار عنه
   const [myUid, setMyUid] = useState("");
   const [isMainAdmin, setIsMainAdmin] = useState(false);
@@ -224,9 +232,10 @@ function EmployeeFinancePage({ id }: { id: string }) {
         baseSalary: Number(record.base_salary) || 0,
         totalSalary: Number(record.total_salary) || 0,
         allowances: Array.isArray(record.allowances) ? (record.allowances as RawAllowance[]).filter((item) => item && typeof item === "object") : [],
+        hireDate: text(record.hire_date).slice(0, 10),
       };
 
-      const [advanceResult, penaltyResult, configResult, decisionResult, payrollResult, terminationResult, deductionCountResult] = await Promise.all([
+      const [advanceResult, penaltyResult, configResult, decisionResult, payrollResult, terminationResult, deductionCountResult, overtimeCountResult] = await Promise.all([
         supabase.from("hr_advances").select("*").eq("employee_id", loaded.id),
         supabase.from("penalties").select("*").eq("employee_id", loaded.id).order("date", { ascending: false }),
         supabase.from("hr_config_items").select("config_type, name_ar, status").eq("config_type", "allowance"),
@@ -240,12 +249,15 @@ function EmployeeFinancePage({ id }: { id: string }) {
         supabase.from("hr_terminations").select("*").eq("emp_id", loaded.id).gt("advances_deduction", 0),
         // عدد الاقتطاعات الشهرية للعداد في التبويب قبل فتحه (HR-13)
         supabase.from("hr_deductions").select("id", { count: "exact", head: true }).eq("employee_id", loaded.id),
+        // عدد سجلات الساعات الإضافية للعداد في التبويب (HR-14)
+        supabase.from("overtime_records").select("id", { count: "exact", head: true }).eq("employee_id", loaded.id),
       ]);
       if (seq !== loadSeq.current) return;
       // قبل HR-13 لا يوجد العمود: لا سداد من نهاية الخدمة؛ وأي خطأ آخر يُنبَّه إليه
       const terminationFailed = Boolean(terminationResult.error && !isMissingColumnError(terminationResult.error));
       const terminationCredit = terminationResult.error ? 0 : (terminationAdvanceCredits((terminationResult.data ?? []) as Record<string, unknown>[]).get(loaded.id) ?? 0);
       if (!deductionCountResult.error) setDeductionCount(deductionCountResult.count ?? 0);
+      if (!overtimeCountResult.error) setOvertimeCount(overtimeCountResult.count ?? 0);
 
       if (advanceResult.error) {
         setAdvances([]);
@@ -291,6 +303,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
             remaining: isRejectedStatus(status) ? 0 : round2(Math.max(0, amount - repaid)),
             skips: [...(skipsById.get(text(advanceRow.id)) ?? [])].sort(),
             terminationPart: isApprovedStatus(status) ? round2(Math.max(0, repaid - (fromPayroll.get(text(advanceRow.id)) ?? 0))) : 0,
+            openingRepaid: round2(Math.max(0, Number(advanceRow.opening_repaid) || 0)),
           };
         }).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
         setAdvanceError(payrollResult.error
@@ -461,14 +474,27 @@ function EmployeeFinancePage({ id }: { id: string }) {
   const advanceInstallment = Number(advanceDraft?.installment);
   const advanceMonths = advanceAmount > 0 && advanceInstallment > 0 ? Math.ceil(round2(advanceAmount / advanceInstallment)) : 0;
   const overTenPercent = Boolean(advanceDraft && wage > 0 && advanceInstallment > wage * 0.1);
+  // HR-14: شهر البداية من شهر تعيين الموظف (وحتى 24 شهرًا للخلف)
+  const advanceMinStart = advanceMinStartMonth(employee?.hireDate, riyadhMonth());
+  const advancePastStart = Boolean(advanceDraft && /^\d{4}-\d{2}$/.test(advanceDraft.startMonth) && advanceDraft.startMonth < riyadhMonth());
+  // المقترح: القسط × الأشهر من شهر البداية حتى الشهر السابق (ما يُفترض أنه خُصم في سمارت)
+  const advanceSuggestedOpening = advanceDraft && advancePastStart ? suggestedOpeningRepaid(round2(advanceAmount), round2(advanceInstallment), advanceDraft.startMonth, riyadhMonth()) : 0;
 
-  const saveAdvance = () => run(async () => {
+  const saveAdvance = () => {
+    // شهر بداية سابق بلا مسدد قبل النظام: ما خُصم في سمارت يُخصم مرة أخرى؛ يُطلب التأكيد
+    if (advanceDraft && advancePastStart && !(round2(Number(advanceDraft.opening) || 0) > 0) && advanceSuggestedOpening > 0
+        && !window.confirm(`${t("لم تُدخل «المسدد قبل النظام» وشهر البداية سابق: ما خُصم منها في سمارت سيُخصم مرة أخرى")}. ${t("المقترح")}: ${money(advanceSuggestedOpening)}. ${t("الحفظ دون مسدد قبل النظام؟")}`)) return;
+    void saveAdvanceNow();
+  };
+  const saveAdvanceNow = () => run(async () => {
     if (!advanceDraft || !employee) return "";
     const amount = round2(Number(advanceDraft.amount));
     const installment = round2(Number(advanceDraft.installment));
     if (!(amount > 0)) throw new Error(t("أدخل مبلغ السلفة"));
     if (!(installment > 0) || installment > amount) throw new Error(t("القسط الشهري يجب أن يكون أكبر من صفر ولا يتجاوز مبلغ السلفة"));
-    if (!/^\d{4}-\d{2}$/.test(advanceDraft.startMonth) || advanceDraft.startMonth < riyadhMonth()) throw new Error(t("شهر بداية الخصم يجب ألا يسبق الشهر الحالي"));
+    if (!/^\d{4}-\d{2}$/.test(advanceDraft.startMonth) || advanceDraft.startMonth < advanceMinStart) throw new Error(`${t("شهر بداية الخصم لا يسبق شهر تعيين الموظف ولا أقدم من 24 شهرًا")}: ${advanceMinStart}`);
+    const opening = round2(Number(advanceDraft.opening) || 0);
+    if (opening < 0 || opening >= amount) throw new Error(t("المسدد قبل النظام لا يكون سالبًا، ويكون أقل من مبلغ السلفة"));
     const { error: insertError } = await supabase.from("hr_advances").insert({
       employee_id: employee.id,
       emp_name: employee.name,
@@ -479,6 +505,8 @@ function EmployeeFinancePage({ id }: { id: string }) {
       request_date: today,
       status: "معتمد",
       notes: advanceDraft.notes.trim() || null,
+      // يُرسل فقط إن وُجد (قبل HR-14 لا يوجد العمود)
+      ...(opening > 0 ? { opening_repaid: opening } : {}),
     });
     if (insertError) throw insertError;
     setAdvanceDraft(null);
@@ -505,7 +533,8 @@ function EmployeeFinancePage({ id }: { id: string }) {
   };
   const advanceTarget = (advance: Advance): AdvanceActionTarget => ({
     id: advance.id, name: employee?.name ?? "", amount: advance.amount, installment: advance.installment,
-    startMonth: advance.startMonth, notes: advance.notes, repaid: advance.repaid,
+    startMonth: advance.startMonth, notes: advance.notes, repaid: advance.repaid, openingRepaid: advance.openingRepaid,
+    minStartMonth: advanceMinStartMonth(employee?.hireDate, riyadhMonth()),
   });
 
   // ─── الجزاءات ───
@@ -667,16 +696,17 @@ function EmployeeFinancePage({ id }: { id: string }) {
         <p className="text-xs text-slate-500">{t("السلفة تُسجَّل معتمدة ويُخصم قسطها من الراتب ابتداءً من شهر البداية حتى السداد. تُعدَّل، ويُؤجَّل قسط شهر (يمتد السداد شهرًا)، وتُحذف ما لم يُخصم منها شيء. المتبقي يُحسب من الأقساط المخصومة فعلًا في كشوف الرواتب.")}</p>
         {advanceError && <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{t(advanceError)}</p>}
         {canAdd && !advanceDraft && (
-          <button type="button" data-readonly-exempt onClick={() => setAdvanceDraft({ amount: "", installment: "", startMonth: nextMonth(riyadhMonth()), notes: "" })} className="flex items-center gap-1 rounded-md bg-[#004e89] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#003d6b]">
+          <button type="button" data-readonly-exempt onClick={() => setAdvanceDraft({ amount: "", installment: "", startMonth: nextMonth(riyadhMonth()), opening: "", notes: "" })} className="flex items-center gap-1 rounded-md bg-[#004e89] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#003d6b]">
             <Plus className="h-4 w-4" />{t("إضافة سلفة")}
           </button>
         )}
         {canAdd && advanceDraft && (
           <div className="space-y-2 rounded-lg border border-blue-100 bg-blue-50/50 p-3">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
               <label className={labelClass}><span className="block">{t("مبلغ السلفة")}</span><input type="number" min="0" step="0.01" value={advanceDraft.amount} onChange={(event) => setAdvanceDraft({ ...advanceDraft, amount: event.target.value })} className={fieldClass} /></label>
               <label className={labelClass}><span className="block">{t("القسط الشهري")}</span><input type="number" min="0" step="0.01" value={advanceDraft.installment} onChange={(event) => setAdvanceDraft({ ...advanceDraft, installment: event.target.value })} className={fieldClass} /></label>
-              <label className={labelClass}><span className="block">{t("شهر بداية الخصم")}</span><input type="month" min={riyadhMonth()} value={advanceDraft.startMonth} onChange={(event) => setAdvanceDraft({ ...advanceDraft, startMonth: event.target.value })} className={fieldClass} /></label>
+              <label className={labelClass}><span className="block">{t("شهر بداية الخصم")}</span><input type="month" min={advanceMinStart} value={advanceDraft.startMonth} onChange={(event) => setAdvanceDraft({ ...advanceDraft, startMonth: event.target.value })} className={fieldClass} /></label>
+              <label className={labelClass}><span className="block">{t("المسدد قبل النظام")}</span><input type="number" min="0" step="0.01" placeholder="0" value={advanceDraft.opening} onChange={(event) => setAdvanceDraft({ ...advanceDraft, opening: event.target.value })} className={fieldClass} /></label>
               <label className={labelClass}><span className="block">{t("ملاحظات")}</span><input value={advanceDraft.notes} onChange={(event) => setAdvanceDraft({ ...advanceDraft, notes: event.target.value })} className={fieldClass} /></label>
               <div className="flex items-end gap-2">
                 <button type="button" data-readonly-exempt disabled={busy} onClick={() => void saveAdvance()} className="rounded-md bg-[#004e89] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{t("حفظ")}</button>
@@ -684,6 +714,20 @@ function EmployeeFinancePage({ id }: { id: string }) {
               </div>
             </div>
             {advanceMonths > 0 && <p className="text-xs text-slate-600">{t("عدد الأشهر التقريبي")}: {formatNumber(advanceMonths)}</p>}
+            {advancePastStart && (
+              <div className="space-y-1 text-xs text-sky-800">
+                <p>{t("شهر بداية سابق: لا يُخصم شيء عن الأشهر الماضية إلا ما في كشوف رواتبها في النظام. أدخل في «المسدد قبل النظام» ما خُصم من هذه السلفة قبل النظام (في سمارت)، فيخصم النظام الباقي فقط")}</p>
+                {advanceSuggestedOpening > 0 && advanceSuggestedOpening < round2(advanceAmount) && (
+                  <p className="flex flex-wrap items-center gap-2">
+                    {t("المقترح حسب القسط وشهر البداية")}: <strong>{money(advanceSuggestedOpening)}</strong>
+                    <button type="button" data-readonly-exempt disabled={busy} onClick={() => setAdvanceDraft({ ...advanceDraft, opening: String(advanceSuggestedOpening) })} className="rounded border border-sky-400 bg-white px-2 py-0.5 text-xs text-sky-800 disabled:opacity-50">{t("استخدام المقترح")}</button>
+                  </p>
+                )}
+                {advanceSuggestedOpening > 0 && advanceSuggestedOpening >= round2(advanceAmount) && (
+                  <p className="font-semibold text-amber-800">{t("حسب القسط وشهر البداية سُددت هذه السلفة كلها قبل النظام؛ لا تسجّلها، أو صحّح شهر البداية")}</p>
+                )}
+              </div>
+            )}
             {overTenPercent && <p className="text-xs font-semibold text-amber-700">{t("القسط أكثر من 10% من أجر الموظف: المادة 92 تشترط موافقته الكتابية")}</p>}
           </div>
         )}
@@ -717,6 +761,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
                     </td>
                     <td className="px-3 py-2">
                       {isApprovedStatus(advance.status) ? money(advance.repaid) : "—"}
+                      {isApprovedStatus(advance.status) && advance.openingRepaid > 0.004 && <span className="block text-xs text-slate-500">{t("منها قبل النظام")}: {money(Math.min(advance.openingRepaid, advance.amount))}</span>}
                       {advance.terminationPart > 0.004 && <span className="block text-xs text-emerald-700">{t("منها من مستحقات نهاية الخدمة")}: {money(advance.terminationPart)}</span>}
                     </td>
                     <td className="px-3 py-2 font-semibold text-[#004e89]">{isRejectedStatus(advance.status) ? "—" : money(advance.remaining)}</td>
@@ -842,6 +887,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
     allowances: allowanceRows.filter((row) => !row.deduction).length,
     deductions: deductionCount + allowanceRows.filter((row) => row.deduction).length,
     advances: advances.length,
+    overtime: overtimeCount,
     penalties: penalties.length,
   };
   const pendingInTab = tab === "advances"
@@ -933,6 +979,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
                   </div>
                 )}
                 {tab === "advances" && renderAdvances()}
+                {tab === "overtime" && <EmployeeOvertimePanel employeeId={employee.id} onCountChange={setOvertimeCount} />}
                 {tab === "penalties" && renderPenalties()}
               </div>
             </div>

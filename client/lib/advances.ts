@@ -8,6 +8,7 @@ import { isApprovedStatus } from "@/lib/hrStatus";
 // «تأجيل قسط شهر» (HR-13، جدول hr_advance_skips): لا يُخصم قسط السلفة في الشهر المؤجَّل، فيمتد سدادها شهرًا.
 // «إجمالي استقطاع السلف» في إنهاء الخدمة (HR-13): مبلغ سُدد من المستحقات، يُحتسب بعد كل أشهر الرواتب
 // (مفتاح TERMINATION_CREDIT_MONTH)، فيقل المتبقي وقسط الراتب بقدره فقط.
+// «المسدد قبل النظام» (HR-14، عمود opening_repaid): ما خُصم من السلفة خارج النظام (سمارت) يُحتسب سدادًا لها أولًا.
 
 export type AdvanceRecord = {
   id: string;
@@ -18,6 +19,8 @@ export type AdvanceRecord = {
   order: string;
   /** الأشهر المؤجَّل قسطها (YYYY-MM) */
   skips?: Set<string>;
+  /** المسدد قبل النظام (HR-14) */
+  openingRepaid?: number;
 };
 
 const round2 = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
@@ -34,6 +37,7 @@ export const parseApprovedAdvance = (row: Record<string, unknown>, skips?: Set<s
   const amount = round2(Number(row.amount ?? row.remaining_amount) || 0);
   const installment = round2(Number(row.monthly_installment) || 0);
   if (!MONTH.test(start) || amount <= 0 || installment <= 0) return null;
+  const openingRepaid = round2(Math.min(amount, Math.max(0, Number(row.opening_repaid) || 0)));
   return {
     id: String(row.id ?? ""),
     employeeId: String(row.employee_id ?? ""),
@@ -42,7 +46,37 @@ export const parseApprovedAdvance = (row: Record<string, unknown>, skips?: Set<s
     installment: Math.min(installment, amount),
     order: `${start}|${String(row.created_at ?? "")}|${String(row.id ?? "")}`,
     ...(skips && skips.size ? { skips } : {}),
+    ...(openingRepaid > 0 ? { openingRepaid } : {}),
   };
+};
+
+/** شهر بعد/قبل شهر (YYYY-MM) بعدد أشهر */
+export const shiftMonth = (month: string, delta: number) => {
+  const [year, mon] = month.split("-").map(Number);
+  const index = year * 12 + (mon - 1) + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+};
+
+/** عدد الأشهر من شهر إلى شهر (YYYY-MM): من 2026-07 إلى 2026-10 = 3 */
+export const monthsFrom = (from: string, to: string) => {
+  const index = (month: string) => { const [year, mon] = month.split("-").map(Number); return year * 12 + (mon - 1); };
+  return index(to) - index(from);
+};
+
+/**
+ * المسدد قبل النظام المقترح لسلفة بشهر بداية سابق (HR-14): القسط × عدد الأشهر من شهر البداية حتى الشهر السابق للحالي،
+ * بحد مبلغ السلفة (إن بلغه فالسلفة سُددت كلها قبل النظام ولا تُسجَّل)
+ */
+export const suggestedOpeningRepaid = (amount: number, installment: number, startMonth: string, currentMonth: string) => {
+  if (!MONTH.test(startMonth) || !(amount > 0) || !(installment > 0)) return 0;
+  return round2(Math.min(amount, installment * Math.max(0, monthsFrom(startMonth, currentMonth))));
+};
+
+/** أول شهر يُسمح به بداية للسلفة (HR-14، كقاعدة البيانات): شهر تعيين الموظف، ولا أكثر من 24 شهرًا قبل الشهر الحالي */
+export const advanceMinStartMonth = (hireDate: unknown, currentMonth: string) => {
+  const limit = shiftMonth(currentMonth, -24);
+  const hire = String(hireDate ?? "").slice(0, 7);
+  return MONTH.test(hire) && hire > limit ? hire : limit;
 };
 
 /** السلفة يُستحق قسطها في الشهر: بدأت فيه أو قبله، ولم يُؤجَّل قسطها فيه */
@@ -69,7 +103,8 @@ export const advanceSkipsById = (rows: Array<Record<string, unknown>>) => {
  */
 export const allocateAdvanceRepayments = (advances: AdvanceRecord[], deductionsByMonth: Map<string, number>): Map<string, number> => {
   const ordered = [...advances].sort((a, b) => a.order.localeCompare(b.order));
-  const repaid = new Map<string, number>(ordered.map((advance) => [advance.id, 0]));
+  // المسدد قبل النظام يُحسب لكل سلفة قبل أقساط الرواتب
+  const repaid = new Map<string, number>(ordered.map((advance) => [advance.id, round2(Math.min(advance.amount, advance.openingRepaid ?? 0))]));
   const remaining = (advance: AdvanceRecord) => round2(advance.amount - (repaid.get(advance.id) ?? 0));
   [...deductionsByMonth.keys()].sort().forEach((month) => {
     let left = round2(Math.max(0, deductionsByMonth.get(month) ?? 0));

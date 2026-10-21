@@ -12,8 +12,9 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useI18n } from "@/i18n";
 
 /**
- * اعتماد الساعات الإضافية: تُسجَّل من "حساب الدوام" معلقة، ولا تدخل الراتب إلا بعد اعتمادها هنا
- * من مسؤول آخر (إدارة الحضور أو الرواتب)، لا من سجّلها ولا من صاحبها. قاعدة البيانات تفرض ذلك أيضًا.
+ * الساعات الإضافية (HR-13، كما في سمارت): تُسجَّل من "حساب الدوام" معتمدة وتدخل كشف الراتب مباشرة.
+ * السجل الخاطئ يُحذف هنا ويُسجَّل من جديد ما دام شهر رواتبه غير مقفل (قاعدة البيانات تفرض ذلك).
+ * السجلات المعلقة القديمة (قبل HR-13) تُعتمد أو تُرفض هنا من مسؤول آخر، لا من سجّلها ولا من صاحبها.
  */
 type OvertimeRow = {
   id: string;
@@ -56,7 +57,7 @@ export default function HRAttendanceOvertime() {
   const ownEmpId = String(session?.empId ?? "").trim();
   const ownName = String(session?.name ?? "").trim();
   const [month, setMonth] = useState(riyadhMonth());
-  const [tab, setTab] = useState<Tab>("pending");
+  const [tab, setTab] = useState<Tab>("all");
   const [rows, setRows] = useState<OvertimeRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -135,8 +136,11 @@ export default function HRAttendanceOvertime() {
     return result;
   }, [rows]);
   const approvedTotal = useMemo(() => rows.filter((row) => isApprovedStatus(row.status)).reduce((sum, row) => sum + row.amount, 0), [rows]);
-  const selectable = visible.filter((row) => tabOf(row.status) === "pending" && !isOwn(row));
+  // التحديد للحذف (أي حالة) وللقرار (المعلق فقط)؛ لا يُحدَّد سجل المستخدم نفسه
+  const selectable = visible.filter((row) => !isOwn(row));
   const allSelected = selectable.length > 0 && selectable.every((row) => selected.has(row.id));
+  const selectedPending = selectable.filter((row) => selected.has(row.id) && tabOf(row.status) === "pending");
+  const hasPending = counts.pending > 0;
 
   const toggle = (id: string) => setSelected((current) => {
     const next = new Set(current);
@@ -147,7 +151,7 @@ export default function HRAttendanceOvertime() {
 
   const decide = async (decision: "معتمد" | "مرفوض") => {
     // المحدد الظاهر فقط (لا ما أخفاه البحث)
-    const ids = selectable.filter((row) => selected.has(row.id)).map((row) => row.id);
+    const ids = selectedPending.map((row) => row.id);
     if (!ids.length || busy) return;
     if (decision === "مرفوض" && !note.trim()) { setError(t("اكتب سبب الرفض في خانة الملاحظة")); return; }
     setBusy(true); setError(""); setMessage("");
@@ -178,19 +182,28 @@ export default function HRAttendanceOvertime() {
     }
   };
 
-  const removePending = async () => {
-    const ids = selectable.filter((row) => selected.has(row.id)).map((row) => row.id);
-    if (!ids.length || busy) return;
-    if (!window.confirm(t("حذف السجلات المعلقة المحددة؟ لا يُحذف سجل معتمد أو مرفوض"))) return;
+  const removeSelected = async () => {
+    const targets = selectable.filter((row) => selected.has(row.id));
+    if (!targets.length || busy) return;
+    if (!window.confirm(t("حذف السجلات المحددة؟ تخرج من كشف الراتب، ولا يُحذف سجل في شهر رواتبه معتمدة أو مرحّلة"))) return;
     setBusy(true); setError(""); setMessage("");
     try {
       let deleted = 0;
-      for (const part of chunkIds(ids)) {
-        const { data, error: deleteError } = await supabase.from("overtime_records").delete().in("id", part).eq("status", "معلق").select("id");
-        if (deleteError) throw deleteError;
-        deleted += (data ?? []).length;
+      const failures: string[] = [];
+      for (const part of chunkIds(targets.map((row) => row.id))) {
+        const { data, error: deleteError } = await supabase.from("overtime_records").delete().in("id", part).select("id");
+        if (!deleteError) { deleted += (data ?? []).length; continue; }
+        // رُفضت الدفعة (شهر مقفل مثلًا): سجلًا سجلًا لمعرفة ما رُفض ولماذا
+        for (const id of part) {
+          const single = await supabase.from("overtime_records").delete().eq("id", id).select("id");
+          const row = targets.find((item) => item.id === id);
+          if (single.error) failures.push(`${row?.name ?? id}: ${t(hrRequestErrorText(single.error, "تعذر الحذف"))}`);
+          else deleted += (single.data ?? []).length;
+        }
       }
-      setMessage(deleted ? `${t("حُذف")} ${formatNumber(deleted)} ${t("سجل")}` : t("لم يُحذف شيء: لا تملك صلاحية الحذف أو صدر قرار في السجلات"));
+      const parts = [deleted ? `${t("حُذف")} ${formatNumber(deleted)} ${t("سجل")}` : t("لم يُحذف شيء")];
+      if (failures.length) parts.push(`${t("لم يُحذف")} ${formatNumber(failures.length)}: ${failures.slice(0, 10).join("، ")}${failures.length > 10 ? "…" : ""}`);
+      setMessage(parts.join("، "));
       await load();
     } catch (deleteError) {
       setError(hrRequestErrorText(deleteError, t("تعذر الحذف")));
@@ -210,8 +223,8 @@ export default function HRAttendanceOvertime() {
       <div className="mx-auto max-w-[1600px] space-y-5 p-6" dir={direction}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t("اعتماد الساعات الإضافية")}</h1>
-            <p className="mt-1 text-sm text-gray-500">{t("تُسجَّل الساعات الإضافية من حساب الدوام معلقة، ولا تدخل الراتب إلا بعد اعتمادها هنا من مسؤول غير من سجّلها وغير صاحبها")}</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t("الساعات الإضافية")}</h1>
+            <p className="mt-1 text-sm text-gray-500">{t("تُسجَّل الساعات الإضافية من «حساب الدوام» معتمدة وتدخل كشف الراتب مباشرة. السجل الخاطئ يُحذف من هنا ويُسجَّل من جديد ما دام شهر رواتبه غير مقفل. السجلات المعلقة القديمة يعتمدها أو يرفضها مسؤول غير من سجّلها")}</p>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">{t("الشهر")}</label>
@@ -242,21 +255,25 @@ export default function HRAttendanceOvertime() {
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input placeholder={t("بحث بالاسم أو الرقم الوظيفي")} value={search} onChange={(event) => { setSearch(event.target.value); setSelected(new Set()); }} className="pr-9" />
             </div>
-            {canDecide && tab === "pending" && (
+            {canDecide && (
               <div className="flex flex-wrap items-center gap-2">
-                <Input placeholder={t("ملاحظة القرار (إلزامية عند الرفض)")} value={note} onChange={(event) => setNote(event.target.value)} className="w-72" />
-                <button type="button" disabled={!selected.size || busy} onClick={() => void decide("معتمد")}
-                  className="flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-sm text-white disabled:opacity-50">
-                  <CheckCircle2 className="h-4 w-4" />{t("اعتماد المحدد")} ({formatNumber(selected.size)})
-                </button>
-                <button type="button" disabled={!selected.size || busy} onClick={() => void decide("مرفوض")}
-                  className="flex items-center gap-1 rounded bg-red-600 px-3 py-2 text-sm text-white disabled:opacity-50">
-                  <XCircle className="h-4 w-4" />{t("رفض المحدد")}
-                </button>
+                {hasPending && (tab === "pending" || tab === "all") && (
+                  <>
+                    <Input placeholder={t("ملاحظة القرار (إلزامية عند الرفض)")} value={note} onChange={(event) => setNote(event.target.value)} className="w-72" />
+                    <button type="button" disabled={!selectedPending.length || busy} onClick={() => void decide("معتمد")}
+                      className="flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+                      <CheckCircle2 className="h-4 w-4" />{t("اعتماد المحدد")} ({formatNumber(selectedPending.length)})
+                    </button>
+                    <button type="button" disabled={!selectedPending.length || busy} onClick={() => void decide("مرفوض")}
+                      className="flex items-center gap-1 rounded bg-red-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+                      <XCircle className="h-4 w-4" />{t("رفض المحدد")}
+                    </button>
+                  </>
+                )}
                 {canDelete && (
-                  <button type="button" disabled={!selected.size || busy} onClick={() => void removePending()}
+                  <button type="button" disabled={!selected.size || busy} onClick={() => void removeSelected()}
                     className="flex items-center gap-1 rounded border border-red-300 px-3 py-2 text-sm text-red-700 disabled:opacity-50">
-                    <Trash2 className="h-4 w-4" />{t("حذف")}
+                    <Trash2 className="h-4 w-4" />{t("حذف المحدد")} ({formatNumber(selected.size)})
                   </button>
                 )}
               </div>
@@ -266,7 +283,7 @@ export default function HRAttendanceOvertime() {
             <table className="w-full min-w-[1100px] text-right text-sm">
               <thead className="bg-[#004e89] text-white">
                 <tr>
-                  {canDecide && tab === "pending" && <th className="w-10 px-3 py-3"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label={t("تحديد الكل")} /></th>}
+                  {canDecide && <th className="w-10 px-3 py-3"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label={t("تحديد الكل")} /></th>}
                   <th className="px-3 py-3 font-medium">{t("الرقم الوظيفي")}</th>
                   <th className="px-3 py-3 font-medium">{t("الاسم")}</th>
                   <th className="px-3 py-3 font-medium">{t("الإدارة")}</th>
@@ -281,16 +298,16 @@ export default function HRAttendanceOvertime() {
               </thead>
               <tbody className="divide-y">
                 {loading ? (
-                  <tr><td colSpan={11} className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
+                  <tr><td colSpan={canDecide ? 11 : 10} className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : visible.length === 0 ? (
-                  <tr><td colSpan={11} className="py-8 text-center text-gray-400">{t("لا توجد سجلات")}</td></tr>
+                  <tr><td colSpan={canDecide ? 11 : 10} className="py-8 text-center text-gray-400">{t("لا توجد سجلات")}</td></tr>
                 ) : visible.map((row) => {
                   const own = isOwn(row);
                   return (
                     <tr key={row.id} className="hover:bg-gray-50/50">
-                      {canDecide && tab === "pending" && (
+                      {canDecide && (
                         <td className="px-3 py-2 text-center">
-                          <input type="checkbox" disabled={own} checked={selected.has(row.id)} onChange={() => toggle(row.id)} title={own ? t("لا تعتمد ساعاتك الإضافية") : ""} />
+                          <input type="checkbox" disabled={own} checked={selected.has(row.id)} onChange={() => toggle(row.id)} title={own ? t("لا تعتمد ساعاتك الإضافية ولا تحذفها") : ""} />
                         </td>
                       )}
                       <td className="px-3 py-2">{row.empId || "—"}</td>

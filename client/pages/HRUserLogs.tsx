@@ -32,6 +32,9 @@ const KNOWN_MODULES: Array<[string, string]> = [
   ["audit.official_holidays", "العطل الرسمية"],
   ["audit.termination_reasons", "أسباب إنهاء الخدمة"],
   ["audit.penalties", "الجزاءات"],
+  ["audit.overtime", "الساعات الإضافية"],
+  ["audit.advances", "السلف"],
+  ["audit.deductions", "الاقتطاعات"],
 ];
 
 const MODULE_COLORS: Record<string, string> = {

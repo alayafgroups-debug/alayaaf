@@ -50,12 +50,15 @@ interface LeaveRequestFormProps {
     name: string;
     gender?: string;
   };
+  /** طلب عوضًا عن موظف (HR-13): يُرسل بلا توقيع الموظف، ويُذكر مرسله في الملاحظات */
+  onBehalfBy?: { empId: string; name: string } | null;
 }
 
 export default function LeaveRequestForm({
   open,
   onOpenChange,
   employeeInfo,
+  onBehalfBy = null,
 }: LeaveRequestFormProps) {
   const { t, direction } = useI18n();
   const [loading, setLoading] = useState(false);
@@ -194,11 +197,13 @@ export default function LeaveRequestForm({
         return;
       }
 
-      if (!signature) {
+      if (!onBehalfBy && !signature) {
         alert(t("يجب إنشاء وحفظ توقيعك الإلكتروني قبل إرسال الطلب"));
         setLoading(false);
         return;
       }
+      // لا يوقّع أحد عن الموظف: الطلب عوضًا عنه يُرسل بلا توقيع ويحمل اسم من أرسله
+      const onBehalfText = onBehalfBy ? `مُرسل عوضًا عن الموظف بواسطة: ${onBehalfBy.name || "—"}${onBehalfBy.empId ? ` (${onBehalfBy.empId})` : ""} | ` : "";
 
       const { error } = await supabase.from("leave_requests").insert({
         emp_id: empId,
@@ -208,9 +213,9 @@ export default function LeaveRequestForm({
         end_date: formData.endDate,
         days: duration,
         status: "معلق",
-        signature_data: signature.signatureData,
-        signed_at: new Date().toISOString(),
-        notes: `مدة الإجازة: ${duration} يوم | العنوان: ${formData.address} | البديل: ${substituteText} | الهاتف: ${formData.phone} | السبب: ${formData.reason}`,
+        signature_data: onBehalfBy ? null : signature?.signatureData ?? null,
+        signed_at: onBehalfBy ? null : new Date().toISOString(),
+        notes: `${onBehalfText}مدة الإجازة: ${duration} يوم | العنوان: ${formData.address} | البديل: ${substituteText} | الهاتف: ${formData.phone} | السبب: ${formData.reason}`,
       });
 
       if (error) throw error;
@@ -409,7 +414,13 @@ export default function LeaveRequestForm({
             </div>
 
             {open && <ApproverPreview kind="leave" empId={employeeInfo?.empId} />}
-            <EmployeeSignatureField onChange={setSignature} />
+            {onBehalfBy ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                {t("طلب عوضًا عن الموظف: يُرسل بلا توقيعه، ويُسجَّل اسمك مرسلًا له")}
+              </p>
+            ) : (
+              <EmployeeSignatureField onChange={setSignature} />
+            )}
 
             {/* Attachments */}
             <div className="space-y-2">

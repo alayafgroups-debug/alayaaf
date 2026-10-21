@@ -124,7 +124,8 @@ const lineFigures = (line: PayrollLine): Figures => {
     expenseReduction,
     penalties: line.penalties,
     advances: line.loans,
-    other: 0,
+    // الاقتطاعات الشهرية (HR-13) تُحفظ ضمن الاستقطاعات، فتظهر في «استقطاعات أخرى» كما في الصف المحفوظ
+    other: line.fixedDeductions,
     deductions: line.totalDeductions,
     net: line.net,
   };

@@ -181,7 +181,7 @@ const hrNavItems: HRNavItem[] = [
     hasChildren: true,
     children: [
       { icon: Clock, label: "حساب الدوام", href: "/hr/attendance/calculate" },
-      { icon: CheckCircle2, label: "اعتماد الساعات الإضافية", href: "/hr/attendance/overtime" },
+      { icon: CheckCircle2, label: "الساعات الإضافية", href: "/hr/attendance/overtime" },
       {
         icon: FileBarChart,
         label: "الحضور والغياب للموظفين",

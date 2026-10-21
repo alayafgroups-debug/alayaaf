@@ -1,13 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Layout from "@/components/Layout";
-import { ChevronDown, Send, List } from "lucide-react";
+import { ChevronDown, Loader2, Search, Send, List, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
 import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
-import { readUserSession } from "@/lib/authSession";
+import { canManagePerm, readUserSession } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
+import { ACTIVE_EMPLOYEE_STATUSES } from "@/lib/hrStatus";
+
+/** موظف يُرسل الطلب عوضًا عنه (كما في سمارت: «إرسال طلب عوضًا عن موظف») */
+type DelegateEmployee = { id: string; empId: string; name: string };
+const toDelegate = (row: Record<string, unknown>): DelegateEmployee => ({
+  id: String(row.id ?? ""),
+  empId: String(row.emp_id ?? "").trim(),
+  name: String(row.name ?? "").trim(),
+});
 
 // ─── Request Types Grid ───────────────────────────────────────────────────────
 const REQUEST_TYPES = [
@@ -63,6 +73,66 @@ export default function HRRequestsSend() {
     department: "",
     directManager: ""
   });
+  // الطلب عوضًا عن موظف: لمن يدير الطلبات أو الإجازات أو الحضور (قاعدة البيانات تفرض الصلاحية نفسها)
+  const { permissions } = useRolePermissions();
+  const canDelegate = canManagePerm(permissions, "hr.requests", "hr.leaves", "hr.attendance", "module.hr");
+  const [onBehalf, setOnBehalf] = useState<DelegateEmployee | null>(null);
+  const [deptEmployees, setDeptEmployees] = useState<Record<string, { loading: boolean; rows: DelegateEmployee[]; error: string }>>({});
+  const [delegateSearch, setDelegateSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<DelegateEmployee[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchSeq = useRef(0);
+  // الطلب يُرسل باسم الموظف المختار، وإلا باسم صاحب الجلسة
+  const formEmployee = onBehalf ? { empId: onBehalf.empId, name: onBehalf.name } : { empId: employeeInfo.empId, name: employeeInfo.name };
+  // عوضًا عن موظف آخر: بلا توقيع (لا يوقّع أحد عن غيره)، ويُذكر المرسل. اختيار نفسه = طلب عادي بتوقيعه
+  const onBehalfBy = onBehalf && onBehalf.empId !== employeeInfo.empId
+    ? { empId: employeeInfo.empId, name: employeeInfo.name || readUserSession()?.name || "" }
+    : null;
+
+  const loadDepartmentEmployees = async (departmentId: string) => {
+    if (deptEmployees[departmentId]?.rows.length) return;
+    setDeptEmployees((current) => ({ ...current, [departmentId]: { loading: true, rows: [], error: "" } }));
+    const { data, error } = await supabase
+      .from("employees")
+      .select("id, emp_id, name")
+      .eq("department_id", departmentId)
+      .in("status", ACTIVE_EMPLOYEE_STATUSES)
+      .order("name")
+      .limit(1000);
+    setDeptEmployees((current) => ({
+      ...current,
+      [departmentId]: { loading: false, rows: error ? [] : (data ?? []).map((row) => toDelegate(row as Record<string, unknown>)), error: error ? t("تعذر تحميل الموظفين") : "" },
+    }));
+  };
+
+  // بحث بالاسم أو الرقم الوظيفي في كل الموظفين الفعالين
+  useEffect(() => {
+    const query = delegateSearch.replace(/[,()%*\\]/g, " ").trim();
+    const seq = ++searchSeq.current;
+    if (!canDelegate || query.length < 2) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    const timer = window.setTimeout(async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, emp_id, name")
+        .in("status", ACTIVE_EMPLOYEE_STATUSES)
+        .or(`name.ilike.%${query}%,emp_id.ilike.%${query}%`)
+        .order("name")
+        .limit(20);
+      if (seq !== searchSeq.current) return;
+      setSearching(false);
+      setSearchResults(error ? [] : (data ?? []).map((row) => toDelegate(row as Record<string, unknown>)));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [delegateSearch, canDelegate]);
+
+  const chooseDelegate = (employee: DelegateEmployee) => {
+    // صاحب الجلسة نفسه: طلب عادي
+    if (employee.empId && employee.empId === employeeInfo.empId && employee.name === employeeInfo.name) { setOnBehalf(null); return; }
+    setOnBehalf(employee);
+    setDelegateSearch("");
+    setSearchResults([]);
+  };
 
   useEffect(() => {
     const loadAdminUser = async () => {
@@ -120,6 +190,16 @@ export default function HRRequestsSend() {
         <div className="flex gap-5">
           {/* ── Left: Request Cards Grid ── */}
           <div className="flex-1 min-w-0">
+            {onBehalf && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <span>
+                  {t("الطلب عوضًا عن")}: <strong>{onBehalf.name}</strong> ({onBehalf.empId || "—"}) — {t("اختر نوع الطلب؛ يُرسل باسمه ويمر بسلسلة موافقاته")}
+                </span>
+                <button type="button" onClick={() => setOnBehalf(null)} className="flex items-center gap-1 rounded-md border border-amber-400 bg-white px-2 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">
+                  <X className="h-3 w-3" />{t("إلغاء والعودة لطلبي")}
+                </button>
+              </div>
+            )}
             {/* Top action bar */}
             <div className="flex items-center justify-between mb-4 gap-3">
               <p className="text-sm text-gray-500">{t("قائمة سلسلة الموافقات الخاصة بهذا الحساب")}</p>
@@ -195,45 +275,92 @@ export default function HRRequestsSend() {
             </div>
 
             {/* Delegate Section */}
+            {canDelegate && (
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
               <h3 className="text-sm font-semibold text-gray-800">{t("إرسال طلب عوضاً عن موظف")}</h3>
-
-              {departments.map((department) => (
-                <div
-                  key={department.id}
-                  className={cn(
-                    "flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition",
-                    delegateDept === department.id
-                      ? "border-blue-400 bg-blue-50"
-                      : "border-gray-200 hover:bg-gray-50"
-                  )}
-                  onClick={() => setDelegateDept(delegateDept === department.id ? "" : department.id)}
-                >
-                  <span className="text-sm text-gray-700">{department.name}</span>
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 text-gray-400 transition-transform",
-                      delegateDept === department.id && "rotate-180"
-                    )}
-                  />
+              <div className="relative">
+                <Search className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={delegateSearch}
+                  onChange={(event) => setDelegateSearch(event.target.value)}
+                  placeholder={t("بحث بالاسم أو الرقم الوظيفي")}
+                  className="w-full rounded-lg border border-gray-200 py-2 pe-2 ps-8 text-sm focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+              {delegateSearch.trim().length >= 2 && (
+                <div className="max-h-60 overflow-auto rounded-lg border border-gray-100">
+                  {searching ? (
+                    <p className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500"><Loader2 className="h-3 w-3 animate-spin" />{t("جاري البحث...")}</p>
+                  ) : searchResults.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-gray-500">{t("لا توجد نتائج")}</p>
+                  ) : searchResults.map((employee) => (
+                    <button key={employee.id} type="button" onClick={() => chooseDelegate(employee)}
+                      className={cn("block w-full px-3 py-2 text-start text-sm hover:bg-blue-50", onBehalf?.id === employee.id && "bg-blue-50 font-semibold")}>
+                      {employee.name} <span className="text-xs text-gray-500">{employee.empId}</span>
+                    </button>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              {departments.map((department) => {
+                const open = delegateDept === department.id;
+                const state = deptEmployees[department.id];
+                return (
+                  <div key={department.id} className="space-y-1">
+                    <div
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition",
+                        open ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:bg-gray-50"
+                      )}
+                      onClick={() => {
+                        const next = open ? "" : department.id;
+                        setDelegateDept(next);
+                        if (next) void loadDepartmentEmployees(next);
+                      }}
+                    >
+                      <span className="text-sm text-gray-700">{department.name}</span>
+                      <ChevronDown className={cn("h-4 w-4 text-gray-400 transition-transform", open && "rotate-180")} />
+                    </div>
+                    {open && (
+                      <div className="max-h-64 overflow-auto rounded-lg border border-gray-100">
+                        {state?.loading ? (
+                          <p className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500"><Loader2 className="h-3 w-3 animate-spin" />{t("جاري التحميل...")}</p>
+                        ) : state?.error ? (
+                          <p className="px-3 py-2 text-xs text-rose-600">{state.error}</p>
+                        ) : !state?.rows.length ? (
+                          <p className="px-3 py-2 text-xs text-gray-500">{t("لا يوجد موظفون في هذه الإدارة")}</p>
+                        ) : state.rows.map((employee) => (
+                          <button key={employee.id} type="button" onClick={() => chooseDelegate(employee)}
+                            className={cn("block w-full px-3 py-2 text-start text-sm hover:bg-blue-50", onBehalf?.id === employee.id && "bg-blue-50 font-semibold")}>
+                            {employee.name} <span className="text-xs text-gray-500">{employee.empId}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Forms */}
       <LeaveRequestForm
+        key={`leave-${formEmployee.empId}-${formEmployee.name}`}
         open={leaveFormOpen}
         onOpenChange={setLeaveFormOpen}
-        employeeInfo={{ empId: employeeInfo.empId, name: employeeInfo.name }}
+        employeeInfo={formEmployee}
+        onBehalfBy={onBehalfBy}
       />
       <DynamicRequestForm
+        key={`dynamic-${formEmployee.empId}-${formEmployee.name}`}
         open={dynamicFormOpen}
         onOpenChange={setDynamicFormOpen}
         schema={activeSchemaId ? requestFormSchemas[activeSchemaId] : null}
-        employeeInfo={{ empId: employeeInfo.empId, name: employeeInfo.name }}
+        employeeInfo={formEmployee}
+        onBehalfBy={onBehalfBy}
       />
     </Layout>
   );

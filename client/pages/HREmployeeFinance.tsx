@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Layout from "@/components/Layout";
-import { ArrowRight, CheckCircle2, Plus, RefreshCw, Trash2, Wallet, XCircle } from "lucide-react";
+import { ArrowRight, CalendarClock, CheckCircle2, Pencil, Plus, RefreshCw, Trash2, Wallet, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { employeeErrorText } from "@/components/hr/employeeErrors";
 import { isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
-import { advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, parseApprovedAdvance, type AdvanceRecord } from "@/lib/advances";
+import { advanceSkipsById, advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, isMissingTableError, parseApprovedAdvance, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
+import { AdvanceEditDialog, AdvanceSkipsDialog, deleteAdvance, type AdvanceActionTarget } from "@/components/hr/AdvanceDialogs";
+import EmployeeDeductionsPanel from "@/components/hr/EmployeeDeductionsPanel";
 import { isEmployeeActive } from "@/lib/employeeStatus";
 import { addDays, monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
 import { canManagePerm, readUserSession } from "@/lib/authSession";
@@ -18,9 +20,9 @@ import { useI18n } from "@/i18n";
  * الحركات المالية للموظف (تُفتح بالضغط على اسمه في قائمة الموظفين): البدلات والاقتطاعات والسلف والجزاءات في صفحة واحدة.
  * - البدلات: بنود employees.allowances نفسها التي في ملف الموظف، ويقرؤها مسير الرواتب لكل شهر يقع ضمن فترتها (بالشهر كاملًا).
  *   تعديلها يتطلب إدارة الموظفين والرواتب، ولا يعدّل أحد بنود نفسه (قاعدة البيانات تفرض ذلك).
- * - الاقتطاعات: للعرض فقط (بنود «البدل المخصوم» في ملف الموظف). البند المخصوم ينقص الراتب الإجمالي المحفوظ للموظف،
- *   وعليه يُحسب أجر الساعة الإضافية ومستحقات نهاية الخدمة، فلا يُضاف من هنا حتى يُعدَّل ذلك في حساب الرواتب.
- * - السلف: كصفحة سلف الموظفين تمامًا: تُسجَّل معلقة ويعتمدها مسؤول رواتب آخر (decide_advance)، ويُخصم قسطها من شهر البداية.
+ * - الاقتطاعات (HR-13، كما في سمارت): اقتطاعات شهرية (جدول hr_deductions) بمبلغ أو نسبة من الأساسي من شهر إلى شهر،
+ *   يخصمها كشف الراتب ولا تمس الراتب الإجمالي. وتُعرض تحتها للعلم بنود «البدل المخصوم» القديمة في ملف الموظف.
+ * - السلف: كصفحة سلف الموظفين تمامًا (HR-13): تُسجَّل معتمدة، وتُعدَّل ويُؤجَّل قسط شهر، وتُحذف ما لم يُخصم منها شيء.
  * - الجزاءات: تُسجَّل معلقة ويعتمدها مسؤول جزاءات آخر (HR-12)، ويخصمها مسير الرواتب بحد المادة 72.
  */
 type Tab = "allowances" | "deductions" | "advances" | "penalties";
@@ -55,6 +57,10 @@ type Advance = {
   createdAt: string;
   repaid: number;
   remaining: number;
+  /** الأشهر المؤجَّل قسطها */
+  skips: string[];
+  /** ما سُدد منها من مستحقات نهاية الخدمة («إجمالي استقطاع السلف»، HR-13) */
+  terminationPart: number;
 };
 type Penalty = {
   id: string;
@@ -137,6 +143,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
   // تعديل البدلات يتطلب الصلاحيتين معًا (كما تفرض قاعدة البيانات على ملف الموظف)
   const canEditPay = canManagePerm(permissions, "hr.payroll", "module.hr") && canManagePerm(permissions, "hr.employees", "module.hr");
   const canAdvances = canManagePerm(permissions, "hr.payroll.advances", "hr.payroll", "module.hr");
+  const canDeductions = canManagePerm(permissions, "hr.payroll", "module.hr");
   const canPenalties = canManagePerm(permissions, "hr.penalties", "module.hr");
   const session = readUserSession() as { empId?: unknown; name?: unknown } | null;
   const ownEmpId = text(session?.empId);
@@ -158,6 +165,9 @@ function EmployeeFinancePage({ id }: { id: string }) {
   const [itemDraft, setItemDraft] = useState<ItemDraft | null>(null);
   const [advanceDraft, setAdvanceDraft] = useState<AdvanceDraft | null>(null);
   const [penaltyDraft, setPenaltyDraft] = useState<PenaltyDraft | null>(null);
+  const [editingAdvance, setEditingAdvance] = useState<AdvanceActionTarget | null>(null);
+  const [skippingAdvance, setSkippingAdvance] = useState<AdvanceActionTarget | null>(null);
+  const [deductionCount, setDeductionCount] = useState(0);
   // من سجّل السلفة أو الجزاء لا يعتمده (إلا مدير النظام): تُخفى أزرار القرار عنه
   const [myUid, setMyUid] = useState("");
   const [isMainAdmin, setIsMainAdmin] = useState(false);
@@ -216,7 +226,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
         allowances: Array.isArray(record.allowances) ? (record.allowances as RawAllowance[]).filter((item) => item && typeof item === "object") : [],
       };
 
-      const [advanceResult, penaltyResult, configResult, decisionResult, payrollResult] = await Promise.all([
+      const [advanceResult, penaltyResult, configResult, decisionResult, payrollResult, terminationResult, deductionCountResult] = await Promise.all([
         supabase.from("hr_advances").select("*").eq("employee_id", loaded.id),
         supabase.from("penalties").select("*").eq("employee_id", loaded.id).order("date", { ascending: false }),
         supabase.from("hr_config_items").select("config_type, name_ar, status").eq("config_type", "allowance"),
@@ -226,8 +236,16 @@ function EmployeeFinancePage({ id }: { id: string }) {
           ? fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("payroll").select("id, emp_id, month, status, advance_deduction").eq("emp_id", loaded.empId).gt("advance_deduction", 0).order("month").order("id").range(from, to))
             .then((data) => ({ data, error: null as unknown }), (payrollError: unknown) => ({ data: [] as Record<string, unknown>[], error: payrollError }))
           : Promise.resolve({ data: [] as Record<string, unknown>[], error: null as unknown }),
+        // «إجمالي استقطاع السلف» في إنهاء الخدمة (HR-13): سداد لسلفه بقدر مبلغه
+        supabase.from("hr_terminations").select("*").eq("emp_id", loaded.id).gt("advances_deduction", 0),
+        // عدد الاقتطاعات الشهرية للعداد في التبويب قبل فتحه (HR-13)
+        supabase.from("hr_deductions").select("id", { count: "exact", head: true }).eq("employee_id", loaded.id),
       ]);
       if (seq !== loadSeq.current) return;
+      // قبل HR-13 لا يوجد العمود: لا سداد من نهاية الخدمة؛ وأي خطأ آخر يُنبَّه إليه
+      const terminationFailed = Boolean(terminationResult.error && !isMissingColumnError(terminationResult.error));
+      const terminationCredit = terminationResult.error ? 0 : (terminationAdvanceCredits((terminationResult.data ?? []) as Record<string, unknown>[]).get(loaded.id) ?? 0);
+      if (!deductionCountResult.error) setDeductionCount(deductionCountResult.count ?? 0);
 
       if (advanceResult.error) {
         setAdvances([]);
@@ -240,8 +258,19 @@ function EmployeeFinancePage({ id }: { id: string }) {
           deductionsByMonth.set(month, round2((deductionsByMonth.get(month) ?? 0) + (Number(payrollRow.advance_deduction) || 0)));
         });
         const advanceRows = (advanceResult.data ?? []) as Record<string, unknown>[];
-        const records = advanceRows.map((advanceRow) => parseApprovedAdvance(advanceRow)).filter((item): item is AdvanceRecord => Boolean(item));
-        const repaidById = allocateAdvanceRepayments(records, deductionsByMonth);
+        // الأشهر المؤجَّل قسطها (HR-13)؛ قبله لا يوجد الجدول
+        const advanceIds = advanceRows.map((advanceRow) => text(advanceRow.id)).filter(Boolean);
+        const skipResult = advanceIds.length
+          ? await supabase.from("hr_advance_skips").select("id, advance_id, month").in("advance_id", advanceIds)
+          : { data: [] as Record<string, unknown>[], error: null };
+        if (seq !== loadSeq.current) return;
+        // غياب الجدول (قبل HR-13) يُتجاهل؛ وأي خطأ آخر يُنبَّه إليه لأن المتبقي يصير تقريبيًا
+        const skipFailed = Boolean(skipResult.error && !isMissingTableError(skipResult.error));
+        const skipsById = advanceSkipsById(skipResult.error ? [] : ((skipResult.data ?? []) as Record<string, unknown>[]));
+        const records = advanceRows.map((advanceRow) => parseApprovedAdvance(advanceRow, skipsById.get(text(advanceRow.id)))).filter((item): item is AdvanceRecord => Boolean(item));
+        const repaidById = allocateAdvanceRepayments(records, withTerminationCredit(deductionsByMonth, terminationCredit));
+        // ما سُدد من نهاية الخدمة لكل سلفة = المسدَّد مع الاستقطاع ناقص المسدَّد من الرواتب وحدها
+        const fromPayroll = terminationCredit > 0 ? allocateAdvanceRepayments(records, deductionsByMonth) : repaidById;
         setAdvances(advanceRows.map((advanceRow) => {
           const status = text(advanceRow.status) || "معلق";
           const amount = round2(Number(advanceRow.amount ?? advanceRow.remaining_amount) || 0);
@@ -260,9 +289,14 @@ function EmployeeFinancePage({ id }: { id: string }) {
             createdAt: text(advanceRow.created_at),
             repaid,
             remaining: isRejectedStatus(status) ? 0 : round2(Math.max(0, amount - repaid)),
+            skips: [...(skipsById.get(text(advanceRow.id)) ?? [])].sort(),
+            terminationPart: isApprovedStatus(status) ? round2(Math.max(0, repaid - (fromPayroll.get(text(advanceRow.id)) ?? 0))) : 0,
           };
         }).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-        setAdvanceError(payrollResult.error ? t("تعذر قراءة الأقساط المخصومة من الرواتب؛ المتبقي تقريبي") : "");
+        setAdvanceError(payrollResult.error
+          ? t("تعذر قراءة الأقساط المخصومة من الرواتب؛ المتبقي تقريبي")
+          : skipFailed ? t("تعذر قراءة الأشهر المؤجلة؛ المتبقي تقريبي")
+            : terminationFailed ? t("تعذر قراءة استقطاع السلف من نهاية الخدمة؛ المتبقي تقريبي") : "");
       }
 
       if (penaltyResult.error) {
@@ -443,12 +477,12 @@ function EmployeeFinancePage({ id }: { id: string }) {
       monthly_installment: installment,
       start_month: advanceDraft.startMonth,
       request_date: today,
-      status: "معلق",
+      status: "معتمد",
       notes: advanceDraft.notes.trim() || null,
     });
     if (insertError) throw insertError;
     setAdvanceDraft(null);
-    return t("سُجّلت السلفة بانتظار اعتماد مسؤول رواتب آخر");
+    return t("سُجّلت السلفة معتمدة؛ يُخصم قسطها من شهر البداية");
   });
 
   const decideAdvance = (advance: Advance, decision: "معتمد" | "مرفوض") => {
@@ -466,14 +500,13 @@ function EmployeeFinancePage({ id }: { id: string }) {
   };
 
   const removeAdvance = (advance: Advance) => {
-    if (!window.confirm(t("حذف السلفة المعلقة؟"))) return;
-    void run(async () => {
-      const { data, error: deleteError } = await supabase.from("hr_advances").delete().eq("id", advance.id).eq("status", "معلق").select("id");
-      if (deleteError) throw deleteError;
-      if (!(data ?? []).length) throw new Error(t("لم يُحذف شيء: لا تملك صلاحية الحذف أو صدر قرار في السلفة"));
-      return t("حُذفت السلفة");
-    });
+    if (!window.confirm(`${t("حذف السلفة")} (${money(advance.amount)})؟ ${t("تُحذف فقط إن لم يُخصم منها شيء")}`)) return;
+    void run(async () => deleteAdvance(advance.id, t));
   };
+  const advanceTarget = (advance: Advance): AdvanceActionTarget => ({
+    id: advance.id, name: employee?.name ?? "", amount: advance.amount, installment: advance.installment,
+    startMonth: advance.startMonth, notes: advance.notes, repaid: advance.repaid,
+  });
 
   // ─── الجزاءات ───
   const fiveDaysWage = round2((wage / 30) * 5);
@@ -542,7 +575,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
       <div className="space-y-3">
         {deduction ? (
           <p className="rounded-md border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">
-            {t("للعرض فقط: هذه بنود «البدل المخصوم» المسجلة في ملف الموظف، ويخصمها مسير الرواتب من راتب كل شهر يقع ضمن فترتها. إضافة اقتطاع من هذه الصفحة تحتاج تعديلًا في حساب الرواتب، لأن البند المخصوم ينقص «الراتب الإجمالي» الذي يُحسب عليه أجر الساعة الإضافية ومستحقات نهاية الخدمة.")}
+            {t("للعرض فقط: بنود «البدل المخصوم» القديمة المسجلة في ملف الموظف، ويخصمها مسير الرواتب من راتب كل شهر يقع ضمن فترتها. الاقتطاعات الجديدة تُضاف في جدول الاقتطاعات الشهرية أعلاه.")}
           </p>
         ) : (
           <p className="text-xs text-slate-500">{t("البدل يُضاف لراتب كل شهر يقع ضمن فترته، بالشهر كاملًا (بلا نهاية = مستمر). هو نفسه بدلات ملف الموظف.")}</p>
@@ -631,7 +664,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
     const canAdd = canAdvances && !isOwn && Boolean(employee && isEmployeeActive(employee.status));
     return (
       <div className="space-y-3">
-        <p className="text-xs text-slate-500">{t("السلفة تُسجَّل معلقة، ويعتمدها مسؤول رواتب آخر (لا من سجّلها ولا صاحبها)، ثم يُخصم قسطها من الراتب ابتداءً من شهر البداية حتى السداد. المتبقي يُحسب من الأقساط المخصومة فعلًا في كشوف الرواتب.")}</p>
+        <p className="text-xs text-slate-500">{t("السلفة تُسجَّل معتمدة ويُخصم قسطها من الراتب ابتداءً من شهر البداية حتى السداد. تُعدَّل، ويُؤجَّل قسط شهر (يمتد السداد شهرًا)، وتُحذف ما لم يُخصم منها شيء. المتبقي يُحسب من الأقساط المخصومة فعلًا في كشوف الرواتب.")}</p>
         {advanceError && <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{t(advanceError)}</p>}
         {canAdd && !advanceDraft && (
           <button type="button" data-readonly-exempt onClick={() => setAdvanceDraft({ amount: "", installment: "", startMonth: nextMonth(riyadhMonth()), notes: "" })} className="flex items-center gap-1 rounded-md bg-[#004e89] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#003d6b]">
@@ -678,8 +711,14 @@ function EmployeeFinancePage({ id }: { id: string }) {
                   <tr key={advance.id} className="hover:bg-gray-50/60">
                     <td className="px-3 py-2 font-medium">{money(advance.amount)}</td>
                     <td className="px-3 py-2">{money(advance.installment)}</td>
-                    <td className="px-3 py-2">{advance.startMonth || "—"}</td>
-                    <td className="px-3 py-2">{isApprovedStatus(advance.status) ? money(advance.repaid) : "—"}</td>
+                    <td className="px-3 py-2">
+                      {advance.startMonth || "—"}
+                      {advance.skips.length > 0 && <span className="block text-xs text-amber-700">{t("مؤجَّل")}: {advance.skips.join(listSeparator)}</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      {isApprovedStatus(advance.status) ? money(advance.repaid) : "—"}
+                      {advance.terminationPart > 0.004 && <span className="block text-xs text-emerald-700">{t("منها من مستحقات نهاية الخدمة")}: {money(advance.terminationPart)}</span>}
+                    </td>
                     <td className="px-3 py-2 font-semibold text-[#004e89]">{isRejectedStatus(advance.status) ? "—" : money(advance.remaining)}</td>
                     <td className="px-3 py-2">{statusBadge(advance.status)}</td>
                     <td className="px-3 py-2">{advance.createdBy || "—"}</td>
@@ -693,6 +732,12 @@ function EmployeeFinancePage({ id }: { id: string }) {
                               <button type="button" data-readonly-exempt disabled={busy} onClick={() => decideAdvance(advance, "مرفوض")} className="text-rose-600 hover:text-rose-800 disabled:opacity-50" title={t("رفض")}><XCircle className="h-4 w-4" /></button>
                             </>
                           )}
+                          <button type="button" data-readonly-exempt disabled={busy} onClick={() => removeAdvance(advance)} className="text-gray-500 hover:text-rose-700 disabled:opacity-50" title={t("حذف")}><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      ) : isApprovedStatus(advance.status) && canAdvances && !isOwn && !(advance.terminationPart > 0.004) ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <button type="button" data-readonly-exempt disabled={busy} onClick={() => setEditingAdvance(advanceTarget(advance))} className="text-[#004e89] hover:text-[#003d6b] disabled:opacity-50" title={t("تعديل معلومات السلفة")}><Pencil className="h-4 w-4" /></button>
+                          <button type="button" data-readonly-exempt disabled={busy} onClick={() => setSkippingAdvance(advanceTarget(advance))} className="text-amber-600 hover:text-amber-800 disabled:opacity-50" title={t("تأجيل قسط شهري")}><CalendarClock className="h-4 w-4" /></button>
                           <button type="button" data-readonly-exempt disabled={busy} onClick={() => removeAdvance(advance)} className="text-gray-500 hover:text-rose-700 disabled:opacity-50" title={t("حذف")}><Trash2 className="h-4 w-4" /></button>
                         </div>
                       ) : <span className="block text-center text-gray-300">—</span>}
@@ -795,7 +840,7 @@ function EmployeeFinancePage({ id }: { id: string }) {
 
   const counts: Record<Tab, number> = {
     allowances: allowanceRows.filter((row) => !row.deduction).length,
-    deductions: allowanceRows.filter((row) => row.deduction).length,
+    deductions: deductionCount + allowanceRows.filter((row) => row.deduction).length,
     advances: advances.length,
     penalties: penalties.length,
   };
@@ -869,7 +914,24 @@ function EmployeeFinancePage({ id }: { id: string }) {
               </div>
               <div className="p-4">
                 {tab === "allowances" && renderItems(false)}
-                {tab === "deductions" && renderItems(true)}
+                {tab === "deductions" && (
+                  <div className="space-y-5">
+                    <EmployeeDeductionsPanel
+                      employeeId={employee.id}
+                      baseSalary={employee.baseSalary}
+                      canManage={canDeductions}
+                      isOwn={isOwn}
+                      active={isEmployeeActive(employee.status)}
+                      onCountChange={setDeductionCount}
+                    />
+                    {allowanceRows.some((row) => row.deduction) && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-slate-700">{t("بنود «البدل المخصوم» في ملف الموظف")}</h3>
+                        {renderItems(true)}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {tab === "advances" && renderAdvances()}
                 {tab === "penalties" && renderPenalties()}
               </div>
@@ -877,6 +939,8 @@ function EmployeeFinancePage({ id }: { id: string }) {
           </>
         )}
       </div>
+      <AdvanceEditDialog advance={editingAdvance} onClose={() => setEditingAdvance(null)} onSaved={(saved) => { setEditingAdvance(null); setMessage(saved); setError(""); void load(); }} />
+      <AdvanceSkipsDialog advance={skippingAdvance} onClose={() => setSkippingAdvance(null)} onChanged={() => void load(true)} />
     </Layout>
   );
 }

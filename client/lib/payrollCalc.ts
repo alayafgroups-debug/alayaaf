@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { eachDate, monthRange, riyadhToday } from "@/lib/hrDates";
 import { isApprovedStatus } from "@/lib/hrStatus";
-import { advanceInstallmentDue, allocateAdvanceRepayments, isCancelledPayrollStatus, parseApprovedAdvance, type AdvanceRecord } from "@/lib/advances";
+import { advanceInstallmentDue, advanceSkipsById, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, parseApprovedAdvance, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
 import { GOSI_EMPLOYEE_RATE_SAUDI, gosiContributionWage, gosiDeductsFromEmployee, gosiSaudiRates, isHousingAllowance } from "@/lib/gosi";
 import { classifyAttendanceDay, type DayCategory, type DayRecord } from "@/lib/attendanceRules";
 import { effectiveLateMinutes, isScheduledWorkDay, loadWorkSchedules, scheduleForEmployee, type WorkSchedule } from "@/lib/workSchedule";
@@ -120,6 +120,11 @@ export type PayrollEmployeeInput = {
 
 export type PayrollAttendanceRecord = DayRecord & { date: string };
 
+/** اقتطاع شهري (HR-13، جدول hr_deductions): مبلغ ثابت، أو نسبة من الأساسي المستحق */
+export type PayrollFixedDeduction = { type: string; calcType: "amount" | "percent"; value: number };
+
+const MISSING_TABLE_CODES = ["42P01", "PGRST205"];
+
 export type PayrollLineInput = {
   employee: PayrollEmployeeInput;
   period: string;
@@ -139,6 +144,8 @@ export type PayrollLineInput = {
   penalties: number;
   overtime: { hours: number; amount: number };
   advanceInstallment: number;
+  /** الاقتطاعات الشهرية السارية في الشهر */
+  fixedDeductions?: PayrollFixedDeduction[];
   policy: PayrollPolicy;
 };
 
@@ -199,7 +206,11 @@ export type PayrollLine = {
   /** قسط السلف المستحق قبل الحدود، والمخصوم فعلًا */
   loansDue: number;
   loans: number;
-  /** حد المادة 93 (نصف الأجر المستحق) وما خُفّض بسببه من السلف والجزاءات (يبقى مستحقًا للأشهر التالية) */
+  /** الاقتطاعات الشهرية المستحقة قبل الحدود، والمخصومة فعلًا، وأنواعها بمبالغها */
+  fixedDeductionsDue: number;
+  fixedDeductions: number;
+  fixedDeductionLabels: string[];
+  /** حد المادة 93 (نصف الأجر المستحق) وما خُفّض بسببه من السلف والاقتطاعات والجزاءات (السلف والجزاءات تبقى مستحقة للأشهر التالية) */
   halfWageCap: number;
   halfWageReduction: number;
   allowanceDeductions: number;
@@ -348,24 +359,35 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
   let penalties = round2(Math.min(penaltiesOutstanding, penaltyCap));
   let loans = policy.excludeAdvances ? 0 : round2(Math.max(0, input.advanceInstallment));
   let allowanceDeductions = round2(fullAllowanceDeductions * factor);
-  // المادة 93: لا تزيد المبالغ المحسومة (التأمينات والبدلات المخصومة والجزاءات والسلف) على نصف الأجر المستحق
-  // (الاستحقاقات بعد الغياب والإجازة بدون راتب). يُخفَّض قسط السلفة أولًا ثم الجزاء، والمخفَّض يبقى مستحقًا للأشهر التالية
+  // الاقتطاعات الشهرية (HR-13): المبلغ كما هو، والنسبة من الأساسي المستحق
+  const fixedItems = (input.fixedDeductions ?? [])
+    .map((item) => ({ ...item, amount: round2(item.calcType === "percent" ? (basic * item.value) / 100 : item.value) }))
+    .filter((item) => item.amount > 0);
+  const fixedDeductionsDue = round2(fixedItems.reduce((sum, item) => sum + item.amount, 0));
+  const fixedDeductionLabels = fixedItems.map((item) => `${item.type} ${item.amount.toFixed(2)}`);
+  let fixedDeductions = fixedDeductionsDue;
+  // المادة 93: لا تزيد المبالغ المحسومة (التأمينات والبدلات المخصومة والاقتطاعات والجزاءات والسلف) على نصف الأجر المستحق
+  // (الاستحقاقات بعد الغياب والإجازة بدون راتب). يُخفَّض قسط السلفة أولًا ثم الاقتطاعات الشهرية ثم الجزاء؛
+  // المخفَّض من السلف والجزاءات يبقى مستحقًا للأشهر التالية، ومن الاقتطاع الشهري لا يُرحَّل
   const earnedWage = round2(Math.max(0, grossEarnings - absenceDeduction - unpaidLeaveDeduction));
   const halfWageCap = round2(earnedWage / 2);
   let halfWageReduction = 0;
-  if (round2(socialInsurance + allowanceDeductions + penalties + loans) > halfWageCap) {
-    let over = round2(socialInsurance + allowanceDeductions + penalties + loans - halfWageCap);
+  if (round2(socialInsurance + allowanceDeductions + fixedDeductions + penalties + loans) > halfWageCap) {
+    let over = round2(socialInsurance + allowanceDeductions + fixedDeductions + penalties + loans - halfWageCap);
     const cutLoans = Math.min(loans, over);
     loans = round2(loans - cutLoans);
     over = round2(over - cutLoans);
+    const cutFixed = Math.min(fixedDeductions, over);
+    fixedDeductions = round2(fixedDeductions - cutFixed);
+    over = round2(over - cutFixed);
     const cutPenalties = Math.min(penalties, over);
     penalties = round2(penalties - cutPenalties);
-    halfWageReduction = round2(cutLoans + cutPenalties);
+    halfWageReduction = round2(cutLoans + cutFixed + cutPenalties);
   }
 
-  // لا صافي سالب: تُخفَّض الاستقطاعات بالترتيب (السلف، الجزاءات، البدلات المخصومة، الغياب، الإجازة بدون راتب، التأمينات)
+  // لا صافي سالب: تُخفَّض الاستقطاعات بالترتيب (السلف، الاقتطاعات الشهرية، الجزاءات، البدلات المخصومة، الغياب، الإجازة بدون راتب، التأمينات)
   // حتى تساوي إجمالي الاستحقاقات؛ فيبقى: الاستحقاقات − الاستقطاعات = الصافي (شرط الترحيل المحاسبي)
-  let total = round2(absenceDeduction + unpaidLeaveDeduction + socialInsurance + penalties + loans + allowanceDeductions);
+  let total = round2(absenceDeduction + unpaidLeaveDeduction + socialInsurance + penalties + loans + fixedDeductions + allowanceDeductions);
   let cappedDeductions = 0;
   if (total > grossEarnings) {
     let excess = round2(total - grossEarnings);
@@ -376,12 +398,13 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
       return round2(value - cut);
     };
     loans = reduce(loans);
+    fixedDeductions = reduce(fixedDeductions);
     penalties = reduce(penalties);
     allowanceDeductions = reduce(allowanceDeductions);
     absenceDeduction = reduce(absenceDeduction);
     unpaidLeaveDeduction = reduce(unpaidLeaveDeduction);
     socialInsurance = reduce(socialInsurance);
-    total = round2(absenceDeduction + unpaidLeaveDeduction + socialInsurance + penalties + loans + allowanceDeductions);
+    total = round2(absenceDeduction + unpaidLeaveDeduction + socialInsurance + penalties + loans + fixedDeductions + allowanceDeductions);
   }
   const net = round2(grossEarnings - total);
 
@@ -416,6 +439,9 @@ export const computePayrollLine = (input: PayrollLineInput): PayrollLine => {
     penaltiesCarried: round2(penaltiesOutstanding - penalties),
     loansDue: round2(policy.excludeAdvances ? 0 : Math.max(0, input.advanceInstallment)),
     loans,
+    fixedDeductionsDue,
+    fixedDeductions,
+    fixedDeductionLabels,
     halfWageCap,
     halfWageReduction,
     allowanceDeductions,
@@ -439,7 +465,9 @@ export const payrollLineNotes = (line: PayrollLine): string => {
   if (line.penaltiesCarried > 0) parts.push(`جزاءات متبقية تُخصم في الأشهر التالية ${line.penaltiesCarried.toFixed(2)} (لا يُخصم في الشهر أكثر من أجر 5 أيام ${line.penaltyCap.toFixed(2)} — المادة 72)`);
   if (line.loans) parts.push(`سلف ${line.loans.toFixed(2)}`);
   if (line.loansDue > line.loans) parts.push(`لم يُخصم من قسط السلف ${(line.loansDue - line.loans).toFixed(2)}؛ يبقى في رصيد السلفة ويمتد السداد`);
-  if (line.halfWageReduction) parts.push(`خُفّضت السلف والجزاءات ${line.halfWageReduction.toFixed(2)} حتى لا يتجاوز المحسوم نصف الأجر المستحق (المادة 93: ${line.halfWageCap.toFixed(2)})`);
+  if (line.fixedDeductions) parts.push(`اقتطاعات شهرية ${line.fixedDeductions.toFixed(2)}${line.fixedDeductionLabels.length ? ` (${line.fixedDeductionLabels.join("، ")})` : ""}`);
+  if (line.fixedDeductionsDue > line.fixedDeductions) parts.push(`لم يُخصم من الاقتطاعات الشهرية ${(line.fixedDeductionsDue - line.fixedDeductions).toFixed(2)}`);
+  if (line.halfWageReduction) parts.push(`خُفّضت السلف والاقتطاعات والجزاءات ${line.halfWageReduction.toFixed(2)} حتى لا يتجاوز المحسوم نصف الأجر المستحق (المادة 93: ${line.halfWageCap.toFixed(2)})`);
   if (line.allowanceDeductions) parts.push(`بدلات مخصومة ${line.allowanceDeductions.toFixed(2)}`);
   if (line.overtime) parts.push(`إضافي ${line.overtime.toFixed(2)}`);
   if (line.cappedDeductions) parts.push(`خُفّضت الاستقطاعات ${line.cappedDeductions.toFixed(2)} حتى لا يكون الصافي سالبًا`);
@@ -650,8 +678,9 @@ export async function computePayroll(employeeIds: string[], period: string, opti
   const penaltiesById = new Map<string, number>();
   const overtimeById = new Map<string, { hours: number; amount: number }>();
   const advancesById = new Map<string, number>();
+  const fixedDeductionsById = new Map<string, PayrollFixedDeduction[]>();
   for (const part of chunk(ids)) {
-    const [penaltyRows, overtimeResult, advanceResult] = await Promise.all([
+    const [penaltyRows, overtimeResult, advanceResult, deductionResult] = await Promise.all([
       // كل الجزاءات حتى نهاية الشهر: المعتمد منها فقط يُخصم، والمتبقي بعد سقف المادة 72 يُرحَّل
       fetchAllRows<Record<string, unknown>>((start, end) => supabase
         .from("penalties")
@@ -678,7 +707,33 @@ export async function computePayroll(employeeIds: string[], period: string, opti
         .order("id")
         .range(start, end))
         .then((data) => ({ data, error: null as unknown }), (error: unknown) => ({ data: [] as Record<string, unknown>[], error })),
+      // الاقتطاعات الشهرية التي بدأت في الشهر أو قبله (HR-13)
+      fetchAllRows<Record<string, unknown>>((start, end) => supabase
+        .from("hr_deductions")
+        .select("employee_id, deduction_type, calc_type, value, start_month, end_month")
+        .in("employee_id", part)
+        .lte("start_month", period)
+        .order("id")
+        .range(start, end))
+        .then((data) => ({ data, error: null as unknown }), (error: unknown) => ({ data: [] as Record<string, unknown>[], error })),
     ]);
+    if (deductionResult.error) {
+      // قبل HR-13 لا يوجد الجدول: لا اقتطاعات شهرية
+      if (!MISSING_TABLE_CODES.includes(errorCode(deductionResult.error))) throw deductionResult.error;
+    } else {
+      deductionResult.data.forEach((row) => {
+        const endMonth = String(row.end_month ?? "").slice(0, 7);
+        if (endMonth && endMonth < period) return;
+        const value = Number(row.value) || 0;
+        if (value <= 0) return;
+        const id = String(row.employee_id ?? "");
+        fixedDeductionsById.set(id, [...(fixedDeductionsById.get(id) ?? []), {
+          type: String(row.deduction_type ?? "").trim() || "اقتطاع",
+          calcType: row.calc_type === "percent" ? "percent" : "amount",
+          value,
+        }]);
+      });
+    }
     const approvedPenalties = new Map<string, number>();
     penaltyRows.forEach((row) => {
       // لا يُخصم جزاء معلق أو مرفوض أو ملغى أو بلا قرار
@@ -706,14 +761,49 @@ export async function computePayroll(employeeIds: string[], period: string, opti
     } else {
       // السلف المعتمدة: المسدَّد من كل سلفة يُعاد توزيعه شهرًا بشهر من أقساط الأشهر الأخرى (lib/advances)،
       // والمستحق هذا الشهر لكل سلفة بدأت فيه أو قبله = الأقل من قسطها ومتبقيها
+      // الأشهر المؤجَّل قسطها لكل سلفة (HR-13)؛ قبله لا يوجد الجدول
+      const approvedIds = (advanceResult.data ?? []).filter((row: Record<string, unknown>) => parseApprovedAdvance(row)).map((row: Record<string, unknown>) => String(row.id ?? ""));
+      let skipRows: Record<string, unknown>[] = [];
+      for (const skipPart of chunk(approvedIds)) {
+        try {
+          skipRows = skipRows.concat(await fetchAllRows<Record<string, unknown>>((start, end) => supabase
+            .from("hr_advance_skips")
+            .select("advance_id, month")
+            .in("advance_id", skipPart)
+            .order("id")
+            .range(start, end)));
+        } catch (skipError) {
+          if (!MISSING_TABLE_CODES.includes(errorCode(skipError))) throw skipError;
+          break;
+        }
+      }
+      const skipsById = advanceSkipsById(skipRows);
       const advancesByEmployee = new Map<string, AdvanceRecord[]>();
       (advanceResult.data ?? []).forEach((row: Record<string, unknown>) => {
-        const advance = parseApprovedAdvance(row);
+        const advance = parseApprovedAdvance(row, skipsById.get(String(row.id ?? "")));
         if (!advance) return;
         advancesByEmployee.set(advance.employeeId, [...(advancesByEmployee.get(advance.employeeId) ?? []), advance]);
       });
+      // HR-13: «إجمالي استقطاع السلف» في إنهاء خدمة غير مرفوض ولا ملغى سداد لسلف الموظف بقدر مبلغه
+      // (بعد كل أشهر الرواتب)؛ يقل المتبقي فيقل القسط أو ينتهي. قبل HR-13 لا يوجد العمود
+      let creditById = new Map<string, number>();
+      for (const creditPart of chunk([...advancesByEmployee.keys()])) {
+        try {
+          creditById = new Map([...creditById, ...terminationAdvanceCredits(await fetchAllRows<Record<string, unknown>>((start, end) => supabase
+            .from("hr_terminations")
+            .select("*")
+            .in("emp_id", creditPart)
+            .gt("advances_deduction", 0)
+            .order("id")
+            .range(start, end)))]);
+        } catch (terminationError) {
+          if (!isMissingColumnError(terminationError)) throw terminationError;
+          break;
+        }
+      }
+      if (creditById.size) warnings.push(`${creditById.size} موظف له استقطاع سلف من مستحقات نهاية الخدمة؛ حُسب سدادًا لسلفه`);
       advancesByEmployee.forEach((list, id) => {
-        const repaid = allocateAdvanceRepayments(list, advanceDeductionsOther.get(codeById.get(id) ?? "") ?? new Map());
+        const repaid = allocateAdvanceRepayments(list, withTerminationCredit(advanceDeductionsOther.get(codeById.get(id) ?? ""), creditById.get(id) ?? 0));
         const due = advanceInstallmentDue(list, repaid, period);
         if (due > 0) advancesById.set(id, due);
       });
@@ -789,6 +879,7 @@ export async function computePayroll(employeeIds: string[], period: string, opti
       penalties: penaltiesById.get(id) ?? 0,
       overtime: overtimeById.get(id) ?? { hours: 0, amount: 0 },
       advanceInstallment: advancesById.get(id) ?? 0,
+      fixedDeductions: fixedDeductionsById.get(id) ?? [],
       policy,
     });
     lines.set(id, line);

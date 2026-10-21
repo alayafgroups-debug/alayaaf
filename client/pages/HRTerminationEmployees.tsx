@@ -9,6 +9,8 @@ import { useI18n } from "@/i18n";
 import { addDays, riyadhToday, serviceYears } from "@/lib/hrDates";
 import { ACTIVE_EMPLOYEE_STATUSES, isApprovedStatus, isPendingStatus } from "@/lib/hrStatus";
 import { hrRequestErrorText } from "@/lib/hrErrors";
+import { fetchAllRows } from "@/lib/fetchAll";
+import { advanceSkipsById, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, isMissingTableError, parseApprovedAdvance, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
 
 type Employee = {
   id: string;
@@ -33,6 +35,7 @@ type TermRow = {
   leaveValue: number;
   otherEntitlements: number;
   otherDeductions: number;
+  advancesDeduction: number;
   total: number;
   status: string;
   hireDate: string;
@@ -158,6 +161,48 @@ function rewardRuleText(years: number, resignation: boolean, deprived: boolean, 
   return t("استقالة بعد عشر سنوات فأكثر: المكافأة كاملة");
 }
 
+const round2 = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+/**
+ * السلف المتبقية على الموظف (HR-13، «إجمالي استقطاع السلف» كما في سمارت): مبلغ كل سلفة معتمدة
+ * ناقص ما خُصم منها فعلًا في كشوف الرواتب (بالتوزيع نفسه الذي يستخدمه مسير الرواتب)، مع تأجيل الأقساط.
+ */
+async function outstandingAdvances(employeeId: string, empCode: string): Promise<number | null> {
+  // استقطاع السلف يسجّله من يدير الرواتب (قاعدة البيانات تفرض ذلك)، وهو يقرأ السلف والرواتب معًا؛
+  // null = لا صلاحية: يبقى الاستقطاع صفرًا
+  const { data: allowed, error: accessError } = await supabase.rpc("hr_area_allowed", { p_areas: ["hr.payroll"], p_manage: true });
+  if (accessError) throw accessError;
+  if (allowed !== true) return null;
+  const { data: advanceRows, error: advanceError } = await supabase.from("hr_advances").select("*").eq("employee_id", employeeId);
+  if (advanceError) throw advanceError;
+  const rows = (advanceRows ?? []) as Record<string, unknown>[];
+  if (!rows.length) return 0;
+  const ids = rows.map((row) => String(row.id ?? "")).filter(Boolean);
+  const skipResult = await supabase.from("hr_advance_skips").select("id, advance_id, month").in("advance_id", ids);
+  if (skipResult.error && !isMissingTableError(skipResult.error)) throw skipResult.error;
+  const skipsById = advanceSkipsById(skipResult.error ? [] : ((skipResult.data ?? []) as Record<string, unknown>[]));
+  const records = rows.map((row) => parseApprovedAdvance(row, skipsById.get(String(row.id ?? "")))).filter((item): item is AdvanceRecord => Boolean(item));
+  if (!records.length) return 0;
+  const payrollRows = empCode
+    ? await fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("payroll").select("id, emp_id, month, status, advance_deduction").eq("emp_id", empCode).gt("advance_deduction", 0).order("month").order("id").range(from, to))
+    : [];
+  const deductionsByMonth = new Map<string, number>();
+  payrollRows.forEach((row) => {
+    if (isCancelledPayrollStatus(row.status)) return;
+    const month = String(row.month ?? "").slice(0, 7);
+    deductionsByMonth.set(month, round2((deductionsByMonth.get(month) ?? 0) + (Number(row.advance_deduction) || 0)));
+  });
+  // استقطاع سلف في إنهاء خدمة سابق غير مرفوض (إن وُجد) سداد لها أيضًا
+  let credit = 0;
+  try {
+    credit = terminationAdvanceCredits(await fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("hr_terminations").select("*").eq("emp_id", employeeId).gt("advances_deduction", 0).order("id").range(from, to))).get(employeeId) ?? 0;
+  } catch (terminationError) {
+    if (!isMissingColumnError(terminationError)) throw terminationError;
+  }
+  const repaid = allocateAdvanceRepayments(records, withTerminationCredit(deductionsByMonth, credit));
+  return round2(records.reduce((sum, record) => sum + Math.max(0, record.amount - (repaid.get(record.id) ?? 0)), 0));
+}
+
 function calcLeaveValue(totalSalary: number, leaveRemaining: number): number {
   if (!totalSalary || leaveRemaining <= 0) return 0;
   const daily = totalSalary / 30;
@@ -174,6 +219,7 @@ const emptyForm = () => ({
   leaveValue: "0",
   otherEntitlements: "0",
   otherDeductions: "0",
+  advancesDeduction: "0",
   total: "0",
   notes: "",
 });
@@ -192,6 +238,8 @@ export default function HRTerminationEmployees() {
   const [terminationSettings, setTerminationSettings] = useState<TerminationSettings>(TERMINATION_SETTINGS_DEFAULT);
   // الحفظ ينتظر تحميل الإعدادات حتى لا تُحسب المكافأة بالقيم الافتراضية قبل وصولها
   const [settingsReady, setSettingsReady] = useState(false);
+  // السلف المتبقية على الموظف المختار (تُملأ في «إجمالي استقطاع السلف» ويمكن تعديلها)
+  const [advancesInfo, setAdvancesInfo] = useState<{ employeeId: string; loading: boolean; outstanding: number | null; error: string; noAccess?: boolean }>({ employeeId: "", loading: false, outstanding: null, error: "" });
 
   const loadData = async () => {
     setLoading(true);
@@ -241,6 +289,7 @@ export default function HRTerminationEmployees() {
           leaveValue: Number(row.leave_value ?? 0),
           otherEntitlements: Number(row.other_entitlements ?? 0),
           otherDeductions: Number(row.other_deductions ?? 0),
+          advancesDeduction: Number(row.advances_deduction ?? 0),
           total: Number(row.total ?? 0),
           status: String(row.status ?? "معلق"),
           hireDate: String(row.hire_date ?? ""),
@@ -306,9 +355,34 @@ export default function HRTerminationEmployees() {
       computedReward +
       computedLeaveValue +
       Number(form.otherEntitlements) -
-      Number(form.otherDeductions)
+      Number(form.otherDeductions) -
+      (Number(form.advancesDeduction) || 0)
     );
-  }, [computedReward, computedLeaveValue, form.otherEntitlements, form.otherDeductions]);
+  }, [computedReward, computedLeaveValue, form.otherEntitlements, form.otherDeductions, form.advancesDeduction]);
+
+  // عند اختيار الموظف: السلف المتبقية عليه تُملأ في «إجمالي استقطاع السلف»
+  useEffect(() => {
+    const employee = employees.find((item) => item.id === form.employeeId);
+    if (!employee) { setAdvancesInfo({ employeeId: "", loading: false, outstanding: null, error: "" }); return; }
+    let active = true;
+    setAdvancesInfo({ employeeId: employee.id, loading: true, outstanding: null, error: "" });
+    outstandingAdvances(employee.id, employee.empId)
+      .then((outstanding) => {
+        if (!active) return;
+        if (outstanding === null) {
+          setAdvancesInfo({ employeeId: employee.id, loading: false, outstanding: null, error: "", noAccess: true });
+          setForm((current) => (current.employeeId === employee.id ? { ...current, advancesDeduction: "0" } : current));
+          return;
+        }
+        setAdvancesInfo({ employeeId: employee.id, loading: false, outstanding, error: "" });
+        setForm((current) => (current.employeeId === employee.id ? { ...current, advancesDeduction: outstanding.toFixed(2) } : current));
+      })
+      .catch((advanceError: unknown) => {
+        if (!active) return;
+        setAdvancesInfo({ employeeId: employee.id, loading: false, outstanding: null, error: hrRequestErrorText(advanceError, t("تعذر قراءة السلف")) });
+      });
+    return () => { active = false; };
+  }, [form.employeeId, employees]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const serviceDuration = useMemo(() => {
     if (!selectedEmployee) return "";
@@ -321,6 +395,7 @@ export default function HRTerminationEmployees() {
       ...current,
       employeeId,
       hireDate: emp?.hireDate ?? "",
+      advancesDeduction: "0",
     }));
   };
 
@@ -331,6 +406,15 @@ export default function HRTerminationEmployees() {
     }
     if (selectedEmployee.hireDate && form.terminationDate < selectedEmployee.hireDate) {
       toast({ title: t("تاريخ غير صحيح"), description: t("تاريخ إنهاء الخدمة قبل تاريخ التعيين"), variant: "destructive" });
+      return false;
+    }
+    if (advancesInfo.loading) {
+      toast({ title: t("انتظر"), description: t("جارٍ حساب السلف المتبقية على الموظف"), variant: "destructive" });
+      return false;
+    }
+    const advancesDeduction = Number(form.advancesDeduction) || 0;
+    if (advancesDeduction < 0 || (advancesInfo.outstanding !== null && advancesDeduction > advancesInfo.outstanding + 0.005)) {
+      toast({ title: t("استقطاع السلف غير صحيح"), description: `${t("لا يتجاوز السلف المتبقية على الموظف")}: ${(advancesInfo.outstanding ?? 0).toFixed(2)}`, variant: "destructive" });
       return false;
     }
     return true;
@@ -370,6 +454,8 @@ export default function HRTerminationEmployees() {
         leave_value: computedLeaveValue,
         other_entitlements: Number(form.otherEntitlements),
         other_deductions: Number(form.otherDeductions),
+        // HR-13: يُرسل فقط إن وُجد (قبل تحديث قاعدة البيانات لا يوجد العمود)
+        ...((Number(form.advancesDeduction) || 0) > 0 ? { advances_deduction: round2(Number(form.advancesDeduction)) } : {}),
         total: computedTotal,
         notes: form.notes,
         status: "معلق",
@@ -494,10 +580,25 @@ export default function HRTerminationEmployees() {
                   <Input type="number" value={form.otherDeductions} onChange={(event) => setForm((current) => ({ ...current, otherDeductions: event.target.value }))} min="0" step="0.01" />
                 </Field>
 
+                <Field label={t("إجمالي استقطاع السلف")}>
+                  <Input type="number" value={form.advancesDeduction} onChange={(event) => setForm((current) => ({ ...current, advancesDeduction: event.target.value }))} min="0" step="0.01" disabled={advancesInfo.loading || Boolean(advancesInfo.noAccess)} />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {advancesInfo.loading
+                      ? t("جارٍ حساب السلف المتبقية…")
+                      : advancesInfo.error
+                        ? `${t("تعذر قراءة السلف؛ أدخل المبلغ يدويًا")} (${t(advancesInfo.error)})`
+                        : advancesInfo.noAccess
+                          ? t("استقطاع السلف يسجّله من يدير الرواتب؛ يبقى صفرًا")
+                          : advancesInfo.outstanding !== null
+                            ? `${t("السلف المتبقية على الموظف")}: ${advancesInfo.outstanding.toFixed(2)} SAR`
+                            : ""}
+                  </p>
+                </Field>
+
                 <Field label={t("الإجمالي")}>
                   <div className="flex items-center gap-3">
                     <Input value={computedTotal.toFixed(2)} readOnly className="bg-gray-50 font-bold text-[#004e89]" />
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{t("= المكافأة + قيمة الإجازات + المستحقات − الاستقطاعات")}</span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">{t("= المكافأة + قيمة الإجازات + المستحقات − الاستقطاعات − السلف")}</span>
                   </div>
                 </Field>
 
@@ -553,15 +654,16 @@ export default function HRTerminationEmployees() {
                   <th className="py-3 px-4">{t("تاريخ الإنهاء")}</th>
                   <th className="py-3 px-4">{t("مكافأة نهاية الخدمة")}</th>
                   <th className="py-3 px-4">{t("قيمة الإجازات")}</th>
+                  <th className="py-3 px-4">{t("استقطاع السلف")}</th>
                   <th className="py-3 px-4">{t("الإجمالي")}</th>
                   <th className="py-3 px-4 text-center">{t("الحالة")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={9} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
+                  <tr><td colSpan={10} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />{t("لا توجد بيانات")}</td></tr>
+                  <tr><td colSpan={10} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4">{row.jobId || "—"}</td>
@@ -571,6 +673,7 @@ export default function HRTerminationEmployees() {
                     <td className="py-3 px-4">{row.terminationDate || "—"}</td>
                     <td className="py-3 px-4">{row.reward.toFixed(2)}</td>
                     <td className="py-3 px-4">{row.leaveValue.toFixed(2)}</td>
+                    <td className="py-3 px-4">{row.advancesDeduction ? row.advancesDeduction.toFixed(2) : "—"}</td>
                     <td className="py-3 px-4 font-semibold text-[#004e89]">{row.total.toFixed(2)}</td>
                     <td className="py-3 px-4 text-center">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -608,6 +711,7 @@ export default function HRTerminationEmployees() {
                   <PreviewItem label={t("قيمة الإجازات")} value={`${computedLeaveValue.toFixed(2)} SAR`} />
                   <PreviewItem label={t("مستحقات أخرى")} value={`${Number(form.otherEntitlements).toFixed(2)} SAR`} />
                   <PreviewItem label={t("استقطاعات أخرى")} value={`${Number(form.otherDeductions).toFixed(2)} SAR`} />
+                  <PreviewItem label={t("إجمالي استقطاع السلف")} value={`${(Number(form.advancesDeduction) || 0).toFixed(2)} SAR`} />
                   <PreviewItem label={t("الإجمالي")} value={`${computedTotal.toFixed(2)} SAR`} />
                 </div>
                 {form.notes && <p className="text-sm text-gray-600 border-t pt-3"><span className="font-medium">{t("ملاحظات")}:</span> {form.notes}</p>}

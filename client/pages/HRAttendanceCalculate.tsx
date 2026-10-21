@@ -63,8 +63,8 @@ type EmployeeSummary = Employee & { present: number; absent: number; late: numbe
 type DepartmentSummary = { id: string; department: string; employees: number; present: number; absent: number; late: number; leave: number; attendanceRate: number };
 
 const unique = (values: string[]) => [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
-// نظام العمل السعودي (المادة 107): أجر الساعة الإضافية = أجر الساعة الفعلي + 50% من أجر الساعة الأساسي.
-// يُحفظ المعامل 1.5 في عمود rate كما في السجلات السابقة؛ المبلغ يُحسب بالمعادلة أعلاه (overtimeAmount).
+// قيمة الساعة الإضافية (HR-13، كإعداد سمارت): الراتب الأساسي ÷ 30 ÷ ساعات الدوام اليومية × 1.5.
+// يُحفظ المعامل 1.5 في عمود rate؛ المبلغ يحسبه الخادم بالمعادلة نفسها (overtimeAmount للعرض فقط).
 const OVERTIME_RATE = 1.5;
 /** حالات الحضور التي يمسح منها "حذف دخول/خروج" الأوقات (لا الإجازة ولا المأمورية ولا العمل عن بعد ولا العطل) */
 const CLEARABLE_ATTENDANCE_STATUSES = ["حاضر", "متأخر", "present", "late"];
@@ -128,13 +128,11 @@ const workDaysText = (workDays: number[], t: (text: string) => string) => {
   });
   return runs.map((run) => run.length >= 3 ? `${t(WEEKDAY_LABELS[run[0]])}–${t(WEEKDAY_LABELS[run[run.length - 1]])}` : run.map((day) => t(WEEKDAY_LABELS[day])).join("، ")).join("، ");
 };
-/** مبلغ الساعات الإضافية (المادة 107): الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي) */
+/** مبلغ الساعات الإضافية: الساعات × الأساسي ÷ 30 ÷ ساعات الدوام اليومية × 1.5 (كما يحسبه الخادم) */
 const overtimeAmount = (employee: Employee, hours: number) => {
   // ساعات العمل اليومية من جدول الدوام، وإلا من ملف الموظف، وإلا 8 ساعات
   const dailyHours = requiredDailyMinutes(employee.schedule, employee.dailyHours) / 60;
-  const basicHourly = employee.baseSalary / 30 / dailyHours;
-  const actualHourly = (employee.totalSalary > 0 ? employee.totalSalary : employee.baseSalary) / 30 / dailyHours;
-  return round2(hours * (actualHourly + 0.5 * basicHourly));
+  return round2((hours * employee.baseSalary * OVERTIME_RATE) / 30 / dailyHours);
 };
 const ID_CHUNK = 100;
 const chunkIds = (ids: string[]) => Array.from({ length: Math.ceil(ids.length / ID_CHUNK) }, (_, index) => ids.slice(index * ID_CHUNK, (index + 1) * ID_CHUNK));
@@ -559,20 +557,20 @@ export default function HRAttendanceCalculate() {
           alreadyRecorded.length ? `${t("تم تخطي")} ${formatNumber(alreadyRecorded.length)} ${t(isPeriod ? "موظف لديه ساعات إضافية مسجلة في أيام هذه الفترة" : "موظف لديه ساعات إضافية مسجلة في هذا التاريخ")}: ${nameList(alreadyRecorded)}` : "",
         ].filter(Boolean).join("، ");
         if (!eligible.length) throw new Error(`${t("لم تُسجَّل أي ساعات إضافية")}${skippedText ? `: ${skippedText}` : ""}`);
-        // المادة 107: الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي)؛ المبلغ يعيد الخادم حسابه.
-        // تُسجَّل "معلقة" وتدخل الراتب بعد اعتمادها من مسؤول آخر في صفحة "اعتماد الساعات الإضافية"
+        // المبلغ يعيد الخادم حسابه (الأساسي ÷ 30 ÷ ساعات الدوام × 1.5).
+        // تُسجَّل «معتمدة» (HR-13) فتدخل كشف الراتب مباشرة؛ تُحذف من صفحة «الساعات الإضافية» ما دام الشهر غير مقفل
         // كل موظف على حدة: رفض واحد (شهر رواتبه معتمد مثلًا) لا يوقف تسجيل الباقين
         let savedCount = 0;
         const failures: string[] = [];
         for (const employee of eligible) {
-          const { error: saveError } = await supabase.from("overtime_records").insert({ employee_id: employee.id, emp_name: employee.name, date: periodTo, ...(isPeriod ? { period_from: periodFrom } : {}), hours, rate: OVERTIME_RATE, amount: overtimeAmount(employee, hours), status: "معلق", notes: actionReason || null });
+          const { error: saveError } = await supabase.from("overtime_records").insert({ employee_id: employee.id, emp_name: employee.name, date: periodTo, ...(isPeriod ? { period_from: periodFrom } : {}), hours, rate: OVERTIME_RATE, amount: overtimeAmount(employee, hours), status: "معتمد", notes: actionReason || null });
           if (saveError) failures.push(`${employee.name}: ${t(hrRequestErrorText(saveError, "تعذر الحفظ"))}`);
           else savedCount += 1;
         }
         changed = savedCount > 0;
         const failureText = failures.length ? `${t("لم يُسجَّل لـ")} ${formatNumber(failures.length)} ${t("موظف")}: ${failures.slice(0, NAME_LIST_LIMIT).join("، ")}${failures.length > NAME_LIST_LIMIT ? "…" : ""}` : "";
         if (!savedCount) throw new Error(failureText || t("لم تُسجَّل أي ساعات إضافية"));
-        message = [`${t("تم تسجيل الساعات الإضافية بانتظار الاعتماد لـ")} ${formatNumber(savedCount)} ${t("موظف")}${isPeriod ? ` (${periodFrom} — ${periodTo})` : ""}`, skippedText, failureText].filter(Boolean).join("، ");
+        message = [`${t("تم تسجيل الساعات الإضافية (تدخل كشف الراتب) لـ")} ${formatNumber(savedCount)} ${t("موظف")}${isPeriod ? ` (${periodFrom} — ${periodTo})` : ""}`, skippedText, failureText].filter(Boolean).join("، ");
       } else if (attendanceAction === "permission") {
         const hours = Number(actionHours);
         if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));
@@ -827,8 +825,8 @@ export default function HRAttendanceCalculate() {
         <p className="mt-3 text-xs text-slate-600">{rangeActions.includes(attendanceAction) ? `${t("سيتم التطبيق على الموظفين المحددين خلال الفترة")}: ${actionDateFrom} — ${actionDateTo}` : `${t("سيتم التطبيق على الموظفين المحددين")}: ${formatNumber(actionEmployees.length)}`}</p>
         {(attendanceAction === "clear-punches" || attendanceAction === "delete-bulk") && <p className="mt-2 text-xs font-semibold text-red-700">{attendanceAction === "delete-bulk" ? t("سيتم حذف سجلات التحضير الإداري فقط ولن تُحذف بصمات الموظفين الجغرافية") : t("سيتم مسح وقت الدخول والخروج من سجلات الحضور (حاضر/متأخر) في أيام عمل كل موظف حسب جدول دوامه فقط، وتتحول حالة اليوم إلى غائب فيُخصم من الراتب؛ لا تُمس أيام الراحة ولا العطل الرسمية ولا الإجازات المعتمدة ولا سجلات الإجازة والمأمورية والعمل عن بعد، ولا بصمات الموظفين الموثّقة من البوابة")}</p>}
         {(attendanceAction === "punch" || attendanceAction === "bulk") && <p className="mt-2 text-xs text-slate-600">{t(attendanceAction === "bulk" ? "تُحضَّر أيام عمل كل موظف حسب جدول دوامه فقط (تُستثنى أيام راحته والعطل الرسمية وإجازاته المعتمدة؛ اليوم الواحد يُقبل كما هو)، وتُضاف الأيام غير المسجلة فقط: لا يُعدَّل أي سجل موجود ولا تُستبدل بصمات الموظفين الموثّقة من بوابة الموظف" : "لن تُستبدل بصمات الموظفين الموثّقة من بوابة الموظف؛ يُحدَّث السجل الموجود عند اختيار موظف واحد فقط، ولعدة موظفين تُضاف السجلات غير المسجلة فقط. وقت انصراف قبل وقت الحضور يُعد وردية ليلية")}</p>}
-        {attendanceAction === "overtime" && <p className="mt-2 text-xs font-medium text-slate-700">{t("عدد الساعات هو مجموع ساعات الفترة كلها (نفس التاريخ في «من» و«إلى» = يوم واحد). الفترة داخل شهر واحد وتدخل راتب ذلك الشهر بعد اعتمادها، ولا يُحسب يوم مرتين")}</p>}
-        {attendanceAction === "overtime" && <p className="mt-2 text-xs text-slate-600">{t("المبلغ = الساعات × (أجر الساعة الفعلي + 50% من أجر الساعة الأساسي) وفق المادة 107 من نظام العمل؛ أجر الساعة الأساسي = الراتب الأساسي ÷ 30 ÷ ساعات العمل اليومية، وأجر الساعة الفعلي = إجمالي الراتب (أو الأساسي إن لم يُسجَّل) ÷ 30 ÷ ساعات العمل اليومية؛ ساعات العمل اليومية من جدول دوام الموظف، وإلا من ملفه. يُتخطى من لم يُسجَّل راتبه الأساسي ومن لديه ساعات إضافية مسجلة في أيام الفترة")}</p>}
+        {attendanceAction === "overtime" && <p className="mt-2 text-xs font-medium text-slate-700">{t("عدد الساعات هو مجموع ساعات الفترة كلها (نفس التاريخ في «من» و«إلى» = يوم واحد). الفترة داخل شهر واحد وتدخل راتب ذلك الشهر مباشرة، ولا يُحسب يوم مرتين")}</p>}
+        {attendanceAction === "overtime" && <p className="mt-2 text-xs text-slate-600">{t("المبلغ = الساعات × الراتب الأساسي ÷ 30 ÷ ساعات العمل اليومية × 1.5 (إعداد الشركة كما في سمارت)؛ ساعات العمل اليومية من جدول دوام الموظف، وإلا من ملفه. يُتخطى من لم يُسجَّل راتبه الأساسي ومن لديه ساعات إضافية مسجلة في أيام الفترة")}</p>}
         <div className="mt-4 flex gap-2"><Button type="button" size="sm" onClick={() => void saveAttendanceAction()} disabled={actionSaving}>{actionSaving ? t("جاري الحفظ...") : t("تأكيد العملية")}</Button><Button type="button" variant="outline" size="sm" onClick={() => setAttendanceAction(null)} disabled={actionSaving}>{t("إلغاء")}</Button></div>
       </div>}
       {actionMessage && <p className="mt-3 text-sm text-slate-700">{actionMessage}</p>}

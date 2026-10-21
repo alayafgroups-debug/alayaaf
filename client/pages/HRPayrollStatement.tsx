@@ -374,7 +374,7 @@ export default function HRPayrollStatement() {
       empId: employee.empId, name: employee.name, department: employee.section || t("غير متوفر"), branch: employee.branch || t("غير متوفر"),
       workDays: `${formatNumber(c.presentDays)}/${formatNumber(c.workDays)}`, absentDays: formatNumber(c.absentDays),
       basic: moneyText(c.basic), allowances: moneyText(c.allowances), overtime: moneyText(c.overtime), absenceDeduction: moneyText(c.absenceDeduction + c.unpaidLeaveDeduction),
-      socialInsurance: moneyText(c.socialInsurance), otherDeductions: moneyText(c.penalties + c.loans + c.allowanceDeductions),
+      socialInsurance: moneyText(c.socialInsurance), otherDeductions: moneyText(c.penalties + c.loans + c.fixedDeductions + c.allowanceDeductions),
       deductions: moneyText(c.totalDeductions), net: moneyText(c.net),
     };
   });
@@ -753,7 +753,7 @@ export default function HRPayrollStatement() {
                         <td className="px-2 py-2">{moneyText(c.overtime)}</td>
                         <td className="px-2 py-2 text-red-600" title={[c.unpaidLeaveDays ? `${t("أيام إجازة مخصومة")}: ${formatNumber(c.unpaidLeaveDays)}` : "", c.fullPeriodUnearned ? t("لم يعمل أي يوم في الفترة: خُصم أجرها كاملًا") : ""].filter(Boolean).join(" — ") || undefined}>{moneyText(c.absenceDeduction + c.unpaidLeaveDeduction)}</td>
                         <td className="px-2 py-2 text-orange-600">{moneyText(c.socialInsurance)}</td>
-                        <td className="px-2 py-2 text-red-600">{moneyText(c.penalties + c.loans + c.allowanceDeductions)}</td>
+                        <td className="px-2 py-2 text-red-600">{moneyText(c.penalties + c.loans + c.fixedDeductions + c.allowanceDeductions)}</td>
                         <td className="px-2 py-2 text-red-600">{moneyText(c.totalDeductions)}</td>
                         <td className="px-2 py-2 font-semibold text-emerald-700" title={c.cappedDeductions > 0 ? t("خُفّضت الاستقطاعات حتى لا يكون الصافي سالبًا") : undefined}>{moneyText(c.net)}</td>
                       </tr>

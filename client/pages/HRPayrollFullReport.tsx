@@ -52,7 +52,8 @@ const columns: PayrollColumn[] = [
   { key: "absenceDeduction", label: "غياب", group: "الاقتطاعات", width: 13, money: true },
   { key: "unpaidLeaveDeduction", label: "إجازات بدون راتب أو بأجر ناقص", group: "الاقتطاعات", width: 16, money: true },
   { key: "socialInsurance", label: "التأمينات الاجتماعية", group: "الاقتطاعات", width: 18, money: true },
-  { key: "penalties", label: "اقتطاعات", group: "الاقتطاعات", width: 14, money: true },
+  { key: "fixedDeductions", label: "اقتطاعات", group: "الاقتطاعات", width: 14, money: true },
+  { key: "penalties", label: "الجزاءات", group: "الاقتطاعات", width: 14, money: true },
   { key: "allowanceDeductions", label: "بدلات مخصومة", group: "الاقتطاعات", width: 14, money: true },
   { key: "loans", label: "السلف", group: "الاقتطاعات", width: 13, money: true },
   { key: "salaryAdvance", label: "مقدم الراتب", group: "الاقتطاعات", width: 14, money: true },
@@ -132,7 +133,7 @@ export default function HRPayrollFullReport() {
           workDays: line.workDays, presentDays: line.presentDays, absenceDays: line.absentDays, unrecordedDays: line.unrecordedDays, notEmployedDays: line.notEmployedDays,
           overtimeHours: `${String(Math.floor(line.overtimeHours)).padStart(2, "0")}:${String(Math.round((line.overtimeHours % 1) * 60)).padStart(2, "0")}:00`,
           basicSalary: line.basic, privileges: 0, overtime: line.overtime, allowances: line.allowances, incentives: 0, otherEarnings: 0, totalEarnings: line.grossEarnings,
-          absenceDeduction: line.absenceDeduction, unpaidLeaveDeduction: line.unpaidLeaveDeduction, socialInsurance: line.socialInsurance, penalties: line.penalties, allowanceDeductions: line.allowanceDeductions, loans: line.loans, salaryAdvance: 0, totalDeductions: line.totalDeductions,
+          absenceDeduction: line.absenceDeduction, unpaidLeaveDeduction: line.unpaidLeaveDeduction, socialInsurance: line.socialInsurance, fixedDeductions: line.fixedDeductions, penalties: line.penalties, allowanceDeductions: line.allowanceDeductions, loans: line.loans, salaryAdvance: 0, totalDeductions: line.totalDeductions,
           netSalary, netSalaryCurrency: `${formatNumber(netSalary, { minimumFractionDigits: 2 })} SAR`, payable: netSalary, payableCurrency: `${formatNumber(netSalary, { minimumFractionDigits: 2 })} SAR`,
           branch: branches.get(String(employee.branch_id ?? "")) ?? "", department: departments.get(String(employee.department_id ?? "")) ?? "", section: sections.get(String(employee.section_id ?? "")) ?? "", location: locations.get(String(employee.attendance_location_id ?? "")) ?? "",
         };

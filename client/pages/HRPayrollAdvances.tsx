@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
-import { CheckCircle2, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, Pencil, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
-import { advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, parseApprovedAdvance, type AdvanceRecord } from "@/lib/advances";
+import { advanceSkipsById, advanceStartMonth, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, parseApprovedAdvance, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
+import { AdvanceEditDialog, AdvanceSkipsDialog, deleteAdvance, type AdvanceActionTarget } from "@/components/hr/AdvanceDialogs";
 import { isEmployeeActive } from "@/lib/employeeStatus";
 import { riyadhMonth, riyadhToday } from "@/lib/hrDates";
 import { canManagePerm, readUserSession } from "@/lib/authSession";
@@ -14,8 +15,9 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useI18n } from "@/i18n";
 
 /**
- * سلف الموظفين: تُسجَّل معلقة، ويعتمدها مسؤول رواتب آخر (لا من سجّلها ولا صاحبها)، ثم يُخصم قسطها من الراتب
- * ابتداءً من شهر البداية حتى السداد. المسدَّد يُحسب من أقساط كشوف الرواتب (عدا الملغاة) شهرًا بشهر،
+ * سلف الموظفين (HR-13، كما في سمارت): تُسجَّل معتمدة من مسؤول الرواتب (لا يسجّل أحد سلفته)، ثم يُخصم قسطها من الراتب
+ * ابتداءً من شهر البداية حتى السداد. تُعدَّل وتُؤجَّل أقساطها شهرًا بشهر، وتُحذف ما لم يُخصم منها شيء.
+ * المعلقة القديمة (قبل HR-13) يعتمدها مسؤول رواتب آخر كما كان. المسدَّد يُحسب من أقساط كشوف الرواتب (عدا الملغاة) شهرًا بشهر،
  * بالدالة نفسها التي يستخدمها مسير الرواتب (lib/advances). المادة 92: قسط السلفة بلا موافقة كتابية لا يزيد على 10% من الأجر،
  * والمادة 93: المحسوم كله لا يزيد على نصف الأجر (يطبقه مسير الرواتب ويؤجل الباقي).
  */
@@ -37,6 +39,10 @@ type Advance = {
   createdAt: string;
   repaid: number;
   remaining: number;
+  /** الأشهر المؤجَّل قسطها */
+  skips: string[];
+  /** ما سُدد منها من مستحقات نهاية الخدمة («إجمالي استقطاع السلف»، HR-13) */
+  terminationPart: number;
 };
 type AdvanceRequest = { id: string; empId: string; name: string; amount: number; installments: number; installmentAmount: number; startMonth: string; method: string; currency: string; createdAt: string };
 type Draft = { employeeId: string; amount: string; installment: string; startMonth: string; notes: string; requestId: string };
@@ -71,7 +77,9 @@ export default function HRPayrollAdvances() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [requests, setRequests] = useState<AdvanceRequest[]>([]);
-  const [tab, setTab] = useState<Tab>("pending");
+  const [tab, setTab] = useState<Tab>("active");
+  const [editing, setEditing] = useState<AdvanceActionTarget | null>(null);
+  const [skipping, setSkipping] = useState<AdvanceActionTarget | null>(null);
   const [search, setSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -95,13 +103,27 @@ export default function HRPayrollAdvances() {
     const seq = ++loadSeq.current;
     setLoading(true); setError("");
     try {
-      const [employeeRows, advanceRows, payrollRows, requestRows] = await Promise.all([
+      const [employeeRows, advanceRows, payrollRows, requestRows, skipRows, terminationRows] = await Promise.all([
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("employees").select("id, emp_id, name, status, base_salary, total_salary").order("name").order("id").range(from, to)),
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("hr_advances").select("*").order("id").range(from, to)),
         // أقساط السلف المخصومة في كشوف الرواتب (غير المرفوضة) — المسدَّد من كل سلفة
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("payroll").select("id, emp_id, month, status, advance_deduction").gt("advance_deduction", 0).order("month").order("id").range(from, to)),
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("hr_requests").select("id, emp_id, emp_name, status, details, created_at").eq("request_type", ADVANCE_REQUEST_TYPE).order("created_at", { ascending: false }).order("id").range(from, to)),
+        // الأشهر المؤجَّل قسطها (HR-13)؛ قبله لا يوجد الجدول فلا تأجيل
+        fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("hr_advance_skips").select("id, advance_id, month").order("id").range(from, to))
+          .catch((skipError: unknown) => {
+            if (["42P01", "PGRST205"].includes(String((skipError as { code?: string } | null)?.code ?? ""))) return [] as Record<string, unknown>[];
+            throw skipError;
+          }),
+        // «إجمالي استقطاع السلف» في إنهاء الخدمة (HR-13): سداد لسلف الموظف بقدر مبلغه؛ قبله لا يوجد العمود
+        fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("hr_terminations").select("*").gt("advances_deduction", 0).order("id").range(from, to))
+          .catch((terminationError: unknown) => {
+            if (isMissingColumnError(terminationError)) return [] as Record<string, unknown>[];
+            throw terminationError;
+          }),
       ]);
+      const creditsByEmployee = terminationAdvanceCredits(terminationRows);
+      const skipsById = advanceSkipsById(skipRows);
       if (seq !== loadSeq.current) return;
       const employeeList: Employee[] = employeeRows.map((row) => ({
         id: String(row.id),
@@ -140,22 +162,34 @@ export default function HRPayrollAdvances() {
           createdAt: String(row.created_at ?? ""),
           repaid: 0,
           remaining: 0,
+          skips: [...(skipsById.get(String(row.id ?? "")) ?? [])].sort(),
+          terminationPart: 0,
         };
       });
       // توزيع المسدَّد على السلف المعتمدة لكل موظف بالدالة نفسها التي يستخدمها مسير الرواتب
       const recordsByEmployee = new Map<string, AdvanceRecord[]>();
       advanceRows.forEach((row) => {
-        const record = parseApprovedAdvance(row);
+        const record = parseApprovedAdvance(row, skipsById.get(String(row.id ?? "")));
         if (record) recordsByEmployee.set(record.employeeId, [...(recordsByEmployee.get(record.employeeId) ?? []), record]);
       });
       const repaidById = new Map<string, number>();
+      const terminationPartById = new Map<string, number>();
       recordsByEmployee.forEach((records, employeeId) => {
-        allocateAdvanceRepayments(records, deductionsByCode.get(employeeById.get(employeeId)?.empId ?? "") ?? new Map()).forEach((value, id) => repaidById.set(id, value));
+        const months = deductionsByCode.get(employeeById.get(employeeId)?.empId ?? "");
+        const credit = creditsByEmployee.get(employeeId) ?? 0;
+        const repaid = allocateAdvanceRepayments(records, withTerminationCredit(months, credit));
+        repaid.forEach((value, id) => repaidById.set(id, value));
+        if (credit > 0) {
+          // ما سُدد من نهاية الخدمة لكل سلفة = المسدَّد مع الاستقطاع ناقص المسدَّد من الرواتب وحدها
+          const fromPayroll = allocateAdvanceRepayments(records, months ?? new Map());
+          repaid.forEach((value, id) => terminationPartById.set(id, round2(Math.max(0, value - (fromPayroll.get(id) ?? 0)))));
+        }
       });
       list.forEach((advance) => {
         if (!isApprovedStatus(advance.status)) { advance.remaining = isRejectedStatus(advance.status) ? 0 : advance.amount; return; }
         advance.repaid = round2(repaidById.get(advance.id) ?? 0);
         advance.remaining = round2(Math.max(0, advance.amount - advance.repaid));
+        advance.terminationPart = terminationPartById.get(advance.id) ?? 0;
       });
       const linked = new Set(list.filter((advance) => !isRejectedStatus(advance.status)).map((advance) => advance.requestId).filter(Boolean));
       const requestList: AdvanceRequest[] = requestRows
@@ -199,6 +233,8 @@ export default function HRPayrollAdvances() {
       && (!query || advance.name.toLowerCase().includes(query) || advance.empId.toLowerCase().includes(query)));
   }, [advances, tab, search]); // eslint-disable-line react-hooks/exhaustive-deps
   const outstandingTotal = useMemo(() => advances.filter((advance) => isApprovedStatus(advance.status)).reduce((sum, advance) => sum + advance.remaining, 0), [advances]);
+  // سلفة سُدد منها شيء من مستحقات نهاية الخدمة: بلا تعديل ولا تأجيل ولا حذف (يُعدَّل الاستقطاع من إنهاء الخدمة)
+  const settledOnTermination = (advance: Advance) => isApprovedStatus(advance.status) && advance.terminationPart > 0.004;
   const employeeOptions = useMemo(() => {
     const query = employeeSearch.trim().toLowerCase();
     return employees.filter((employee) => employee.active && (!query || employee.name.toLowerCase().includes(query) || employee.empId.toLowerCase().includes(query))).slice(0, 200);
@@ -246,15 +282,15 @@ export default function HRPayrollAdvances() {
         monthly_installment: installment,
         start_month: draft.startMonth,
         request_date: riyadhToday(),
-        status: "معلق",
+        status: "معتمد",
         notes: draft.notes.trim() || null,
       };
       if (draft.requestId) payload.request_id = draft.requestId;
       const { error: insertError } = await supabase.from("hr_advances").insert(payload);
       if (insertError) throw insertError;
-      setMessage(t("سُجّلت السلفة بانتظار اعتماد مسؤول رواتب آخر"));
+      setMessage(t("سُجّلت السلفة معتمدة؛ يُخصم قسطها من شهر البداية"));
       setDraft(null); setDraftSource(null); setEmployeeSearch("");
-      setTab("pending");
+      setTab("active");
       await load();
     } catch (saveError) {
       setError(hrRequestErrorText(saveError, t("تعذر حفظ السلفة")));
@@ -284,13 +320,11 @@ export default function HRPayrollAdvances() {
     }
   };
 
-  const removePending = async (advance: Advance) => {
-    if (busy || !window.confirm(t("حذف السلفة المعلقة؟"))) return;
+  const removeAdvance = async (advance: Advance) => {
+    if (busy || !window.confirm(`${t("حذف سلفة")} ${advance.name} (${money(advance.amount)})؟ ${t("تُحذف فقط إن لم يُخصم منها شيء")}`)) return;
     setBusy(true); setError(""); setMessage("");
     try {
-      const { data, error: deleteError } = await supabase.from("hr_advances").delete().eq("id", advance.id).eq("status", "معلق").select("id");
-      if (deleteError) throw deleteError;
-      setMessage((data ?? []).length ? t("حُذفت السلفة") : t("لم يُحذف شيء: لا تملك صلاحية الحذف أو صدر قرار في السلفة"));
+      setMessage(await deleteAdvance(advance.id, t));
       await load();
     } catch (deleteError) {
       setError(hrRequestErrorText(deleteError, t("تعذر الحذف")));
@@ -298,6 +332,10 @@ export default function HRPayrollAdvances() {
       setBusy(false);
     }
   };
+  const actionTarget = (advance: Advance): AdvanceActionTarget => ({
+    id: advance.id, name: advance.name, amount: advance.amount, installment: advance.installment,
+    startMonth: advance.startMonth, notes: advance.notes, repaid: advance.repaid,
+  });
 
   const statusBadge = (advance: Advance) => {
     const kind = tabOf(advance);
@@ -312,7 +350,7 @@ export default function HRPayrollAdvances() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{t("سلف الموظفين")}</h1>
-            <p className="mt-1 text-sm text-gray-500">{t("تُسجَّل السلفة معلقة ويعتمدها مسؤول رواتب آخر، ثم يُخصم قسطها من الراتب ابتداءً من شهر البداية حتى السداد")}</p>
+            <p className="mt-1 text-sm text-gray-500">{t("تُسجَّل السلفة معتمدة ويُخصم قسطها من الراتب ابتداءً من شهر البداية حتى السداد. تُعدَّل، ويُؤجَّل قسط شهر، وتُحذف ما لم يُخصم منها شيء")}</p>
           </div>
           <div className="flex items-center gap-2">
             {canManage && !draft && (
@@ -376,7 +414,7 @@ export default function HRPayrollAdvances() {
               </p>
             )}
             <div className="flex gap-2">
-              <button type="button" disabled={busy} onClick={() => void saveDraft()} className="rounded bg-[#004e89] px-4 py-2 text-sm text-white disabled:opacity-50">{t("حفظ بانتظار الاعتماد")}</button>
+              <button type="button" disabled={busy} onClick={() => void saveDraft()} className="rounded bg-[#004e89] px-4 py-2 text-sm text-white disabled:opacity-50">{t("حفظ")}</button>
               <button type="button" disabled={busy} onClick={() => { setDraft(null); setDraftSource(null); }} className="rounded border px-4 py-2 text-sm">{t("إلغاء")}</button>
             </div>
           </div>
@@ -386,7 +424,7 @@ export default function HRPayrollAdvances() {
           <div className="rounded-lg border bg-white shadow-sm">
             <div className="border-b p-4">
               <h2 className="font-semibold text-gray-900">{t("طلبات سلف موافق عليها لم تُسجَّل بعد")} ({formatNumber(requests.length)})</h2>
-              <p className="text-xs text-gray-500">{t("الموافقة على طلب السلفة لا تخصم شيئًا حتى تُسجَّل السلفة هنا وتُعتمد")}</p>
+              <p className="text-xs text-gray-500">{t("الموافقة على طلب السلفة لا تخصم شيئًا حتى تُسجَّل السلفة هنا")}</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-right text-sm">
@@ -463,9 +501,17 @@ export default function HRPayrollAdvances() {
                       <td className="px-3 py-2 font-medium">{advance.name || "—"} <span className="text-xs text-gray-500">{advance.empId}</span></td>
                       <td className="px-3 py-2">{money(advance.amount)}</td>
                       <td className="px-3 py-2">{advance.installment ? money(advance.installment) : <span className="text-red-600">{t("غير محدد — لا يُخصم")}</span>}</td>
-                      <td className="px-3 py-2">{advance.startMonth || "—"}</td>
-                      <td className="px-3 py-2">{isApprovedStatus(advance.status) ? money(advance.repaid) : "—"}</td>
-                      <td className="px-3 py-2 font-semibold">{isApprovedStatus(advance.status) ? money(advance.remaining) : "—"}</td>
+                      <td className="px-3 py-2">
+                        {advance.startMonth || "—"}
+                        {advance.skips.length > 0 && <span className="block text-xs text-amber-700">{t("مؤجَّل")}: {advance.skips.join("، ")}</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        {isApprovedStatus(advance.status) ? money(advance.repaid) : "—"}
+                        {settledOnTermination(advance) && <span className="block text-xs text-emerald-700">{t("منها من مستحقات نهاية الخدمة")}: {money(advance.terminationPart)}</span>}
+                      </td>
+                      <td className="px-3 py-2 font-semibold">
+                        {isApprovedStatus(advance.status) ? money(advance.remaining) : "—"}
+                      </td>
                       <td className="px-3 py-2">{statusBadge(advance)}</td>
                       <td className="px-3 py-2">{advance.createdBy || "—"}</td>
                       <td className="px-3 py-2">{advance.decidedBy ? `${advance.decidedBy}${advance.decisionNote ? ` — ${advance.decisionNote}` : ""}` : "—"}</td>
@@ -476,10 +522,17 @@ export default function HRPayrollAdvances() {
                             <span className="flex gap-1">
                               <button type="button" disabled={busy} onClick={() => void decide(advance, "معتمد")} className="flex items-center gap-1 rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-50"><CheckCircle2 className="h-3 w-3" />{t("اعتماد")}</button>
                               <button type="button" disabled={busy} onClick={() => void decide(advance, "مرفوض")} className="flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-xs text-white disabled:opacity-50"><XCircle className="h-3 w-3" />{t("رفض")}</button>
-                              <button type="button" disabled={busy} onClick={() => void removePending(advance)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50" title={t("حذف")}><Trash2 className="h-3 w-3" /></button>
+                              <button type="button" disabled={busy} onClick={() => void removeAdvance(advance)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50" title={t("حذف")}><Trash2 className="h-3 w-3" /></button>
                             </span>
                           )}
-                          {pending && own && <span className="text-xs text-amber-700">{t("سلفتك؛ يقرر فيها مسؤول آخر")}</span>}
+                          {isApprovedStatus(advance.status) && !own && !settledOnTermination(advance) && (
+                            <span className="flex gap-1">
+                              <button type="button" disabled={busy} onClick={() => setEditing(actionTarget(advance))} className="flex items-center gap-1 rounded border border-[#004e89] px-2 py-1 text-xs text-[#004e89] disabled:opacity-50" title={t("تعديل معلومات السلفة")}><Pencil className="h-3 w-3" />{t("تعديل")}</button>
+                              <button type="button" disabled={busy} onClick={() => setSkipping(actionTarget(advance))} className="flex items-center gap-1 rounded border border-amber-400 px-2 py-1 text-xs text-amber-800 disabled:opacity-50" title={t("تأجيل قسط شهري")}><CalendarClock className="h-3 w-3" />{t("تأجيل قسط")}</button>
+                              <button type="button" disabled={busy} onClick={() => void removeAdvance(advance)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50" title={t("حذف")}><Trash2 className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {own && <span className="text-xs text-amber-700">{t("سلفتك؛ يتولاها مسؤول آخر")}</span>}
                         </td>
                       )}
                     </tr>
@@ -490,6 +543,8 @@ export default function HRPayrollAdvances() {
           </div>
         </div>
       </div>
+      <AdvanceEditDialog advance={editing} onClose={() => setEditing(null)} onSaved={(text) => { setEditing(null); setMessage(text); void load(); }} />
+      <AdvanceSkipsDialog advance={skipping} onClose={() => setSkipping(null)} onChanged={() => void load()} />
     </Layout>
   );
 }

@@ -37,7 +37,7 @@ const postingErrorText = (t: (text: string) => string, error: unknown) => {
 };
 
 export default function HRPayrollTransfer() {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, locale, direction, formatDate, formatNumber } = useI18n();
   const [period, setPeriod] = useState(riyadhMonth());
   const [rows, setRows] = useState<PayrollRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,7 +138,7 @@ export default function HRPayrollTransfer() {
 
   // رفع إيقاف الصرف لراتب مرحّل: لا يتغير القيد ولا المبالغ؛ يصبح الراتب جاهزًا للصرف من الرواتب المستحقة
   const releaseHold = async (row: PayrollRow) => {
-    if (!window.confirm(`${t("رفع إيقاف صرف راتب")} ${row.empName} (${money(row.net)} ${t("ر.س")})؟ ${t("يصبح جاهزًا للصرف من حساب الرواتب المستحقة.")}`)) return;
+    if (!window.confirm(`${t("رفع إيقاف صرف راتب")} ${row.empName} (${money(row.net)} ${t("ر.س")})${locale === "en" ? "?" : "؟"} ${t("يصبح جاهزًا للصرف من حساب الرواتب المستحقة.")}`)) return;
     setReleasingId(row.id);
     const session = readUserSession();
     // الرفع عبر دالة الخادم وحدها (تتطلب صلاحيتي الرواتب والمحاسبة، وتسجّل التاريخ في الملاحظات)
@@ -184,11 +184,11 @@ export default function HRPayrollTransfer() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <SummaryCard label="إجمالي الأساسي والبدلات" value={totals.basic + totals.allowances} />
-              <SummaryCard label="خصم الغياب والإجازات والبدلات المخصومة" value={totals.absence} tone="red" />
-              <SummaryCard label="مصروف الرواتب" value={totals.basic + totals.allowances - totals.absence} />
-              <SummaryCard label="صافي للصرف" value={totals.net - totals.held} tone="green" />
-              <SummaryCard label="موقوف الصرف" value={totals.held} tone="orange" />
+              <SummaryCard label={t("إجمالي الأساسي والبدلات")} value={totals.basic + totals.allowances} />
+              <SummaryCard label={t("خصم الغياب والإجازات والبدلات المخصومة")} value={totals.absence} tone="red" />
+              <SummaryCard label={t("مصروف الرواتب")} value={totals.basic + totals.allowances - totals.absence} />
+              <SummaryCard label={t("صافي للصرف")} value={totals.net - totals.held} tone="green" />
+              <SummaryCard label={t("موقوف الصرف")} value={totals.held} tone="orange" />
             </div>
 
             <div className="overflow-x-auto border border-gray-100 rounded-xl">

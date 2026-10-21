@@ -1,6 +1,7 @@
 import Layout from "./Layout";
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 
 interface PlaceholderModuleProps {
   title: string;
@@ -15,6 +16,7 @@ export default function PlaceholderModule({
   icon: Icon,
   features,
 }: PlaceholderModuleProps) {
+  const { t, locale } = useI18n();
   const formattedFeatures = features.map((f) =>
     typeof f === "string" ? { label: f } : f
   );
@@ -44,8 +46,8 @@ export default function PlaceholderModule({
                 <Icon className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold">{title}</h1>
-                <p className="text-sm text-white/80 mt-1">{description}</p>
+                <h1 className="text-3xl font-bold">{t(title)}</h1>
+                <p className="text-sm text-white/80 mt-1">{t(description)}</p>
               </div>
             </div>
           </div>
@@ -63,13 +65,13 @@ export default function PlaceholderModule({
                   </div>
                 </div>
                 <h3 className="text-2xl font-bold text-foreground">
-                  {title} قريباً
+                  {locale === "en" ? `${t(title)} — coming soon` : `${title} قريباً`}
                 </h3>
                 <p className="mt-3 text-muted-foreground max-w-sm mx-auto">
-                  هذه الميزة قيد التطوير حالياً. تابعنا للتحديثات الجديدة.
+                  {t("هذه الميزة قيد التطوير حالياً. تابعنا للتحديثات الجديدة.")}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  يمكنك أن تطلب المزيد من الميزات من خلال فريق الدعم الفني.
+                  {t("يمكنك أن تطلب المزيد من الميزات من خلال فريق الدعم الفني.")}
                 </p>
               </div>
             </div>
@@ -96,7 +98,7 @@ export default function PlaceholderModule({
                         "bg-slate-500"
                       )} />
                       <p className="text-sm font-medium text-foreground">
-                        {feature.label}
+                        {t(feature.label)}
                       </p>
                     </div>
                   </div>
@@ -116,16 +118,16 @@ export default function PlaceholderModule({
               gradient.includes("rose") ? "border-l-rose-500 bg-rose-50/30" :
               "border-l-slate-500 bg-slate-50/30"
             )}>
-              <h4 className="font-semibold text-foreground text-right">💡 نصيحة</h4>
-              <p className="mt-2 text-sm text-muted-foreground text-right">
-                اضغط على {title} في الشريط الجانبي لعرض قائمة الخيارات والعمليات المتاحة.
+              <h4 className="font-semibold text-foreground text-start">💡 {t("نصيحة")}</h4>
+              <p className="mt-2 text-sm text-muted-foreground text-start">
+                {locale === "en" ? `Click ${t(title)} in the sidebar to see the available options and operations.` : `اضغط على ${title} في الشريط الجانبي لعرض قائمة الخيارات والعمليات المتاحة.`}
               </p>
             </div>
 
             {/* Stats Box */}
             <div className="rounded-xl bg-white border border-border/50 p-4 shadow-sm animate-fade-in-up" style={{ animationDelay: "100ms" }}>
               <div className="text-center">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">الميزات المتاحة</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{t("الميزات المتاحة")}</p>
                 <p className="text-3xl font-bold mt-2 bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
                   {formattedFeatures.length}
                 </p>

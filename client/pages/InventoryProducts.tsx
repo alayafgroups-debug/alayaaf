@@ -106,7 +106,7 @@ export default function InventoryProducts() {
     });
     setBusy(false);
     if (saveError) { setError(inventoryErrorText(saveError.message, t)); return; }
-    toast({ title: t(editingId ? "تم تحديث الصنف" : "تم إنشاء الصنف") });
+    toast({ title: editingId ? t("تم تحديث الصنف") : t("تم إنشاء الصنف") });
     reset(); await load();
   };
 
@@ -120,7 +120,7 @@ export default function InventoryProducts() {
   };
 
   const AccountSelect = ({ label, value, onChange, prefix }: { label: string; value: string; onChange: (value: string) => void; prefix: string }) => (
-    <label className="text-xs text-slate-600">{t(label)}
+    <label className="text-xs text-slate-600">{label}
       <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 h-10 w-full rounded border px-2 text-sm">
         <option value="">{t("اختر حسابًا طرفيًا")}</option>
         {accounts.filter((account) => account.code.startsWith(prefix)).map((account) => <option key={account.code} value={account.code}>{account.code} — {account.name_ar}</option>)}
@@ -138,7 +138,7 @@ export default function InventoryProducts() {
     <section className="grid gap-3 md:grid-cols-3">{[["المنتجات", totals.products], ["الخدمات", totals.services], ["النشطة", totals.active]].map(([label, value]) => <div key={String(label)} className="rounded-xl border bg-white p-4"><p className="text-xs text-slate-500">{t(String(label))}</p><p className="mt-2 text-xl font-bold">{value}</p></div>)}</section>
 
     {editingId !== undefined && <section className="rounded-xl border bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{t(editingId ? "تعديل الصنف أو الخدمة" : "صنف أو خدمة جديدة")}</h2><button onClick={reset}><X className="h-5 w-5" /></button></div>
+      <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{editingId ? t("تعديل الصنف أو الخدمة") : t("صنف أو خدمة جديدة")}</h2><button onClick={reset}><X className="h-5 w-5" /></button></div>
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-xs text-slate-600">{t("رمز الصنف")}<input value={sku} onChange={(event) => setSku(event.target.value.toUpperCase())} placeholder={t("تلقائي عند تركه فارغًا")} className="mt-1 h-10 w-full rounded border px-3" /></label>
         <label className="text-xs text-slate-600">{t("الاسم العربي")}<input value={nameAr} onChange={(event) => setNameAr(event.target.value)} className="mt-1 h-10 w-full rounded border px-3" /></label>
@@ -146,14 +146,14 @@ export default function InventoryProducts() {
         <label className="text-xs text-slate-600">{t("النوع")}<select value={itemType} onChange={(event) => setItemType(event.target.value as Product["itemType"])} className="mt-1 h-10 w-full rounded border px-2"><option value="product">{t("منتج مخزني")}</option><option value="service">{t("خدمة")}</option></select></label>
         <label className="text-xs text-slate-600">{t("وحدة القياس")}<input value={unit} onChange={(event) => setUnit(event.target.value)} className="mt-1 h-10 w-full rounded border px-3" /></label>
         <label className="flex items-center gap-2 self-end rounded border px-3 py-2 text-sm"><input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />{t("نشط")}</label>
-        {itemType === "product" && <><AccountSelect label="حساب أصل المخزون" value={inventoryAccount} onChange={setInventoryAccount} prefix="115" /><AccountSelect label="حساب تكلفة المبيعات" value={cogsAccount} onChange={setCogsAccount} prefix="5" /></>}
-        <AccountSelect label="حساب الإيراد" value={revenueAccount} onChange={setRevenueAccount} prefix="4" />
+        {itemType === "product" && <><AccountSelect label={t("حساب أصل المخزون")} value={inventoryAccount} onChange={setInventoryAccount} prefix="115" /><AccountSelect label={t("حساب تكلفة المبيعات")} value={cogsAccount} onChange={setCogsAccount} prefix="5" /></>}
+        <AccountSelect label={t("حساب الإيراد")} value={revenueAccount} onChange={setRevenueAccount} prefix="4" />
       </div>
       <div className="mt-4 flex justify-end"><button disabled={busy} onClick={() => void save()} className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{t("حفظ")}</button></div>
     </section>}
 
     <section className="overflow-hidden rounded-xl border bg-white shadow-sm"><div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-slate-100 text-slate-600"><tr><th className="p-3">{t("الرمز")}</th><th className="p-3">{t("الصنف أو الخدمة")}</th><th className="p-3">{t("النوع")}</th><th className="p-3">{t("الوحدة")}</th><th className="p-3">{t("الحسابات")}</th><th className="p-3">{t("الحالة")}</th><th className="p-3">{t("الإجراءات")}</th></tr></thead><tbody>
-      {loading ? <tr><td colSpan={7} className="py-14 text-center">{t("جاري التحميل...")}</td></tr> : products.length === 0 ? <tr><td colSpan={7} className="py-14 text-center text-slate-400">{t("لا توجد منتجات أو خدمات")}</td></tr> : products.map((product) => <tr key={product.id} className="border-t"><td className="p-3 font-mono">{product.sku}</td><td className="p-3"><p className="font-semibold">{product.nameAr}</p><p className="text-xs text-slate-500">{product.nameEn || "—"}</p></td><td className="p-3 text-center">{t(product.itemType === "product" ? "منتج مخزني" : "خدمة")}</td><td className="p-3 text-center">{product.unit}</td><td className="p-3 text-xs"><p>{t("الإيراد")}: {product.revenueAccountCode}</p>{product.itemType === "product" && <p>{t("المخزون")}: {product.inventoryAccountCode} · {t("التكلفة")}: {product.cogsAccountCode}</p>}</td><td className="p-3 text-center"><span className={`rounded px-2 py-1 text-xs font-semibold ${product.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{t(product.active ? "نشط" : "غير نشط")}</span></td><td className="p-3"><div className="flex justify-center gap-1"><button onClick={() => startEdit(product)} className="rounded border p-1.5" title={t("تعديل")}><Edit3 className="h-4 w-4" /></button><button onClick={() => void remove(product)} className="rounded border border-red-200 p-1.5 text-red-600" title={t("حذف")}><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
+      {loading ? <tr><td colSpan={7} className="py-14 text-center">{t("جاري التحميل...")}</td></tr> : products.length === 0 ? <tr><td colSpan={7} className="py-14 text-center text-slate-400">{t("لا توجد منتجات أو خدمات")}</td></tr> : products.map((product) => <tr key={product.id} className="border-t"><td className="p-3 font-mono">{product.sku}</td><td className="p-3"><p className="font-semibold">{product.nameAr}</p><p className="text-xs text-slate-500">{product.nameEn || "—"}</p></td><td className="p-3 text-center">{product.itemType === "product" ? t("منتج مخزني") : t("خدمة")}</td><td className="p-3 text-center">{product.unit}</td><td className="p-3 text-xs"><p>{t("الإيراد")}: {product.revenueAccountCode}</p>{product.itemType === "product" && <p>{t("المخزون")}: {product.inventoryAccountCode} · {t("التكلفة")}: {product.cogsAccountCode}</p>}</td><td className="p-3 text-center"><span className={`rounded px-2 py-1 text-xs font-semibold ${product.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{product.active ? t("نشط") : t("غير نشط")}</span></td><td className="p-3"><div className="flex justify-center gap-1"><button onClick={() => startEdit(product)} className="rounded border p-1.5" title={t("تعديل")}><Edit3 className="h-4 w-4" /></button><button onClick={() => void remove(product)} className="rounded border border-red-200 p-1.5 text-red-600" title={t("حذف")}><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
     </tbody></table></div></section>
   </main></Layout>;
 }

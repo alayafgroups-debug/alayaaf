@@ -75,7 +75,7 @@ export default function HRPayrollSettings() {
           setS({ ...DEFAULTS, ...(data.setting_value as Partial<PayrollSettings>) });
         }
       } catch (error) {
-        setLoadError(String((error as { message?: string } | null)?.message ?? "") || "تعذر تحميل الإعدادات");
+        setLoadError(String((error as { message?: string } | null)?.message ?? "") || t("تعذر تحميل الإعدادات"));
       } finally {
         setLoading(false);
       }
@@ -108,8 +108,8 @@ export default function HRPayrollSettings() {
 
   const YesNo = ({ name, value, onChange }: { name: string; value: boolean; onChange: (v: boolean) => void }) => (
     <div className="flex gap-6 mt-2">
-      <Radio name={name} checked={value} onChange={() => onChange(true)} label="نعم" />
-      <Radio name={name} checked={!value} onChange={() => onChange(false)} label="لا" />
+      <Radio name={name} checked={value} onChange={() => onChange(true)} label={t("نعم")} />
+      <Radio name={name} checked={!value} onChange={() => onChange(false)} label={t("لا")} />
     </div>
   );
 
@@ -173,18 +173,18 @@ export default function HRPayrollSettings() {
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("طريقة احتساب قيمة أيام الغياب")} <span className="text-red-500">*</span> <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
                   <div className="space-y-3 mt-2">
-                    <Radio name="absence_calc" checked={s.absenceCalc === "basic"} onChange={() => set("absenceCalc", "basic")} label="من الراتب الأساسي" />
-                    <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances"} onChange={() => set("absenceCalc", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات (الافتراضي)" />
-                    <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances_privileges"} onChange={() => set("absenceCalc", "basic_allowances_privileges")} label="من إجمالي الراتب الأساسي + البدلات + الإمتيازات" />
+                    <Radio name="absence_calc" checked={s.absenceCalc === "basic"} onChange={() => set("absenceCalc", "basic")} label={t("من الراتب الأساسي")} />
+                    <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances"} onChange={() => set("absenceCalc", "basic_allowances")} label={t("من إجمالي الراتب الأساسي + البدلات (الافتراضي)")} />
+                    <Radio name="absence_calc" checked={s.absenceCalc === "basic_allowances_privileges"} onChange={() => set("absenceCalc", "basic_allowances_privileges")} label={t("من إجمالي الراتب الأساسي + البدلات + الإمتيازات")} />
                   </div>
                 </div>
 
                 <div className="space-y-3 pt-2">
                   <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("احتساب قيمة الساعة العادية للموظف")} <span className="text-red-500">*</span></label>
                   <div className="space-y-3 mt-2">
-                    <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic"} onChange={() => set("normalHourCalc", "basic")} label="من الراتب الأساسي / 30 يوم / على عدد ساعات الدوام" />
-                    <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic_allowances"} onChange={() => set("normalHourCalc", "basic_allowances")} label="من (الأساسي + البدلات) / 30 يوم / على عدد ساعات الدوام" />
-                    <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic_allowances_privileges"} onChange={() => set("normalHourCalc", "basic_allowances_privileges")} label="من (الأساسي + البدلات + الإمتيازات) / 30 يوم / على ساعات الدوام" />
+                    <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic"} onChange={() => set("normalHourCalc", "basic")} label={t("من الراتب الأساسي / 30 يوم / على عدد ساعات الدوام")} />
+                    <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic_allowances"} onChange={() => set("normalHourCalc", "basic_allowances")} label={t("من (الأساسي + البدلات) / 30 يوم / على عدد ساعات الدوام")} />
+                    <Radio name="normal_hour_calc" checked={s.normalHourCalc === "basic_allowances_privileges"} onChange={() => set("normalHourCalc", "basic_allowances_privileges")} label={t("من (الأساسي + البدلات + الإمتيازات) / 30 يوم / على ساعات الدوام")} />
                   </div>
                 </div>
               </div>
@@ -194,18 +194,18 @@ export default function HRPayrollSettings() {
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("احتساب الساعة الإضافية حتى 100%")} <span className="text-red-500">*</span></label>
                 <div className="space-y-3 mt-2">
-                  <Radio name="ot_basic" checked={s.otBasic === "basic"} onChange={() => set("otBasic", "basic")} label="من الراتب الأساسي (الافتراضي)" />
-                  <Radio name="ot_basic" checked={s.otBasic === "basic_allowances"} onChange={() => set("otBasic", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات" />
-                  <Radio name="ot_basic" checked={s.otBasic === "basic_allowances_privileges"} onChange={() => set("otBasic", "basic_allowances_privileges")} label="من إجمالي الراتب الأساسي + البدلات + الإمتيازات" />
+                  <Radio name="ot_basic" checked={s.otBasic === "basic"} onChange={() => set("otBasic", "basic")} label={t("من الراتب الأساسي (الافتراضي)")} />
+                  <Radio name="ot_basic" checked={s.otBasic === "basic_allowances"} onChange={() => set("otBasic", "basic_allowances")} label={t("من إجمالي الراتب الأساسي + البدلات")} />
+                  <Radio name="ot_basic" checked={s.otBasic === "basic_allowances_privileges"} onChange={() => set("otBasic", "basic_allowances_privileges")} label={t("من إجمالي الراتب الأساسي + البدلات + الإمتيازات")} />
                 </div>
               </div>
 
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("احتساب الساعة الإضافية فوق 100%")} <span className="text-red-500">*</span></label>
                 <div className="space-y-3 mt-2">
-                  <Radio name="ot_extra" checked={s.otExtra === "basic"} onChange={() => set("otExtra", "basic")} label="من الراتب الأساسي (الافتراضي)" />
-                  <Radio name="ot_extra" checked={s.otExtra === "basic_allowances"} onChange={() => set("otExtra", "basic_allowances")} label="من إجمالي الراتب الأساسي + البدلات" />
-                  <Radio name="ot_extra" checked={s.otExtra === "basic_allowances_privileges"} onChange={() => set("otExtra", "basic_allowances_privileges")} label="من إجمالي الراتب الأساسي + البدلات + الإمتيازات" />
+                  <Radio name="ot_extra" checked={s.otExtra === "basic"} onChange={() => set("otExtra", "basic")} label={t("من الراتب الأساسي (الافتراضي)")} />
+                  <Radio name="ot_extra" checked={s.otExtra === "basic_allowances"} onChange={() => set("otExtra", "basic_allowances")} label={t("من إجمالي الراتب الأساسي + البدلات")} />
+                  <Radio name="ot_extra" checked={s.otExtra === "basic_allowances_privileges"} onChange={() => set("otExtra", "basic_allowances_privileges")} label={t("من إجمالي الراتب الأساسي + البدلات + الإمتيازات")} />
                 </div>
               </div>
             </div>

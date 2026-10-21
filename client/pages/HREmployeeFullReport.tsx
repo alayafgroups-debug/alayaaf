@@ -20,6 +20,8 @@ import { monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { isEmployeeActive } from "@/lib/employeeStatus";
 import { computePayroll, round2, type PayrollDay, type PayrollLine } from "@/lib/payrollCalc";
+import { loadOrgEnglishNames } from "@/lib/orgNames";
+import { localizePayrollNotes } from "@/lib/payrollNotesText";
 
 /**
  * تقرير الموظف الكامل: الحضور والراتب لشهر واحد بالقواعد نفسها التي يحسب بها كشف الرواتب
@@ -97,6 +99,8 @@ const DAY_SYMBOLS: Record<DayCell["kind"], { symbol: string; color: string }> = 
   future: { symbol: "○", color: "#cbd5e1" },
   none: { symbol: "·", color: "#cbd5e1" },
 };
+/** رموز الأيام ذات الحرف العربي في الواجهة الإنجليزية */
+const DAY_SYMBOLS_EN: Partial<Record<DayCell["kind"], string>> = { leave: "L", unpaid: "L", unrecorded: "?" };
 
 const dayCell = (day: PayrollDay, today: string): DayCell => {
   const number = Number(day.date.slice(8, 10));
@@ -174,7 +178,8 @@ export default function HREmployeeFullReport() {
 
   const formatDate = (value: string) => {
     if (!value) return "-";
-    return new Date(`${value}T00:00:00`).toLocaleDateString(displayLocale, {
+    // التاريخ بالإنجليزية بصيغة en-GB (يوم/شهر/سنة)
+    return new Date(`${value}T00:00:00`).toLocaleDateString(locale === "ar" ? displayLocale : "en-GB", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -195,6 +200,20 @@ export default function HREmployeeFullReport() {
   // شهر التقرير المعروض (قد يختلف عن الحقل إن غُيّر أثناء الإنشاء)، ورقم الطلب لتجاهل النتائج القديمة
   const [reportMonth, setReportMonth] = useState("");
   const generateSeq = useRef(0);
+  // أسماء الهيكل والمسميات بالإنجليزية (تُحمّل في الواجهة الإنجليزية فقط)؛ القيم المحفوظة تبقى عربية
+  const [orgEnglishNames, setOrgEnglishNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (locale !== "en") return;
+    loadOrgEnglishNames().then(setOrgEnglishNames).catch(() => undefined);
+  }, [locale]);
+  const orgName = (name: string) => (locale === "en" ? orgEnglishNames.get(name.trim()) || t(name) : name);
+  const symbolOf = (kind: DayCell["kind"]) => (locale === "en" && DAY_SYMBOLS_EN[kind]) || DAY_SYMBOLS[kind].symbol;
+  const listSeparator = locale === "en" ? "; " : "؛ ";
+  /** تحذير يبدأ بعدد ("3 موظف ...") يُترجم نصه دون العدد */
+  const warningText = (warning: string) => {
+    const match = /^(\d+) (.+)$/.exec(warning);
+    return match ? `${match[1]} ${t(match[2])}` : t(warning);
+  };
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -315,7 +334,7 @@ export default function HREmployeeFullReport() {
           unrecorded: days.filter((day) => day.kind === "unrecorded").length,
         };
         if (computation.notStarted.has(employee.id)) {
-          return { employee, days, counts, figures: null, statusLabel: "لم يبدأ خدمته في هذا الشهر", estimated: false, notes: "تاريخ التعيين بعد نهاية الشهر" };
+          return { employee, days, counts, figures: null, statusLabel: "لم يبدأ خدمته في هذا الشهر", estimated: false, notes: t("تاريخ التعيين بعد نهاية الشهر") };
         }
         if (saved) {
           return {
@@ -323,7 +342,7 @@ export default function HREmployeeFullReport() {
             figures: rowFigures(saved),
             statusLabel: payrollStatusLabel(String(saved.status ?? ""), String(saved.accounting_status ?? "")),
             estimated: false,
-            notes: String(saved.notes ?? ""),
+            notes: localizePayrollNotes(String(saved.notes ?? "")),
           };
         }
         return {
@@ -331,13 +350,13 @@ export default function HREmployeeFullReport() {
           figures: line ? lineFigures(line) : null,
           statusLabel: "تقديري: لا يوجد صف رواتب محفوظ لهذا الشهر",
           estimated: true,
-          notes: line ? `حساب تقديري حتى تاريخ اليوم — ${line.workDays} يوم عمل` : "",
+          notes: line ? (locale === "en" ? `Estimated calculation up to today — ${line.workDays} work days` : `حساب تقديري حتى تاريخ اليوم — ${line.workDays} يوم عمل`) : "",
         };
       });
       if (seq !== generateSeq.current) return;
       setReports(generated);
       setReportMonth(targetMonth);
-      setReportWarnings([...computation.loadErrors.map((item) => `${item}؛ الأرقام التقديرية قد تكون ناقصة`), ...computation.warnings]);
+      setReportWarnings([...computation.loadErrors.map((item) => `${t(item)}${listSeparator}${t("الأرقام التقديرية قد تكون ناقصة")}`), ...computation.warnings]);
     } catch (error) {
       if (seq === generateSeq.current) toast({ title: t("تعذر إنشاء التقرير"), description: hrRequestErrorText(error), variant: "destructive" });
     } finally {
@@ -350,61 +369,66 @@ export default function HREmployeeFullReport() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    // نصوص الطباعة بلغة الواجهة: في الإنجليزية إنجليزية من اليسار إلى اليمين بأرقام إنجليزية
+    const currency = escapeHtml(t("ر.س"));
     const pages = reports
       .map((report) => {
         const figures = report.figures;
         const deductionRows = figures
-          ? deductionLines(figures).map((item) => `<tr><td>${escapeHtml(item.label)}</td><td>${money(item.value)} ر.س</td></tr>`).join("") || `<tr><td colspan="2">لا توجد استقطاعات</td></tr>`
-          : `<tr><td colspan="2">${escapeHtml(report.statusLabel)}</td></tr>`;
+          ? deductionLines(figures).map((item) => `<tr><td>${escapeHtml(t(item.label))}</td><td>${money(item.value)} ${currency}</td></tr>`).join("") || `<tr><td colspan="2">${escapeHtml(t("لا توجد استقطاعات"))}</td></tr>`
+          : `<tr><td colspan="2">${escapeHtml(t(report.statusLabel))}</td></tr>`;
         const attendanceHeaders = report.days
           .map((item) => `<th style="min-width:18px;padding:4px 1px;text-align:center"><b style="display:block;font-size:8px">${item.day}</b><small style="display:block;font-size:5px;font-weight:400">${escapeHtml(item.date.slice(5))}</small></th>`)
           .join("");
         const attendanceCells = report.days
           .map((item) => {
             const style = DAY_SYMBOLS[item.kind];
-            return `<td title="${escapeHtml(`${formatDate(item.date)} - ${item.label}`)}" style="padding:5px 1px;text-align:center;color:${style.color};font-size:11px;font-weight:800">${style.symbol}</td>`;
+            return `<td title="${escapeHtml(`${formatDate(item.date)} - ${t(item.label)}`)}" style="padding:5px 1px;text-align:center;color:${style.color};font-size:11px;font-weight:800">${escapeHtml(symbolOf(item.kind))}</td>`;
           })
           .join("");
+        const periodText = locale === "en"
+          ? `For the period ${escapeHtml(formatDate(range.from))} to ${escapeHtml(formatDate(range.to))}`
+          : `للفترة من ${escapeHtml(formatDate(range.from))} إلى ${escapeHtml(formatDate(range.to))}`;
 
         return `
         <section class="page">
           <div class="report-head">
-            <div><div class="eyebrow">الموارد البشرية</div><h1>تقرير الموظف الكامل</h1><p>للفترة من ${escapeHtml(formatDate(range.from))} إلى ${escapeHtml(formatDate(range.to))}</p></div>
+            <div><div class="eyebrow">${escapeHtml(t("الموارد البشرية"))}</div><h1>${escapeHtml(t("تقرير الموظف الكامل"))}</h1><p>${periodText}</p></div>
             <div class="brand">HR</div>
           </div>
           <div class="employee-card">
             <div class="avatar">${escapeHtml(report.employee.name.charAt(0))}</div>
-            <div><h2>${escapeHtml(report.employee.name)}</h2><p>${escapeHtml(report.employee.jobTitle)}</p></div>
-            <div class="identity"><span>رقم الموظف</span><strong>${escapeHtml(report.employee.empId)}</strong></div>
+            <div><h2>${escapeHtml(report.employee.name)}</h2><p>${escapeHtml(orgName(report.employee.jobTitle))}</p></div>
+            <div class="identity"><span>${escapeHtml(t("رقم الموظف"))}</span><strong>${escapeHtml(report.employee.empId)}</strong></div>
           </div>
           <div class="meta-grid">
-            <div><span>الإدارة</span><strong>${escapeHtml(report.employee.administration)}</strong></div>
-            <div><span>القسم</span><strong>${escapeHtml(report.employee.department)}</strong></div>
-            <div><span>الفرع</span><strong>${escapeHtml(report.employee.branch)}</strong></div>
+            <div><span>${escapeHtml(t("الإدارة"))}</span><strong>${escapeHtml(orgName(report.employee.administration))}</strong></div>
+            <div><span>${escapeHtml(t("القسم"))}</span><strong>${escapeHtml(orgName(report.employee.department))}</strong></div>
+            <div><span>${escapeHtml(t("الفرع"))}</span><strong>${escapeHtml(orgName(report.employee.branch))}</strong></div>
           </div>
-          <div class="section-title"><h3>الحضور والانصراف</h3><div class="stats"><b class="green">حضور ${report.counts.present}</b><b class="amber">تأخير ${report.counts.late}</b><b class="red">غياب ${report.counts.absent}</b><b class="blue">إجازة ${report.counts.leave}</b>${report.counts.unrecorded ? `<b class="grey">بلا تسجيل ${report.counts.unrecorded}</b>` : ""}</div></div>
-          <div style="overflow:hidden;border:1px solid #dbe4f0;border-radius:8px"><table style="width:100%;table-layout:fixed;margin:0"><thead><tr style="background:#1d4ed8;color:#fff"><th style="width:82px;padding:5px 3px;text-align:right">الموظف</th>${attendanceHeaders}</tr></thead><tbody><tr><td style="padding:5px 3px;font-size:7px;font-weight:700;white-space:nowrap">${escapeHtml(report.employee.name)}</td>${attendanceCells}</tr></tbody></table></div>
-          <p class="legend">✓ حضور (البرتقالي تأخير) · ✕ غياب مخصوم · إ إجازة (الأحمر بدون راتب) · — راحة أو عطلة · ؟ بلا تسجيل لم يُخصم · ○ قادم</p>
-          <div class="section-title"><h3>الراتب</h3><span class="state ${report.estimated ? "est" : ""}">${escapeHtml(report.statusLabel)}</span></div>
+          <div class="section-title"><h3>${escapeHtml(t("الحضور والانصراف"))}</h3><div class="stats"><b class="green">${escapeHtml(t("حضور"))} ${report.counts.present}</b><b class="amber">${escapeHtml(t("تأخير"))} ${report.counts.late}</b><b class="red">${escapeHtml(t("غياب"))} ${report.counts.absent}</b><b class="blue">${escapeHtml(t("إجازة"))} ${report.counts.leave}</b>${report.counts.unrecorded ? `<b class="grey">${escapeHtml(t("بلا تسجيل"))} ${report.counts.unrecorded}</b>` : ""}</div></div>
+          <div style="overflow:hidden;border:1px solid #dbe4f0;border-radius:8px"><table style="width:100%;table-layout:fixed;margin:0"><thead><tr style="background:#1d4ed8;color:#fff"><th style="width:82px;padding:5px 3px;text-align:start">${escapeHtml(t("الموظف"))}</th>${attendanceHeaders}</tr></thead><tbody><tr><td style="padding:5px 3px;font-size:7px;font-weight:700;white-space:nowrap">${escapeHtml(report.employee.name)}</td>${attendanceCells}</tr></tbody></table></div>
+          <p class="legend">${escapeHtml(t("✓ حضور (البرتقالي تأخير) · ✕ غياب مخصوم · إ إجازة (الأحمر بدون راتب) · — راحة أو عطلة · ؟ بلا تسجيل لم يُخصم · ○ قادم"))}</p>
+          <div class="section-title"><h3>${escapeHtml(t("الراتب"))}</h3><span class="state ${report.estimated ? "est" : ""}">${escapeHtml(t(report.statusLabel))}</span></div>
           ${figures ? `<div class="finance-grid">
-            <div><span>الراتب الأساسي المستحق</span><strong>${money(figures.basic)} ر.س</strong></div>
-            <div><span>البدلات والإضافي</span><strong>${money(figures.allowances)} ر.س</strong></div>
-            <div class="gross"><span>إجمالي الاستحقاق</span><strong>${money(figures.gross)} ر.س</strong></div>
-            <div class="deduction"><span>إجمالي الاستقطاعات</span><strong>− ${money(figures.deductions)} ر.س</strong></div>
+            <div><span>${escapeHtml(t("الراتب الأساسي المستحق"))}</span><strong>${money(figures.basic)} ${currency}</strong></div>
+            <div><span>${escapeHtml(t("البدلات والإضافي"))}</span><strong>${money(figures.allowances)} ${currency}</strong></div>
+            <div class="gross"><span>${escapeHtml(t("إجمالي الاستحقاق"))}</span><strong>${money(figures.gross)} ${currency}</strong></div>
+            <div class="deduction"><span>${escapeHtml(t("إجمالي الاستقطاعات"))}</span><strong>− ${money(figures.deductions)} ${currency}</strong></div>
           </div>` : ""}
-          <div class="section-title"><h3>تفصيل الاستقطاعات</h3></div>
-          <table class="deductions-table"><thead><tr><th>البند</th><th>المبلغ</th></tr></thead><tbody>${deductionRows}</tbody></table>
-          ${report.notes ? `<div class="reason"><span>تفاصيل الحساب</span><p>${escapeHtml(report.notes)}</p></div>` : ""}
-          ${figures ? `<div class="net ${report.estimated ? "est" : ""}"><span>صافي الراتب${report.estimated ? " (تقديري)" : ""}</span><strong>${money(figures.net)} ر.س</strong></div>` : ""}
-          <div class="signatures"><div>مسؤول الموارد البشرية</div><div>المدير المالي</div></div>
-          <div class="footer">تاريخ إصدار التقرير: ${escapeHtml(formatDate(riyadhToday()))} — هذا التقرير للمعلومات وليس مستند صرف أو استلام</div>
+          <div class="section-title"><h3>${escapeHtml(t("تفصيل الاستقطاعات"))}</h3></div>
+          <table class="deductions-table"><thead><tr><th>${escapeHtml(t("البند"))}</th><th>${escapeHtml(t("المبلغ"))}</th></tr></thead><tbody>${deductionRows}</tbody></table>
+          ${report.notes ? `<div class="reason"><span>${escapeHtml(t("تفاصيل الحساب"))}</span><p>${escapeHtml(report.notes)}</p></div>` : ""}
+          ${figures ? `<div class="net ${report.estimated ? "est" : ""}"><span>${escapeHtml(report.estimated ? t("صافي الراتب (تقديري)") : t("صافي الراتب"))}</span><strong>${money(figures.net)} ${currency}</strong></div>` : ""}
+          <div class="signatures"><div>${escapeHtml(t("مسؤول الموارد البشرية"))}</div><div>${escapeHtml(t("المدير المالي"))}</div></div>
+          <div class="footer">${escapeHtml(t("تاريخ إصدار التقرير"))}: ${escapeHtml(formatDate(riyadhToday()))} — ${escapeHtml(t("هذا التقرير للمعلومات وليس مستند صرف أو استلام"))}</div>
         </section>`;
       })
       .join("");
 
     printWindow.document
-      .write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير الموظف الكامل</title><style>
-      @page{size:A4;margin:9mm}*{box-sizing:border-box}body{margin:0;background:#e2e8f0;color:#0f172a;font-family:Arial,"Tahoma",sans-serif}.page{width:210mm;min-height:277mm;margin:10px auto;background:#fff;padding:11mm;page-break-after:always;position:relative;overflow:hidden}.page:last-child{page-break-after:auto}.report-head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #0f766e;padding-bottom:12px}.report-head h1{font-size:25px;margin:3px 0}.report-head p{font-size:11px;color:#64748b;margin:0}.eyebrow{font-size:10px;font-weight:700;color:#0f766e;letter-spacing:1px}.brand{width:55px;height:55px;border-radius:18px;background:linear-gradient(135deg,#0f766e,#0ea5e9);display:grid;place-items:center;color:#fff;font-size:20px;font-weight:800}.employee-card{display:flex;align-items:center;gap:12px;margin:14px 0;background:linear-gradient(135deg,#f0fdfa,#eff6ff);border:1px solid #bae6d8;border-radius:14px;padding:12px}.avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#0f766e;color:#fff;font-size:20px;font-weight:800}.employee-card h2{margin:0 0 4px;font-size:18px}.employee-card p{margin:0;color:#64748b;font-size:11px}.identity{margin-right:auto;text-align:center;background:#fff;border-radius:9px;padding:7px 15px;border:1px solid #dbeafe}.identity span,.meta-grid span,.finance-grid span,.reason span,.net span{display:block;color:#64748b;font-size:10px;margin-bottom:4px}.identity strong{font-size:14px;color:#0f766e}.meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.meta-grid div{border:1px solid #e2e8f0;border-radius:8px;padding:8px}.meta-grid strong{font-size:11px}.section-title{display:flex;justify-content:space-between;align-items:center;margin:15px 0 7px}.section-title h3{font-size:14px;margin:0;padding-right:8px;border-right:4px solid #0f766e}.stats{display:flex;gap:6px}.stats b{font-size:9px;border-radius:20px;padding:4px 8px}.green{color:#047857;background:#d1fae5}.red{color:#b91c1c;background:#fee2e2}.amber{color:#b45309;background:#fef3c7}.blue{color:#0369a1;background:#e0f2fe}.grey{color:#475569;background:#f1f5f9}.legend{font-size:8px;color:#64748b;margin:4px 0 0}.state{font-size:10px;font-weight:700;color:#0f766e;background:#f0fdfa;border:1px solid #99f6e4;border-radius:20px;padding:3px 10px}.state.est{color:#b45309;background:#fffbeb;border-color:#fde68a}table{width:100%;border-collapse:collapse;font-size:9px}th{background:#0f766e;color:#fff;padding:6px}td{border:1px solid #e2e8f0;text-align:center;padding:5px}.deductions-table{font-size:9px}.deductions-table td{padding:5px}.deductions-table td:nth-child(2){white-space:nowrap;font-weight:700;color:#be123c}.finance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.finance-grid div{border:1px solid #e2e8f0;border-radius:9px;padding:9px}.finance-grid strong{font-size:11px}.finance-grid .gross{background:#eff6ff;border-color:#bfdbfe}.finance-grid .deduction{background:#fff1f2;border-color:#fecdd3}.deduction strong{color:#be123c}.reason{margin-top:8px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:9px;padding:8px}.reason p{font-size:9px;margin:0}.net{margin-top:9px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#fff;border-radius:11px;padding:11px 15px;display:flex;align-items:center;justify-content:space-between}.net.est{background:linear-gradient(135deg,#92400e,#b45309)}.net span{color:#ecfeff;margin:0}.net strong{font-size:20px}.signatures{display:grid;grid-template-columns:repeat(2,1fr);gap:30px;margin-top:24px;text-align:center;color:#475569;font-size:10px}.signatures div{padding-top:16px;border-top:1px dashed #94a3b8}.footer{position:absolute;bottom:7mm;left:11mm;right:11mm;border-top:1px solid #e2e8f0;padding-top:5px;text-align:center;color:#94a3b8;font-size:8px}@media print{body{background:#fff}.page{margin:0;box-shadow:none}}
+      .write(`<!doctype html><html dir="${direction}" lang="${locale}"><head><meta charset="utf-8"><title>${escapeHtml(t("تقرير الموظف الكامل"))}</title><style>
+      @page{size:A4;margin:9mm}*{box-sizing:border-box}body{margin:0;background:#e2e8f0;color:#0f172a;font-family:Arial,"Tahoma",sans-serif}.page{width:210mm;min-height:277mm;margin:10px auto;background:#fff;padding:11mm;page-break-after:always;position:relative;overflow:hidden}.page:last-child{page-break-after:auto}.report-head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #0f766e;padding-bottom:12px}.report-head h1{font-size:25px;margin:3px 0}.report-head p{font-size:11px;color:#64748b;margin:0}.eyebrow{font-size:10px;font-weight:700;color:#0f766e;letter-spacing:1px}.brand{width:55px;height:55px;border-radius:18px;background:linear-gradient(135deg,#0f766e,#0ea5e9);display:grid;place-items:center;color:#fff;font-size:20px;font-weight:800}.employee-card{display:flex;align-items:center;gap:12px;margin:14px 0;background:linear-gradient(135deg,#f0fdfa,#eff6ff);border:1px solid #bae6d8;border-radius:14px;padding:12px}.avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#0f766e;color:#fff;font-size:20px;font-weight:800}.employee-card h2{margin:0 0 4px;font-size:18px}.employee-card p{margin:0;color:#64748b;font-size:11px}.identity{margin-inline-start:auto;text-align:center;background:#fff;border-radius:9px;padding:7px 15px;border:1px solid #dbeafe}.identity span,.meta-grid span,.finance-grid span,.reason span,.net span{display:block;color:#64748b;font-size:10px;margin-bottom:4px}.identity strong{font-size:14px;color:#0f766e}.meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.meta-grid div{border:1px solid #e2e8f0;border-radius:8px;padding:8px}.meta-grid strong{font-size:11px}.section-title{display:flex;justify-content:space-between;align-items:center;margin:15px 0 7px}.section-title h3{font-size:14px;margin:0;padding-inline-start:8px;border-inline-start:4px solid #0f766e}.stats{display:flex;gap:6px}.stats b{font-size:9px;border-radius:20px;padding:4px 8px}.green{color:#047857;background:#d1fae5}.red{color:#b91c1c;background:#fee2e2}.amber{color:#b45309;background:#fef3c7}.blue{color:#0369a1;background:#e0f2fe}.grey{color:#475569;background:#f1f5f9}.legend{font-size:8px;color:#64748b;margin:4px 0 0}.state{font-size:10px;font-weight:700;color:#0f766e;background:#f0fdfa;border:1px solid #99f6e4;border-radius:20px;padding:3px 10px}.state.est{color:#b45309;background:#fffbeb;border-color:#fde68a}table{width:100%;border-collapse:collapse;font-size:9px}th{background:#0f766e;color:#fff;padding:6px}td{border:1px solid #e2e8f0;text-align:center;padding:5px}.deductions-table{font-size:9px}.deductions-table td{padding:5px}.deductions-table td:nth-child(2){white-space:nowrap;font-weight:700;color:#be123c}.finance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.finance-grid div{border:1px solid #e2e8f0;border-radius:9px;padding:9px}.finance-grid strong{font-size:11px}.finance-grid .gross{background:#eff6ff;border-color:#bfdbfe}.finance-grid .deduction{background:#fff1f2;border-color:#fecdd3}.deduction strong{color:#be123c}.reason{margin-top:8px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:9px;padding:8px}.reason p{font-size:9px;margin:0}.net{margin-top:9px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#fff;border-radius:11px;padding:11px 15px;display:flex;align-items:center;justify-content:space-between}.net.est{background:linear-gradient(135deg,#92400e,#b45309)}.net span{color:#ecfeff;margin:0}.net strong{font-size:20px}.signatures{display:grid;grid-template-columns:repeat(2,1fr);gap:30px;margin-top:24px;text-align:center;color:#475569;font-size:10px}.signatures div{padding-top:16px;border-top:1px dashed #94a3b8}.footer{position:absolute;bottom:7mm;left:11mm;right:11mm;border-top:1px solid #e2e8f0;padding-top:5px;text-align:center;color:#94a3b8;font-size:8px}@media print{body{background:#fff}.page{margin:0;box-shadow:none}}
     </style></head><body>${pages}<script>window.onload=()=>window.print()</script></body></html>`);
     printWindow.document.close();
   };
@@ -451,12 +475,12 @@ export default function HREmployeeFullReport() {
             <label className="space-y-1.5">
               <span className="text-xs font-semibold text-slate-600">{t("رقم أو اسم الموظف")}</span>
               <div className="relative">
-                <Search className="absolute right-3 top-3 h-4 w-4 text-slate-400" />
+                <Search className="absolute start-3 top-3 h-4 w-4 text-slate-400" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={t("مثال: 1001")}
-                  className="h-10 w-full rounded-lg border border-slate-200 pr-9 pl-3 text-sm outline-none focus:border-emerald-500"
+                  className="h-10 w-full rounded-lg border border-slate-200 ps-9 pe-3 text-sm outline-none focus:border-emerald-500"
                 />
               </div>
             </label>
@@ -469,7 +493,7 @@ export default function HREmployeeFullReport() {
               >
                 <option value="الكل">{t("كل الإدارات")}</option>
                 {administrations.map((item) => (
-                  <option key={item}>{item}</option>
+                  <option key={item} value={item}>{orgName(item)}</option>
                 ))}
               </select>
             </label>
@@ -482,7 +506,7 @@ export default function HREmployeeFullReport() {
               >
                 <option value="الكل">{t("كل الأقسام")}</option>
                 {departments.map((item) => (
-                  <option key={item}>{item}</option>
+                  <option key={item} value={item}>{orgName(item)}</option>
                 ))}
               </select>
             </label>
@@ -507,7 +531,7 @@ export default function HREmployeeFullReport() {
               <input type="checkbox" checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} />
               {t("إظهار الموظفين غير الفعالين")}
             </label>
-            <div className="mr-auto flex items-center gap-3">
+            <div className="ms-auto flex items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">
                 {t("تم اختيار")} {selectedIds.size} {t("موظف")}
               </span>
@@ -546,7 +570,7 @@ export default function HREmployeeFullReport() {
                   <button
                     key={employee.id}
                     onClick={() => toggleEmployee(employee.id)}
-                    className={`flex items-center gap-3 rounded-xl border p-3 text-right transition ${active ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500" : "border-slate-200 hover:border-emerald-300"}`}
+                    className={`flex items-center gap-3 rounded-xl border p-3 text-start transition ${active ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500" : "border-slate-200 hover:border-emerald-300"}`}
                   >
                     <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${active ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-400"}`}>
                       {active ? <Check className="h-5 w-5" /> : employee.name.charAt(0)}
@@ -554,7 +578,7 @@ export default function HREmployeeFullReport() {
                     <span className="min-w-0">
                       <strong className="block truncate text-sm text-slate-900">{employee.name}</strong>
                       <small className="block truncate text-slate-500">
-                        #{employee.empId} · {employee.department}{employee.active ? "" : ` · ${t("غير فعال")}`}
+                        #{employee.empId} · {orgName(employee.department)}{employee.active ? "" : ` · ${t("غير فعال")}`}
                       </small>
                     </span>
                   </button>
@@ -572,7 +596,7 @@ export default function HREmployeeFullReport() {
             </div>
             {reportWarnings.length > 0 && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                {reportWarnings.map((warning) => <p key={warning}>{t(warning)}</p>)}
+                {reportWarnings.map((warning) => <p key={warning}>{warningText(warning)}</p>)}
               </div>
             )}
             {reports.map((report) => {
@@ -585,10 +609,10 @@ export default function HREmployeeFullReport() {
                     </div>
                     <div>
                       <h3 className="text-lg font-bold">{report.employee.name}</h3>
-                      <p className="text-xs text-slate-300">#{report.employee.empId} · {report.employee.jobTitle}</p>
+                      <p className="text-xs text-slate-300">#{report.employee.empId} · {orgName(report.employee.jobTitle)}</p>
                     </div>
-                    <div className="mr-auto flex flex-wrap gap-4 text-xs">
-                      <span className="flex items-center gap-1"><Building2 className="h-4 w-4" />{report.employee.department}</span>
+                    <div className="ms-auto flex flex-wrap gap-4 text-xs">
+                      <span className="flex items-center gap-1"><Building2 className="h-4 w-4" />{orgName(report.employee.department)}</span>
                       <span className="flex items-center gap-1"><CalendarDays className="h-4 w-4" />{formatDate(range.from)} — {formatDate(range.to)}</span>
                       <span className={`rounded-full px-3 py-1 font-semibold ${report.estimated ? "bg-amber-400 text-amber-950" : "bg-white/15"}`}>{t(report.statusLabel)}</span>
                     </div>
@@ -646,9 +670,9 @@ export default function HREmployeeFullReport() {
                         <span className="text-emerald-700">✓ {t("حضور")}</span>
                         <span className="text-amber-600">✓ {t("تأخير")}</span>
                         <span className="text-rose-600">✕ {t("غياب مخصوم")}</span>
-                        <span className="text-sky-700">إ {t("إجازة")}</span>
+                        <span className="text-sky-700">{symbolOf("leave")} {t("إجازة")}</span>
                         <span className="text-slate-400">— {t("راحة أو عطلة")}</span>
-                        <span className="text-slate-400">؟ {t("بلا تسجيل")}</span>
+                        <span className="text-slate-400">{symbolOf("unrecorded")} {t("بلا تسجيل")}</span>
                         <span className="text-slate-300">○ {t("يوم قادم")}</span>
                       </div>
                     </div>
@@ -656,7 +680,7 @@ export default function HREmployeeFullReport() {
                       <table className="min-w-max border-collapse text-center text-xs">
                         <thead className="bg-blue-700 text-white">
                           <tr>
-                            <th className="sticky right-0 z-10 min-w-[170px] bg-blue-700 px-3 py-2 text-right">{t("الموظف")}</th>
+                            <th className="sticky start-0 z-10 min-w-[170px] bg-blue-700 px-3 py-2 text-start">{t("الموظف")}</th>
                             {report.days.map((item) => (
                               <th key={item.date} className="min-w-[42px] px-1 py-1.5">
                                 <span className="block text-sm font-bold">{item.day}</span>
@@ -667,7 +691,7 @@ export default function HREmployeeFullReport() {
                         </thead>
                         <tbody>
                           <tr className="bg-white">
-                            <td className="sticky right-0 z-10 border-l border-slate-200 bg-white px-3 py-3 text-right font-bold text-slate-800">{report.employee.name}</td>
+                            <td className="sticky start-0 z-10 border-e border-slate-200 bg-white px-3 py-3 text-start font-bold text-slate-800">{report.employee.name}</td>
                             {report.days.map((item) => (
                               <td
                                 key={item.date}
@@ -675,7 +699,7 @@ export default function HREmployeeFullReport() {
                                 className="border-r border-slate-100 px-1 py-2 text-lg font-bold"
                                 style={{ color: DAY_SYMBOLS[item.kind].color }}
                               >
-                                {DAY_SYMBOLS[item.kind].symbol}
+                                {symbolOf(item.kind)}
                               </td>
                             ))}
                           </tr>

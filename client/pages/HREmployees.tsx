@@ -27,6 +27,7 @@ import EmployeeForm, { computeTotalSalary, emptyForm, mapRowToForm } from "./Emp
 import type { EmpFormData } from "./EmployeeForm";
 import { EmployeePhoto, employeeFileName, isEmployeeStoragePath, openEmployeeFile } from "@/components/hr/employeeFiles";
 import { printReport } from "@/lib/reportExport";
+import { loadOrgEnglishNames } from "@/lib/orgNames";
 import EmployeeDeleteDialog, { type DeletableEmployee } from "@/components/hr/EmployeeDeleteDialog";
 import BulkScheduleDialog from "@/components/hr/BulkScheduleDialog";
 import { isSaudiNationality } from "@/lib/hrStatus";
@@ -100,6 +101,20 @@ const EXPORT_ENGLISH_VALUES: Record<string, string> = {
   "السويد": "Sweden", "اليونان": "Greece", "الولايات المتحدة": "United States", "كندا": "Canada",
   "المكسيك": "Mexico", "البرازيل": "Brazil", "الأرجنتين": "Argentina", "أستراليا": "Australia",
   "نيوزيلندا": "New Zealand", "أخرى": "Other",
+  // الجنسية بصيغة النسبة (سعودي/سعودية...) كما تُدخل في بعض الملفات
+  "السعودية": "Saudi Arabia", "سعودي": "Saudi", "سعودية": "Saudi", "غير سعودي": "Non-Saudi", "غير سعودية": "Non-Saudi",
+  "إماراتي": "Emirati", "إماراتية": "Emirati", "بحريني": "Bahraini", "بحرينية": "Bahraini", "كويتي": "Kuwaiti", "كويتية": "Kuwaiti",
+  "عماني": "Omani", "عمانية": "Omani", "عُماني": "Omani", "عُمانية": "Omani", "قطري": "Qatari", "قطرية": "Qatari",
+  "مصري": "Egyptian", "مصرية": "Egyptian", "سوداني": "Sudanese", "سودانية": "Sudanese", "يمني": "Yemeni", "يمنية": "Yemeni",
+  "أردني": "Jordanian", "أردنية": "Jordanian", "سوري": "Syrian", "سورية": "Syrian", "لبناني": "Lebanese", "لبنانية": "Lebanese",
+  "فلسطيني": "Palestinian", "فلسطينية": "Palestinian", "عراقي": "Iraqi", "عراقية": "Iraqi", "ليبي": "Libyan", "ليبية": "Libyan",
+  "مغربي": "Moroccan", "مغربية": "Moroccan", "تونسي": "Tunisian", "تونسية": "Tunisian", "جزائري": "Algerian", "جزائرية": "Algerian",
+  "موريتاني": "Mauritanian", "موريتانية": "Mauritanian", "صومالي": "Somali", "صومالية": "Somali",
+  "هندي": "Indian", "هندية": "Indian", "باكستاني": "Pakistani", "باكستانية": "Pakistani", "بنغلاديشي": "Bangladeshi", "بنغلاديشية": "Bangladeshi",
+  "سريلانكي": "Sri Lankan", "سريلانكية": "Sri Lankan", "نيبالي": "Nepali", "نيبالية": "Nepali", "أفغاني": "Afghan", "أفغانية": "Afghan",
+  "فلبيني": "Filipino", "فلبينية": "Filipino", "إندونيسي": "Indonesian", "إندونيسية": "Indonesian",
+  "إثيوبي": "Ethiopian", "إثيوبية": "Ethiopian", "إريتري": "Eritrean", "إريترية": "Eritrean", "كيني": "Kenyan", "كينية": "Kenyan",
+  "أوغندي": "Ugandan", "أوغندية": "Ugandan", "نيجيري": "Nigerian", "نيجيرية": "Nigerian", "تركي": "Turkish", "تركية": "Turkish",
 };
 
 const toDeletable = (employee: EmpFormData): DeletableEmployee => ({
@@ -130,6 +145,19 @@ export default function HREmployees() {
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">(isNewRoute ? "create" : "list");
   const [selected, setSelected] = useState<EmpFormData | null>(null);
   const [loading, setLoading] = useState(false);
+  // أسماء الفروع والإدارات والأقسام والمسميات بالإنجليزية (name_en) في الواجهة الإنجليزية
+  const [orgEnglish, setOrgEnglish] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    if (locale !== "en") return;
+    let active = true;
+    loadOrgEnglishNames().then((names) => { if (active) setOrgEnglish(names); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [locale]);
+  const orgName = (value: string) => {
+    const raw = value.trim();
+    if (!raw || locale !== "en") return value;
+    return orgEnglish.get(raw) || t(raw);
+  };
 
   // Filters
   const [fSearch, setFSearch] = useState("");
@@ -403,12 +431,12 @@ export default function HREmployees() {
       columns,
       rows: outputRows.map((employee) => ({
         number: employee.accountTitle && employee.accountTitle !== employee.empId ? `${employee.accountTitle} (${employee.empId})` : employee.empId,
-        name: employee.name || employee.firstName,
-        branch: employee.branch,
-        directorate: employee.directorate,
-        department: employee.department,
-        jobTitle: employee.jobTitle,
-        nationality: employee.nationality,
+        name: locale === "en" ? employee.firstName || employee.name : employee.name || employee.firstName,
+        branch: orgName(employee.branch),
+        directorate: orgName(employee.directorate),
+        department: orgName(employee.department),
+        jobTitle: orgName(employee.jobTitle),
+        nationality: employee.nationality ? t(employee.nationality) : "",
         nationalId: employee.nationalId,
         hireDate: employee.hireDate,
         phone: employee.phone,
@@ -426,9 +454,11 @@ export default function HREmployees() {
       return;
     }
 
+    // بلغة الواجهة: في الإنجليزية عناوين وقيم إنجليزية من اليسار، وفي العربية عناوين وقيم عربية من اليمين
+    const english = locale === "en";
     const reportDate = new Date();
     const dateLabel = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 1).padStart(2, "0")}-${String(reportDate.getDate()).padStart(2, "0")}`;
-    const dayName = reportDate.toLocaleDateString("en-US", { weekday: "long" });
+    const dayName = reportDate.toLocaleDateString(english ? "en-US" : "ar-SA", { weekday: "long" });
     const containsArabic = (value: string) => /[\u0600-\u06ff]/.test(value);
     const englishValue = (value: string | null | undefined, fallback = "-") => {
       const clean = String(value ?? "").trim();
@@ -451,29 +481,37 @@ export default function HREmployees() {
       const firstError = branchResult.error ?? departmentResult.error ?? jobResult.error ?? sectionResult.error;
       if (firstError) throw firstError;
 
-      const branchesById = new Map((branchResult.data ?? []).map((row) => [String(row.id), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
-      const departmentsById = new Map((departmentResult.data ?? []).map((row) => [String(row.id), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
-      const sectionsById = new Map((sectionResult.data ?? []).map((row) => [String(row.id), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
-      const jobsByName = new Map((jobResult.data ?? []).map((row) => [String(row.name ?? "").trim(), englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))]));
-      const headers = ["No.", "Employee ID", "Employee Name", "Status", "Branch", "Management", "Department", "Job Title", "Nationality", "National ID", "Hire Date", "Mobile Number", "Email Address"];
+      const arabicValue = (value: string | null | undefined, fallback = "-") => String(value ?? "").trim() || fallback;
+      const orgValue = (row: { name?: unknown; name_en?: unknown }) => english
+        ? englishValue(String(row.name_en ?? ""), englishValue(String(row.name ?? ""), "Not specified"))
+        : arabicValue(String(row.name ?? ""), "غير محدد");
+      const branchesById = new Map((branchResult.data ?? []).map((row) => [String(row.id), orgValue(row)]));
+      const departmentsById = new Map((departmentResult.data ?? []).map((row) => [String(row.id), orgValue(row)]));
+      const sectionsById = new Map((sectionResult.data ?? []).map((row) => [String(row.id), orgValue(row)]));
+      const jobsByName = new Map((jobResult.data ?? []).map((row) => [String(row.name ?? "").trim(), orgValue(row)]));
+      const headers = english
+        ? ["No.", "Employee ID", "Employee Name", "Status", "Branch", "Management", "Department", "Job Title", "Nationality", "National ID", "Hire Date", "Mobile Number", "Email Address"]
+        : ["م", "الرقم الوظيفي", "اسم الموظف", "الحالة", "الفرع", "الإدارة", "القسم", "المسمى الوظيفي", "الجنسية", "رقم الهوية", "تاريخ التعيين", "رقم الجوال", "البريد الإلكتروني"];
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Idarat Al Ayaf Management System";
       workbook.created = reportDate;
       workbook.modified = reportDate;
-      const worksheet = workbook.addWorksheet("Employees", { views: [{ state: "frozen", ySplit: 5, rightToLeft: false }] });
+      const worksheet = workbook.addWorksheet(english ? "Employees" : "الموظفون", { views: [{ state: "frozen", ySplit: 5, rightToLeft: !english }] });
       const lastColumn = headers.length;
 
       worksheet.mergeCells(1, 1, 1, lastColumn);
-      worksheet.getCell(1, 1).value = `EMPLOYEE LIST — ${dayName.toUpperCase()}`;
+      worksheet.getCell(1, 1).value = english ? `EMPLOYEE LIST — ${dayName.toUpperCase()}` : `قائمة الموظفين — ${dayName}`;
       worksheet.mergeCells(2, 1, 2, lastColumn);
-      worksheet.getCell(2, 1).value = "Al Ayaf Contracting Management Company | Master employee register";
+      worksheet.getCell(2, 1).value = english ? "Al Ayaf Contracting Management Company | Master employee register" : "شركة إدارة العياف للمقاولات | السجل الرئيسي للموظفين";
       worksheet.mergeCells(3, 1, 3, lastColumn);
-      worksheet.getCell(3, 1).value = `Last updated: ${dateLabel} | Use the filter arrows to search and sort records.`;
+      worksheet.getCell(3, 1).value = english
+        ? `Last updated: ${dateLabel} | Use the filter arrows to search and sort records.`
+        : `آخر تحديث: ${dateLabel} | استخدم أسهم التصفية للبحث وترتيب السجلات.`;
       worksheet.getRow(4).height = 8;
       worksheet.addRow(headers);
 
       outputRows.forEach((employee, index) => {
-        worksheet.addRow([
+        worksheet.addRow(english ? [
           index + 1,
           employee.empId || employee.accountTitle || "-",
           englishValue(employee.firstName, englishValue(employee.name, employee.empId || "-")),
@@ -487,6 +525,20 @@ export default function HREmployees() {
           employee.hireDate || "-",
           employee.phone || "-",
           englishValue(employee.email),
+        ] : [
+          index + 1,
+          employee.empId || employee.accountTitle || "-",
+          arabicValue(employee.name, arabicValue(employee.firstName, employee.empId || "-")),
+          arabicValue(employee.status, "غير محدد"),
+          branchesById.get(employee.branchId) || arabicValue(employee.branch, "غير محدد"),
+          departmentsById.get(employee.departmentId) || arabicValue(employee.directorate, "غير محدد"),
+          sectionsById.get(employee.sectionId) || arabicValue(employee.department, "غير محدد"),
+          jobsByName.get(employee.jobTitle.trim()) || arabicValue(employee.jobTitle, "غير محدد"),
+          arabicValue(employee.nationality, "غير محدد"),
+          employee.nationalId || "-",
+          employee.hireDate || "-",
+          employee.phone || "-",
+          arabicValue(employee.email),
         ]);
       });
 
@@ -497,7 +549,7 @@ export default function HREmployees() {
       worksheet.getRow(5).height = 30;
       worksheet.getCell(1, 1).font = { bold: true, size: 22, color: { argb: "FFFFFFFF" } };
       worksheet.getCell(1, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF12324A" } };
-      worksheet.getCell(1, 1).alignment = { horizontal: "left", vertical: "middle" };
+      worksheet.getCell(1, 1).alignment = { horizontal: english ? "left" : "right", vertical: "middle" };
       worksheet.getCell(2, 1).font = { italic: true, size: 12, color: { argb: "FF607080" } };
       worksheet.getCell(3, 1).font = { size: 10, color: { argb: "FF607080" } };
       worksheet.getRow(5).eachCell((cell) => {
@@ -522,11 +574,11 @@ export default function HREmployees() {
       const url = URL.createObjectURL(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Employee_List_${dateLabel}_${dayName}.xlsx`;
+      link.download = english ? `Employee_List_${dateLabel}_${dayName}.xlsx` : `قائمة_الموظفين_${dateLabel}_${dayName}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (exportError) {
-      toast({ title: "Excel export failed", description: exportError instanceof Error ? exportError.message : "Unable to generate the employee report", variant: "destructive" });
+      toast({ title: t("تعذر تصدير ملف Excel"), description: exportError instanceof Error ? exportError.message : t("تعذر إنشاء تقرير الموظفين"), variant: "destructive" });
     }
   };
 
@@ -967,7 +1019,7 @@ export default function HREmployees() {
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right focus:outline-none focus:border-blue-400"
             >
               <option value="">{t("جميع الحالات")}</option>
-              {STATUSES.map((s) => <option key={s}>{t(s)}</option>)}
+              {STATUSES.map((s) => <option key={s} value={s}>{t(s)}</option>)}
             </select>
             <select
               value={fAdministration}
@@ -1139,11 +1191,11 @@ export default function HREmployees() {
                       </button>
                     </td>
                     {visibleColumns.englishName && <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.firstName || "—"}</td>}
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || "—"}</td>
-                    {visibleColumns.directorate && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.directorate || "—"}</td>}
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.department || "—"}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.jobTitle || "—"}</td>
-                    {visibleColumns.nationality && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.nationality || "—"}</td>}
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch ? orgName(emp.branch) : "—"}</td>
+                    {visibleColumns.directorate && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.directorate ? orgName(emp.directorate) : "—"}</td>}
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.department ? orgName(emp.department) : "—"}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.jobTitle ? orgName(emp.jobTitle) : "—"}</td>
+                    {visibleColumns.nationality && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.nationality ? t(emp.nationality) : "—"}</td>}
                     {visibleColumns.nationalId && <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{emp.nationalId || "—"}</td>}
                     {visibleColumns.hireDate && <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.hireDate || "—"}</td>}
                     {visibleColumns.phone && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.phone || "—"}</td>}
@@ -1299,7 +1351,7 @@ function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <InfoGroup title={t("المعلومات الشخصية")}>
-              <InfoRow label={t("الجنسية")} value={emp.nationality} />
+              <InfoRow label={t("الجنسية")} value={emp.nationality ? t(emp.nationality) : ""} />
               <InfoRow label={t("رقم الهوية / الإقامة")} value={emp.nationalId} />
               <InfoRow label={t("تاريخ انتهاء الهوية")} value={emp.idExpiryDate} />
               <InfoRow label={t("الجنس")} value={emp.gender} />

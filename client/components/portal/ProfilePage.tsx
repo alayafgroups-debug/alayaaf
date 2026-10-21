@@ -17,9 +17,11 @@ const TABS = ["المعلومات الشخصية", "العقد", "البنك"] a
 const SELF_EDITABLE_FIELDS = ["phone", "marital_status", "id_expiry_date"] as const;
 const isSelfEditable = (key: string) => (SELF_EDITABLE_FIELDS as readonly string[]).includes(key);
 type Tab = typeof TABS[number];
+// قيم معدودة تُعرض مترجمة في الواجهة الإنجليزية
+const ENUM_FIELDS = new Set(["gender", "marital_status", "nationality", "employment_type"]);
 
 export default function ProfilePage({ empId, onBack }: Props) {
-  const { t, formatDate } = useI18n();
+  const { t, direction, formatDate } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>("المعلومات الشخصية");
   const [data, setData] = useState<EmpData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,35 +65,35 @@ export default function ProfilePage({ empId, onBack }: Props) {
   };
 
   const personalFields = [
-    { key: "name", label: "الاسم" },
-    { key: "national_id", label: "رقم الهوية" },
-    { key: "id_expiry_date", label: "تاريخ إنتهاء الهوية" },
-    { key: "nationality", label: "الجنسية" },
-    { key: "marital_status", label: "الحالة الاجتماعية" },
-    { key: "gender", label: "الجنس" },
-    { key: "birth_date", label: "تاريخ الميلاد" },
-    { key: "phone", label: "الهاتف" },
-    { key: "email", label: "البريد الإلكتروني" },
+    { key: "name", label: t("الاسم") },
+    { key: "national_id", label: t("رقم الهوية") },
+    { key: "id_expiry_date", label: t("تاريخ إنتهاء الهوية") },
+    { key: "nationality", label: t("الجنسية") },
+    { key: "marital_status", label: t("الحالة الاجتماعية") },
+    { key: "gender", label: t("الجنس") },
+    { key: "birth_date", label: t("تاريخ الميلاد") },
+    { key: "phone", label: t("الهاتف") },
+    { key: "email", label: t("البريد الإلكتروني") },
   ];
 
   const contractFields = [
-    { key: "emp_id", label: "الرقم الوظيفي" },
-    { key: "job_title", label: "المسمى الوظيفي" },
-    { key: "department", label: "القسم" },
-    { key: "directorate", label: "الإدارة" },
-    { key: "branch", label: "الفرع" },
-    { key: "hire_date", label: "تاريخ التعيين" },
-    { key: "employment_type", label: "نوع العقد" },
-    { key: "work_location", label: "مكان العمل" },
-    { key: "base_salary", label: "الراتب الأساسي" },
-    { key: "total_salary", label: "الراتب الإجمالي" },
+    { key: "emp_id", label: t("الرقم الوظيفي") },
+    { key: "job_title", label: t("المسمى الوظيفي") },
+    { key: "department", label: t("القسم") },
+    { key: "directorate", label: t("الإدارة") },
+    { key: "branch", label: t("الفرع") },
+    { key: "hire_date", label: t("تاريخ التعيين") },
+    { key: "employment_type", label: t("نوع العقد") },
+    { key: "work_location", label: t("مكان العمل") },
+    { key: "base_salary", label: t("الراتب الأساسي") },
+    { key: "total_salary", label: t("الراتب الإجمالي") },
   ];
 
   const bankFields = [
-    { key: "bank_name", label: "اسم الحساب البنكي" },
-    { key: "bank_branch", label: "اسم الفرع" },
-    { key: "bank_account", label: "رقم الحساب" },
-    { key: "iban", label: "رقم الآيبان" },
+    { key: "bank_name", label: t("اسم الحساب البنكي") },
+    { key: "bank_branch", label: t("اسم الفرع") },
+    { key: "bank_account", label: t("رقم الحساب") },
+    { key: "iban", label: t("رقم الآيبان") },
   ];
 
   const activeFields = activeTab === "المعلومات الشخصية" ? personalFields : activeTab === "العقد" ? contractFields : bankFields;
@@ -102,10 +104,10 @@ export default function ProfilePage({ empId, onBack }: Props) {
     <div className="flex flex-col h-full">
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between p-4">
-          <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className="h-6 w-6 rotate-180" /></button>
+          <button onClick={onBack} className="text-[#004e89]"><ChevronLeft className={`h-6 w-6 ${direction === "rtl" ? "rotate-180" : ""}`} /></button>
           <h2 className="font-bold text-lg text-gray-900">{t("الملف الشخصي")}</h2>
           <button onClick={() => editMode ? save() : setEditMode(true)} disabled={saving} className="text-[#004e89]">
-            {editMode ? (saving ? <span className="text-xs">حفظ...</span> : <Save className="h-5 w-5" />) : <Edit2 className="h-5 w-5" />}
+            {editMode ? (saving ? <span className="text-xs">{t("حفظ...")}</span> : <Save className="h-5 w-5" />) : <Edit2 className="h-5 w-5" />}
           </button>
         </div>
       </div>
@@ -138,7 +140,7 @@ export default function ProfilePage({ empId, onBack }: Props) {
           {editMode && <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("يمكنك تعديل الهاتف والحالة الاجتماعية وتاريخ انتهاء الهوية فقط. لتعديل الاسم أو الهوية أو البريد أو بيانات البنك تواصل مع الموارد البشرية.")}</p>}
           {activeFields.map(({ key, label }) => (
             <div key={key} className="flex items-center justify-between py-3 border-b border-gray-100">
-              <span className="text-gray-500 text-sm">{t(label)}</span>
+              <span className="text-gray-500 text-sm">{label}</span>
               {editMode && isSelfEditable(key) ? (
                 <input
                   value={(form as any)[key] ?? ""}
@@ -147,7 +149,7 @@ export default function ProfilePage({ empId, onBack }: Props) {
                   className="border-b border-[#004e89] text-start outline-none text-sm text-gray-800 bg-transparent min-w-0 w-40"
                 />
               ) : (
-                <span className="font-medium text-gray-800 text-sm">{(data as any)?.[key] ?? t("لا يوجد")}</span>
+                <span className="font-medium text-gray-800 text-sm">{(data as any)?.[key] == null ? t("لا يوجد") : ENUM_FIELDS.has(key) ? t(String((data as any)[key])) : (data as any)[key]}</span>
               )}
             </div>
           ))}

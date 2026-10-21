@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { exportReportExcel, printReport, ReportColumn } from "@/lib/reportExport";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { addDays, monthRange, riyadhMonth, riyadhToday } from "@/lib/hrDates";
+import { loadOrgEnglishNames } from "@/lib/orgNames";
+import { useI18n } from "@/i18n";
 import { ReportFilter, ReportSchema } from "./reportSchemas";
 
 type Employee = {
@@ -87,33 +89,37 @@ function recordEmployeeKey(record: ReportRecord) {
   return valueText(record.employee_id) !== "-" ? String(record.employee_id) : String(record.emp_id ?? "");
 }
 
-function recordDetail(schemaId: string, record: ReportRecord) {
+// تفاصيل السجل بلغة الواجهة: الحالات والأنواع تُترجم بالقاموس، والأرقام والتواريخ كما هي
+function recordDetail(schemaId: string, record: ReportRecord, t: (source: string) => string) {
+  const label = (value: unknown) => t(valueText(value));
+  const sar = t("ر.س");
   switch (schemaId) {
     case "leaves":
-      return `${valueText(record.leave_type)} — ${valueText(record.days)} يوم`;
+      return `${label(record.leave_type)} — ${t("الأيام")}: ${valueText(record.days)}`;
     case "penalties_warnings":
-      return `${valueText(record.subject)} — ${valueText(record.status)}`;
+      return `${label(record.subject)} — ${label(record.status)}`;
     case "payroll_expenses":
-      return `${valueText(record.month)} — ${valueText(record.status)} — صافي ${valueText(record.net_salary)} ر.س`;
+      return `${valueText(record.month)} — ${label(record.status)} — ${t("صافي")} ${valueText(record.net_salary)} ${sar}`;
     case "disbursement_reports":
-      return `${valueText(record.month)} — صافي ${valueText(record.net_salary)} ر.س — صُرف ${valueText(record.paid_date)}`;
+      return `${valueText(record.month)} — ${t("صافي")} ${valueText(record.net_salary)} ${sar} — ${t("تاريخ الصرف")}: ${valueText(record.paid_date)}`;
     case "attendance_departure":
-      return `${valueText(record.date)} — ${valueText(record.status)}`;
+      return `${valueText(record.date)} — ${label(record.status)}`;
     case "end_of_service":
-      return `${valueText(record.termination_date)} — ${valueText(record.end_reason ?? record.reason)}`;
+      return `${valueText(record.termination_date)} — ${label(record.end_reason ?? record.reason)}`;
     case "advances_reports":
-      return `${valueText(record.amount)} ر.س — ${valueText(record.status)}`;
+      return `${valueText(record.amount)} ${sar} — ${label(record.status)}`;
     case "overtime_reports":
       // سجل الفترة (HR-11): period_from بدايتها وdate نهايتها
-      return `${valueText(record.hours)} ساعة — ${valueText(record.amount)} ر.س${record.period_from ? ` — ${valueText(record.period_from)} إلى ${valueText(record.date)}` : ""}`;
+      return `${t("الساعات")}: ${valueText(record.hours)} — ${valueText(record.amount)} ${sar}${record.period_from ? ` — ${valueText(record.period_from)} ${t("إلى")} ${valueText(record.date)}` : ""}`;
     case "social_insurance":
-      return `${valueText(record.insurance_type)} — ${valueText(record.status)}`;
+      return `${label(record.insurance_type)} — ${label(record.status)}`;
     default:
-      return valueText(record.status);
+      return label(record.status);
   }
 }
 
 export default function DynamicReport({ schema }: { schema: ReportSchema }) {
+  const { t, locale } = useI18n();
   const [selectionMode, setSelectionMode] = useState<"all" | "custom">("all");
   const [filterValues, setFilterValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = Object.fromEntries(schema.filters.filter((filter) => filter.type === "select" && filter.options?.length).map((filter) => [filter.id, filter.options![0]]));
@@ -142,6 +148,19 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
   const [missingDateSources, setMissingDateSources] = useState<string[]>([]);
   const sourceTable = SOURCE_CONFIG[schema.id]?.table;
   const dateFilterUnavailable = !!sourceTable && missingDateSources.includes(sourceTable);
+  // أسماء الهيكل والمسميات بالإنجليزية (name_en) في الواجهة الإنجليزية؛ ما لا اسم إنجليزي له يُترجم بالقاموس أو يبقى كما هو
+  const [orgEnglish, setOrgEnglish] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    if (locale !== "en") return;
+    let active = true;
+    loadOrgEnglishNames().then((names) => { if (active) setOrgEnglish(names); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [locale]);
+  const orgName = (value: string | null | undefined) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    return locale === "en" ? orgEnglish.get(raw) || t(raw) : raw;
+  };
 
   useEffect(() => {
     const from = usableDate(fromDate);
@@ -284,17 +303,17 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
 
     const employeeRows = baseEmployees.map((employee) => {
       const matches = recordsByEmployee.get(employee.id) ?? recordsByEmployee.get(employee.emp_id ?? "") ?? [];
-      let details = matches.slice(0, 2).map((record) => recordDetail(schema.id, record)).join(" | ");
+      let details = matches.slice(0, 2).map((record) => recordDetail(schema.id, record, t)).join(" | ");
       if ((schema.id === "payroll_expenses" || schema.id === "disbursement_reports") && matches.length > 1) {
         const net = matches.reduce((sum, record) => sum + (Number(record.net_salary) || 0), 0);
-        details = `${matches.length} شهر — إجمالي الصافي ${net.toFixed(2)} ر.س | ${details}`;
+        details = `${t("عدد الأشهر")}: ${matches.length} — ${t("إجمالي الصافي")} ${net.toFixed(2)} ${t("ر.س")} | ${details}`;
       }
       if (EMPLOYEE_REPORTS.has(schema.id)) {
-        if (schema.id === "financial_data") details = `الراتب والبيانات المالية للموظف`;
-        if (schema.id === "personal_details") details = "البيانات الشخصية والوظيفية";
-        if (schema.id === "bank_accounts") details = `الحساب: ${valueText(employee.bank_account)}`;
-        if (schema.id === "new_employees") details = `تاريخ التعيين: ${valueText(employee.hire_date)}`;
-        if (schema.id === "leave_balances") details = "رصيد الإجازات حسب العقد والطلبات";
+        if (schema.id === "financial_data") details = t("الراتب والبيانات المالية للموظف");
+        if (schema.id === "personal_details") details = t("البيانات الشخصية والوظيفية");
+        if (schema.id === "bank_accounts") details = `${t("الحساب")}: ${valueText(employee.bank_account)}`;
+        if (schema.id === "new_employees") details = `${t("تاريخ التعيين")}: ${valueText(employee.hire_date)}`;
+        if (schema.id === "leave_balances") details = t("رصيد الإجازات حسب العقد والطلبات");
       }
       // تقارير الموظفين: السجل هو بيانات الموظف نفسه؛ غيرها: عدد السجلات المطابقة فعلًا (0 إن لم توجد)
       return { ...employee, recordCount: EMPLOYEE_REPORTS.has(schema.id) ? 1 : matches.length, details };
@@ -310,7 +329,7 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
       employeeRows.push({
         id: `record-${schema.id}-${key}-${index}`,
         emp_id: String(record.emp_id ?? ""),
-        name: empName === "-" ? "موظف غير معروف" : empName,
+        name: empName === "-" ? t("موظف غير معروف") : empName,
         job_title: null,
         department: (record.department as string) ?? null,
         directorate: null,
@@ -320,7 +339,7 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
         bank_account: null,
         social_insurance: null,
         recordCount: recordsByEmployee.get(key)?.length ?? 0,
-        details: recordDetail(schema.id, record),
+        details: recordDetail(schema.id, record, t),
       });
     });
 
@@ -330,9 +349,9 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
       if (filterValues.department && filterValues.department !== "الكل" && row.department !== filterValues.department) return false;
       if (filterValues.work_location && filterValues.work_location !== "الكل" && row.work_location !== filterValues.work_location) return false;
       const term = search.trim().toLowerCase();
-      return !term || [row.name, row.emp_id, row.job_title, row.department, row.details].some((value) => String(value ?? "").toLowerCase().includes(term));
+      return !term || [row.name, row.emp_id, row.job_title, row.department, orgName(row.job_title), orgName(row.department), row.details].some((value) => String(value ?? "").toLowerCase().includes(term));
     });
-  }, [employees, records, filterValues, queryDates, dateFilterUnavailable, schema.id, search]);
+  }, [employees, records, filterValues, queryDates, dateFilterUnavailable, schema.id, search, t, orgEnglish]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => setPage(1), [search, filterValues, pageSize, schema.id]);
 
@@ -344,47 +363,56 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
     setFilterValues((previous) => ({ ...previous, [id]: value }));
   };
 
+  // الطباعة وExcel بلغة الواجهة: العناوين والأسماء والتفاصيل كما تُعرض في الجدول
   const reportColumns: ReportColumn[] = [
-    { key: "empId", label: "الرقم الوظيفي", width: 16 },
-    { key: "name", label: schema.tableColumns[0] || "اسم الموظف", width: 26 },
-    { key: "jobTitle", label: schema.tableColumns[1] || "المسمى الوظيفي", width: 22 },
-    { key: "department", label: schema.tableColumns[2] || "القسم", width: 20 },
-    { key: "directorate", label: schema.tableColumns[3] || "الإدارة", width: 20 },
-    { key: "branch", label: schema.tableColumns[4] || "الفرع", width: 18 },
-    { key: "recordCount", label: "عدد السجلات", width: 14 },
-    { key: "details", label: "تفاصيل التقرير", width: 38 },
+    { key: "empId", label: t("الرقم الوظيفي"), width: 16 },
+    { key: "name", label: t(schema.tableColumns[0] || "اسم الموظف"), width: 26 },
+    { key: "jobTitle", label: t(schema.tableColumns[1] || "المسمى الوظيفي"), width: 22 },
+    { key: "department", label: t(schema.tableColumns[2] || "القسم"), width: 20 },
+    { key: "directorate", label: t(schema.tableColumns[3] || "الإدارة"), width: 20 },
+    { key: "branch", label: t(schema.tableColumns[4] || "الفرع"), width: 18 },
+    { key: "recordCount", label: t("عدد السجلات"), width: 14 },
+    { key: "details", label: t("تفاصيل التقرير"), width: 38 },
   ];
 
   const exportedRows = (selectionMode === "custom" ? rows.filter((row) => selectedIds.has(row.id)) : rows).map((row) => ({
     empId: row.emp_id || "-",
     name: row.name,
-    jobTitle: row.job_title || "-",
-    department: row.department || "-",
-    directorate: row.directorate || "-",
-    branch: row.branch || "-",
+    jobTitle: orgName(row.job_title) || "-",
+    department: orgName(row.department) || "-",
+    directorate: orgName(row.directorate) || "-",
+    branch: orgName(row.branch) || "-",
     recordCount: row.recordCount,
     details: row.details || "-",
   }));
 
-  const reportSubtitle = `تقرير مفلتر حسب البيانات المحددة — ${exportedRows.length} موظف`;
+  const reportTitle = t(schema.title);
+  const reportSubtitle = `${t("تقرير مفلتر حسب البيانات المحددة")} — ${t("عدد الموظفين")}: ${exportedRows.length}`;
 
   const handlePrint = () => printReport({
-    title: schema.title,
+    title: reportTitle,
     subtitle: reportSubtitle,
     columns: reportColumns,
     rows: exportedRows,
     fileName: schema.id,
     landscape: true,
-    summary: [{ label: "إجمالي الموظفين", value: exportedRows.length }],
+    summary: [{ label: t("إجمالي الموظفين"), value: exportedRows.length }],
   });
 
   const handleExcel = () => exportReportExcel({
-    title: schema.title,
+    title: reportTitle,
     subtitle: reportSubtitle,
     columns: reportColumns,
     rows: exportedRows,
-    fileName: schema.title,
+    fileName: reportTitle,
   });
+
+  const pageSummary = () => {
+    if (!rows.length) return locale === "en" ? "0 employees" : "0 موظف";
+    const first = (safePage - 1) * pageSize + 1;
+    const last = Math.min(safePage * pageSize, rows.length);
+    return locale === "en" ? `Showing ${first} to ${last} of ${rows.length} employees` : `إظهار ${first} إلى ${last} من أصل ${rows.length} موظف`;
+  };
 
   // فلتر نوع التقرير بخيار واحد هو اسم التقرير نفسه وليس فلترًا
   const isInformationalFilter = (filter: ReportFilter) => filter.id === "report_type" && (filter.options?.length ?? 0) <= 1;
@@ -397,7 +425,7 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
       const options = dynamicOptions ? ["الكل", ...dynamicOptions] : filter.options ?? [];
       return (
         <select disabled={disabled} value={filterValues[filter.id] || options[0] || ""} onChange={(event) => handleFilterChange(filter.id, event.target.value)} className="w-full bg-white border border-gray-200 text-gray-800 text-sm rounded-lg focus:ring-2 focus:ring-[#004e89] outline-none px-3 py-2.5 h-10 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
-          {options.map((option) => <option key={option} value={option}>{option}</option>)}
+          {options.map((option) => <option key={option} value={option}>{orgName(option) || option}</option>)}
         </select>
       );
     }
@@ -423,10 +451,10 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full animate-in fade-in zoom-in-95 duration-200">
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center sticky top-0 z-10">
-        <h2 className="text-xl font-bold text-gray-800">{schema.title}</h2>
+        <h2 className="text-xl font-bold text-gray-800">{reportTitle}</h2>
         <div className="flex gap-2">
-          <button onClick={handlePrint} disabled={exportedRows.length === 0} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm disabled:opacity-50 flex items-center gap-2"><Printer className="h-4 w-4" />طباعة / PDF</button>
-          <button onClick={handleExcel} disabled={exportedRows.length === 0} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm disabled:opacity-50 flex items-center gap-2"><FileSpreadsheet className="h-4 w-4" />تصدير Excel</button>
+          <button onClick={handlePrint} disabled={exportedRows.length === 0} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm disabled:opacity-50 flex items-center gap-2"><Printer className="h-4 w-4" />{t("طباعة / PDF")}</button>
+          <button onClick={handleExcel} disabled={exportedRows.length === 0} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm disabled:opacity-50 flex items-center gap-2"><FileSpreadsheet className="h-4 w-4" />{t("تصدير Excel")}</button>
         </div>
       </div>
 
@@ -434,43 +462,43 @@ export default function DynamicReport({ schema }: { schema: ReportSchema }) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
           {schema.filters.map((filter) => (
             <div key={filter.id} className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">{filter.required && <span className="text-red-500">*</span>}{filter.label}{isFilterDisabled(filter) && <span className="text-[10px] font-medium text-gray-400">(غير مفعّل)</span>}</label>
+              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">{filter.required && <span className="text-red-500">*</span>}{t(filter.label)}{isFilterDisabled(filter) && <span className="text-[10px] font-medium text-gray-400">({t("غير مفعّل")})</span>}</label>
               {renderFilter(filter)}
             </div>
           ))}
         </div>
 
         {dateFilterUnavailable && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">فلتر التاريخ لا ينطبق على هذا التقرير: جدول المصدر لا يحتوي على عمود التاريخ، فتُعرض كل السجلات.</p>
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{t("فلتر التاريخ لا ينطبق على هذا التقرير: جدول المصدر لا يحتوي على عمود التاريخ، فتُعرض كل السجلات.")}</p>
         )}
 
         <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
-          <button onClick={() => setSelectionMode("all")} className={cn("px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm", selectionMode === "all" ? "bg-[#004e89] text-white" : "bg-white border border-[#004e89] text-[#004e89]")}><Users className="w-4 h-4" />جميع الموظفين</button>
-          <button onClick={() => setSelectionMode("custom")} className={cn("px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm", selectionMode === "custom" ? "bg-[#004e89] text-white" : "bg-white border border-[#004e89] text-[#004e89]")}><UserCheck className="w-4 h-4" />اختيار الموظفين</button>
+          <button onClick={() => setSelectionMode("all")} className={cn("px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm", selectionMode === "all" ? "bg-[#004e89] text-white" : "bg-white border border-[#004e89] text-[#004e89]")}><Users className="w-4 h-4" />{t("جميع الموظفين")}</button>
+          <button onClick={() => setSelectionMode("custom")} className={cn("px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm", selectionMode === "custom" ? "bg-[#004e89] text-white" : "bg-white border border-[#004e89] text-[#004e89]")}><UserCheck className="w-4 h-4" />{t("اختيار الموظفين")}</button>
         </div>
 
         <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
           <div className="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span>عرض</span>
+              <span>{t("عرض")}</span>
               <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="border border-gray-300 rounded px-2 py-1 bg-white"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select>
-              <span>من السجلات</span>
+              <span>{t("من السجلات")}</span>
             </div>
-            <div className="relative"><Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} type="text" placeholder="بحث" className="pl-3 pr-9 py-1.5 border border-gray-300 rounded-lg text-sm w-64 focus:outline-none focus:border-[#004e89]" /></div>
+            <div className="relative"><Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} type="text" placeholder={t("بحث")} className="pl-3 pr-9 py-1.5 border border-gray-300 rounded-lg text-sm w-64 focus:outline-none focus:border-[#004e89]" /></div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-right">
-              <thead className="bg-[#004e89] text-white font-medium"><tr><th className="px-4 py-3 w-12 text-center">{selectionMode === "custom" && <input type="checkbox" checked={pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id))} onChange={() => setSelectedIds(new Set(pageRows.every((row) => selectedIds.has(row.id)) ? [] : pageRows.map((row) => row.id)))} />}</th><th className="px-4 py-3">الرقم الوظيفي</th>{schema.tableColumns.map((column) => <th key={column} className="px-4 py-3 border-r border-white/10">{column}</th>)}<th className="px-4 py-3">عدد السجلات</th><th className="px-4 py-3">تفاصيل التقرير</th></tr></thead>
+            <table className="w-full text-sm text-start">
+              <thead className="bg-[#004e89] text-white font-medium"><tr><th className="px-4 py-3 w-12 text-center">{selectionMode === "custom" && <input type="checkbox" checked={pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id))} onChange={() => setSelectedIds(new Set(pageRows.every((row) => selectedIds.has(row.id)) ? [] : pageRows.map((row) => row.id)))} />}</th><th className="px-4 py-3 text-start">{t("الرقم الوظيفي")}</th>{schema.tableColumns.map((column) => <th key={column} className="px-4 py-3 text-start border-s border-white/10">{t(column)}</th>)}<th className="px-4 py-3 text-start">{t("عدد السجلات")}</th><th className="px-4 py-3 text-start">{t("تفاصيل التقرير")}</th></tr></thead>
               <tbody>
-                {loading ? <tr><td colSpan={9} className="py-14 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-[#004e89]" /><p className="mt-2 text-gray-500">جاري جلب بيانات الموظفين...</p></td></tr> : error ? <tr><td colSpan={9} className="py-12 text-center text-red-600">{error}</td></tr> : pageRows.length === 0 ? <tr><td colSpan={9} className="py-12 text-center text-gray-500">لا يوجد موظفون لديهم بيانات في هذا التقرير</td></tr> : pageRows.map((row) => <tr key={row.id} className="hover:bg-gray-50 border-b border-gray-100"><td className="px-4 py-3 text-center">{selectionMode === "custom" && <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleRow(row.id)} />}</td><td className="px-4 py-3 text-gray-600">{row.emp_id || "-"}</td><td className="px-4 py-3 font-medium text-gray-800">{row.name}</td><td className="px-4 py-3 text-gray-600">{row.job_title || "-"}</td><td className="px-4 py-3 text-gray-600">{row.department || "-"}</td><td className="px-4 py-3 text-gray-600">{row.directorate || "-"}</td><td className="px-4 py-3 text-gray-600">{row.branch || "-"}</td><td className="px-4 py-3 text-center font-semibold">{row.recordCount}</td><td className="px-4 py-3 text-gray-600 min-w-56">{row.details || "-"}</td></tr>)}
+                {loading ? <tr><td colSpan={9} className="py-14 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-[#004e89]" /><p className="mt-2 text-gray-500">{t("جاري جلب بيانات الموظفين...")}</p></td></tr> : error ? <tr><td colSpan={9} className="py-12 text-center text-red-600">{t(error)}</td></tr> : pageRows.length === 0 ? <tr><td colSpan={9} className="py-12 text-center text-gray-500">{t("لا يوجد موظفون لديهم بيانات في هذا التقرير")}</td></tr> : pageRows.map((row) => <tr key={row.id} className="hover:bg-gray-50 border-b border-gray-100"><td className="px-4 py-3 text-center">{selectionMode === "custom" && <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleRow(row.id)} />}</td><td className="px-4 py-3 text-gray-600">{row.emp_id || "-"}</td><td className="px-4 py-3 font-medium text-gray-800">{row.name}</td><td className="px-4 py-3 text-gray-600">{orgName(row.job_title) || "-"}</td><td className="px-4 py-3 text-gray-600">{orgName(row.department) || "-"}</td><td className="px-4 py-3 text-gray-600">{orgName(row.directorate) || "-"}</td><td className="px-4 py-3 text-gray-600">{orgName(row.branch) || "-"}</td><td className="px-4 py-3 text-center font-semibold">{row.recordCount}</td><td className="px-4 py-3 text-gray-600 min-w-56">{row.details || "-"}</td></tr>)}
               </tbody>
             </table>
           </div>
 
           <div className="p-3 border-t border-gray-200 bg-gray-50 flex justify-between items-center text-sm text-gray-600">
-            <div>{rows.length ? `إظهار ${(safePage - 1) * pageSize + 1} إلى ${Math.min(safePage * pageSize, rows.length)} من أصل ${rows.length} موظف` : "0 موظف"}</div>
-            <div className="flex gap-1"><button disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="px-3 py-1.5 rounded border border-gray-300 bg-white disabled:opacity-50">السابق</button><span className="px-3 py-1.5 rounded bg-[#004e89] text-white">{safePage}</span><button disabled={safePage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} className="px-3 py-1.5 rounded border border-gray-300 bg-white disabled:opacity-50">التالي</button></div>
+            <div>{pageSummary()}</div>
+            <div className="flex gap-1"><button disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="px-3 py-1.5 rounded border border-gray-300 bg-white disabled:opacity-50">{t("السابق")}</button><span className="px-3 py-1.5 rounded bg-[#004e89] text-white">{safePage}</span><button disabled={safePage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} className="px-3 py-1.5 rounded border border-gray-300 bg-white disabled:opacity-50">{t("التالي")}</button></div>
           </div>
         </div>
       </div>

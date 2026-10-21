@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { exportReportExcel, printReport } from "@/lib/reportExport";
+import { loadOrgEnglishNames } from "@/lib/orgNames";
 
 const NO_ROWS_MESSAGE = "لم يُحفظ شيء: السجل غير موجود أو لا تملك صلاحية هذه العملية";
 const orgErrorText = (error: unknown) =>
@@ -53,6 +54,21 @@ export default function HROrgJobs() {
 
   const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 outline-none";
 
+  // في الواجهة الإنجليزية: name_en للوظيفة متى وُجد، واسم الإدارة الإنجليزي من الهيكل
+  const [orgEnglish, setOrgEnglish] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    if (locale !== "en") return;
+    let active = true;
+    loadOrgEnglishNames().then((names) => { if (active) setOrgEnglish(names); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [locale]);
+  const displayName = (row: JobRow) => (locale === "en" ? row.nameEn || row.name : row.name);
+  const displayDepartment = (value: string) => {
+    const raw = value.trim();
+    if (!raw || locale !== "en") return value;
+    return orgEnglish.get(raw) || t(raw);
+  };
+
   const loadData = async () => {
     setLoading(true);
     setLoadFailed(false);
@@ -94,7 +110,7 @@ export default function HROrgJobs() {
   useEffect(() => { loadData(); }, []);
 
   const handleDelete = async (job: JobRow) => {
-    if (!confirm(`${t("حذف الوظيفة")} "${job.name}"؟`)) return;
+    if (!confirm(locale === "en" ? `${t("حذف الوظيفة")} "${displayName(job)}"?` : `${t("حذف الوظيفة")} "${job.name}"؟`)) return;
     // الموظف يرتبط بالوظيفة باسمها (employees.job_title)
     if (job.name.trim()) {
       try {
@@ -138,15 +154,15 @@ export default function HROrgJobs() {
   };
 
   const reportOptions = () => ({
-    title: "قائمة الوظائف",
+    title: t("قائمة الوظائف"),
     fileName: "jobs",
     columns: [
-      { key: "name", label: "المسمى الوظيفي", width: 26 },
-      { key: "nameEn", label: "الاسم بالإنجليزية", width: 26 },
-      { key: "department", label: "الإدارة", width: 22 },
-      { key: "status", label: "الحالة", width: 12 },
+      { key: "name", label: t("المسمى الوظيفي"), width: 26 },
+      { key: "nameEn", label: t("الاسم بالإنجليزية"), width: 26 },
+      { key: "department", label: t("الإدارة"), width: 22 },
+      { key: "status", label: t("الحالة"), width: 12 },
     ],
-    rows: jobs.map((row) => ({ name: row.name, nameEn: row.nameEn, department: row.department, status: row.status })),
+    rows: jobs.map((row) => ({ name: displayName(row), nameEn: row.nameEn, department: displayDepartment(row.department), status: t(row.status) })),
   });
   const handlePrint = () => {
     if (!printReport(reportOptions())) toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة ثم أعد المحاولة"), variant: "destructive" });
@@ -229,9 +245,9 @@ export default function HROrgJobs() {
               ) : jobs.map((row, i) => (
                 <tr key={row.id} className="hover:bg-gray-50">
                   <td className="py-3 px-4">{i + 1}</td>
-                  <td className="py-3 px-4 font-medium">{locale === "en" ? row.nameEn || row.name : row.name}</td>
+                  <td className="py-3 px-4 font-medium">{displayName(row)}</td>
                   <td className="py-3 px-4 text-gray-600">{row.nameEn}</td>
-                  <td className="py-3 px-4">{row.department}</td>
+                  <td className="py-3 px-4">{displayDepartment(row.department)}</td>
                   <td className="py-3 px-4 text-center">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.status === "فعال" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"}`}>{t(row.status)}</span>
                   </td>

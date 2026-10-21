@@ -241,7 +241,7 @@ export default function HRLeavesAnnualBalance() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `أرصدة_الإجازات_السنوية_${today}.csv`;
+    link.download = `${t("أرصدة الإجازات السنوية").replace(/ /g, "_")}_${today}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };

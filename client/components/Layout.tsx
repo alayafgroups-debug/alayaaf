@@ -942,7 +942,7 @@ function HRSidebar({
         >
           <div className="relative flex-shrink-0">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-[12px] font-bold text-white shadow-md shadow-emerald-500/20">
-              م
+              {t("م")}
             </div>
             <span className="absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full border-2 border-[#0c2a1e] bg-emerald-400" />
           </div>
@@ -953,7 +953,7 @@ function HRSidebar({
                   {userSession?.name || t("مدير النظام")}
                 </p>
                 <p className="text-[10px] text-emerald-300/30 truncate">
-                  {userSession?.role || ""}
+                  {userSession?.role ? t(userSession.role) : ""}
                 </p>
               </div>
               <button
@@ -1131,7 +1131,7 @@ function MainSidebar({
                 ? "text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
                 : "bg-white/10 text-white hover:bg-white/20",
             )}
-            title={t(sidebarOpen ? "تصغير القائمة" : "توسيع القائمة")}
+            title={sidebarOpen ? t("تصغير القائمة") : t("توسيع القائمة")}
           >
             {sidebarOpen ? (
               <X className="h-4 w-4" />
@@ -1330,7 +1330,7 @@ function MainSidebar({
         >
           <div className="relative flex-shrink-0">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-[12px] font-bold text-white shadow-md shadow-blue-500/20">
-              م
+              {t("م")}
             </div>
             <span className="absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full border-2 border-[#1a1f3a] bg-emerald-400" />
           </div>
@@ -1341,7 +1341,7 @@ function MainSidebar({
                   {userSession?.name || t("مدير النظام")}
                 </p>
                 <p className="text-[10px] text-white/30 truncate">
-                  {userSession?.role || ""}
+                  {userSession?.role ? t(userSession.role) : ""}
                 </p>
               </div>
               <button

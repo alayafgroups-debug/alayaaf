@@ -48,7 +48,7 @@ export default function EmployeeEmailPage({
   useEffect(() => {
     async function loadEmployeeEmail() {
       if (!empId) {
-        setLoginError("لم يتم العثور على الرقم الوظيفي");
+        setLoginError(t("لم يتم العثور على الرقم الوظيفي"));
         setIsLoadingEmail(false);
         return;
       }
@@ -57,7 +57,7 @@ export default function EmployeeEmailPage({
         body: { action: "mailbox-info", empId },
       });
       if (error || !data?.success) {
-        setLoginError(data?.error || "لم يتم إنشاء بريد إلكتروني لك بعد");
+        setLoginError(data?.error || t("لم يتم إنشاء بريد إلكتروني لك بعد"));
       } else {
         setEmployeeEmail(String(data.generated_email || ""));
       }
@@ -128,7 +128,7 @@ export default function EmployeeEmailPage({
   const handleMailboxLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!mailboxPassword) {
-      setLoginError("أدخل كلمة مرور البريد الإلكتروني");
+      setLoginError(t("أدخل كلمة مرور البريد الإلكتروني"));
       return;
     }
 
@@ -139,7 +139,7 @@ export default function EmployeeEmailPage({
     });
     setIsSigningIn(false);
     if (error || !data?.success) {
-      setLoginError(data?.error || "كلمة مرور البريد غير صحيحة");
+      setLoginError(data?.error || t("كلمة مرور البريد غير صحيحة"));
       return;
     }
 
@@ -148,7 +148,7 @@ export default function EmployeeEmailPage({
   };
 
   const deleteMessage = async (message: MailMessage) => {
-    if (!window.confirm("هل تريد نقل هذه الرسالة إلى المهملات؟")) return;
+    if (!window.confirm(t("هل تريد نقل هذه الرسالة إلى المهملات؟"))) return;
 
     setDeletingMessageId(message.id);
     const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
@@ -156,7 +156,7 @@ export default function EmployeeEmailPage({
     });
     setDeletingMessageId(null);
     if (error || !data?.success) {
-      toast.error(data?.error || "تعذر حذف الرسالة");
+      toast.error(data?.error ? t(String(data.error)) : t("تعذر حذف الرسالة"));
       return;
     }
 
@@ -167,11 +167,11 @@ export default function EmployeeEmailPage({
       deleted_by_recipient_at: item.to_email === employeeEmail ? deletedAt : item.deleted_by_recipient_at,
     } : item));
     setSelectedEmail(null);
-    toast.success("تم نقل الرسالة إلى المهملات");
+    toast.success(t("تم نقل الرسالة إلى المهملات"));
   };
 
   const purgeMessage = async (message: MailMessage) => {
-    if (!window.confirm("سيتم حذف الرسالة نهائياً من مهملاتك. هل تريد المتابعة؟")) return;
+    if (!window.confirm(t("سيتم حذف الرسالة نهائياً من مهملاتك. هل تريد المتابعة؟"))) return;
 
     setDeletingMessageId(message.id);
     const { data, error } = await supabase.functions.invoke("manage-employee-credentials", {
@@ -179,7 +179,7 @@ export default function EmployeeEmailPage({
     });
     setDeletingMessageId(null);
     if (error || !data?.success) {
-      toast.error(data?.error || "تعذر حذف الرسالة نهائياً");
+      toast.error(data?.error ? t(String(data.error)) : t("تعذر حذف الرسالة نهائياً"));
       return;
     }
 
@@ -190,7 +190,7 @@ export default function EmployeeEmailPage({
       purged_by_recipient_at: item.to_email === employeeEmail ? purgedAt : item.purged_by_recipient_at,
     } : item));
     setSelectedEmail(null);
-    toast.success("تم حذف الرسالة نهائياً من مهملاتك");
+    toast.success(t("تم حذف الرسالة نهائياً من مهملاتك"));
   };
 
   const openMessage = (message: MailMessage) => {
@@ -259,7 +259,7 @@ export default function EmployeeEmailPage({
                 </button>
               </div>
             </div>
-            {loginError && <p className="text-sm text-red-400">{loginError}</p>}
+            {loginError && <p className="text-sm text-red-400">{t(loginError)}</p>}
             <button
               type="submit"
               disabled={!employeeEmail || isSigningIn}
@@ -287,7 +287,7 @@ export default function EmployeeEmailPage({
             <button
               key={folder.id}
               onClick={() => { setActiveFolder(folder.id); setSelectedEmail(null); }}
-              className={`w-full text-right px-4 py-2.5 rounded-lg font-medium transition flex items-center justify-between ${activeFolder === folder.id ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700"}`}
+              className={`w-full text-start px-4 py-2.5 rounded-lg font-medium transition flex items-center justify-between ${activeFolder === folder.id ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700"}`}
             >
               <span>{folder.label}</span>
               {folder.count > 0 && <span className="bg-red-500 text-xs font-bold rounded-full min-w-5 h-5 px-1 flex items-center justify-center">{folder.count}</span>}
@@ -322,7 +322,7 @@ export default function EmployeeEmailPage({
                     <div key={message.id} className="flex items-stretch transition hover:bg-gray-800">
                       <button
                         onClick={() => openMessage(message)}
-                        className="min-w-0 flex-1 p-4 text-right"
+                        className="min-w-0 flex-1 p-4 text-start"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
@@ -339,7 +339,7 @@ export default function EmployeeEmailPage({
                       <button
                         onClick={() => activeFolder === "trash" ? purgeMessage(message) : deleteMessage(message)}
                         disabled={deletingMessageId === message.id}
-                        title={activeFolder === "trash" ? "حذف نهائي" : "نقل إلى المهملات"}
+                        title={activeFolder === "trash" ? t("حذف نهائي") : t("نقل إلى المهملات")}
                         className="px-4 text-gray-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
                       >
                         <Trash2 className="h-5 w-5" />
@@ -378,15 +378,15 @@ export default function EmployeeEmailPage({
                 <div className="bg-gray-800 rounded-lg p-6">
                   <div className="flex items-start justify-between border-b border-gray-700 pb-4 mb-4">
                     <div>
-                      <p className="text-sm text-gray-400">من:</p>
+                      <p className="text-sm text-gray-400">{t("من:")}</p>
                       <p dir="ltr" className="text-white font-semibold text-left">{selectedEmail.from_email}</p>
-                      <p className="text-sm text-gray-400 mt-2">إلى:</p>
+                      <p className="text-sm text-gray-400 mt-2">{t("إلى:")}</p>
                       <p dir="ltr" className="text-white text-sm text-left">{selectedEmail.to_email}</p>
                     </div>
                     <button
                       onClick={() => activeFolder === "trash" ? purgeMessage(selectedEmail) : deleteMessage(selectedEmail)}
                       disabled={deletingMessageId === selectedEmail.id}
-                      title={activeFolder === "trash" ? "حذف نهائي" : "نقل إلى المهملات"}
+                      title={activeFolder === "trash" ? t("حذف نهائي") : t("نقل إلى المهملات")}
                       className="text-gray-400 hover:text-red-400 disabled:opacity-40"
                     >
                       <Trash2 className="h-5 w-5" />

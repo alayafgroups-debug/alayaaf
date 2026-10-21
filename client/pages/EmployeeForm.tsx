@@ -3,7 +3,7 @@ import Layout from "@/components/Layout";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useI18n } from "@/i18n";
+import { translateText, useI18n } from "@/i18n";
 import { INACTIVE_EMPLOYEE_STATUSES, setEmployeeLoginState } from "@/components/hr/employeeActions";
 import { employeeErrorText } from "@/components/hr/employeeErrors";
 import { GOSI_TYPE_NON_SAUDI, gosiTypesFor } from "@/lib/gosi";
@@ -384,6 +384,8 @@ type FormIssue = { step: number; message: string };
 // (خاصة للموظفين المؤقتين)، ويُفحص فقط شكل ما يُدخل. التعديل: لا يُسمح بإفراغ حقل إلزامي كان معبأً، وتُفحص صيغة ما تغيّر فقط.
 const validateEmployeeForm = (form: EmpFormData, mode: "create" | "edit", initial: EmpFormData): FormIssue[] => {
   const issues: FormIssue[] = [];
+  // الرسائل بلغة الواجهة (دالة خارج المكوّن)
+  const t = translateText;
   const add = (step: number, message: string) => issues.push({ step, message });
   const isCreate = mode === "create";
   const filled = (value: unknown) => typeof value === "number" ? value > 0 : String(value ?? "").trim() !== "";
@@ -399,55 +401,55 @@ const validateEmployeeForm = (form: EmpFormData, mode: "create" | "edit", initia
   const nationalId = normalizeDigits(form.nationalId.trim());
   const phone = normalizeDigits(form.phone.replace(/[\s-]/g, ""));
 
-  need(0, "name", "الاسم الكامل بالعربي مطلوب");
-  keep(0, "nationality", "لا تُفرَّغ الجنسية بعد تسجيلها: عليها تُحسب التأمينات الاجتماعية");
-  keep(0, "nationalId", "لا يُفرَّغ رقم الهوية / الإقامة بعد تسجيله");
-  if (nationalId && check("nationalId") && !/^[1-4]\d{9}$/.test(nationalId)) add(0, "رقم الهوية / الإقامة / الحدود يجب أن يكون 10 أرقام ويبدأ بـ 1 أو 2 أو 3 أو 4");
-  if (phone && check("phone") && !/^(05\d{8}|\+?\d{8,15})$/.test(phone)) add(0, "رقم الجوال غير صحيح (مثال: 05xxxxxxxx أو رقم دولي)");
-  if (form.email.trim() && check("email") && !EMAIL_PATTERN.test(form.email.trim())) add(0, "البريد الإلكتروني غير صحيح");
-  if (form.birthDate && check("birthDate") && form.birthDate >= riyadhToday()) add(0, "تاريخ الميلاد غير صحيح");
+  need(0, "name", t("الاسم الكامل بالعربي مطلوب"));
+  keep(0, "nationality", t("لا تُفرَّغ الجنسية بعد تسجيلها: عليها تُحسب التأمينات الاجتماعية"));
+  keep(0, "nationalId", t("لا يُفرَّغ رقم الهوية / الإقامة بعد تسجيله"));
+  if (nationalId && check("nationalId") && !/^[1-4]\d{9}$/.test(nationalId)) add(0, t("رقم الهوية / الإقامة / الحدود يجب أن يكون 10 أرقام ويبدأ بـ 1 أو 2 أو 3 أو 4"));
+  if (phone && check("phone") && !/^(05\d{8}|\+?\d{8,15})$/.test(phone)) add(0, t("رقم الجوال غير صحيح (مثال: 05xxxxxxxx أو رقم دولي)"));
+  if (form.email.trim() && check("email") && !EMAIL_PATTERN.test(form.email.trim())) add(0, t("البريد الإلكتروني غير صحيح"));
+  if (form.birthDate && check("birthDate") && form.birthDate >= riyadhToday()) add(0, t("تاريخ الميلاد غير صحيح"));
   if (!isCreate && initial.email.trim() && form.email.trim().toLowerCase() !== initial.email.trim().toLowerCase()) {
-    add(0, "تغيير البريد لموظف له بريد مسجّل يتم من مدير النظام فقط؛ أعد البريد كما كان");
+    add(0, t("تغيير البريد لموظف له بريد مسجّل يتم من مدير النظام فقط؛ أعد البريد كما كان"));
   }
 
-  need(1, "employmentType", "نوع التوظيف مطلوب");
-  need(1, "status", "الحالة مطلوبة");
-  keep(1, "hireDate", "لا يُفرَّغ تاريخ التعيين بعد تسجيله: عليه يُحسب الراتب والإجازات ومكافأة نهاية الخدمة");
-  if (form.isContractEnd && !form.contractEndDate) add(1, "تاريخ انتهاء العقد مطلوب للعقد محدد المدة");
+  need(1, "employmentType", t("نوع التوظيف مطلوب"));
+  need(1, "status", t("الحالة مطلوبة"));
+  keep(1, "hireDate", t("لا يُفرَّغ تاريخ التعيين بعد تسجيله: عليه يُحسب الراتب والإجازات ومكافأة نهاية الخدمة"));
+  if (form.isContractEnd && !form.contractEndDate) add(1, t("تاريخ انتهاء العقد مطلوب للعقد محدد المدة"));
   if (form.contractEndDate && form.hireDate && (check("contractEndDate") || check("hireDate")) && form.contractEndDate < form.hireDate) {
-    add(1, "تاريخ انتهاء العقد قبل تاريخ التعيين");
+    add(1, t("تاريخ انتهاء العقد قبل تاريخ التعيين"));
   }
-  if (check("dailyHours") && !(form.dailyHours > 0 && form.dailyHours <= 24)) add(1, "عدد ساعات اليوم يجب أن يكون بين 1 و24");
-  if (form.managementDaysAfter < 0) add(1, "أيام الإجازة السنوية لا تكون سالبة");
+  if (check("dailyHours") && !(form.dailyHours > 0 && form.dailyHours <= 24)) add(1, t("عدد ساعات اليوم يجب أن يكون بين 1 و24"));
+  if (form.managementDaysAfter < 0) add(1, t("أيام الإجازة السنوية لا تكون سالبة"));
 
-  if (form.baseSalary < 0) add(2, "الراتب الأساسي لا يكون سالبًا");
-  if (form.employmentType !== "متعاون") keep(2, "baseSalary", "لا يُصفَّر الراتب الأساسي بعد تسجيله");
+  if (form.baseSalary < 0) add(2, t("الراتب الأساسي لا يكون سالبًا"));
+  if (form.employmentType !== "متعاون") keep(2, "baseSalary", t("لا يُصفَّر الراتب الأساسي بعد تسجيله"));
   if (check("allowances")) {
     form.allowances.forEach((a, index) => {
       const row = index + 1;
-      if (!a.type) add(2, `البدل رقم ${row}: نوع البدل مطلوب`);
-      if (!(Number(a.amount) > 0)) add(2, `البدل رقم ${row}: القيمة يجب أن تكون أكبر من صفر`);
-      if (!a.effect) add(2, `البدل رقم ${row}: حدد الأثر (مضاف أو مخصوم)`);
-      if (a.from && a.to && a.to < a.from) add(2, `البدل رقم ${row}: تاريخ النهاية قبل تاريخ البداية`);
+      if (!a.type) add(2, `${t("البدل رقم")} ${row}: ${t("نوع البدل مطلوب")}`);
+      if (!(Number(a.amount) > 0)) add(2, `${t("البدل رقم")} ${row}: ${t("القيمة يجب أن تكون أكبر من صفر")}`);
+      if (!a.effect) add(2, `${t("البدل رقم")} ${row}: ${t("حدد الأثر (مضاف أو مخصوم)")}`);
+      if (a.from && a.to && a.to < a.from) add(2, `${t("البدل رقم")} ${row}: ${t("تاريخ النهاية قبل تاريخ البداية")}`);
     });
   }
   if ((check("allowances") || check("baseSalary")) && computeTotalSalary(form.baseSalary, form.allowances) < 0) {
-    add(2, "إجمالي الراتب بعد البدلات المخصومة سالب");
+    add(2, t("إجمالي الراتب بعد البدلات المخصومة سالب"));
   }
   if (form.socialInsurance === "نعم" && form.socialInsuranceType && form.nationality.trim()
       && (check("socialInsuranceType") || check("nationality"))
       && !gosiTypesFor(form.nationality).includes(form.socialInsuranceType)) {
     add(2, form.socialInsuranceType === GOSI_TYPE_NON_SAUDI
-      ? "نوع التأمين «غير سعودي» لا يناسب موظفًا سعوديًا"
-      : "نوع التأمين السعودي لا يناسب موظفًا غير سعودي؛ اختر «غير سعودي (أخطار مهنية)»");
+      ? t("نوع التأمين «غير سعودي» لا يناسب موظفًا سعوديًا")
+      : t("نوع التأمين السعودي لا يناسب موظفًا غير سعودي؛ اختر «غير سعودي (أخطار مهنية)»"));
   }
-  if (form.iban && check("iban") && !/^SA\d{22}$/.test(form.iban.toUpperCase().replace(/\s/g, ""))) add(2, "رقم الآيبان يجب أن يبدأ بـ SA ويتبعه 22 رقمًا");
+  if (form.iban && check("iban") && !/^SA\d{22}$/.test(form.iban.toUpperCase().replace(/\s/g, ""))) add(2, t("رقم الآيبان يجب أن يبدأ بـ SA ويتبعه 22 رقمًا"));
 
   if (form.password) {
-    if (!form.email.trim()) add(6, "إنشاء حساب دخول يتطلب بريدًا إلكترونيًا في الخطوة الأولى");
-    if (form.password.length < 8) add(6, "كلمة المرور 8 أحرف على الأقل");
+    if (!form.email.trim()) add(6, t("إنشاء حساب دخول يتطلب بريدًا إلكترونيًا في الخطوة الأولى"));
+    if (form.password.length < 8) add(6, t("كلمة المرور 8 أحرف على الأقل"));
   }
-  need(6, "employeeRole", "صلاحية الموظف (الدور) مطلوبة");
+  need(6, "employeeRole", t("صلاحية الموظف (الدور) مطلوبة"));
   return issues;
 };
 
@@ -532,7 +534,8 @@ const readFunctionError = async (error: unknown, data: unknown) => {
       // ignore
     }
   }
-  return (error as { message?: string } | null)?.message || "تعذر إنشاء حساب الدخول";
+  const t = translateText;
+  return (error as { message?: string } | null)?.message || t("تعذر إنشاء حساب الدخول");
 };
 
 const securePassword = () => {
@@ -558,7 +561,7 @@ export default function EmployeeForm({
   onSaved: () => void;
   title?: string;
 }) {
-  const { t, direction } = useI18n();
+  const { t, direction, locale } = useI18n();
   const initialRef = useRef<EmpFormData>(initialData ?? emptyForm());
   const [form, setForm] = useState<EmpFormData>(initialRef.current);
   const [step, setStep] = useState(0);
@@ -778,15 +781,15 @@ export default function EmployeeForm({
         description: `${form.name}${savedEmpId ? ` — ${t("الرقم الوظيفي")}: ${savedEmpId}` : ""}${login?.ok ? ` — ${login.created ? t("تم إنشاء حساب الدخول") : t("تم تغيير كلمة مرور حساب الدخول")}` : ""}`,
       });
       if (fileFailures.length) {
-        toast({ title: t("لم تُرفع بعض الملفات"), description: fileFailures.join("، "), variant: "destructive" });
+        toast({ title: t("لم تُرفع بعض الملفات"), description: fileFailures.join(locale === "en" ? ", " : "، "), variant: "destructive" });
       }
       if (login && !login.ok) {
-        toast({ title: t("حُفظت البيانات لكن لم يُنشأ حساب الدخول"), description: login.message, variant: "destructive" });
+        toast({ title: t("حُفظت البيانات لكن لم يُنشأ حساب الدخول"), description: t(login.message), variant: "destructive" });
       }
       if (loginState && !loginState.ok) {
         toast({
           title: isInactive ? t("عُطّل الموظف لكن لم يُوقف حساب دخوله") : t("فُعّل الموظف لكن لم يُعَد حساب دخوله"),
-          description: loginState.message,
+          description: t(loginState.message),
           variant: "destructive",
         });
       }
@@ -956,7 +959,7 @@ function Step1Personal({
   const saveNewEmail = async () => {
     if (!onChangeEmail) return;
     const value = newEmail.trim().toLowerCase();
-    if (!EMAIL_PATTERN.test(value)) { setEmailError("البريد الجديد غير صحيح"); return; }
+    if (!EMAIL_PATTERN.test(value)) { setEmailError(t("البريد الجديد غير صحيح")); return; }
     setEmailSaving(true);
     setEmailError("");
     const message = await onChangeEmail(value);
@@ -1018,21 +1021,21 @@ function Step1Personal({
 
       {/* Row 1: Names */}
       <div className="grid grid-cols-2 gap-4">
-        <FInput label="الاسم كامل عربي *" value={form.name} onChange={(v) => set("name", v)} placeholder="الاسم كامل عربي" />
-        <FInput label="الاسم كامل إنجليزي" value={form.firstName} onChange={(v) => set("firstName", v)} placeholder="Full name in English" />
+        <FInput label={t("الاسم كامل عربي *")} value={form.name} onChange={(v) => set("name", v)} placeholder={t("الاسم كامل عربي")} />
+        <FInput label={t("الاسم كامل إنجليزي")} value={form.firstName} onChange={(v) => set("firstName", v)} placeholder="Full name in English" />
       </div>
 
       {/* Row 2: Gender / Birthdate */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الجنس" value={form.gender} onChange={(v) => set("gender", v)} options={GENDERS} placeholder="--" />
-        <FInput label="تاريخ الميلاد" value={form.birthDate} onChange={(v) => set("birthDate", v)} type="date" />
+        <FSelect label={t("الجنس")} value={form.gender} onChange={(v) => set("gender", v)} options={GENDERS} placeholder="--" />
+        <FInput label={t("تاريخ الميلاد")} value={form.birthDate} onChange={(v) => set("birthDate", v)} type="date" />
       </div>
 
       {/* Row 3: Email / Phone */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <FInput
-            label="البريد الإلكتروني"
+            label={t("البريد الإلكتروني")}
             value={form.email}
             onChange={(v) => set("email", v)}
             type="email"
@@ -1070,43 +1073,43 @@ function Step1Personal({
             </div>
           )}
         </div>
-        <FInput label="رقم الجوال" value={form.phone} onChange={(v) => set("phone", v)} placeholder="05xxxxxxxx" />
+        <FInput label={t("رقم الجوال")} value={form.phone} onChange={(v) => set("phone", v)} placeholder="05xxxxxxxx" />
       </div>
 
       {/* Row 4: Nationality / Address */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الجنسية" value={form.nationality} onChange={onNationalityChange} options={NATIONALITIES} placeholder="حدد الدولة..." />
-        <FInput label="العنوان" value={form.address2} onChange={(v) => set("address2", v)} placeholder="" />
+        <FSelect label={t("الجنسية")} value={form.nationality} onChange={onNationalityChange} options={NATIONALITIES} placeholder={t("حدد الدولة...")} />
+        <FInput label={t("العنوان")} value={form.address2} onChange={(v) => set("address2", v)} placeholder="" />
       </div>
 
       {/* Row 5: Marital / National ID */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الحالة الاجتماعية" value={form.maritalStatus} onChange={(v) => set("maritalStatus", v)} options={MARITAL_STATUSES} placeholder="--" />
-        <FInput label="رقم الهوية / الإقامة" value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1xxxxxxxxx / 2xxxxxxxxx" />
+        <FSelect label={t("الحالة الاجتماعية")} value={form.maritalStatus} onChange={(v) => set("maritalStatus", v)} options={MARITAL_STATUSES} placeholder="--" />
+        <FInput label={t("رقم الهوية / الإقامة")} value={form.nationalId} onChange={(v) => set("nationalId", v)} placeholder="1xxxxxxxxx / 2xxxxxxxxx" />
       </div>
 
       {/* Row 6: Work Contact Type / ID Expiry */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="وسيلة التواصل المفضلة" value={form.workContactType} onChange={(v) => set("workContactType", v)} options={["هاتف", "بريد إلكتروني", "واتساب"]} placeholder="---" />
-        <FInput label="تاريخ انتهاء الهوية / الإقامة" value={form.idExpiryDate} onChange={(v) => set("idExpiryDate", v)} type="date" />
+        <FSelect label={t("وسيلة التواصل المفضلة")} value={form.workContactType} onChange={(v) => set("workContactType", v)} options={["هاتف", "بريد إلكتروني", "واتساب"]} placeholder="---" />
+        <FInput label={t("تاريخ انتهاء الهوية / الإقامة")} value={form.idExpiryDate} onChange={(v) => set("idExpiryDate", v)} type="date" />
       </div>
 
       {/* Passport */}
       <div className="grid grid-cols-2 gap-4">
-        <FInput label="تاريخ انتهاء جواز السفر" value={form.passportExpiryDate} onChange={(v) => set("passportExpiryDate", v)} type="date" />
-        <FInput label="رقم جواز السفر" value={form.passportNumber} onChange={(v) => set("passportNumber", v)} placeholder="" />
+        <FInput label={t("تاريخ انتهاء جواز السفر")} value={form.passportExpiryDate} onChange={(v) => set("passportExpiryDate", v)} type="date" />
+        <FInput label={t("رقم جواز السفر")} value={form.passportNumber} onChange={(v) => set("passportNumber", v)} placeholder="" />
       </div>
 
       {/* Work Permit */}
       <div className="grid grid-cols-2 gap-4">
-        <FInput label="تاريخ انتهاء رخصة العمل" value={form.residencePermitDate} onChange={(v) => set("residencePermitDate", v)} type="date" />
-        <FInput label="رقم رخصة العمل" value={form.workPermitNumber} onChange={(v) => set("workPermitNumber", v)} placeholder="" />
+        <FInput label={t("تاريخ انتهاء رخصة العمل")} value={form.residencePermitDate} onChange={(v) => set("residencePermitDate", v)} type="date" />
+        <FInput label={t("رقم رخصة العمل")} value={form.workPermitNumber} onChange={(v) => set("workPermitNumber", v)} placeholder="" />
       </div>
 
       {/* Kafala */}
       <div className="grid grid-cols-2 gap-4">
-        <FInput label="تاريخ انتهاء الكفالة" value={form.kafalaExpiryDate} onChange={(v) => set("kafalaExpiryDate", v)} type="date" />
-        <FInput label="رقم الكفالة" value={form.kafalaNumber} onChange={(v) => set("kafalaNumber", v)} placeholder="" />
+        <FInput label={t("تاريخ انتهاء الكفالة")} value={form.kafalaExpiryDate} onChange={(v) => set("kafalaExpiryDate", v)} type="date" />
+        <FInput label={t("رقم الكفالة")} value={form.kafalaNumber} onChange={(v) => set("kafalaNumber", v)} placeholder="" />
       </div>
     </div>
   );
@@ -1164,13 +1167,13 @@ function Step2Job({
     <div className="space-y-5">
       {/* Row 1: Job Title / Division */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="المسمى الوظيفي" value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={jobs} placeholder={jobs.length ? "--" : "أضف الوظائف من الهيكل التنظيمي"} />
-        <FSelect label="الشعبة" value={form.division} onChange={(v) => set("division", v)} options={subunits} placeholder={subunits.length ? "--" : "أضف الشعب من الهيكل التنظيمي"} />
+        <FSelect label={t("المسمى الوظيفي")} value={form.jobTitle} onChange={(v) => set("jobTitle", v)} options={jobs} placeholder={jobs.length ? "--" : t("أضف الوظائف من الهيكل التنظيمي")} />
+        <FSelect label={t("الشعبة")} value={form.division} onChange={(v) => set("division", v)} options={subunits} placeholder={subunits.length ? "--" : t("أضف الشعب من الهيكل التنظيمي")} />
       </div>
 
       {/* Row 2: Employment Type / Branch */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="نوع التوظيف" value={form.employmentType} onChange={(v) => set("employmentType", v)} options={EMPLOYMENT_TYPES} placeholder="--" />
+        <FSelect label={t("نوع التوظيف")} value={form.employmentType} onChange={(v) => set("employmentType", v)} options={EMPLOYMENT_TYPES} placeholder="--" />
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t("الفرع")}</label>
           <select value={form.branchId} onChange={(e) => onBranchChange(e.target.value)} className={inputCls}>
@@ -1183,8 +1186,8 @@ function Step2Job({
 
       {/* Status Row */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="الحالة" value={form.status} onChange={(v) => set("status", v)} options={EMPLOYEE_STATUSES} placeholder="--" />
-        <FInput label="تاريخ التعيين" value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
+        <FSelect label={t("الحالة")} value={form.status} onChange={(v) => set("status", v)} options={EMPLOYEE_STATUSES} placeholder="--" />
+        <FInput label={t("تاريخ التعيين")} value={form.hireDate} onChange={(v) => set("hireDate", v)} type="date" />
       </div>
 
       {/* Row 3: Directorate / Department (real FK links) */}
@@ -1213,8 +1216,8 @@ function Step2Job({
 
       {/* Row 4: Work Location / Other Locations */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="مكان العمل" value={form.workLocation} onChange={(v) => set("workLocation", v)} options={workLocations} placeholder={workLocations.length ? "--" : "أضف مواقع العمل من الهيكل التنظيمي"} />
-        <FInput label="مواقع العمل الأخرى" value={form.otherWorkLocations} onChange={(v) => set("otherWorkLocations", v)} />
+        <FSelect label={t("مكان العمل")} value={form.workLocation} onChange={(v) => set("workLocation", v)} options={workLocations} placeholder={workLocations.length ? "--" : t("أضف مواقع العمل من الهيكل التنظيمي")} />
+        <FInput label={t("مواقع العمل الأخرى")} value={form.otherWorkLocations} onChange={(v) => set("otherWorkLocations", v)} />
       </div>
 
       {/* Row 5: Direct Manager */}
@@ -1232,7 +1235,7 @@ function Step2Job({
             {managerNames.map((name) => <option key={name} value={name} />)}
           </datalist>
         </div>
-        <FSelect label="فئة الموظف" value={form.employeeCategory} onChange={(v) => set("employeeCategory", v)} options={EMPLOYEE_CATEGORIES} placeholder="--" />
+        <FSelect label={t("فئة الموظف")} value={form.employeeCategory} onChange={(v) => set("employeeCategory", v)} options={EMPLOYEE_CATEGORIES} placeholder="--" />
       </div>
 
       {/* Row 6: Fixed-term contract */}
@@ -1249,19 +1252,19 @@ function Step2Job({
           </label>
         </div>
         {form.isContractEnd ? (
-          <FInput label="تاريخ انتهاء العقد *" value={form.contractEndDate} onChange={(v) => set("contractEndDate", v)} type="date" />
+          <FInput label={t("تاريخ انتهاء العقد *")} value={form.contractEndDate} onChange={(v) => set("contractEndDate", v)} type="date" />
         ) : <div />}
       </div>
 
       {/* Row 7: Work Schedule / Work Time */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="جدول العمل" value={form.workSchedule} onChange={(v) => set("workSchedule", v)} options={workSchedules} placeholder={workSchedules.length ? "--" : "أضف فترات الدوام من حساب الدوام"} />
-        <FSelect label="وقت العمل" value={form.workTime} onChange={(v) => set("workTime", v)} options={WORK_TIMES} placeholder="--" />
+        <FSelect label={t("جدول العمل")} value={form.workSchedule} onChange={(v) => set("workSchedule", v)} options={workSchedules} placeholder={workSchedules.length ? "--" : t("أضف فترات الدوام من حساب الدوام")} />
+        <FSelect label={t("وقت العمل")} value={form.workTime} onChange={(v) => set("workTime", v)} options={WORK_TIMES} placeholder="--" />
       </div>
 
       {/* Row 8: Attendance Exempt / Daily Hours */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="معفي من الحضور اليومي" value={form.attendanceExempt ? "نعم" : "لا"} onChange={(v) => set("attendanceExempt", v === "نعم")} options={["نعم", "لا"]} />
+        <FSelect label={t("معفي من الحضور اليومي")} value={form.attendanceExempt ? "نعم" : "لا"} onChange={(v) => set("attendanceExempt", v === "نعم")} options={["نعم", "لا"]} />
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t("عدد ساعات اليوم")} *</label>
           <input type="number" value={form.dailyHours} onChange={(e) => set("dailyHours", Number(e.target.value))} min={1} max={24} className={inputCls} />
@@ -1337,7 +1340,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
           />
         </div>
         <FSelect
-          label="العملة"
+          label={t("العملة")}
           value={form.currency || "SAR"}
           onChange={(v) => set("currency", v)}
           options={CURRENCIES}
@@ -1407,7 +1410,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
           {form.socialInsurance === "نعم" && (
             <div className="bg-blue-50 rounded-lg p-4 space-y-4 border border-blue-200">
               <div>
-                <FSelect label="نوع التأمين" value={form.socialInsuranceType} onChange={(v) => set("socialInsuranceType", v)} options={gosiTypesFor(form.nationality)} placeholder="اختر نوع التأمين" />
+                <FSelect label={t("نوع التأمين")} value={form.socialInsuranceType} onChange={(v) => set("socialInsuranceType", v)} options={gosiTypesFor(form.nationality)} placeholder={t("اختر نوع التأمين")} />
                 {!form.socialInsuranceType && isSaudiNationality(form.nationality) && (
                   <p className="mt-1 text-xs text-gray-500">{t("إن تُرك فارغًا تُحسب حصة السعودي بنسب النظام السابق (قابل للخصم)")}</p>
                 )}
@@ -1442,10 +1445,10 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
       <div>
         <h3 className="text-sm font-semibold text-gray-800 mb-3">{t("معلومات البنك")}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FInput label="اسم الحساب البنكي" value={form.bankName} onChange={(v) => set("bankName", v)} />
-          <FInput label="اسم الفرع" value={form.bankBranch} onChange={(v) => set("bankBranch", v)} />
-          <FInput label="رقم الحساب" value={form.bankAccount} onChange={(v) => set("bankAccount", v)} />
-          <FInput label="رقم الآيبان" value={form.iban} onChange={(v) => set("iban", v.toUpperCase().replace(/\s/g, ""))} placeholder="SA0000000000000000000000" />
+          <FInput label={t("اسم الحساب البنكي")} value={form.bankName} onChange={(v) => set("bankName", v)} />
+          <FInput label={t("اسم الفرع")} value={form.bankBranch} onChange={(v) => set("bankBranch", v)} />
+          <FInput label={t("رقم الحساب")} value={form.bankAccount} onChange={(v) => set("bankAccount", v)} />
+          <FInput label={t("رقم الآيبان")} value={form.iban} onChange={(v) => set("iban", v.toUpperCase().replace(/\s/g, ""))} placeholder="SA0000000000000000000000" />
         </div>
       </div>
     </div>
@@ -1634,7 +1637,7 @@ function Step7Account({
           <input value={form.empId || t("يُولَّد تلقائيًا عند الحفظ")} readOnly disabled className={cn(inputCls, "bg-gray-50 font-mono text-gray-600")} />
         </div>
         <div>
-          <FInput label="رقم وظيفي بديل (اختياري)" value={form.accountTitle} onChange={(v) => set("accountTitle", v)} placeholder="مثال: 0300" />
+          <FInput label={t("رقم وظيفي بديل (اختياري)")} value={form.accountTitle} onChange={(v) => set("accountTitle", v)} placeholder={t("مثال: 0300")} />
           <p className="mt-1 text-xs text-gray-400">{t("يظهر في القوائم ويُبحث به، ولا يغني عن الرقم الوظيفي في الدخول")}</p>
         </div>
       </div>
@@ -1685,7 +1688,7 @@ function Step7Account({
 
       {/* Employee Role */}
       <div className="grid grid-cols-2 gap-4">
-        <FSelect label="صلاحية الموظف (الدور)" value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={roles} placeholder="--" />
+        <FSelect label={t("صلاحية الموظف (الدور)")} value={form.employeeRole} onChange={(v) => set("employeeRole", v)} options={roles} placeholder="--" />
         <div />
       </div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">

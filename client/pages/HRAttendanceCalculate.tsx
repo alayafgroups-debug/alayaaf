@@ -118,15 +118,15 @@ const classifyEmployeeDay = (employee: Employee, date: string, record: Attendanc
   });
   return { ...day, workDay, computedLateMinutes };
 };
-/** أيام العمل بأسماء الأيام، والأيام المتتالية (3 فأكثر) كمدى: "الأحد–الخميس" */
-const workDaysText = (workDays: number[], t: (text: string) => string) => {
+/** أيام العمل بأسماء الأيام، والأيام المتتالية (3 فأكثر) كمدى: "الأحد–الخميس"؛ separator: فاصل القائمة بلغة الواجهة */
+const workDaysText = (workDays: number[], t: (text: string) => string, separator = "، ") => {
   const runs: number[][] = [];
   [...new Set(workDays)].sort((a, b) => a - b).forEach((day) => {
     const last = runs[runs.length - 1];
     if (last && day === last[last.length - 1] + 1) last.push(day);
     else runs.push([day]);
   });
-  return runs.map((run) => run.length >= 3 ? `${t(WEEKDAY_LABELS[run[0]])}–${t(WEEKDAY_LABELS[run[run.length - 1]])}` : run.map((day) => t(WEEKDAY_LABELS[day])).join("، ")).join("، ");
+  return runs.map((run) => run.length >= 3 ? `${t(WEEKDAY_LABELS[run[0]])}–${t(WEEKDAY_LABELS[run[run.length - 1]])}` : run.map((day) => t(WEEKDAY_LABELS[day])).join(separator)).join(separator);
 };
 /** مبلغ الساعات الإضافية: الساعات × الأساسي ÷ 30 ÷ ساعات الدوام اليومية × 1.5 (كما يحسبه الخادم) */
 const overtimeAmount = (employee: Employee, hours: number) => {
@@ -144,6 +144,8 @@ function FilterSelect({ label, value, onChange, options, allLabel }: { label: st
 
 export default function HRAttendanceCalculate() {
   const { t, locale, direction, formatNumber } = useI18n();
+  // فاصل القوائم في الرسائل والنصوص المعروضة: «، » بالعربية و«, » بالإنجليزية
+  const listSeparator = locale === "en" ? ", " : "، ";
   const initialRange = monthRange(riyadhMonth());
   const [dateFrom, setDateFrom] = useState(initialRange.from);
   const [dateTo, setDateTo] = useState(initialRange.to);
@@ -479,10 +481,10 @@ export default function HRAttendanceCalculate() {
       const { own: ownTargets, others: attendanceTargets } = splitOwnEmployees(actionEmployees);
       const attendanceAffecting = attendanceAction === "punch" || attendanceAction === "bulk" || attendanceAction === "clear-punches" || attendanceAction === "delete-bulk";
       if (attendanceAffecting && !attendanceTargets.length) throw new Error(t(OWN_ATTENDANCE_NOTE));
-      const ownNote = attendanceAffecting && ownTargets.length ? `، ${t(OWN_ATTENDANCE_NOTE)}` : "";
+      const ownNote = attendanceAffecting && ownTargets.length ? `${listSeparator}${t(OWN_ATTENDANCE_NOTE)}` : "";
       const empIds = attendanceTargets.map((employee) => employee.empId);
       const updatedAt = new Date().toISOString();
-      const nameList = (list: Employee[]) => `${list.slice(0, NAME_LIST_LIMIT).map((employee) => employee.name).join("، ")}${list.length > NAME_LIST_LIMIT ? "…" : ""}`;
+      const nameList = (list: Employee[]) => `${list.slice(0, NAME_LIST_LIMIT).map((employee) => employee.name).join(listSeparator)}${list.length > NAME_LIST_LIMIT ? "…" : ""}`;
       if (attendanceAction === "punch" || attendanceAction === "bulk") {
         let rows: ManualAttendanceRow[];
         let overwriteExisting = false;
@@ -555,7 +557,7 @@ export default function HRAttendanceCalculate() {
           selfEmployees.length ? t("لا تسجّل ساعات إضافية لنفسك؛ يسجّلها لك مسؤول آخر") : "",
           withoutSalary.length ? `${t("تم تخطي")} ${formatNumber(withoutSalary.length)} ${t("موظف لعدم تسجيل الراتب الأساسي")}: ${nameList(withoutSalary)}` : "",
           alreadyRecorded.length ? `${t("تم تخطي")} ${formatNumber(alreadyRecorded.length)} ${t(isPeriod ? "موظف لديه ساعات إضافية مسجلة في أيام هذه الفترة" : "موظف لديه ساعات إضافية مسجلة في هذا التاريخ")}: ${nameList(alreadyRecorded)}` : "",
-        ].filter(Boolean).join("، ");
+        ].filter(Boolean).join(listSeparator);
         if (!eligible.length) throw new Error(`${t("لم تُسجَّل أي ساعات إضافية")}${skippedText ? `: ${skippedText}` : ""}`);
         // المبلغ يعيد الخادم حسابه (الأساسي ÷ 30 ÷ ساعات الدوام × 1.5).
         // تُسجَّل «معتمدة» (HR-13) فتدخل كشف الراتب مباشرة؛ تُحذف من صفحة «الساعات الإضافية» ما دام الشهر غير مقفل
@@ -568,9 +570,9 @@ export default function HRAttendanceCalculate() {
           else savedCount += 1;
         }
         changed = savedCount > 0;
-        const failureText = failures.length ? `${t("لم يُسجَّل لـ")} ${formatNumber(failures.length)} ${t("موظف")}: ${failures.slice(0, NAME_LIST_LIMIT).join("، ")}${failures.length > NAME_LIST_LIMIT ? "…" : ""}` : "";
+        const failureText = failures.length ? `${t("لم يُسجَّل لـ")} ${formatNumber(failures.length)} ${t("موظف")}: ${failures.slice(0, NAME_LIST_LIMIT).join(listSeparator)}${failures.length > NAME_LIST_LIMIT ? "…" : ""}` : "";
         if (!savedCount) throw new Error(failureText || t("لم تُسجَّل أي ساعات إضافية"));
-        message = [`${t("تم تسجيل الساعات الإضافية (تدخل كشف الراتب) لـ")} ${formatNumber(savedCount)} ${t("موظف")}${isPeriod ? ` (${periodFrom} — ${periodTo})` : ""}`, skippedText, failureText].filter(Boolean).join("، ");
+        message = [`${t("تم تسجيل الساعات الإضافية (تدخل كشف الراتب) لـ")} ${formatNumber(savedCount)} ${t("موظف")}${isPeriod ? ` (${periodFrom} — ${periodTo})` : ""}`, skippedText, failureText].filter(Boolean).join(listSeparator);
       } else if (attendanceAction === "permission") {
         const hours = Number(actionHours);
         if (!Number.isFinite(hours) || hours <= 0) throw new Error(t("أدخل عدد ساعات صحيح"));
@@ -586,7 +588,7 @@ export default function HRAttendanceCalculate() {
         const { error: saveError } = await supabase.from("hr_requests").insert(targets.map((employee) => ({ emp_id: employee.empId, emp_name: employee.name, request_type: "استئذان", start_date: actionDate, end_date: actionDate, status: "معتمد", details: { hours, reason: actionReason, source: "attendance_calculation" } })));
         if (saveError) throw saveError;
         changed = true;
-        message = `${t("تم تسجيل الاستئذان لـ")} ${formatNumber(targets.length)} ${t("موظف")}${selfEmployees.length ? `، ${selfNote}` : ""}`;
+        message = `${t("تم تسجيل الاستئذان لـ")} ${formatNumber(targets.length)} ${t("موظف")}${selfEmployees.length ? `${listSeparator}${selfNote}` : ""}`;
       } else if (attendanceAction === "clear-punches") {
         // أيام عمل كل موظف حسب جدول دوامه فقط (لا أيام راحته)، وسجلات الحضور فقط (لا الإجازة والمأمورية والعمل عن بعد والعطل)،
         // ولا تُمس البصمات الموثّقة من البوابة (entry_source أو location_verified)
@@ -628,8 +630,8 @@ export default function HRAttendanceCalculate() {
         }
         changed = updated > 0;
         message = updated ? `${t("تم مسح الدخول والخروج من")} ${formatNumber(updated)} ${t("سجل")}` : t("لم يُعدَّل أي سجل: لا توجد سجلات حضور إدارية في أيام العمل ضمن الفترة أو لا تملك صلاحية التعديل");
-        if (verifiedCount) message += `، ${t("وتُرك")} ${formatNumber(verifiedCount)} ${t("سجل بصمة موثّقة من بوابة الموظف دون تعديل")}`;
-        if (lockedSkipped) message += `، ${t("ولم تُمس")} ${formatNumber(lockedSkipped)} ${t("يوم في أشهر رواتبها معتمدة أو مرحّلة")}`;
+        if (verifiedCount) message += `${listSeparator}${t("وتُرك")} ${formatNumber(verifiedCount)} ${t("سجل بصمة موثّقة من بوابة الموظف دون تعديل")}`;
+        if (lockedSkipped) message += `${listSeparator}${t("ولم تُمس")} ${formatNumber(lockedSkipped)} ${t("يوم في أشهر رواتبها معتمدة أو مرحّلة")}`;
         message += ownNote;
       } else {
         // سجل أنشأه المدير ثم سجّل الموظف عليه انصرافًا موثّقًا من البوابة لا يُحذف
@@ -660,8 +662,8 @@ export default function HRAttendanceCalculate() {
         }
         changed = deleted > 0;
         message = deleted ? `${t("تم حذف")} ${formatNumber(deleted)} ${t("سجل تحضير إداري")}` : t("لم يُحذف أي سجل: لا توجد سجلات تحضير إداري في الفترة أو لا تملك صلاحية الحذف");
-        if (keptCount) message += `، ${t("وتُرك")} ${formatNumber(keptCount)} ${t("سجل يحمل بصمة موثّقة من بوابة الموظف دون حذف")}`;
-        if (lockedMonths) message += `، ${t("ولم يُمس")} ${formatNumber(lockedMonths)} ${t("شهر رواتبه معتمدة أو مرحّلة لموظف")}`;
+        if (keptCount) message += `${listSeparator}${t("وتُرك")} ${formatNumber(keptCount)} ${t("سجل يحمل بصمة موثّقة من بوابة الموظف دون حذف")}`;
+        if (lockedMonths) message += `${listSeparator}${t("ولم يُمس")} ${formatNumber(lockedMonths)} ${t("شهر رواتبه معتمدة أو مرحّلة لموظف")}`;
         message += ownNote;
       }
       setAttendanceAction(null);
@@ -729,8 +731,8 @@ export default function HRAttendanceCalculate() {
     }
     const times = schedule.flexible || !schedule.periods.length
       ? `${t("جدول متغير")}: ${formatNumber(round2(schedule.dailyMinutes / 60))} ${t("ساعة يوميًا")}`
-      : schedule.periods.map((period) => `${period.start}–${period.end}`).join("، ");
-    return `${workDaysText(schedule.workDays, t)} · ${times}`;
+      : schedule.periods.map((period) => `${period.start}–${period.end}`).join(listSeparator);
+    return `${workDaysText(schedule.workDays, t, listSeparator)} · ${times}`;
   };
   const printCurrentReport = () => window.print();
   const showDepartmentSummary = () => false;
@@ -749,6 +751,9 @@ export default function HRAttendanceCalculate() {
         .attendance-print-page:last-child { break-after: auto; }
         .attendance-detail-table { font-size: 9px !important; }
         .attendance-detail-table th, .attendance-detail-table td { padding: 5px !important; }
+        #attendance-print-area .overflow-x-auto { overflow: visible !important; }
+        .attendance-summary-table { width: 100% !important; min-width: 0 !important; table-layout: auto; font-size: 9px !important; }
+        .attendance-summary-table th, .attendance-summary-table td { padding: 3px !important; }
       }
     `}</style>
     <header className="attendance-no-print flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#004e89]">{t("حساب الدوام")}</h1><p className="mt-1 text-sm text-slate-500">{t("تقرير حضور الموظفين المرتبط بالفروع والإدارات والأقسام المحفوظة")}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => void loadData()} title={t("تحديث")}><RefreshCw className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={printCurrentReport} disabled={!reportRows.length} title={t("طباعة / PDF")}><Printer className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => exportReportExcel(mode === "departments" ? comprehensiveReportOptions : reportOptions)} disabled={mode === "departments" ? !comprehensiveRows.length : !reportRows.length} title={t("تحميل Excel")}><Download className="h-4 w-4" /></Button></div></header>
@@ -789,12 +794,12 @@ export default function HRAttendanceCalculate() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#075f94]">{t("المحدد")}: {formatNumber(selectedEmployeeIds.length)}</span>
-          <div className="relative w-64 max-w-full"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={employeePickerSearch} onChange={(event) => setEmployeePickerSearch(event.target.value)} placeholder={t("بحث عن موظف...")} className="pr-9" /></div>
+          <div className="relative w-64 max-w-full"><Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={employeePickerSearch} onChange={(event) => setEmployeePickerSearch(event.target.value)} placeholder={t("بحث عن موظف...")} className="ps-9" /></div>
         </div>
       </div>
       <div className="max-h-80 overflow-auto">
         <table className="min-w-full text-xs">
-          <thead className="sticky top-0 z-10 bg-[#075f94] text-white"><tr><th className="w-12 px-3 py-3"><input type="checkbox" checked={allSelectableSelected} onChange={toggleAllSelectable} aria-label={t("تحديد الكل")} className="h-4 w-4 accent-blue-600" /></th><th className="px-3 py-3">{t("الصورة")}</th><th className="px-3 py-3 text-right">{t("الاسم")}</th><th className="px-3 py-3 text-right">{t("المسمى الوظيفي")}</th><th className="px-3 py-3 text-right">{t("الإدارة")}</th><th className="px-3 py-3 text-right">{t("القسم")}</th><th className="px-3 py-3 text-right">{t("جدول العمل")}</th><th className="px-3 py-3 text-right">{t("مكان العمل")}</th></tr></thead>
+          <thead className="sticky top-0 z-10 bg-[#075f94] text-white"><tr><th className="w-12 px-3 py-3"><input type="checkbox" checked={allSelectableSelected} onChange={toggleAllSelectable} aria-label={t("تحديد الكل")} className="h-4 w-4 accent-blue-600" /></th><th className="px-3 py-3">{t("الصورة")}</th><th className="px-3 py-3 text-start">{t("الاسم")}</th><th className="px-3 py-3 text-start">{t("المسمى الوظيفي")}</th><th className="px-3 py-3 text-start">{t("الإدارة")}</th><th className="px-3 py-3 text-start">{t("القسم")}</th><th className="px-3 py-3 text-start">{t("جدول العمل")}</th><th className="px-3 py-3 text-start">{t("مكان العمل")}</th></tr></thead>
           <tbody>{loading ? <tr><td colSpan={8} className="py-10 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : selectableEmployees.length === 0 ? <tr><td colSpan={8} className="py-10 text-center text-slate-400">{t("لا يوجد موظفون مرتبطون بالفلاتر المحددة")}</td></tr> : selectableEmployees.map((employee) => {
             const selected = selectedEmployeeIds.includes(employee.id);
             return <tr key={employee.id} onClick={() => toggleEmployee(employee.id)} className={`cursor-pointer border-b transition-colors ${selected ? "bg-blue-50" : "hover:bg-slate-50"}`}><td className="px-3 py-3 text-center"><input type="checkbox" checked={selected} onChange={() => toggleEmployee(employee.id)} onClick={(event) => event.stopPropagation()} aria-label={`${t("تحديد")} ${employee.name}`} className="h-4 w-4 accent-blue-600" /></td><td className="px-3 py-2"><div className="mx-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-md bg-slate-100 text-sm font-bold text-slate-500"><EmployeePhoto value={employee.photoUrl} name={employee.name} /></div></td><td className="px-3 py-3 font-semibold text-slate-800"><div>{employee.name}</div><div className="mt-0.5 font-normal text-slate-400">{employee.empId}</div></td><td className="px-3 py-3">{employee.jobTitle || "—"}</td><td className="px-3 py-3">{employee.department || "—"}</td><td className="px-3 py-3">{employee.section || "—"}</td><td className="px-3 py-3">{employee.workSchedule || "—"}</td><td className="px-3 py-3">{employee.workLocation || "—"}</td></tr>;
@@ -860,7 +865,7 @@ export default function HRAttendanceCalculate() {
             </div>
           </div>
           <div className="attendance-print-only border-b-2 border-[#075f94] px-6 py-4 text-center">
-            <h1 className="text-2xl font-bold text-[#075f94]">{t("شركة إدارة العياف للمقاولات")}</h1>
+            <h1 className="text-2xl font-bold text-[#075f94]">{locale === "en" ? COMPANY_PROFILE.companyNameEn : t("شركة إدارة العياف للمقاولات")}</h1>
             <p className="mt-1 text-sm font-semibold text-slate-600">{t("تقرير حساب الدوام التفصيلي")}</p>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-4 border-b bg-slate-50 px-5 py-4">
@@ -876,7 +881,7 @@ export default function HRAttendanceCalculate() {
           <div className="attendance-no-print flex flex-wrap gap-4 border-b px-5 py-3 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-sky-600">● {t("إجازة")}</span><span className="text-slate-500">● {t("لا يوجد تسجيل")}</span></div>
           <div className="overflow-x-auto"><table className="attendance-detail-table min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("التاريخ")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("دخول")}</th><th className="px-3 py-3">{t("خروج")}</th><th className="px-3 py-3">{t("ساعات الحضور")}</th><th className="px-3 py-3">{t("الساعات المستحقة")}</th><th className="px-3 py-3">{t("ساعات التأخير")}</th><th className="px-3 py-3">{t("خروج مبكر")}</th><th className="px-3 py-3">{t("ساعات الاستئذان")}</th><th className="px-3 py-3">{t("ساعات النقص")}</th><th className="px-3 py-3">{t("الساعات الإضافية")}</th>{showNotes && <th className="px-3 py-3">{t("ملاحظات")}</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row.rowId} className="border-b odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-3 py-2 text-center">{row.date}</td><td className="px-3 py-2 text-center"><span className={`rounded px-2 py-1 font-semibold ${row.category === "present" ? "bg-emerald-50 text-emerald-700" : row.category === "late" ? "bg-amber-50 text-amber-700" : row.category === "leave" ? "bg-sky-50 text-sky-700" : row.category === "absent" ? "bg-red-50 text-red-700" : row.category === "holiday" ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-500"}`}>{row.statusLabel}</span></td><td className="px-3 py-2 text-center text-emerald-700">{row.checkIn}</td><td className="px-3 py-2 text-center text-red-600">{row.checkOut}</td><td className="px-3 py-2 text-center font-semibold">{row.worked}</td><td className="px-3 py-2 text-center">{row.required}</td><td className="px-3 py-2 text-center text-amber-700">{row.late}</td><td className="px-3 py-2 text-center text-orange-700">{row.earlyLeave}</td><td className="px-3 py-2 text-center text-cyan-700">{row.permission}</td><td className="px-3 py-2 text-center text-red-700">{row.deficit}</td><td className="px-3 py-2 text-center text-blue-700">{row.overtime}</td>{showNotes && <td className="max-w-40 px-3 py-2">{row.notes || "—"}</td>}</tr>)}</tbody></table></div>
           <div className="grid gap-px bg-slate-200 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{[{ label: t("إجمالي ساعات الحضور"), value: formatDuration(sumSeconds("workedSeconds")) }, { label: t("إجمالي الساعات المستحقة"), value: formatDuration(sumSeconds("requiredSeconds")) }, { label: t("إجمالي ساعات التأخير"), value: formatDuration(sumSeconds("lateSeconds")) }, { label: t("إجمالي الخروج المبكر"), value: formatDuration(sumSeconds("earlyLeaveSeconds")) }, { label: t("إجمالي ساعات الاستئذان"), value: formatDuration(sumSeconds("permissionSeconds")) }, { label: t("إجمالي ساعات النقص"), value: formatDuration(sumSeconds("deficitSeconds")) }, { label: t("إجمالي الساعات الإضافية"), value: formatDuration(sumSeconds("overtimeSeconds")) }, { label: t("أيام الحضور"), value: formatNumber(presentDays) }, { label: t("أيام الغياب"), value: formatNumber(absentDays) }, { label: t("أيام الإجازات"), value: formatNumber(leaveDays) }, { label: t("أيام الفترة"), value: formatNumber(employeeDays.length) }, { label: t("نسبة الحضور"), value: `${formatNumber(employee.attendanceRate, { maximumFractionDigits: 1 })}%` }].map((item) => <div key={item.label} className="bg-white px-3 py-3 text-center"><span className="block text-xs text-slate-500">{item.label}</span><strong className="mt-1 block text-sm text-[#075f94]">{item.value}</strong></div>)}</div>
-          <div className="attendance-print-only px-5 py-3 text-left text-[10px] text-slate-400">{t("تاريخ إصدار التقرير")}: {new Date().toLocaleDateString(locale === "ar" ? "ar-SA" : "en-US")}</div>
+          <div className="attendance-print-only px-5 py-3 text-end text-[10px] text-slate-400">{t("تاريخ إصدار التقرير")}: {new Date().toLocaleDateString(locale === "ar" ? "ar-SA" : "en-GB")}</div>
         </article>;
       })}
     </div>}
@@ -898,10 +903,10 @@ export default function HRAttendanceCalculate() {
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto"><table className="min-w-[1700px] border-collapse text-[11px]"><thead className="bg-[#075f94] text-white"><tr>{comprehensiveColumns.map((column) => <th key={column.key} className="border border-white/30 px-3 py-3 text-center font-bold whitespace-normal">{column.label}</th>)}</tr></thead><tbody>{comprehensiveRows.map((row) => <tr key={String(row.empId)} className="border-b odd:bg-white even:bg-slate-50">{comprehensiveColumns.map((column) => <td key={column.key} className="border border-slate-200 px-3 py-3 text-center">{String(row[column.key as keyof typeof row] ?? "")}</td>)}</tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="attendance-summary-table min-w-[1700px] border-collapse text-[11px]"><thead className="bg-[#075f94] text-white"><tr>{comprehensiveColumns.map((column) => <th key={column.key} className="border border-white/30 px-3 py-3 text-center font-bold whitespace-normal">{column.label}</th>)}</tr></thead><tbody>{comprehensiveRows.map((row) => <tr key={String(row.empId)} className="border-b odd:bg-white even:bg-slate-50">{comprehensiveColumns.map((column) => <td key={column.key} className="border border-slate-200 px-3 py-3 text-center">{String(row[column.key as keyof typeof row] ?? "")}</td>)}</tr>)}</tbody></table></div>
     </section>}
     {showDepartmentSummary() && <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div className="flex flex-wrap gap-4 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-sky-600">● {t("إجازة")}</span></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-500">{t("عرض")}<select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded border px-2 py-1"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><div className="relative w-64"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث...")} className="pr-9" /></div></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div className="flex flex-wrap gap-4 text-xs"><span className="text-emerald-700">● {t("حاضر")}</span><span className="text-red-600">● {t("غائب")}</span><span className="text-amber-600">● {t("متأخر")}</span><span className="text-sky-600">● {t("إجازة")}</span></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-500">{t("عرض")}<select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded border px-2 py-1"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><div className="relative w-64"><Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("بحث...")} className="ps-9" /></div></div></div>
       <div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="bg-[#075f94] text-white"><tr>{columns.map((column) => <th key={column.key} className="whitespace-nowrap px-3 py-3 text-center font-semibold">{column.label}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : !pagedRows.length ? <tr><td colSpan={columns.length} className="py-16 text-center text-slate-400">{t("لا توجد بيانات")}</td></tr> : mode === "employees" ? (pagedRows as EmployeeSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 text-center">{row.empId}</td><td className="px-3 py-3 font-semibold">{row.name}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{row.section || "—"}</td><td className="px-3 py-3">{row.jobTitle || "—"}</td><td className="px-3 py-3">{row.branch || "—"}</td><td className="px-3 py-3">{row.workSchedule || "—"}</td><td className="px-3 py-3">{row.workLocation || "—"}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>) : (pagedRows as DepartmentSummary[]).map((row) => <tr key={row.id} className="border-b hover:bg-slate-50"><td className="px-3 py-3 font-semibold">{row.department}</td><td className="px-3 py-3 text-center">{formatNumber(row.employees)}</td><td className="px-3 py-3 text-center text-emerald-700">{formatNumber(row.present)}</td><td className="px-3 py-3 text-center text-red-600">{formatNumber(row.absent)}</td><td className="px-3 py-3 text-center text-amber-600">{formatNumber(row.late)}</td><td className="px-3 py-3 text-center text-sky-600">{formatNumber(row.leave)}</td><td className="px-3 py-3 text-center font-bold">{formatNumber(row.attendanceRate, { maximumFractionDigits: 1 })}%</td></tr>)}</tbody></table></div>
       <footer className="flex items-center justify-between border-t px-4 py-3 text-xs text-slate-500"><span>{formatNumber(allRows.length)} {t("من السجلات")}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("السابق")}</Button><span>{formatNumber(safePage)} / {formatNumber(totalPages)}</span><Button variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>{t("التالي")}</Button></div></footer>
     </section>}

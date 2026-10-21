@@ -18,7 +18,9 @@ const orgErrorText = (error: unknown) =>
     : hrRequestErrorText(error, "تعذر حفظ البيانات");
 
 export default function HROrgBranches() {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, locale, direction, formatNumber } = useI18n();
+  // في الواجهة الإنجليزية يُعرض name_en متى وُجد
+  const displayName = (row: BranchRow) => (locale === "en" ? row.nameEn || row.name : row.name);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -46,7 +48,7 @@ export default function HROrgBranches() {
   useEffect(() => { loadData(); }, []);
 
   const handleDelete = async (b: BranchRow) => {
-    if (!confirm(`${t("حذف الفرع")} "${b.name}"؟`)) return;
+    if (!confirm(locale === "en" ? `${t("حذف الفرع")} "${displayName(b)}"?` : `${t("حذف الفرع")} "${b.name}"؟`)) return;
     const { data, error } = await supabase.from("branches").delete().eq("id", b.id).select("id");
     if (error || !data?.length) {
       toast({ title: t("لم يتم الحذف"), description: t(error ? orgErrorText(error) : NO_ROWS_MESSAGE), variant: "destructive" });
@@ -77,16 +79,16 @@ export default function HROrgBranches() {
   };
 
   const reportOptions = () => ({
-    title: "قائمة الفروع",
+    title: t("قائمة الفروع"),
     fileName: "branches",
     columns: [
-      { key: "name", label: "اسم الفرع", width: 24 },
-      { key: "nameEn", label: "الاسم بالإنجليزية", width: 24 },
-      { key: "address", label: "العنوان", width: 30 },
-      { key: "phone", label: "الهاتف", width: 16 },
-      { key: "status", label: "الحالة", width: 12 },
+      { key: "name", label: t("اسم الفرع"), width: 24 },
+      { key: "nameEn", label: t("الاسم بالإنجليزية"), width: 24 },
+      { key: "address", label: t("العنوان"), width: 30 },
+      { key: "phone", label: t("الهاتف"), width: 16 },
+      { key: "status", label: t("الحالة"), width: 12 },
     ],
-    rows: branches.map((row) => ({ name: row.name, nameEn: row.nameEn, address: row.address, phone: row.phone, status: row.status })),
+    rows: branches.map((row) => ({ name: displayName(row), nameEn: row.nameEn, address: row.address, phone: row.phone, status: t(row.status) })),
   });
   const handlePrint = () => {
     if (!printReport(reportOptions())) toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة ثم أعد المحاولة"), variant: "destructive" });
@@ -148,7 +150,7 @@ export default function HROrgBranches() {
               ) : branches.map((row, i) => (
                 <TableRow key={row.id}>
                   <TableCell>{i + 1}</TableCell>
-                  <TableCell className="font-medium">{row.name}</TableCell>
+                  <TableCell className="font-medium">{displayName(row)}</TableCell>
                   <TableCell>{row.nameEn}</TableCell>
                   <TableCell>{row.address}</TableCell>
                   <TableCell>{row.phone}</TableCell>

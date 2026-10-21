@@ -389,7 +389,7 @@ export default function HRPayrollStatement() {
     { label: t("إجمالي صافي الرواتب"), value: `${moneyText(payrollTotal)} ${t("ر.س")}` },
   ];
   const printPayroll = () => printReport({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: reportSummary });
-  const exportPayroll = () => exportReportExcel({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `كشف-الرواتب-${period}`, summary: reportSummary });
+  const exportPayroll = () => exportReportExcel({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `${t("كشف الرواتب").replace(/ /g, "-")}-${period}`, summary: reportSummary });
 
   const handleOpenApproval = () => {
     setApprovalScope("all");
@@ -510,7 +510,7 @@ export default function HRPayrollStatement() {
 
       toast({
         title: t("تم إرسال طلب الاعتماد"),
-        description: `${t("أُرسل")} ${formatNumber(sent.active)} ${t("موظف")}، ${t("وأُوقف راتب")} ${formatNumber(sent.stopped)} ${t("موظف")}${sent.skipped ? ` — ${formatNumber(sent.skipped)} ${t("معتمد أو مرحّل مسبقًا لم يُعَد إرساله")}` : ""}${sent.carried ? ` — ${formatNumber(sent.carried)} ${t("من طلبك المعلق السابق ضُمّوا للطلب الجديد")}` : ""}`,
+        description: `${t("أُرسل")} ${formatNumber(sent.active)} ${t("موظف")}${locale === "en" ? "," : "،"} ${t("وأُوقف راتب")} ${formatNumber(sent.stopped)} ${t("موظف")}${sent.skipped ? ` — ${formatNumber(sent.skipped)} ${t("معتمد أو مرحّل مسبقًا لم يُعَد إرساله")}` : ""}${sent.carried ? ` — ${formatNumber(sent.carried)} ${t("من طلبك المعلق السابق ضُمّوا للطلب الجديد")}` : ""}`,
       });
       setStopDialogOpen(false);
       setSelected(new Set());
@@ -520,7 +520,7 @@ export default function HRPayrollStatement() {
       const failureHint = (cause: unknown) => {
         const done = resendPreparationOf(preparation, cause);
         if (!done || done.deleted === 0) return "";
-        const list = done.carried.length ? ` ${t("ومعهم من طلبك السابق")}: ${done.carried.slice(0, 15).join("، ")}${done.carried.length > 15 ? " …" : ""}` : "";
+        const list = done.carried.length ? ` ${t("ومعهم من طلبك السابق")}: ${done.carried.slice(0, 15).join(locale === "en" ? ", " : "، ")}${done.carried.length > 15 ? " …" : ""}` : "";
         return ` — ${t("حُذف طلبك المعلق السابق؛ أعد الإرسال لإكمال الطلب")}${list}`;
       };
       toast({ title: t("تعذر إرسال طلب الاعتماد"), description: `${t(payrollApprovalErrorText(error))}${failureHint(error)}`, variant: "destructive" });
@@ -539,13 +539,13 @@ export default function HRPayrollStatement() {
 
           <div className="space-y-5 p-5">
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-3">
-              <FilterSelect t={t} label="السنة" value={yearFilter} onChange={setYearFilter} options={options.years} />
-              <FilterSelect t={t} label="شهر" value={monthFilter} onChange={setMonthFilter} options={options.months.map((m) => ({ value: m.value, label: m.label }))} />
-              <FilterSelect t={t} label="الفرع" value={branchFilter} onChange={setBranchFilter} options={options.branches} />
+              <FilterSelect t={t} label={t("السنة")} value={yearFilter} onChange={setYearFilter} options={options.years} />
+              <FilterSelect t={t} label={t("شهر")} value={monthFilter} onChange={setMonthFilter} options={options.months.map((m) => ({ value: m.value, label: m.label }))} />
+              <FilterSelect t={t} label={t("الفرع")} value={branchFilter} onChange={setBranchFilter} options={options.branches} />
 
-              <FilterSelect t={t} label="مكان العمل" value={locationFilter} onChange={setLocationFilter} options={options.locations} />
-              <FilterSelect t={t} label="الإدارة" value={departmentFilter} onChange={setDepartmentFilter} options={options.departments} />
-              <FilterSelect t={t} label="القسم" value={sectionFilter} onChange={setSectionFilter} options={options.sections} />
+              <FilterSelect t={t} label={t("مكان العمل")} value={locationFilter} onChange={setLocationFilter} options={options.locations} />
+              <FilterSelect t={t} label={t("الإدارة")} value={departmentFilter} onChange={setDepartmentFilter} options={options.departments} />
+              <FilterSelect t={t} label={t("القسم")} value={sectionFilter} onChange={setSectionFilter} options={options.sections} />
 
               <div className="relative space-y-2 md:col-span-2">
                 <label className="text-sm font-medium text-gray-700">{t("إيقاف رواتب الموظفين")}</label>
@@ -564,7 +564,7 @@ export default function HRPayrollStatement() {
                   </div>
                 )}
               </div>
-              <FilterSelect t={t} label="نوع الموظفين" value={typeFilter} onChange={setTypeFilter} options={options.types} />
+              <FilterSelect t={t} label={t("نوع الموظفين")} value={typeFilter} onChange={setTypeFilter} options={options.types} />
             </div>
 
             <div className="flex flex-wrap justify-end gap-3 pt-1">
@@ -668,7 +668,7 @@ export default function HRPayrollStatement() {
                         <td className="py-3 px-4">{emp.department || t("غير متوفر")}</td>
                         <td className="py-3 px-4">{emp.section || t("غير متوفر")}</td>
                         <td className="py-3 px-4">{emp.workLocation || t("غير متوفر")}</td>
-                        <td className="py-3 px-4">{emp.workTime || t("غير متوفر")}</td>
+                        <td className="py-3 px-4">{emp.workTime ? t(emp.workTime) : t("غير متوفر")}</td>
                       </tr>
                     ))
                   )}

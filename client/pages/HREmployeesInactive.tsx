@@ -16,6 +16,7 @@ import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import EmployeeForm, { mapRowToForm } from "./EmployeeForm";
+import { loadOrgEnglishNames } from "@/lib/orgNames";
 import type { EmpFormData } from "./EmployeeForm";
 
 // Status values that count as "inactive"
@@ -29,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function HREmployeesInactive() {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, locale, direction, formatDate, formatNumber } = useI18n();
   const emptyValue = t("—");
   const BackIcon = direction === "rtl" ? ArrowRight : ChevronLeft;
   const PreviousIcon = direction === "rtl" ? ChevronRight : ChevronLeft;
@@ -41,6 +42,20 @@ export default function HREmployeesInactive() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [mode, setMode] = useState<"list" | "edit" | "view">("list");
   const [selected, setSelected] = useState<EmpFormData | null>(null);
+
+  // أسماء الفروع والأقسام والمسميات بالإنجليزية (name_en) في الواجهة الإنجليزية
+  const [orgEnglish, setOrgEnglish] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    if (locale !== "en") return;
+    let active = true;
+    loadOrgEnglishNames().then((names) => { if (active) setOrgEnglish(names); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [locale]);
+  const orgName = (value: string) => {
+    const raw = value.trim();
+    if (!raw || locale !== "en") return value;
+    return orgEnglish.get(raw) || t(raw);
+  };
 
   // Filters
   const [fSearch, setFSearch] = useState("");
@@ -113,8 +128,8 @@ export default function HREmployeesInactive() {
       return;
     }
     const rows = filtered.map((e) => [
-      e.empId, e.name, e.firstName, e.status, e.branch,
-      e.department, e.jobTitle, e.nationality, e.nationalId,
+      e.empId, e.name, e.firstName, e.status ? t(e.status) : e.status, orgName(e.branch),
+      orgName(e.department), orgName(e.jobTitle), e.nationality ? t(e.nationality) : e.nationality, e.nationalId,
       e.hireDate, e.phone, e.email,
     ]);
     const csv = [
@@ -184,7 +199,7 @@ export default function HREmployeesInactive() {
               <div>
                 <div className="text-xl font-bold">{selected.name || selected.firstName}</div>
                 <div className="text-sm text-gray-500">
-                  {selected.empId || emptyValue} | {selected.jobTitle || emptyValue}
+                  {selected.empId || emptyValue} | {selected.jobTitle ? orgName(selected.jobTitle) : emptyValue}
                 </div>
                 <span
                   className={cn(
@@ -199,16 +214,16 @@ export default function HREmployeesInactive() {
 
             <div className="grid grid-cols-2 gap-6">
               <InfoGroup title={t("المعلومات الشخصية")}>
-                <InfoRow label={t("الجنسية")} value={selected.nationality} />
+                <InfoRow label={t("الجنسية")} value={selected.nationality ? t(selected.nationality) : ""} />
                 <InfoRow label={t("رقم الهوية")} value={selected.nationalId} />
                 <InfoRow label={t("الجنس")} value={selected.gender} />
                 <InfoRow label={t("الهاتف")} value={selected.phone} />
                 <InfoRow label={t("البريد الإلكتروني")} value={selected.email} />
               </InfoGroup>
               <InfoGroup title={t("المعلومات الوظيفية")}>
-                <InfoRow label={t("القسم")} value={selected.department} />
-                <InfoRow label={t("المسمى الوظيفي")} value={selected.jobTitle} />
-                <InfoRow label={t("الفرع")} value={selected.branch} />
+                <InfoRow label={t("القسم")} value={orgName(selected.department)} />
+                <InfoRow label={t("المسمى الوظيفي")} value={orgName(selected.jobTitle)} />
+                <InfoRow label={t("الفرع")} value={orgName(selected.branch)} />
                 <InfoRow label={t("تاريخ التعيين")} value={formatHireDate(selected.hireDate)} />
                 <InfoRow label={t("المدير المباشر")} value={selected.directManager} />
               </InfoGroup>
@@ -323,10 +338,10 @@ export default function HREmployeesInactive() {
                       <td className="px-3 py-2 font-semibold text-gray-800 whitespace-nowrap">
                         {emp.name || emp.firstName || emptyValue}
                       </td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch || emptyValue}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.department || emptyValue}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.jobTitle || emptyValue}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.nationality || emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.branch ? orgName(emp.branch) : emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.department ? orgName(emp.department) : emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.jobTitle ? orgName(emp.jobTitle) : emptyValue}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.nationality ? t(emp.nationality) : emptyValue}</td>
                       <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{emp.nationalId || emptyValue}</td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{formatHireDate(emp.hireDate)}</td>
                       <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.phone || emptyValue}</td>

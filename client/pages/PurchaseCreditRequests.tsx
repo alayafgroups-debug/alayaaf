@@ -316,12 +316,13 @@ export default function PurchaseCreditRequests() {
           `<tr><td>${index + 1}</td><td>${escapeHtml(item.description)}</td><td>${escapeHtml(formatNumber(Number(item.quantity) || 0))}</td><td>${escapeHtml(formatAmount(Number(item.unitPrice) || 0))}</td><td>${escapeHtml(formatAmount(round2((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))))}</td></tr>`,
       )
       .join("");
-    win.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${escapeHtml(request.number)}</title>
+    const english = direction === "ltr";
+    win.document.write(`<!doctype html><html dir="${direction}" lang="${english ? "en" : "ar"}"><head><meta charset="utf-8"><title>${escapeHtml(request.number)}</title>
       <style>body{font-family:Tahoma,Arial,sans-serif;padding:32px;color:#1e293b}h1{font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:16px}
-      th,td{border:1px solid #cbd5e1;padding:6px 8px;font-size:13px;text-align:right}th{background:#f1f5f9}.muted{color:#64748b;font-size:12px}.totals{margin-top:12px;width:320px}
+      th,td{border:1px solid #cbd5e1;padding:6px 8px;font-size:13px;text-align:start}th{background:#f1f5f9}.muted{color:#64748b;font-size:12px}.totals{margin-top:12px;width:320px}
       .note{margin-top:18px;padding:10px;border:1px dashed #94a3b8;font-size:12px}</style></head><body>
-      <h1>${escapeHtml(COMPANY_PROFILE.companyNameAr)}</h1>
-      <div class="muted">${escapeHtml(COMPANY_PROFILE.addressAr)} — ${escapeHtml(t("الرقم الضريبي"))}: ${escapeHtml(COMPANY_PROFILE.vatNumber)}</div>
+      <h1>${escapeHtml(english ? COMPANY_PROFILE.companyNameEn : COMPANY_PROFILE.companyNameAr)}</h1>
+      <div class="muted">${escapeHtml(english ? COMPANY_PROFILE.addressEn : COMPANY_PROFILE.addressAr)} — ${escapeHtml(t("الرقم الضريبي"))}: ${escapeHtml(COMPANY_PROFILE.vatNumber)}</div>
       <h2 style="font-size:18px;margin-top:20px">${escapeHtml(t("طلب إشعار دائن من المورد"))} ${escapeHtml(request.number)}</h2>
       <div>${escapeHtml(t("المورد"))}: <b>${escapeHtml(request.vendor)}</b></div>
       <div>${escapeHtml(t("فاتورة المورد لدينا"))}: ${escapeHtml(request.invoiceId)} — ${escapeHtml(t("تاريخ الطلب"))}: ${escapeHtml(request.date)}</div>

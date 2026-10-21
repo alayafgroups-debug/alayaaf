@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import { loadOrgEnglishNames } from "@/lib/orgNames";
 
 type Holiday = {
   id: string;
@@ -24,8 +25,21 @@ type Opt = { id: string; name: string };
 const PAGE_SIZE = 20;
 
 export default function HRLeavesHolidays() {
-  const { t, direction } = useI18n();
+  const { t, locale, direction } = useI18n();
   const [rows, setRows] = useState<Holiday[]>([]);
+  // أسماء الفروع والإدارات والأقسام بالإنجليزية (name_en) في الواجهة الإنجليزية؛ القيمة المحفوظة تبقى الاسم العربي
+  const [orgEnglish, setOrgEnglish] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    if (locale !== "en") return;
+    let active = true;
+    loadOrgEnglishNames().then((names) => { if (active) setOrgEnglish(names); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [locale]);
+  const orgName = (value: string) => {
+    const raw = value.trim();
+    if (!raw || locale !== "en") return value;
+    return orgEnglish.get(raw) || t(raw);
+  };
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<Opt[]>([]);
   const [departments, setDepartments] = useState<Opt[]>([]);
@@ -145,12 +159,26 @@ export default function HRLeavesHolidays() {
 
   return (
     <Layout>
+      {/* الطباعة: الجدول وحده بعرض الصفحة، بلا القائمة الجانبية والأزرار والفلاتر */}
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 10mm; }
+          body * { visibility: hidden !important; }
+          #holidays-print-area, #holidays-print-area * { visibility: visible !important; }
+          #holidays-print-area { position: absolute; inset: 0 0 auto 0; width: 100%; overflow: visible !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+          #holidays-print-area .holidays-print-head { background: #fff !important; color: #000 !important; padding: 0 0 8px !important; }
+          #holidays-print-area .overflow-x-auto { overflow: visible !important; }
+          #holidays-print-area table { width: 100% !important; min-width: 0 !important; table-layout: auto; font-size: 9px; white-space: normal !important; }
+          #holidays-print-area th, #holidays-print-area td { min-width: 0 !important; padding: 4px !important; word-break: break-word; }
+          .holidays-no-print { display: none !important; }
+        }
+      `}</style>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div id="holidays-print-area" className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="holidays-print-head bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4 w-full md:w-auto">
               <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">{t("العُطل والاجازات الرسمية")}</h2>
-              <div className="flex gap-2 text-black w-full sm:w-auto">
+              <div className="holidays-no-print flex gap-2 text-black w-full sm:w-auto">
                 <select
                   value={branchFilter}
                   onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }}
@@ -158,7 +186,7 @@ export default function HRLeavesHolidays() {
                 >
                   <option value="الكل">{t("الكل")}</option>
                   {branches.map((b) => (
-                    <option key={b.id}>{b.name}</option>
+                    <option key={b.id} value={b.name}>{orgName(b.name)}</option>
                   ))}
                 </select>
               </div>
@@ -166,7 +194,7 @@ export default function HRLeavesHolidays() {
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
               <h2 className="text-lg font-bold sm:hidden">{t("العُطل والاجازات الرسمية")}</h2>
-              <div className="flex items-center gap-2">
+              <div className="holidays-no-print flex items-center gap-2">
                 <button onClick={openAdd} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("إضافة")} aria-label={t("إضافة")}>
                   <Plus className="h-5 w-5" />
                 </button>
@@ -192,7 +220,7 @@ export default function HRLeavesHolidays() {
                   <th className="py-3 px-2 font-medium min-w-[140px]">{t("اسم القسم")}</th>
                   <th className="py-3 px-2 font-medium min-w-[120px]">{t("فريق العمل")}</th>
                   <th className="py-3 px-2 font-medium min-w-[180px]">{t("الوصف")}</th>
-                  <th className="py-3 px-2 font-medium">{t("الإجراءات")}</th>
+                  <th className="holidays-no-print py-3 px-2 font-medium">{t("الإجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -217,12 +245,12 @@ export default function HRLeavesHolidays() {
                       <td className="py-2.5 px-2 font-medium text-gray-800">{h.name}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.start_date || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.end_date || "-"}</td>
-                      <td className="py-2.5 px-2 text-gray-600">{h.branch || t("الكل")}</td>
-                      <td className="py-2.5 px-2 text-gray-600">{h.department || t("الكل")}</td>
-                      <td className="py-2.5 px-2 text-gray-600">{h.section || t("الكل")}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{h.branch ? orgName(h.branch) : t("الكل")}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{h.department ? orgName(h.department) : t("الكل")}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{h.section ? orgName(h.section) : t("الكل")}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.team || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{h.description || "-"}</td>
-                      <td className="py-2.5 px-2">
+                      <td className="holidays-no-print py-2.5 px-2">
                         <div className="flex items-center justify-center gap-2">
                           <button onClick={() => openEdit(h)} className="text-blue-500 hover:text-blue-700" title={t("تعديل")} aria-label={t("تعديل")}>
                             <Pencil className="h-4 w-4" />
@@ -244,7 +272,7 @@ export default function HRLeavesHolidays() {
               {t("يعرض")} {filtered.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}-{(currentPage - 1) * PAGE_SIZE + pageRows.length} {t("من أصل")} {filtered.length} {t("سجل")}
             </span>
             {pageCount > 1 && (
-              <div className="flex items-center gap-1">
+              <div className="holidays-no-print flex items-center gap-1">
                 <Button variant="outline" size="sm" className="h-8 px-3" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>{t("السابق")}</Button>
                 <span className="px-2 text-gray-500">{currentPage} / {pageCount}</span>
                 <Button variant="outline" size="sm" className="h-8 px-3" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>{t("التالي")}</Button>
@@ -284,7 +312,7 @@ export default function HRLeavesHolidays() {
                   <select value={form.branch ?? ""} onChange={(e) => set("branch", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                     <option value="">{t("الكل")}</option>
                     {branches.map((b) => (
-                      <option key={b.id}>{b.name}</option>
+                      <option key={b.id} value={b.name}>{orgName(b.name)}</option>
                     ))}
                   </select>
                 </div>
@@ -293,7 +321,7 @@ export default function HRLeavesHolidays() {
                   <select value={form.department ?? ""} onChange={(e) => set("department", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                     <option value="">{t("الكل")}</option>
                     {departments.map((d) => (
-                      <option key={d.id}>{d.name}</option>
+                      <option key={d.id} value={d.name}>{orgName(d.name)}</option>
                     ))}
                   </select>
                 </div>
@@ -304,7 +332,7 @@ export default function HRLeavesHolidays() {
                   <select value={form.section ?? ""} onChange={(e) => set("section", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                     <option value="">{t("الكل")}</option>
                     {sections.map((s) => (
-                      <option key={s.id}>{s.name}</option>
+                      <option key={s.id} value={s.name}>{orgName(s.name)}</option>
                     ))}
                   </select>
                 </div>

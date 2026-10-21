@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 
-const MUTATION_WORDS = /(إضافة|اضافة|حذف|تعديل|حفظ|إنشاء|انشاء|اعتماد|رفض|إرسال|ارسال|ترحيل|إيقاف|ايقاف|تفعيل|add|edit|delete|save|create|approve|reject|submit)/i;
+const MUTATION_WORDS = /(إضافة|اضافة|حذف|تعديل|حفظ|إنشاء|انشاء|اعتماد|رفض|إرسال|ارسال|ترحيل|إيقاف|ايقاف|تفعيل|add|edit|delete|save|create|approve|reject|submit|\b(?:post|send|stop|suspend|activate|reactivate|release|import)\b)/i;
 
 export default function ReadOnlyBoundary({ readOnly, children }: { readOnly: boolean; children: ReactNode }) {
-  const block = () => toast.error("هذه الصلاحية للقراءة فقط ولا تسمح بإضافة أو تعديل أو حذف البيانات");
+  const { t, direction } = useI18n();
+  const block = () => toast.error(t("هذه الصلاحية للقراءة فقط ولا تسمح بإضافة أو تعديل أو حذف البيانات"));
 
   return (
     <div
@@ -31,9 +33,9 @@ export default function ReadOnlyBoundary({ readOnly, children }: { readOnly: boo
       }}
     >
       {readOnly && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800" dir="rtl">
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800" dir={direction}>
           <LockKeyhole className="h-4 w-4" />
-          وضع القراءة فقط — يمكنك استعراض البيانات والبحث والطباعة، ولا يمكنك الإضافة أو التعديل أو الحذف.
+          {t("وضع القراءة فقط — يمكنك استعراض البيانات والبحث والطباعة، ولا يمكنك الإضافة أو التعديل أو الحذف.")}
         </div>
       )}
       {children}

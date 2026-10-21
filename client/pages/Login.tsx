@@ -8,9 +8,11 @@ import { isEmployeeActive } from "@/lib/employeeStatus";
 import { toast } from "sonner";
 import type { UserSession } from "@/lib/authSession";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
+import { useI18n } from "@/i18n";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { t, locale, direction } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -19,7 +21,7 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
-      toast.error("يجب ملء جميع الحقول");
+      toast.error(t("يجب ملء جميع الحقول"));
       return;
     }
     setLoading(true);
@@ -30,7 +32,7 @@ export default function Login() {
           password,
         });
       if (authError) {
-        toast.error("بيانات الدخول غير صحيحة");
+        toast.error(t("بيانات الدخول غير صحيحة"));
         return;
       }
 
@@ -42,7 +44,7 @@ export default function Login() {
         .maybeSingle();
 
       if (empData && !isEmployeeActive(empData.status)) {
-        toast.error("حسابك موقوف؛ راجع الموارد البشرية");
+        toast.error(t("حسابك موقوف؛ راجع الموارد البشرية"));
         await supabase.auth.signOut();
         return;
       }
@@ -61,7 +63,7 @@ export default function Login() {
           .eq("status", "فعال")
           .maybeSingle();
         if (systemUserError || !systemUser) {
-          toast.error("لم يتم العثور على حساب نظام فعال");
+          toast.error(t("لم يتم العثور على حساب نظام فعال"));
           await supabase.auth.signOut();
           return;
         }
@@ -101,10 +103,10 @@ export default function Login() {
       };
       localStorage.setItem("user_session", JSON.stringify(session));
 
-      toast.success(`مرحباً ${accountName}`);
+      toast.success(`${t("مرحباً")} ${accountName}`);
       setTimeout(() => navigate("/"), 400);
     } catch {
-      toast.error("حدث خطأ ما");
+      toast.error(t("حدث خطأ ما"));
     } finally {
       setLoading(false);
     }
@@ -113,7 +115,7 @@ export default function Login() {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      dir="rtl"
+      dir={direction}
       style={{
         background:
           "linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f2740 70%, #020d1a 100%)",
@@ -140,10 +142,10 @@ export default function Login() {
             </div>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight leading-tight">
-            {COMPANY_PROFILE.programNameAr}
+            {t(COMPANY_PROFILE.programNameAr)}
           </h1>
           <p className="mt-2 text-blue-200/70 text-sm">
-            {COMPANY_PROFILE.companyNameAr} · تسجيل دخول الإدارة
+            {locale === "en" ? COMPANY_PROFILE.companyNameEn : COMPANY_PROFILE.companyNameAr} · {t("تسجيل دخول الإدارة")}
           </p>
         </div>
 
@@ -153,7 +155,7 @@ export default function Login() {
             {/* Email */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-white/70">
-                البريد الإلكتروني
+                {t("البريد الإلكتروني")}
               </label>
               <div className="relative">
                 <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
@@ -172,7 +174,7 @@ export default function Login() {
             {/* Password */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-white/70">
-                كلمة المرور
+                {t("كلمة المرور")}
               </label>
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
@@ -208,25 +210,25 @@ export default function Login() {
                 background: "linear-gradient(135deg, #2563eb, #4f46e5)",
               }}
             >
-              {loading ? "جاري الدخول..." : "دخول النظام"}
+              {loading ? t("جاري الدخول...") : t("دخول النظام")}
             </Button>
           </form>
 
           {/* Switch to employee portal */}
           <p className="text-center text-sm text-white/40">
-            هل أنت موظف؟{" "}
+            {t("هل أنت موظف؟")}{" "}
             <Link
               to="/employee/login"
               className="text-blue-400 hover:text-blue-300 font-medium"
             >
-              بوابة الموظفين
+              {t("بوابة الموظفين")}
             </Link>
           </p>
         </div>
 
         {/* Footer */}
         <p className="text-center mt-6 text-xs text-white/20">
-          © 2026 {COMPANY_PROFILE.programNameAr} · جميع الحقوق محفوظة
+          © 2026 {t(COMPANY_PROFILE.programNameAr)} · {t("جميع الحقوق محفوظة")}
         </p>
       </div>
     </div>

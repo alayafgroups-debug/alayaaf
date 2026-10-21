@@ -298,7 +298,7 @@ export default function HRApprovalsAdd() {
                       {managers.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
                     </select>
                     <select value={st.role} onChange={(e) => updateStep(st.order, { role: e.target.value })} className="w-40 h-10 border border-gray-300 rounded-md px-3 bg-white text-sm">
-                      <option value="معتمد">{t("معتمد")}</option>
+                      <option value="معتمد">{t("معتمِد")}</option>
                       <option value="مراجع">{t("مراجع")}</option>
                       <option value="معتمد نهائي">{t("معتمد نهائي")}</option>
                     </select>

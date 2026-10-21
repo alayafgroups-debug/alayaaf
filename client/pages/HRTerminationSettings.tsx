@@ -440,7 +440,7 @@ export default function HRTerminationSettings() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm text-right border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm text-start border border-gray-200 rounded-lg overflow-hidden">
                   <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
                     <tr>
                       <th className="py-3 px-4 font-medium w-20">{t("معرف")}</th>
@@ -478,7 +478,7 @@ export default function HRTerminationSettings() {
                   </tbody>
                 </table>
               </div>
-              <div className="text-xs text-gray-500 text-left">{t("يعرض")} {reasons.length} {t("سجل")}</div>
+              <div className="text-xs text-gray-500 text-end">{t("يعرض")} {reasons.length} {t("سجل")}</div>
             </div>
           )}
         </div>

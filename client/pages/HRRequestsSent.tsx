@@ -158,9 +158,9 @@ export default function HRRequestsSent() {
   });
 
   const stats = [
-    { label: "إجمالي المرسلة", value: items.length, color: "from-blue-500 to-indigo-600" },
-    { label: "قيد المراجعة", value: items.filter((r) => r.status === "معلق").length, color: "from-yellow-500 to-orange-500" },
-    { label: "تمت الموافقة", value: items.filter((r) => r.status === "موافق").length, color: "from-emerald-500 to-teal-600" },
+    { label: t("إجمالي المرسلة"), value: items.length, color: "from-blue-500 to-indigo-600" },
+    { label: t("قيد المراجعة"), value: items.filter((r) => r.status === "معلق").length, color: "from-yellow-500 to-orange-500" },
+    { label: t("تمت الموافقة"), value: items.filter((r) => r.status === "موافق").length, color: "from-emerald-500 to-teal-600" },
   ];
 
   return (
@@ -176,7 +176,7 @@ export default function HRRequestsSent() {
           {stats.map((s) => (
             <div key={s.label} className={cn("bg-gradient-to-br text-white rounded-xl p-4 shadow-sm", s.color)}>
               <p className="text-3xl font-bold">{formatNumber(s.value)}</p>
-              <p className="text-sm opacity-85 mt-1">{t(s.label)}</p>
+              <p className="text-sm opacity-85 mt-1">{s.label}</p>
             </div>
           ))}
         </div>
@@ -201,7 +201,7 @@ export default function HRRequestsSent() {
             <table className="w-full text-sm" dir={direction}>
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">{t("إجراءات")}</th>
+                  <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("إجراءات")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("الحالة")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("المرسل (القسم أو الموظف)")}</th>
                   <th className="px-4 py-3 text-start font-semibold text-gray-700">{t("المعتمد")}</th>

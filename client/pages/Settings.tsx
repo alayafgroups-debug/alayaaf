@@ -24,11 +24,11 @@ export default function Settings() {
     { label: "العنوان بالإنجليزية", value: COMPANY_PROFILE.addressEn },
   ];
   const bankFields: Array<{ label: string; value: string; mono?: boolean }> = [
-    { label: "اسم المستفيد", value: COMPANY_PROFILE.bank.beneficiaryAr },
-    { label: "البنك", value: COMPANY_PROFILE.bank.nameAr },
+    { label: "اسم المستفيد", value: locale === "en" ? COMPANY_PROFILE.bank.beneficiaryEn : COMPANY_PROFILE.bank.beneficiaryAr },
+    { label: "البنك", value: locale === "en" ? COMPANY_PROFILE.bank.nameEn : COMPANY_PROFILE.bank.nameAr },
     { label: "رقم الحساب", value: COMPANY_PROFILE.bank.accountNumber, mono: true },
     { label: "الآيبان", value: COMPANY_PROFILE.bank.iban, mono: true },
-    { label: "الفرع", value: `${COMPANY_PROFILE.bank.branchNameAr} (${COMPANY_PROFILE.bank.branchCode})` },
+    { label: "الفرع", value: `${locale === "en" ? COMPANY_PROFILE.bank.branchNameEn : COMPANY_PROFILE.bank.branchNameAr} (${COMPANY_PROFILE.bank.branchCode})` },
   ];
 
   const renderField = (field: { label: string; value: string; mono?: boolean }) => (
@@ -45,10 +45,10 @@ export default function Settings() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>{t("الإعدادات")}</span>
             <span>/</span>
-            <span>{t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}</span>
+            <span>{activeSection === "templates" ? t("قوالب المستندات") : t("إعدادات الشركة")}</span>
           </div>
           <h1 className="mt-2 text-3xl font-bold text-foreground">
-            {t(activeSection === "templates" ? "قوالب المستندات" : "إعدادات الشركة")}
+            {activeSection === "templates" ? t("قوالب المستندات") : t("إعدادات الشركة")}
           </h1>
         </div>
 

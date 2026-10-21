@@ -23,11 +23,14 @@ const countLinkedEmployees = async (column: string, value: string) => {
   return count ?? 0;
 };
 
-type DeptRow = { id: string; name: string; nameEn: string; branchId: string; branch: string; manager: string; status: string };
-type BranchOption = { id: string; name: string };
+type DeptRow = { id: string; name: string; nameEn: string; branchId: string; branch: string; branchEn: string; manager: string; status: string };
+type BranchOption = { id: string; name: string; nameEn: string };
 
 export default function HROrgDepartments() {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, locale, direction, formatNumber } = useI18n();
+  // في الواجهة الإنجليزية يُعرض name_en متى وُجد
+  const displayName = (row: DeptRow) => (locale === "en" ? row.nameEn || row.name : row.name);
+  const displayBranch = (row: DeptRow) => (locale === "en" ? row.branchEn || row.branch : row.branch);
   const [departments, setDepartments] = useState<DeptRow[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,16 +47,17 @@ export default function HROrgDepartments() {
     try {
       const [departmentResult, branchResult] = await Promise.all([
         supabase.from("departments").select("id, name, name_en, branch_id, branch, manager, status, created_at").order("created_at", { ascending: false }),
-        supabase.from("branches").select("id, name").eq("status", "فعال").order("name"),
+        supabase.from("branches").select("id, name, name_en").eq("status", "فعال").order("name"),
       ]);
       if (departmentResult.error) throw departmentResult.error;
       if (branchResult.error) throw branchResult.error;
-      const branchRows = (branchResult.data ?? []).map((r) => ({ id: String(r.id), name: String(r.name ?? "") }));
+      const branchRows = (branchResult.data ?? []).map((r) => ({ id: String(r.id), name: String(r.name ?? ""), nameEn: String(r.name_en ?? "") }));
       const branchById = new Map(branchRows.map((branch) => [branch.id, branch.name]));
+      const branchEnById = new Map(branchRows.map((branch) => [branch.id, branch.nameEn]));
       setBranches(branchRows);
       setDepartments((departmentResult.data ?? []).map((r) => ({
         id: String(r.id), name: String(r.name ?? ""), nameEn: String(r.name_en ?? ""), branchId: String(r.branch_id ?? ""),
-        branch: branchById.get(String(r.branch_id ?? "")) || String(r.branch ?? ""), manager: String(r.manager ?? ""), status: String(r.status ?? "فعال"),
+        branch: branchById.get(String(r.branch_id ?? "")) || String(r.branch ?? ""), branchEn: branchEnById.get(String(r.branch_id ?? "")) ?? "", manager: String(r.manager ?? ""), status: String(r.status ?? "فعال"),
       })));
     } catch (error) {
       toast({ title: t("تعذر تحميل البيانات"), description: t(hrRequestErrorText(error)), variant: "destructive" });
@@ -63,7 +67,7 @@ export default function HROrgDepartments() {
   useEffect(() => { loadData(); }, []);
 
   const handleDelete = async (dept: DeptRow) => {
-    if (!confirm(`${t("حذف الإدارة")} "${dept.name}"؟`)) return;
+    if (!confirm(locale === "en" ? `${t("حذف الإدارة")} "${displayName(dept)}"?` : `${t("حذف الإدارة")} "${dept.name}"؟`)) return;
     try {
       const linked = await countLinkedEmployees("department_id", dept.id);
       if (linked > 0) {
@@ -106,16 +110,16 @@ export default function HROrgDepartments() {
   };
 
   const reportOptions = () => ({
-    title: "قائمة الإدارات",
+    title: t("قائمة الإدارات"),
     fileName: "departments",
     columns: [
-      { key: "name", label: "اسم الإدارة", width: 26 },
-      { key: "nameEn", label: "الاسم بالإنجليزية", width: 24 },
-      { key: "branch", label: "الفرع", width: 20 },
-      { key: "manager", label: "المدير", width: 20 },
-      { key: "status", label: "الحالة", width: 12 },
+      { key: "name", label: t("اسم الإدارة"), width: 26 },
+      { key: "nameEn", label: t("الاسم بالإنجليزية"), width: 24 },
+      { key: "branch", label: t("الفرع"), width: 20 },
+      { key: "manager", label: t("المدير"), width: 20 },
+      { key: "status", label: t("الحالة"), width: 12 },
     ],
-    rows: departments.map((row) => ({ name: row.name, nameEn: row.nameEn, branch: row.branch, manager: row.manager, status: row.status })),
+    rows: departments.map((row) => ({ name: displayName(row), nameEn: row.nameEn, branch: displayBranch(row), manager: row.manager, status: t(row.status) })),
   });
   const handlePrint = () => {
     if (!printReport(reportOptions())) toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة ثم أعد المحاولة"), variant: "destructive" });
@@ -146,7 +150,7 @@ export default function HROrgDepartments() {
             <div className="grid grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium mb-1">{t("اسم الإدارة")} *</label><input value={formName} onChange={(e) => setFormName(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
               <div><label className="block text-sm font-medium mb-1">{t("الاسم بالإنجليزية")}</label><input value={formNameEn} onChange={(e) => setFormNameEn(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-              <div><label className="block text-sm font-medium mb-1">{t("الفرع")}</label><select value={formBranchId} onChange={(e) => setFormBranchId(e.target.value)} className="w-full px-3 py-2 border rounded-lg bg-white text-sm"><option value="">{t("غير محدد")}</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div>
+              <div><label className="block text-sm font-medium mb-1">{t("الفرع")}</label><select value={formBranchId} onChange={(e) => setFormBranchId(e.target.value)} className="w-full px-3 py-2 border rounded-lg bg-white text-sm"><option value="">{t("غير محدد")}</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{locale === "en" && branch.nameEn ? branch.nameEn : branch.name}</option>)}</select></div>
               <div><label className="block text-sm font-medium mb-1">{t("المدير")}</label><input value={formManager} onChange={(e) => setFormManager(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
             </div>
             <div className="flex gap-2">
@@ -178,9 +182,9 @@ export default function HROrgDepartments() {
                 departments.map((row, i) => (
                   <TableRow key={row.id}>
                     <TableCell>{i + 1}</TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">{displayName(row)}</TableCell>
                     <TableCell>{row.nameEn}</TableCell>
-                    <TableCell>{row.branch}</TableCell>
+                    <TableCell>{displayBranch(row)}</TableCell>
                     <TableCell>{row.manager}</TableCell>
                     <TableCell><span className="px-2 py-1 rounded bg-green-50 text-green-600 text-xs font-medium">{t(row.status)}</span></TableCell>
                     <TableCell className="text-center">

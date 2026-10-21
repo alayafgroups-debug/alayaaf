@@ -198,7 +198,7 @@ const statusTone: Record<string, string> = {
 
 export default function TasksProjects() {
   const session = readUserSession();
-  const { t, direction, formatDate } = useI18n();
+  const { t, locale, direction, formatDate } = useI18n();
   const [view, setView] = useState<View>("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [modal, setModal] = useState<ModalName>(null);
@@ -717,7 +717,7 @@ export default function TasksProjects() {
   };
 
   const deleteTask = async (task: Task) => {
-    if (!confirm(`${t("حذف المهمة")} «${task.title}»؟`)) return;
+    if (!confirm(locale === "en" ? `${t("حذف المهمة")} "${task.title}"?` : `${t("حذف المهمة")} «${task.title}»؟`)) return;
     const { error } = await supabase
       .from("work_tasks")
       .delete()
@@ -1040,25 +1040,25 @@ export default function TasksProjects() {
               {["projects", "dashboard"].includes(view) && (
                 <PrimaryButton
                   onClick={() => setModal("project")}
-                  label="مشروع جديد"
+                  label={t("مشروع جديد")}
                 />
               )}
               {["tasks", "daily", "dashboard"].includes(view) && (
                 <PrimaryButton
                   onClick={() => setModal("task")}
-                  label="مهمة جديدة"
+                  label={t("مهمة جديدة")}
                 />
               )}
               {view === "tickets" && (
                 <PrimaryButton
                   onClick={() => setModal("ticket")}
-                  label="تذكرة جديدة"
+                  label={t("تذكرة جديدة")}
                 />
               )}
               {view === "clients" && (
                 <PrimaryButton
                   onClick={() => setModal("client")}
-                  label="عميل جديد"
+                  label={t("عميل جديد")}
                 />
               )}
             </div>
@@ -1150,9 +1150,9 @@ export default function TasksProjects() {
       </div>
 
       {modal === "project" && (
-        <Modal title="إضافة مشروع جديد" onClose={() => setModal(null)}>
+        <Modal title={t("إضافة مشروع جديد")} onClose={() => setModal(null)}>
           <div className="space-y-3">
-            <Field label="اسم المشروع *">
+            <Field label={`${t("اسم المشروع")} *`}>
               <input
                 className={inputClass}
                 value={projectForm.name}
@@ -1163,7 +1163,7 @@ export default function TasksProjects() {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <SelectField
-                label="نوع المشروع"
+                label={t("نوع المشروع")}
                 value={projectForm.projectType}
                 onChange={(value) =>
                   setProjectForm({ ...projectForm, projectType: value })
@@ -1174,7 +1174,7 @@ export default function TasksProjects() {
                 ]}
               />
               <SelectField
-                label="الإدارة"
+                label={t("الإدارة")}
                 value={projectForm.department}
                 onChange={(value) =>
                   setProjectForm({ ...projectForm, department: value })
@@ -1191,7 +1191,7 @@ export default function TasksProjects() {
                 }))}
               />
               <SelectField
-                label="مدير المشروع"
+                label={t("مدير المشروع")}
                 value={projectForm.managerId}
                 onChange={(value) =>
                   setProjectForm({ ...projectForm, managerId: value })
@@ -1202,7 +1202,7 @@ export default function TasksProjects() {
                 }))}
               />
             </div>
-            <Field label="الوصف">
+            <Field label={t("الوصف")}>
               <textarea
                 className={inputClass}
                 rows={4}
@@ -1216,7 +1216,7 @@ export default function TasksProjects() {
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="تاريخ البداية">
+              <Field label={t("تاريخ البداية")}>
                 <input
                   type="date"
                   className={inputClass}
@@ -1229,7 +1229,7 @@ export default function TasksProjects() {
                   }
                 />
               </Field>
-              <Field label="تاريخ النهاية">
+              <Field label={t("تاريخ النهاية")}>
                 <input
                   type="date"
                   className={inputClass}
@@ -1245,9 +1245,9 @@ export default function TasksProjects() {
         </Modal>
       )}
       {modal === "task" && (
-        <Modal title="إضافة مهمة جديدة" onClose={() => setModal(null)}>
+        <Modal title={t("إضافة مهمة جديدة")} onClose={() => setModal(null)}>
           <div className="space-y-3">
-            <Field label="عنوان المهمة *">
+            <Field label={`${t("عنوان المهمة")} *`}>
               <input
                 className={inputClass}
                 value={taskForm.title}
@@ -1256,7 +1256,7 @@ export default function TasksProjects() {
                 }
               />
             </Field>
-            <Field label="الوصف">
+            <Field label={t("الوصف")}>
               <textarea
                 className={inputClass}
                 rows={3}
@@ -1268,7 +1268,7 @@ export default function TasksProjects() {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <SelectField
-                label="المشروع"
+                label={t("المشروع")}
                 value={taskForm.projectId}
                 onChange={(value) =>
                   setTaskForm({ ...taskForm, projectId: value })
@@ -1276,7 +1276,7 @@ export default function TasksProjects() {
                 options={projects.map((p) => ({ value: p.id, label: p.name }))}
               />
               <SelectField
-                label="المسؤول"
+                label={t("المسؤول")}
                 value={taskForm.assigneeId}
                 onChange={(value) =>
                   setTaskForm({ ...taskForm, assigneeId: value })
@@ -1287,7 +1287,7 @@ export default function TasksProjects() {
                 }))}
               />
               <SelectField
-                label="الأولوية"
+                label={t("الأولوية")}
                 value={taskForm.priority}
                 onChange={(value) =>
                   setTaskForm({ ...taskForm, priority: value })
@@ -1297,7 +1297,7 @@ export default function TasksProjects() {
                   label: v,
                 }))}
               />
-              <Field label="عدد الساعات">
+              <Field label={t("عدد الساعات")}>
                 <input
                   type="number"
                   min="0"
@@ -1309,7 +1309,7 @@ export default function TasksProjects() {
                   }
                 />
               </Field>
-              <Field label="تاريخ المهمة">
+              <Field label={t("تاريخ المهمة")}>
                 <input
                   type="date"
                   className={inputClass}
@@ -1319,7 +1319,7 @@ export default function TasksProjects() {
                   }
                 />
               </Field>
-              <Field label="الموعد النهائي">
+              <Field label={t("الموعد النهائي")}>
                 <input
                   type="date"
                   className={inputClass}
@@ -1332,7 +1332,7 @@ export default function TasksProjects() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <SelectField
-                label="تكرار المهمة"
+                label={t("تكرار المهمة")}
                 value={taskForm.recurrenceType}
                 onChange={(value) =>
                   setTaskForm({ ...taskForm, recurrenceType: value })
@@ -1342,7 +1342,7 @@ export default function TasksProjects() {
                   label: value,
                 }))}
               />
-              <Field label="نقاط المهمة (كل نقطة في سطر)">
+              <Field label={t("نقاط المهمة (كل نقطة في سطر)")}>
                 <textarea
                   className={inputClass}
                   rows={3}
@@ -1350,11 +1350,11 @@ export default function TasksProjects() {
                   onChange={(e) =>
                     setTaskForm({ ...taskForm, pointsText: e.target.value })
                   }
-                  placeholder="النقطة الأولى\nالنقطة الثانية"
+                  placeholder={locale === "en" ? "First point\nSecond point" : "النقطة الأولى\\nالنقطة الثانية"}
                 />
               </Field>
             </div>
-            <Field label="معلومات إضافية">
+            <Field label={t("معلومات إضافية")}>
               <textarea
                 className={inputClass}
                 rows={2}
@@ -1364,7 +1364,7 @@ export default function TasksProjects() {
                 }
               />
             </Field>
-            <Field label="إضافة ملفات (PDF، صور، Excel — بحد أقصى 10MB)">
+            <Field label={t("إضافة ملفات (PDF، صور، Excel — بحد أقصى 10MB)")}>
               <input
                 type="file"
                 multiple
@@ -1378,7 +1378,7 @@ export default function TasksProjects() {
                 }
               />
             </Field>
-            <Field label="المتعاونون في المهمة">
+            <Field label={t("المتعاونون في المهمة")}>
               <select
                 multiple
                 className={`${inputClass} min-h-28`}
@@ -1419,9 +1419,9 @@ export default function TasksProjects() {
         </Modal>
       )}
       {modal === "client" && (
-        <Modal title="إضافة عميل" onClose={() => setModal(null)}>
+        <Modal title={t("إضافة عميل")} onClose={() => setModal(null)}>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="اسم العميل *">
+            <Field label={`${t("اسم العميل")} *`}>
               <input
                 className={inputClass}
                 value={clientForm.name}
@@ -1430,7 +1430,7 @@ export default function TasksProjects() {
                 }
               />
             </Field>
-            <Field label="اسم الشركة *">
+            <Field label={`${t("اسم الشركة")} *`}>
               <input
                 className={inputClass}
                 value={clientForm.companyName}
@@ -1439,7 +1439,7 @@ export default function TasksProjects() {
                 }
               />
             </Field>
-            <Field label="كود دخول الشركة *">
+            <Field label={`${t("كود دخول الشركة")} *`}>
               <input
                 className={inputClass}
                 value={clientForm.companyLogin}
@@ -1449,7 +1449,7 @@ export default function TasksProjects() {
               />
             </Field>
             <SelectField
-              label="مسؤول الدعم"
+              label={t("مسؤول الدعم")}
               value={clientForm.supportEmployeeId}
               onChange={(value) =>
                 setClientForm({ ...clientForm, supportEmployeeId: value })
@@ -1459,7 +1459,7 @@ export default function TasksProjects() {
                 label: e.name,
               }))}
             />
-            <Field label="البريد الإلكتروني *">
+            <Field label={`${t("البريد الإلكتروني")} *`}>
               <input
                 type="email"
                 className={inputClass}
@@ -1469,7 +1469,7 @@ export default function TasksProjects() {
                 }
               />
             </Field>
-            <Field label="رقم الهاتف">
+            <Field label={t("رقم الهاتف")}>
               <input
                 className={inputClass}
                 value={clientForm.phone}
@@ -1485,9 +1485,9 @@ export default function TasksProjects() {
         </Modal>
       )}
       {modal === "ticket" && (
-        <Modal title="إضافة تذكرة دعم" onClose={() => setModal(null)}>
+        <Modal title={t("إضافة تذكرة دعم")} onClose={() => setModal(null)}>
           <div className="space-y-3">
-            <Field label="عنوان التذكرة *">
+            <Field label={`${t("عنوان التذكرة")} *`}>
               <input
                 className={inputClass}
                 value={ticketForm.subject}
@@ -1498,7 +1498,7 @@ export default function TasksProjects() {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <SelectField
-                label="العميل *"
+                label={`${t("العميل")} *`}
                 value={ticketForm.clientId}
                 onChange={(value) =>
                   setTicketForm({ ...ticketForm, clientId: value })
@@ -1509,7 +1509,7 @@ export default function TasksProjects() {
                 }))}
               />
               <SelectField
-                label="المشروع"
+                label={t("المشروع")}
                 value={ticketForm.projectId}
                 onChange={(value) =>
                   setTicketForm({ ...ticketForm, projectId: value })
@@ -1517,7 +1517,7 @@ export default function TasksProjects() {
                 options={projects.map((p) => ({ value: p.id, label: p.name }))}
               />
               <SelectField
-                label="المسؤول"
+                label={t("المسؤول")}
                 value={ticketForm.assigneeId}
                 onChange={(value) =>
                   setTicketForm({ ...ticketForm, assigneeId: value })
@@ -1528,7 +1528,7 @@ export default function TasksProjects() {
                 }))}
               />
               <SelectField
-                label="نوع التذكرة"
+                label={t("نوع التذكرة")}
                 value={ticketForm.type}
                 onChange={(value) =>
                   setTicketForm({ ...ticketForm, type: value })
@@ -1538,7 +1538,7 @@ export default function TasksProjects() {
                 )}
               />
               <SelectField
-                label="الأولوية"
+                label={t("الأولوية")}
                 value={ticketForm.priority}
                 onChange={(value) =>
                   setTicketForm({ ...ticketForm, priority: value })
@@ -1549,7 +1549,7 @@ export default function TasksProjects() {
                 }))}
               />
             </div>
-            <Field label="الوصف *">
+            <Field label={`${t("الوصف")} *`}>
               <textarea
                 className={inputClass}
                 rows={5}
@@ -1581,7 +1581,7 @@ export default function TasksProjects() {
               <div className="rounded-2xl bg-slate-900 p-5 text-white md:col-span-2">
                 <div className="flex justify-between">
                   <span className="rounded-full bg-white/10 px-2 py-1 text-xs">
-                    {t(selectedProject.project_type || "داخلي")}
+                    {selectedProject.project_type ? t(selectedProject.project_type) : t("داخلي")}
                   </span>
                   <span className="text-xs text-white/50">
                     {t(selectedProject.status)}
@@ -1664,7 +1664,7 @@ export default function TasksProjects() {
                     </button>
                   ))}
                 {tasks.filter((task) => task.project_id === selectedProject.id)
-                  .length === 0 && <Empty label="لا توجد مهام في المشروع" />}
+                  .length === 0 && <Empty label={t("لا توجد مهام في المشروع")} />}
               </div>
             </div>
             <DetailFiles
@@ -1686,7 +1686,7 @@ export default function TasksProjects() {
         </Modal>
       )}
       {modal === "task-detail" && selectedTask && (
-        <Modal title="تفاصيل المهمة" onClose={() => setModal(null)} wide>
+        <Modal title={t("تفاصيل المهمة")} onClose={() => setModal(null)} wide>
           <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
             <aside className="space-y-3 rounded-2xl bg-slate-100 p-4">
               <div>
@@ -1834,7 +1834,7 @@ export default function TasksProjects() {
       )}
       {modal === "ticket-detail" && selectedTicket && (
         <Modal
-          title={`تذكرة #${selectedTicket.ticket_no}`}
+          title={`${t("تذكرة")} #${selectedTicket.ticket_no}`}
           onClose={() => setModal(null)}
           wide
         >
@@ -2027,7 +2027,7 @@ function DashboardView({
                 </div>
               );
             })}
-            {projects.length === 0 && <Empty label="لا توجد مشاريع" />}
+            {projects.length === 0 && <Empty label={t("لا توجد مشاريع")} />}
           </div>
         </div>
         <div className="rounded-2xl border bg-white p-5 shadow-sm lg:col-span-2">
@@ -2055,7 +2055,7 @@ function DashboardView({
                 </p>
               </div>
             ))}
-            {tasks.length === 0 && <Empty label="لا توجد مهام" />}
+            {tasks.length === 0 && <Empty label={t("لا توجد مهام")} />}
           </div>
         </div>
       </div>
@@ -2114,7 +2114,7 @@ function ProjectsView({
       })}
       {projects.length === 0 && (
         <div className="md:col-span-2 xl:col-span-3">
-          <Empty label="لا توجد مشاريع، أضف مشروعًا جديدًا" />
+          <Empty label={t("لا توجد مشاريع، أضف مشروعًا جديدًا")} />
         </div>
       )}
     </div>
@@ -2183,13 +2183,13 @@ function TasksView({
             {loading ? (
               <tr>
                 <td colSpan={9}>
-                  <Empty label="جاري التحميل..." />
+                  <Empty label={t("جاري التحميل...")} />
                 </td>
               </tr>
             ) : tasks.length === 0 ? (
               <tr>
                 <td colSpan={9}>
-                  <Empty label="لا توجد مهام مطابقة" />
+                  <Empty label={t("لا توجد مهام مطابقة")} />
                 </td>
               </tr>
             ) : (
@@ -2421,7 +2421,7 @@ function ReportsView({
             {tasks.length === 0 && (
               <tr>
                 <td colSpan={6}>
-                  <Empty label="لا توجد نتائج" />
+                  <Empty label={t("لا توجد نتائج")} />
                 </td>
               </tr>
             )}
@@ -2528,7 +2528,7 @@ function TicketsView({ tickets, search, setSearch, openTicket }: any) {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7}>
-                    <Empty label="لا توجد تذاكر" />
+                    <Empty label={t("لا توجد تذاكر")} />
                   </td>
                 </tr>
               )}
@@ -2589,7 +2589,7 @@ function ClientsView({ clients, search, setSearch }: any) {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={7}>
-                  <Empty label="لا يوجد عملاء" />
+                  <Empty label={t("لا يوجد عملاء")} />
                 </td>
               </tr>
             )}
@@ -2678,7 +2678,7 @@ function SettingsView({
         {tab === "members" && (
           <div className="space-y-2">
             {memberTypes.length === 0 ? (
-              <Empty label="أضف أنواع أعضاء المشاريع مثل مدير مشروع أو عضو أو مراقب" />
+              <Empty label={t("أضف أنواع أعضاء المشاريع مثل مدير مشروع أو عضو أو مراقب")} />
             ) : (
               memberTypes.map((item: MemberType) => (
                 <div

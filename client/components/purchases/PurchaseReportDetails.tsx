@@ -281,8 +281,8 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
 
     const movements = [
       ...invoiceRows.map((invoice) => ({ date: invoice.date, reference: invoice.id, vendor: vendorName(invoice.vendorId, invoice.vendor), movement: t("فاتورة مشتريات"), debit: 0, credit: invoice.total, balanceEffect: invoice.total })),
-      ...noteRows.map((note) => ({ date: note.date, reference: note.number, vendor: vendorName(note.vendorId, note.vendor), movement: t(note.type === "purchase_credit" ? "إشعار دائن مشتريات" : "إشعار مدين مشتريات"), debit: note.total, credit: 0, balanceEffect: -note.total })),
-      ...paymentRows.map((payment) => ({ date: payment.date, reference: payment.number, vendor: vendorName(payment.vendorId), movement: t(payment.amount >= 0 ? "سداد مورد" : "عكس سداد مورد"), debit: Math.max(payment.amount, 0), credit: Math.max(-payment.amount, 0), balanceEffect: -payment.amount })),
+      ...noteRows.map((note) => ({ date: note.date, reference: note.number, vendor: vendorName(note.vendorId, note.vendor), movement: note.type === "purchase_credit" ? t("إشعار دائن مشتريات") : t("إشعار مدين مشتريات"), debit: note.total, credit: 0, balanceEffect: -note.total })),
+      ...paymentRows.map((payment) => ({ date: payment.date, reference: payment.number, vendor: vendorName(payment.vendorId), movement: payment.amount >= 0 ? t("سداد مورد") : t("عكس سداد مورد"), debit: Math.max(payment.amount, 0), credit: Math.max(-payment.amount, 0), balanceEffect: -payment.amount })),
     ].sort((a, b) => a.date.localeCompare(b.date) || a.reference.localeCompare(b.reference));
     // رصيد أول المدة: للمورد المختار، أو لكل الموردين معًا
     const opening = selectedVendor
@@ -303,7 +303,7 @@ export default function PurchaseReportDetails({ report, onClose }: { report: str
     };
   }, [dateFrom, dateTo, formatNumber, invoices, notes, payments, selectedVendor, t, type, vendors]);
 
-  const title = type ? report : t("تقرير المشتريات");
+  const title = type ? t(report) : t("تقرير المشتريات");
   const exportOptions = { title, subtitle: `${t("من تاريخ")} ${dateFrom} ${t("إلى تاريخ")} ${dateTo}`, columns: columns as ReportColumn[], rows, fileName: title, summary, landscape: true, brand: COMPANY_REPORT_BRAND };
 
   return <div dir={direction} className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4" onMouseDown={onClose}>

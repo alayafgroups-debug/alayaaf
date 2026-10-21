@@ -9,6 +9,7 @@ import { useI18n } from "@/i18n";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { ACTIVE_EMPLOYEE_STATUSES } from "@/lib/hrStatus";
+import { loadOrgEnglishNames } from "@/lib/orgNames";
 
 type EmpRow = { id: string; name: string; jobTitle: string; department: string; branch: string; workTime: string; baseSalary: number; status: string };
 
@@ -16,9 +17,22 @@ type EmpRow = { id: string; name: string; jobTitle: string; department: string; 
 const isOnPayroll = (status: string) => !status || ACTIVE_EMPLOYEE_STATUSES.includes(status) || status === "إجازة";
 
 export default function HRPayrollFinancialData() {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, locale, direction, formatNumber } = useI18n();
   const [employees, setEmployees] = useState<EmpRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // أسماء الأقسام والفروع والمسميات بالإنجليزية (name_en) في الواجهة الإنجليزية
+  const [orgEnglish, setOrgEnglish] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    if (locale !== "en") return;
+    let active = true;
+    loadOrgEnglishNames().then((names) => { if (active) setOrgEnglish(names); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [locale]);
+  const orgName = (value: string) => {
+    const raw = value.trim();
+    if (!raw || locale !== "en") return value;
+    return orgEnglish.get(raw) || t(raw);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -42,39 +56,39 @@ export default function HRPayrollFinancialData() {
   }, []);
 
   const reportColumns: ReportColumn[] = [
-    { key: "name", label: "الاسم", width: 26 },
-    { key: "jobTitle", label: "المسمى الوظيفي", width: 22 },
-    { key: "department", label: "القسم", width: 20 },
-    { key: "branch", label: "الفرع", width: 18 },
-    { key: "baseSalary", label: "الراتب الأساسي", width: 16 },
-    { key: "workTime", label: "وقت العمل", width: 14 },
-    { key: "status", label: "الحالة", width: 12 },
+    { key: "name", label: t("الاسم"), width: 26 },
+    { key: "jobTitle", label: t("المسمى الوظيفي"), width: 22 },
+    { key: "department", label: t("القسم"), width: 20 },
+    { key: "branch", label: t("الفرع"), width: 18 },
+    { key: "baseSalary", label: t("الراتب الأساسي"), width: 16 },
+    { key: "workTime", label: t("وقت العمل"), width: 14 },
+    { key: "status", label: t("الحالة"), width: 12 },
   ];
   const reportRows = () => employees.map((emp) => ({
     name: emp.name,
-    jobTitle: emp.jobTitle || "-",
-    department: emp.department || "-",
-    branch: emp.branch || "-",
+    jobTitle: emp.jobTitle ? orgName(emp.jobTitle) : "-",
+    department: emp.department ? orgName(emp.department) : "-",
+    branch: emp.branch ? orgName(emp.branch) : "-",
     baseSalary: emp.baseSalary,
-    workTime: emp.workTime || "كامل",
-    status: emp.status || "فعال",
+    workTime: emp.workTime ? t(emp.workTime) : t("كامل"),
+    status: emp.status ? t(emp.status) : t("فعال"),
   }));
   // الإجمالي للموظفين على رأس العمل فقط (فعال أو في إجازة)؛ المنتهية خدمتهم وغير الفعالين لا يدخلون
   const reportSummary = () => {
     const onPayroll = employees.filter((emp) => isOnPayroll(emp.status));
     return [
-      { label: "عدد الموظفين", value: employees.length },
-      { label: "الموظفون على رأس العمل (فعال أو في إجازة)", value: onPayroll.length },
-      { label: "إجمالي الرواتب الأساسية", value: onPayroll.reduce((sum, emp) => sum + emp.baseSalary, 0) },
+      { label: t("عدد الموظفين"), value: employees.length },
+      { label: t("الموظفون على رأس العمل (فعال أو في إجازة)"), value: onPayroll.length },
+      { label: t("إجمالي الرواتب الأساسية"), value: onPayroll.reduce((sum, emp) => sum + emp.baseSalary, 0) },
     ];
   };
   const handleExport = () => {
     if (!employees.length) { toast({ title: t("لا توجد بيانات للتصدير") }); return; }
-    exportReportExcel({ title: "البيانات المالية للموظفين", columns: reportColumns, rows: reportRows(), fileName: "employees-financial-data", summary: reportSummary() });
+    exportReportExcel({ title: t("البيانات المالية للموظفين"), columns: reportColumns, rows: reportRows(), fileName: "employees-financial-data", summary: reportSummary() });
   };
   const handlePrint = () => {
     if (!employees.length) { toast({ title: t("لا توجد بيانات للتصدير") }); return; }
-    if (!printReport({ title: "البيانات المالية للموظفين", columns: reportColumns, rows: reportRows(), fileName: "employees-financial-data", summary: reportSummary(), landscape: true })) {
+    if (!printReport({ title: t("البيانات المالية للموظفين"), columns: reportColumns, rows: reportRows(), fileName: "employees-financial-data", summary: reportSummary(), landscape: true })) {
       toast({ title: t("تعذر فتح نافذة الطباعة"), description: t("اسمح بالنوافذ المنبثقة ثم أعد المحاولة"), variant: "destructive" });
     }
   };
@@ -115,12 +129,12 @@ export default function HRPayrollFinancialData() {
                       <Avatar className="h-8 w-8"><AvatarFallback className="bg-[#004e89] text-white text-xs">{emp.name.charAt(0)}</AvatarFallback></Avatar>
                     </td>
                     <td className="py-3 px-4 font-medium text-gray-900">{emp.name}</td>
-                    <td className="py-3 px-4">{emp.jobTitle || t("—")}</td>
-                    <td className="py-3 px-4">{emp.department || t("—")}</td>
-                    <td className="py-3 px-4">{emp.branch || t("—")}</td>
+                    <td className="py-3 px-4">{emp.jobTitle ? orgName(emp.jobTitle) : t("—")}</td>
+                    <td className="py-3 px-4">{emp.department ? orgName(emp.department) : t("—")}</td>
+                    <td className="py-3 px-4">{emp.branch ? orgName(emp.branch) : t("—")}</td>
                     <td className="py-3 px-4 font-semibold text-emerald-700">{formatNumber(emp.baseSalary, { style: "currency", currency: "SAR", minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                    <td className="py-3 px-4">{emp.workTime || t("كامل")}</td>
-                    <td className="py-3 px-4">{t(emp.status || "فعال")}</td>
+                    <td className="py-3 px-4">{emp.workTime ? t(emp.workTime) : t("كامل")}</td>
+                    <td className="py-3 px-4">{emp.status ? t(emp.status) : t("فعال")}</td>
                   </tr>
                 ))}
               </tbody>

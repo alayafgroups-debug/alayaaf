@@ -1,7 +1,7 @@
 import { CheckCircle2, EllipsisVertical, FileUp, Landmark, Link2, RefreshCw, Unlink, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
-import { useI18n } from "@/i18n";
+import { currentLocale, useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 
 type BankAccount = { id: string; name: string; bank_name: string | null; iban: string | null; account_code: string; currency: string; active: boolean };
@@ -41,7 +41,7 @@ function normalizeStatementDate(raw: string | undefined) {
 // رسائل الاستيراد بالعربية بدل رموز الخطأ
 function importErrorText(message: string) {
   const row = message.match(/BANK_STATEMENT_ROW_INVALID:(\d+)/);
-  if (row) return `السطر ${row[1]} في الملف: التاريخ غير صحيح (المقبول يوم/شهر/سنة أو سنة-شهر-يوم)، أو الحركة ليست مدينة فقط أو دائنة فقط`;
+  if (row) return currentLocale() === "en" ? `Line ${row[1]} in the file: the date is invalid (accepted day/month/year or year-month-day), or the transaction is not debit only or credit only` : `السطر ${row[1]} في الملف: التاريخ غير صحيح (المقبول يوم/شهر/سنة أو سنة-شهر-يوم)، أو الحركة ليست مدينة فقط أو دائنة فقط`;
   if (message.includes("BANK_STATEMENT_CSV_EMPTY")) return "الملف فارغ أو ليس فيه أسطر حركات";
   if (message.includes("BANK_STATEMENT_COLUMNS_INVALID")) return "أعمدة الملف غير معروفة: يلزم عمود التاريخ (date أو التاريخ) وعمود مدين/دائن أو المبلغ";
   if (message.includes("file_hash") || message.includes("duplicate key")) return "هذا الكشف مستورد من قبل لهذا الحساب";

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Eraser, Loader2, PenLine } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 
 export type EmployeeSignature = {
   signatureData: string;
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export default function EmployeeSignatureField({ onChange }: Props) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const hasInkRef = useRef(false);
@@ -100,7 +102,7 @@ export default function EmployeeSignatureField({ onChange }: Props) {
   const saveSignature = async () => {
     const canvas = canvasRef.current;
     if (!canvas || !hasInkRef.current) {
-      toast.error("وقّع داخل المساحة البيضاء أولاً");
+      toast.error(t("وقّع داخل المساحة البيضاء أولاً"));
       return;
     }
 
@@ -118,9 +120,9 @@ export default function EmployeeSignatureField({ onChange }: Props) {
       setSignature(saved);
       onChange(saved);
       setEditing(false);
-      toast.success("تم حفظ التوقيع الإلكتروني");
+      toast.success(t("تم حفظ التوقيع الإلكتروني"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر حفظ التوقيع");
+      toast.error(error instanceof Error ? error.message : t("تعذر حفظ التوقيع"));
     } finally {
       setSaving(false);
     }
@@ -129,7 +131,7 @@ export default function EmployeeSignatureField({ onChange }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 py-6 text-sm text-gray-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> جاري تحميل التوقيع...
+        <Loader2 className="h-4 w-4 animate-spin" /> {t("جاري تحميل التوقيع...")}
       </div>
     );
   }
@@ -138,12 +140,12 @@ export default function EmployeeSignatureField({ onChange }: Props) {
     <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-gray-800">التوقيع الإلكتروني *</p>
-          <p className="mt-1 text-xs text-gray-500">يُحفظ توقيعك ويُرفق تلقائيًا مع الطلبات التي ترسلها.</p>
+          <p className="text-sm font-semibold text-gray-800">{t("التوقيع الإلكتروني *")}</p>
+          <p className="mt-1 text-xs text-gray-500">{t("يُحفظ توقيعك ويُرفق تلقائيًا مع الطلبات التي ترسلها.")}</p>
         </div>
         {signature && !editing && (
           <span className="flex items-center gap-1 text-xs font-medium text-emerald-700">
-            <CheckCircle className="h-4 w-4" /> توقيع محفوظ
+            <CheckCircle className="h-4 w-4" /> {t("توقيع محفوظ")}
           </span>
         )}
       </div>
@@ -151,10 +153,10 @@ export default function EmployeeSignatureField({ onChange }: Props) {
       {signature && !editing ? (
         <div className="space-y-3">
           <div className="flex min-h-28 items-center justify-center rounded-lg border border-gray-200 bg-white p-3">
-            <img src={signature.signatureData} alt="توقيع الموظف" className="max-h-24 max-w-full object-contain" />
+            <img src={signature.signatureData} alt={t("توقيع الموظف")} className="max-h-24 max-w-full object-contain" />
           </div>
           <button type="button" onClick={() => setEditing(true)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">
-            <PenLine className="h-4 w-4" /> تحديث التوقيع
+            <PenLine className="h-4 w-4" /> {t("تحديث التوقيع")}
           </button>
         </div>
       ) : (
@@ -169,19 +171,19 @@ export default function EmployeeSignatureField({ onChange }: Props) {
             onPointerCancel={stopDrawing}
             onPointerLeave={stopDrawing}
             className="h-44 w-full touch-none rounded-lg border-2 border-dashed border-gray-300 bg-white cursor-crosshair"
-            aria-label="مساحة التوقيع الإلكتروني"
+            aria-label={t("مساحة التوقيع الإلكتروني")}
           />
-          <p className="text-center text-xs text-gray-400">وقّع داخل المساحة البيضاء باستخدام الإصبع أو الفأرة</p>
+          <p className="text-center text-xs text-gray-400">{t("وقّع داخل المساحة البيضاء باستخدام الإصبع أو الفأرة")}</p>
           <div className="flex gap-2">
             <button type="button" onClick={clearCanvas} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white py-2 text-sm text-gray-700 disabled:opacity-50">
-              <Eraser className="h-4 w-4" /> مسح
+              <Eraser className="h-4 w-4" /> {t("مسح")}
             </button>
             {signature && (
-              <button type="button" onClick={() => setEditing(false)} disabled={saving} className="flex-1 rounded-lg border border-gray-300 bg-white py-2 text-sm text-gray-700 disabled:opacity-50">إلغاء</button>
+              <button type="button" onClick={() => setEditing(false)} disabled={saving} className="flex-1 rounded-lg border border-gray-300 bg-white py-2 text-sm text-gray-700 disabled:opacity-50">{t("إلغاء")}</button>
             )}
             <button type="button" onClick={saveSignature} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#004e89] py-2 text-sm font-medium text-white disabled:opacity-50">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PenLine className="h-4 w-4" />}
-              {saving ? "جاري الحفظ..." : "حفظ التوقيع"}
+              {saving ? t("جاري الحفظ...") : t("حفظ التوقيع")}
             </button>
           </div>
         </div>

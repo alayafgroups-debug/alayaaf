@@ -1,3 +1,5 @@
+import { translateText } from "@/i18n";
+
 // رسائل عربية لرموز أخطاء قاعدة البيانات في الموارد البشرية (الطلبات والإجازات والأدوار)
 const HR_ERROR_MESSAGES: Record<string, string> = {
   REQUEST_SENDER_MISMATCH: "لا يمكنك إرسال طلب باسم موظف آخر",
@@ -81,7 +83,9 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   ADVANCE_ENTRY_NOT_ALLOWED: "تسجيل السلف يتطلب صلاحية إدارة الرواتب",
   ADVANCE_SELF_ENTRY: "لا تسجّل سلفة لنفسك؛ يسجّلها مسؤول رواتب آخر",
   ADVANCE_INVALID_AMOUNTS: "مبلغ السلفة وقسطها يجب أن يكونا أكبر من صفر، والقسط لا يتجاوز المبلغ",
-  ADVANCE_INVALID_START: "شهر بداية الخصم غير صحيح أو قبل الشهر الحالي",
+  ADVANCE_INVALID_START: "شهر بداية الخصم غير صحيح، أو قبل شهر تعيين الموظف، أو أقدم من 24 شهرًا",
+  ADVANCE_INVALID_OPENING: "المسدد قبل النظام لا يكون سالبًا، ويكون أقل من مبلغ السلفة (السلفة المسددة كلها في سمارت لا تُسجَّل)",
+  ADVANCE_START_LOCKED: "للموظف أقساط سلف مخصومة في رواتب معتمدة أو مرحّلة منذ هذا الشهر؛ اختر شهر بداية بعد آخر شهر معتمد، وأدخل ما سُدد قبله في «المسدد قبل النظام»",
   ADVANCE_EMPLOYEE_NOT_FOUND: "الموظف غير موجود أو غير فعال",
   ADVANCE_REQUEST_INVALID: "طلب السلفة المرتبط غير موافق عليه أو لا يخص هذا الموظف أو سُجّلت منه سلفة",
   ADVANCE_DECISION_NOT_ALLOWED: "اعتماد السلف يتطلب صلاحية إدارة الرواتب",
@@ -93,7 +97,7 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   ADVANCE_FIELDS_LOCKED: "لا يُغيَّر موظف السلفة ولا طلبها؛ احذفها وسجّلها من جديد",
   ADVANCE_EDIT_NOT_ALLOWED: "يُعدَّل في السلفة المبلغ والقسط وشهر البداية والملاحظات فقط؛ الموظف لا يتغير (احذفها وسجّلها من جديد)",
   // HR-13: تعديل السلف وتأجيل أقساطها والاقتطاعات الشهرية
-  ADVANCE_HAS_DEDUCTIONS: "خُصم من الموظف قسط سلفة منذ شهر بداية هذه السلفة؛ لا تُحذف ولا يتغير شهر بدايتها. عدّل مبلغها، أو أجّل قسط شهر",
+  ADVANCE_HAS_DEDUCTIONS: "خُصم من الموظف قسط سلفة في رواتب معتمدة أو مرحّلة أو داخل طلب اعتماد منذ شهر بداية هذه السلفة؛ لا تُحذف ولا يتغير شهر بدايتها. عدّل مبلغها، أو أجّل قسط شهر",
   ADVANCE_NOT_APPROVED: "يُؤجَّل قسط السلفة المعتمدة فقط",
   ADVANCE_SKIP_INVALID_MONTH: "اختر الشهر المؤجَّل",
   ADVANCE_SKIP_BEFORE_START: "لا يُؤجَّل قسط قبل شهر بداية السلفة",
@@ -110,7 +114,9 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   DEDUCTION_INVALID_VALUE: "قيمة الاقتطاع أكبر من صفر، والنسبة من 1 إلى 100",
   DEDUCTION_INVALID_PERIOD: "شهر البداية مطلوب، وشهر النهاية لا يسبقه",
   hr_terminations_advances_deduction_check: "إجمالي استقطاع السلف لا يكون سالبًا",
+  hr_advances_opening_repaid_check: "المسدد قبل النظام لا يكون سالبًا",
   "'advances_deduction' column": "إجمالي استقطاع السلف يحتاج تحديث قاعدة البيانات (HR-13)؛ احفظ دون استقطاع السلف أو طبّق التحديث",
+  "'opening_repaid' column": "«المسدد قبل النظام» يحتاج تحديث قاعدة البيانات (HR-14)؛ احفظ دونه أو طبّق التحديث",
   PAYROLL_ROW_DELETE_LOCKED: "صف الراتب معتمد أو موقوف أو ضمن طلب اعتماد معلق؛ لا يُحذف",
   PAYROLL_APPROVED_LOCKED: "الراتب أو إيقافه معتمد من الإدارة؛ لا تُعدَّل مبالغه",
   PAYROLL_STATUS_LOCKED: "حالة الراتب لا تتغير يدويًا: الاعتماد والرفض بقرار طلب الاعتماد، والترحيل من صفحة الترحيل",
@@ -143,7 +149,10 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   ATTENDANCE_RANGE_TOO_LONG: "الفترة طويلة؛ اختر شهرين أو أقل",
 };
 
-export const hrRequestErrorText = (error: unknown, fallback = "حدث خطأ غير متوقع") => {
+// الرسالة بلغة الواجهة (HR-15): العربية كما هي، والإنجليزية من القاموس
+export const hrRequestErrorText = (error: unknown, fallback = "حدث خطأ غير متوقع") => translateText(hrRequestErrorSource(error, fallback));
+
+function hrRequestErrorSource(error: unknown, fallback: string) {
   const err = error as { message?: string; code?: string; details?: string } | null;
   const text = `${err?.message ?? ""} ${err?.details ?? ""}`;
   // الأطول أولًا حتى لا يطابق ROLE_IN_USE رسالة ROLE_IN_USE_RENAME
@@ -154,7 +163,7 @@ export const hrRequestErrorText = (error: unknown, fallback = "حدث خطأ غ�
   if (err?.code === "PGRST116") return "لم يُحفظ شيء: لا تملك صلاحية هذه العملية على هذا السجل";
   if (/failed to fetch|network/i.test(text)) return "تعذر الاتصال بالخادم؛ تحقق من الإنترنت ثم أعد المحاولة";
   return err?.message || fallback;
-};
+}
 
 // الخطأ نفسه يُمرَّر (لا رسالته فقط) حتى لا يضيع رمزه مثل 42501 أو 23505
 export const payrollApprovalErrorText = (error: unknown) => hrRequestErrorText(error, "حدث خطأ غير متوقع");

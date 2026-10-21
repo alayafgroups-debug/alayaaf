@@ -26,7 +26,7 @@ import {
   Mail,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useI18n } from "@/i18n";
+import { translateText, useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import DynamicRequestForm from "@/components/hr/DynamicRequestForm";
 import LeaveRequestForm from "@/components/hr/LeaveRequestForm";
@@ -179,6 +179,8 @@ const REQUEST_TYPES = [
 ];
 
 const formatRequestReason = (requestType: string, rawReason: unknown) => {
+  // النص المعروض بلغة الواجهة (دالة خارج المكوّن)
+  const t = translateText;
   const raw = String(rawReason ?? "").trim();
   if (!raw) return "-";
 
@@ -215,18 +217,19 @@ const formatRequestReason = (requestType: string, rawReason: unknown) => {
     const parts: string[] = [];
     if (reasonKey) {
       const field = schema?.fields.find((item) => item.name === reasonKey);
+      const optionLabel = field?.options?.find(
+        (option) => option.value === String(values[reasonKey]),
+      )?.label;
       const reasonValue =
-        field?.options?.find(
-          (option) => option.value === String(values[reasonKey]),
-        )?.label ?? String(values[reasonKey]);
-      parts.push(`السبب: ${reasonValue}`);
+        optionLabel != null ? t(optionLabel) : String(values[reasonKey]);
+      parts.push(`${t("السبب")}: ${reasonValue}`);
     }
-    if (valueKey) parts.push(`القيمة: ${String(values[valueKey])}`);
+    if (valueKey) parts.push(`${t("القيمة")}: ${String(values[valueKey])}`);
 
     return parts.join(" • ") || "-";
   } catch {
     const reasonMatch = raw.match(/السبب:\s*([^|]+)/);
-    return reasonMatch ? `السبب: ${reasonMatch[1].trim()}` : raw;
+    return reasonMatch ? `${t("السبب")}: ${reasonMatch[1].trim()}` : raw;
   }
 };
 
@@ -343,7 +346,7 @@ const MORE_OPTIONS = [
 
 export default function EmployeePortal() {
   const navigate = useNavigate();
-  const { t, direction, formatDate } = useI18n();
+  const { t, locale, direction, formatDate } = useI18n();
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {
@@ -439,7 +442,7 @@ export default function EmployeePortal() {
           ? t("تسجيل الحضور من البوابة غير مفعّل لك؛ يسجّله لك مسؤول الحضور")
           : check.allowed
           ? `${t("أنت داخل نطاق")} ${check.locationName} — ${t("المسافة")} ${Number(check.distanceMeters).toFixed(1)} ${t("متر")}`
-          : `${t("خارج النطاق أو دقة GPS غير كافية")} — ${t("المسافة")} ${Number(check.distanceMeters).toFixed(1)} ${t("متر")}، ${t("الدقة")} ${Number(check.accuracyMeters).toFixed(1)} ${t("متر")}`,
+          : `${t("خارج النطاق أو دقة GPS غير كافية")} — ${t("المسافة")} ${Number(check.distanceMeters).toFixed(1)} ${t("متر")}${locale === "en" ? "," : "،"} ${t("الدقة")} ${Number(check.accuracyMeters).toFixed(1)} ${t("متر")}`,
       );
       if (!check.allowed && showError)
         toast.error(
@@ -458,7 +461,7 @@ export default function EmployeePortal() {
         typeof (locationError as { code?: unknown }).code === "number";
       const message = isGeolocationError
         ? t("يرجى السماح بالوصول إلى الموقع وتفعيل الموقع الدقيق")
-        : t(hrRequestErrorText(locationError, "تعذر التحقق من موقع الحضور"));
+        : t(hrRequestErrorText(locationError, t("تعذر التحقق من موقع الحضور")));
       setLocationMessage(message);
       if (showError) toast.error(message);
       return false;
@@ -527,7 +530,7 @@ export default function EmployeePortal() {
       };
     } catch (error: any) {
       console.error("Attendance save failed:", error);
-      toast.error(t(hrRequestErrorText(error, "تعذر حفظ الحضور في قاعدة البيانات")));
+      toast.error(t(hrRequestErrorText(error, t("تعذر حفظ الحضور في قاعدة البيانات"))));
       return null;
     }
   };
@@ -704,7 +707,7 @@ export default function EmployeePortal() {
         type: "مساءلة إدارية",
         status: normalizeStatus(r.status === "مرسلة" ? "معلق" : r.status),
         createdAt: r.sent_at ? String(r.sent_at) : "",
-        reason: `${String(r.subject ?? "مساءلة")} — ${String(r.message ?? "")}`,
+        reason: `${String(r.subject ?? t("مساءلة"))} — ${String(r.message ?? "")}`,
         adminNote: "",
       }));
 
@@ -714,7 +717,7 @@ export default function EmployeePortal() {
           type: "إنذار إداري",
           status: normalizeStatus(r.status === "مرسل" ? "معلق" : r.status),
           createdAt: r.sent_at ? String(r.sent_at) : "",
-          reason: `${String(r.subject ?? "إنذار")} — ${String(r.message ?? "")}`,
+          reason: `${String(r.subject ?? t("إنذار"))} — ${String(r.message ?? "")}`,
           adminNote: "",
         }),
       );
@@ -783,7 +786,7 @@ export default function EmployeePortal() {
     };
     const target = pageMap[option.name];
     if (target) setCurrentPage(target);
-    else toast.info(`سيتم فتح ${option.name} قريباً`);
+    else toast.info(locale === "en" ? `${t(option.name)} will open soon` : `سيتم فتح ${option.name} قريباً`);
   };
 
   // ملخص الشهر بالقاعدة نفسها في حساب الدوام وكشف الرواتب (جدول الدوام والعطل والإجازات المعتمدة وإعداد الراتب المكتسب)

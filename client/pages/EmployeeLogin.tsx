@@ -8,9 +8,11 @@ import { toast } from "sonner";
 import type { UserSession } from "@/lib/authSession";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import { isEmployeeActive } from "@/lib/employeeStatus";
+import { useI18n } from "@/i18n";
 
 export default function EmployeeLogin() {
   const navigate = useNavigate();
+  const { t, locale, direction } = useI18n();
   const [empId, setEmpId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -19,7 +21,7 @@ export default function EmployeeLogin() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empId.trim() || !password.trim()) {
-      toast.error("يجب ملء جميع الحقول");
+      toast.error(t("يجب ملء جميع الحقول"));
       return;
     }
     setLoading(true);
@@ -34,17 +36,17 @@ export default function EmployeeLogin() {
       });
       const missingNewLogin = Boolean(loginError && (loginError.code === "PGRST202" || loginError.code === "42883"));
       if (loginError && !missingNewLogin) {
-        toast.error("تعذر التحقق من بيانات الدخول، حاول مرة أخرى");
+        toast.error(t("تعذر التحقق من بيانات الدخول، حاول مرة أخرى"));
         return;
       }
       if (!loginError) {
         const result = (loginData ?? {}) as { status?: string; email?: string; retry_after_minutes?: number };
         if (result.status === "locked") {
-          toast.error(`محاولات دخول كثيرة لهذا الرقم؛ حاول بعد ${result.retry_after_minutes ?? 15} دقيقة`);
+          toast.error(locale === "en" ? `Too many login attempts for this number; try again in ${result.retry_after_minutes ?? 15} minutes` : `محاولات دخول كثيرة لهذا الرقم؛ حاول بعد ${result.retry_after_minutes ?? 15} دقيقة`);
           return;
         }
         if (result.status === "busy") {
-          toast.error("الخادم مشغول بمحاولات دخول كثيرة؛ حاول بعد دقيقة");
+          toast.error(t("الخادم مشغول بمحاولات دخول كثيرة؛ حاول بعد دقيقة"));
           return;
         }
         if (result.status === "ok" && result.email) resolvedEmail = result.email;
@@ -58,7 +60,7 @@ export default function EmployeeLogin() {
           { p_emp_id: empId.trim() },
         );
         if (empError || !legacyEmail) {
-          toast.error("بيانات الدخول غير صحيحة");
+          toast.error(t("بيانات الدخول غير صحيحة"));
           return;
         }
         resolvedEmail = String(legacyEmail);
@@ -70,7 +72,7 @@ export default function EmployeeLogin() {
           password,
         });
       if (authError) {
-        toast.error("بيانات الدخول غير صحيحة");
+        toast.error(t("بيانات الدخول غير صحيحة"));
         return;
       }
 
@@ -81,12 +83,12 @@ export default function EmployeeLogin() {
         .maybeSingle();
 
       if (profileError || !empData) {
-        toast.error("لم يتم العثور على بيانات الموظف");
+        toast.error(t("لم يتم العثور على بيانات الموظف"));
         await supabase.auth.signOut();
         return;
       }
       if (!isEmployeeActive(empData.status)) {
-        toast.error("حسابك موقوف؛ راجع الموارد البشرية");
+        toast.error(t("حسابك موقوف؛ راجع الموارد البشرية"));
         await supabase.auth.signOut();
         return;
       }
@@ -104,10 +106,10 @@ export default function EmployeeLogin() {
       };
       localStorage.setItem("user_session", JSON.stringify(session));
 
-      toast.success(`مرحباً ${empData.name}`);
+      toast.success(`${t("مرحباً")} ${empData.name}`);
       setTimeout(() => navigate("/employee/dashboard"), 400);
     } catch {
-      toast.error("حدث خطأ ما");
+      toast.error(t("حدث خطأ ما"));
     } finally {
       setLoading(false);
     }
@@ -116,7 +118,7 @@ export default function EmployeeLogin() {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      dir="rtl"
+      dir={direction}
       style={{
         background:
           "linear-gradient(135deg, #052e16 0%, #14532d 40%, #064e3b 70%, #012617 100%)",
@@ -143,10 +145,10 @@ export default function EmployeeLogin() {
             </div>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight leading-tight">
-            بوابة الموظفين
+            {t("بوابة الموظفين")}
           </h1>
           <p className="mt-2 text-emerald-200/70 text-sm">
-            نظام الموارد البشرية · {COMPANY_PROFILE.programNameAr}
+            {t("نظام الموارد البشرية")} · {t(COMPANY_PROFILE.programNameAr)}
           </p>
         </div>
 
@@ -156,7 +158,7 @@ export default function EmployeeLogin() {
             {/* Employee ID */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-white/70">
-                الرقم الوظيفي
+                {t("الرقم الوظيفي")}
               </label>
               <div className="relative">
                 <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
@@ -164,7 +166,7 @@ export default function EmployeeLogin() {
                   type="text"
                   value={empId}
                   onChange={(e) => setEmpId(e.target.value)}
-                  placeholder="مثال: 1002 أو EMP-002"
+                  placeholder={t("مثال: 1002 أو EMP-002")}
                   className="pr-10 h-11 bg-white/[0.06] border-white/10 text-white placeholder:text-white/25 focus:border-emerald-500/60 focus:ring-emerald-500/20"
                   disabled={loading}
                   autoComplete="username"
@@ -175,7 +177,7 @@ export default function EmployeeLogin() {
             {/* Password */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-white/70">
-                كلمة المرور
+                {t("كلمة المرور")}
               </label>
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
@@ -211,25 +213,25 @@ export default function EmployeeLogin() {
                 background: "linear-gradient(135deg, #059669, #0d9488)",
               }}
             >
-              {loading ? "جاري الدخول..." : "دخول"}
+              {loading ? t("جاري الدخول...") : locale === "en" ? "Sign in" : "دخول"}
             </Button>
           </form>
 
           {/* Switch to admin portal */}
           <p className="text-center text-sm text-white/40">
-            هل أنت مدير؟{" "}
+            {t("هل أنت مدير؟")}{" "}
             <Link
               to="/login"
               className="text-emerald-400 hover:text-emerald-300 font-medium"
             >
-              {COMPANY_PROFILE.programNameAr}
+              {t(COMPANY_PROFILE.programNameAr)}
             </Link>
           </p>
         </div>
 
         {/* Footer */}
         <p className="text-center mt-6 text-xs text-white/20">
-          © 2026 نظام إدارة الموارد البشرية · جميع الحقوق محفوظة
+          © 2026 {t("نظام إدارة الموارد البشرية")} · {t("جميع الحقوق محفوظة")}
         </p>
       </div>
     </div>

@@ -387,7 +387,7 @@ export default function PurchaseInvoices() {
               <div class="card"><span class="label">${escapeHtml(t("تاريخ الاستحقاق"))}</span><span class="value">${escapeHtml(displayDate(invoice.dueDate))}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("رقم أمر الشراء"))}</span><span class="value">${escapeHtml(invoice.poNumber || "-")}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("رقم فاتورة المورد"))}</span><span class="value">${escapeHtml(invoice.referenceNo || "-")}</span></div>
-              <div class="card"><span class="label">${escapeHtml(t("مركز التكلفة"))}</span><span class="value">${escapeHtml(invoice.costCenterName || invoice.costCenter || "-")}</span></div>
+              <div class="card"><span class="label">${escapeHtml(t("مركز التكلفة"))}</span><span class="value">${escapeHtml(invoice.costCenterName || t(invoice.costCenter) || "-")}</span></div>
               <div class="card"><span class="label">${escapeHtml(t("الحالة"))} / Status</span><span class="value">${escapeHtml(t(invoice.status))}</span></div>
               ${invoice.importTreatment ? `<div class="card"><span class="label">${escapeHtml(t("نوع فاتورة المورد غير المقيم"))}</span><span class="value">${escapeHtml(t(IMPORT_TREATMENT_LABELS[invoice.importTreatment as Exclude<ImportTreatment, "">] ?? invoice.importTreatment))}</span></div>` : ""}
               ${invoice.supplierCurrency ? `<div class="card"><span class="label">${escapeHtml(t("فاتورة المورد بعملته"))}</span><span class="value">${escapeHtml(formatAmount(invoice.supplierCurrencyTotal ?? 0))} ${escapeHtml(invoice.supplierCurrency)} × ${escapeHtml(String(invoice.exchangeRate ?? ""))}</span></div>` : ""}
@@ -545,7 +545,7 @@ function InvoicesList({
   onDelete: (id: string) => void;
   onPrintPdf: (i: PurchaseInvoice) => void;
 }) {
-  const { t, direction, formatDate, formatNumber } = useI18n();
+  const { t, direction, locale, formatDate, formatNumber } = useI18n();
   const formatAmount = (value: string) =>
     formatNumber(parseCurrency(value), {
       minimumFractionDigits: 2,
@@ -574,7 +574,7 @@ function InvoicesList({
       />
 
       <FilterBar>
-        <div className="space-y-1.5 md:col-span-2"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("البحث")}</label><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`${t("رقم الفاتورة")}، ${t("المرجع")}، ${t("المورد")}...`} className="w-full rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5 text-sm" /></div>
+        <div className="space-y-1.5 md:col-span-2"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("البحث")}</label><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={locale === "en" ? `${t("رقم الفاتورة")}, ${t("المرجع")}, ${t("المورد")}...` : `${t("رقم الفاتورة")}، ${t("المرجع")}، ${t("المورد")}...`} className="w-full rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5 text-sm" /></div>
         <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("من تاريخ")}</label><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm" /></div>
         <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("إلى تاريخ")}</label><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm" /></div>
         <div className="space-y-1.5"><label className="block text-start text-xs font-semibold text-muted-foreground">{t("الحالة")}</label><select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm"><option value="">{t("الكل")}</option><option value="مفتوحة">{t("مفتوحة")}</option><option value="مدفوعة جزئياً">{t("مدفوعة جزئياً")}</option><option value="مدفوعة بالكامل">{t("مدفوعة بالكامل")}</option></select></div>
@@ -642,7 +642,7 @@ function InvoicesList({
                     />}
                     {inv.accountingStatus === "posted" && (canPay || parseCurrency(inv.paid) > 0) && <ActionBtn
                       icon={CreditCard}
-                      label={t(canPay && parseCurrency(inv.remaining) > 0.01 ? "تسديد" : "المدفوعات")}
+                      label={canPay && parseCurrency(inv.remaining) > 0.01 ? t("تسديد") : t("المدفوعات")}
                       color="indigo"
                       onClick={() => onPayment(inv)}
                     />}
@@ -2324,7 +2324,7 @@ function InvoicePayment({
       return;
     }
     if (!accountCode) {
-      toast({ title: t(isCash ? "اختر الصندوق" : "اختر الحساب البنكي") });
+      toast({ title: isCash ? t("اختر الصندوق") : t("اختر الحساب البنكي") });
       return;
     }
     if (isCheque && (!chequeNumber.trim() || !chequeDate)) {
@@ -2355,7 +2355,7 @@ function InvoicePayment({
       const refreshed = await reloadInvoice();
       if (!error) {
         toast({
-          title: t(chequeDeferred ? "تم تسجيل الشيك المؤجل" : "تم تسجيل الدفعة والقيد المحاسبي"),
+          title: chequeDeferred ? t("تم تسجيل الشيك المؤجل") : t("تم تسجيل الدفعة والقيد المحاسبي"),
           description: `${t("المبلغ")}: ${formatAmount(payAmount)} ${t("ريال")}`,
         });
         onUpdated(refreshed ?? current);
@@ -2406,7 +2406,7 @@ function InvoicePayment({
         toast({ title: t("تعذّر تنفيذ الإجراء"), description: purchasePaymentErrorText(String(error.message ?? ""), t), variant: "destructive" });
         return;
       }
-      toast({ title: t(action.type === "clear" ? "تم تأكيد صرف الشيك" : "تم عكس السداد وقيده") });
+      toast({ title: action.type === "clear" ? t("تم تأكيد صرف الشيك") : t("تم عكس السداد وقيده") });
       setAction(null);
       setActionReason("");
     } finally {
@@ -2474,13 +2474,13 @@ function InvoicePayment({
                   className="w-full px-3 py-2 border border-slate-300 rounded text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none appearance-none bg-white"
                 >
                   {PAYMENT_METHODS.map((method) => (
-                    <option key={method} value={method}>{t(method === "نقدي" ? "نقداً" : method)}</option>
+                    <option key={method} value={method}>{method === "نقدي" ? t("نقداً") : t(method)}</option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700 text-right block">
-                  {t(isCash ? "الصندوق" : "الحساب البنكي")} <span className="text-red-500">*</span>
+                  {isCash ? t("الصندوق") : t("الحساب البنكي")} <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={accountCode}
@@ -2659,7 +2659,7 @@ function InvoicePayment({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-slate-600 block text-right">
-                    {t(action.type === "clear" ? "تاريخ الصرف" : "تاريخ العكس")}
+                    {action.type === "clear" ? t("تاريخ الصرف") : t("تاريخ العكس")}
                   </label>
                   <input
                     type="date"
@@ -2690,7 +2690,7 @@ function InvoicePayment({
                   disabled={saving}
                   className={`px-4 py-1.5 rounded text-sm font-semibold text-white disabled:opacity-60 ${action.type === "clear" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}
                 >
-                  {saving ? t("جارٍ التنفيذ...") : t(action.type === "clear" ? "تأكيد الصرف" : "تأكيد العكس")}
+                  {saving ? t("جارٍ التنفيذ...") : action.type === "clear" ? t("تأكيد الصرف") : t("تأكيد العكس")}
                 </button>
               </div>
             </div>

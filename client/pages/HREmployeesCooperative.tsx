@@ -108,7 +108,7 @@ export default function HREmployeesCooperative() {
       <EmployeeForm
         mode="create"
         initialData={getCooperativeInitialData()}
-        title="إضافة موظف متعاون"
+        title={t("إضافة موظف متعاون")}
         onBack={() => setMode("list")}
         onSaved={() => {
           setMode("list");
@@ -124,7 +124,7 @@ export default function HREmployeesCooperative() {
         mode="edit"
         initialData={selected}
         onBack={() => setMode("list")}
-        title="تعديل موظف متعاون"
+        title={t("تعديل موظف متعاون")}
         onSaved={() => {
           setMode("list");
           refresh();
@@ -138,9 +138,9 @@ export default function HREmployeesCooperative() {
       <div className="mx-auto max-w-7xl space-y-6" dir={direction}>
         <PageHeader
           icon={Users}
-          title="الموظفون المتعاونون"
-          subtitle="إدارة الموظفين المتعاونين وربطهم الفعلي مع قاعدة البيانات"
-          actionLabel="إضافة موظف متعاون"
+          title={t("الموظفون المتعاونون")}
+          subtitle={t("إدارة الموظفين المتعاونين وربطهم الفعلي مع قاعدة البيانات")}
+          actionLabel={t("إضافة موظف متعاون")}
           onAction={() => setMode("create")}
           gradient="from-blue-600 to-indigo-700"
         />

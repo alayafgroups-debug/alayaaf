@@ -158,9 +158,9 @@ export default function HRPenaltiesArchive() {
       // المادة 71: مهلة الاتهام بالمخالفة وتوقيع الجزاء 30 يومًا
       const date = String(row.date ?? "").slice(0, 10);
       const old = /^\d{4}-\d{2}-\d{2}$/.test(date) && date < addDays(riyadhToday(), -30);
-      if (!confirm(t(old
-        ? "تاريخ المخالفة قبل أكثر من 30 يومًا: راجع المادة 71 من نظام العمل (مهلة الاتهام وتوقيع الجزاء) قبل الاعتماد. اعتماد الجزاء؟"
-        : "اعتماد الجزاء؟ يُخصم في مسير الرواتب بحد المادة 72"))) return;
+      if (!confirm(old
+        ? t("تاريخ المخالفة قبل أكثر من 30 يومًا: راجع المادة 71 من نظام العمل (مهلة الاتهام وتوقيع الجزاء) قبل الاعتماد. اعتماد الجزاء؟")
+        : t("اعتماد الجزاء؟ يُخصم في مسير الرواتب بحد المادة 72"))) return;
     }
     setDeciding(row.id);
     const { data, error } = await supabase.from("penalties").update({ status: decision, decision_note: note }).eq("id", row.id).select("*");
@@ -175,7 +175,7 @@ export default function HRPenaltiesArchive() {
     }
     const updated = data[0] as PenaltyRow;
     setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, ...updated } : item)));
-    toast({ title: t(decision === "معتمد" ? "اعتُمد الجزاء" : "رُفض الجزاء") });
+    toast({ title: decision === "معتمد" ? t("اعتُمد الجزاء") : t("رُفض الجزاء") });
   };
 
   const handlePrint = () => window.print();
@@ -183,7 +183,7 @@ export default function HRPenaltiesArchive() {
   const handleExport = () => {
     const header = [t("رقم المساءلة"), t("إسم الموظف"), t("المخالفة"), t("الجزاء"), t("المبلغ"), t("الحالة"), t("التاريخ")];
     const lines = filtered.map((r) =>
-      [r.id, r.emp_name ?? "", r.reason ?? "", r.penalty_type ?? "", r.amount ?? 0, r.status ?? "", r.date ?? ""]
+      [r.id, r.emp_name ?? "", r.reason ?? "", t(r.penalty_type ?? ""), r.amount ?? 0, t(r.status ?? ""), r.date ?? ""]
         .map(csvCell)
         .join(","),
     );
@@ -199,12 +199,26 @@ export default function HRPenaltiesArchive() {
 
   return (
     <Layout>
+      {/* الطباعة: الجدول وحده بعرض الصفحة، بلا القائمة الجانبية والأزرار والفلاتر */}
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 10mm; }
+          body * { visibility: hidden !important; }
+          #penalties-print-area, #penalties-print-area * { visibility: visible !important; }
+          #penalties-print-area { position: absolute; inset: 0 0 auto 0; width: 100%; overflow: visible !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+          #penalties-print-area .penalties-print-head { background: #fff !important; color: #000 !important; padding: 0 0 8px !important; }
+          #penalties-print-area .overflow-x-auto { overflow: visible !important; }
+          #penalties-print-area table { width: 100% !important; min-width: 0 !important; table-layout: auto; font-size: 9px; white-space: normal !important; }
+          #penalties-print-area th, #penalties-print-area td { min-width: 0 !important; padding: 4px !important; word-break: break-word; }
+          .penalties-no-print { display: none !important; }
+        }
+      `}</style>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div id="penalties-print-area" className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="penalties-print-head bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4 w-full md:w-auto">
               <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">{t("ارشيف الجزاءات")}</h2>
-              <div className="flex gap-2 text-black w-full sm:w-auto">
+              <div className="penalties-no-print flex gap-2 text-black w-full sm:w-auto">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -222,7 +236,7 @@ export default function HRPenaltiesArchive() {
                 >
                   <option value="الكل">{t("الكل")}</option>
                   {penaltyTypes.map((pt) => (
-                    <option key={pt} value={pt}>{pt}</option>
+                    <option key={pt} value={pt}>{t(pt)}</option>
                   ))}
                 </select>
               </div>
@@ -230,7 +244,7 @@ export default function HRPenaltiesArchive() {
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
               <h2 className="text-lg font-bold sm:hidden">{t("ارشيف الجزاءات")}</h2>
-              <div className="flex items-center gap-2">
+              <div className="penalties-no-print flex items-center gap-2">
                 <button onClick={handleExport} className="p-1.5 hover:bg-white/10 rounded transition-colors text-white" title={t("تصدير")} aria-label={t("تصدير")}>
                   <Download className="h-4 w-4" />
                 </button>
@@ -258,7 +272,7 @@ export default function HRPenaltiesArchive() {
                   <th className="py-3 px-2 font-medium">{t("تاريخ الإضافة")}</th>
                   <th className="py-3 px-2 font-medium">{t("سجّله")}</th>
                   <th className="py-3 px-2 font-medium">{t("القرار")}</th>
-                  <th className="py-3 px-2 font-medium">{t("الإجراءات")}</th>
+                  <th className="penalties-no-print py-3 px-2 font-medium">{t("الإجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -284,7 +298,7 @@ export default function HRPenaltiesArchive() {
                       <td className="py-2.5 px-2 font-medium text-gray-800">{r.emp_name || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.employee_id || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.reason || "-"}</td>
-                      <td className="py-2.5 px-2 text-gray-600">{r.penalty_type || "-"}</td>
+                      <td className="py-2.5 px-2 text-gray-600">{r.penalty_type ? t(r.penalty_type) : "-"}</td>
                       <td className="py-2.5 px-2 text-red-600 font-medium">{Number(r.amount ?? 0).toLocaleString(locale === "ar" ? "ar-SA" : "en-US")}</td>
                       <td className="py-2.5 px-2">
                         <span
@@ -297,15 +311,15 @@ export default function HRPenaltiesArchive() {
                                 : "bg-amber-100 text-amber-700")
                           }
                         >
-                          {t(isApprovedStatus(r.status) ? "معتمد" : isRejectedStatus(r.status) ? "مرفوض" : "معلق")}
+                          {isApprovedStatus(r.status) ? t("معتمد") : isRejectedStatus(r.status) ? t("مرفوض") : t("معلق")}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-gray-500">
-                        {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US") : "-")}
+                        {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-GB") : "-")}
                       </td>
                       <td className="py-2.5 px-2 text-gray-600">{r.created_by_name || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.decided_by_name ? `${r.decided_by_name}${r.decision_note ? ` — ${r.decision_note}` : ""}` : "-"}</td>
-                      <td className="py-2.5 px-2">
+                      <td className="penalties-no-print py-2.5 px-2">
                         <div className="flex items-center justify-center gap-2">
                           {canDecide && isPendingPenalty(r.status) && !(r.created_by && r.created_by === myUid && !isMainAdmin) && (
                             <>
@@ -333,7 +347,7 @@ export default function HRPenaltiesArchive() {
 
           <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-sm">
             <span className="text-gray-500">{t("يعرض")} {filtered.length} {t("من أصل")} {rows.length} {t("سجل")}</span>
-            <div className="flex gap-1 opacity-50 pointer-events-none">
+            <div className="penalties-no-print flex gap-1 opacity-50 pointer-events-none">
               <Button variant="outline" size="sm" className="h-8 px-3">{t("السابق")}</Button>
               <Button variant="outline" size="sm" className="h-8 px-3">{t("التالي")}</Button>
             </div>

@@ -5,6 +5,7 @@ import { fetchAllRows } from "@/lib/fetchAll";
 import { eachDate, riyadhToday } from "@/lib/hrDates";
 import { isApprovedStatus } from "@/lib/hrStatus";
 import { readUserSession } from "@/lib/authSession";
+import { currentLocale } from "@/i18n";
 import { MAX_SHIFT_MINUTES, attendanceSpanSeconds, isScheduledWorkDay, type WorkSchedule } from "@/lib/workSchedule";
 
 export const VERIFIED_ATTENDANCE_SOURCE = "employee_geolocation";
@@ -282,7 +283,7 @@ export const manualAttendanceResultText = (result: ManualAttendanceResult, t: (t
   if (result.skippedLocked) parts.push(`${t("وتُرك")} ${formatNumber(result.skippedLocked)} ${t("سجل في شهر رواتبه معتمدة أو مرحّلة")}`);
   if (result.skippedOwn) parts.push(`${t("وتُرك")} ${formatNumber(result.skippedOwn)} ${t("سجل لك أنت (يسجّله مسؤول آخر)")}`);
   if (result.skippedConcurrent) parts.push(`${t("وتُرك")} ${formatNumber(result.skippedConcurrent)} ${t("سجل تغيّر أثناء الحفظ دون استبدال")}`);
-  return parts.join("، ");
+  return parts.join(currentLocale() === "en" ? ", " : "، ");
 };
 
 // ───────────── أيام لا تُحتسب غيابًا: العطل الرسمية والإجازات المعتمدة ─────────────

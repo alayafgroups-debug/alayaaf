@@ -15,7 +15,7 @@ type CompanyRow = { id: string; name: string; nameEn: string; city: string; phon
 type TabKey = "schedules" | "companies";
 
 export default function HROrgWorkSchedules() {
-  const { t, direction, formatNumber } = useI18n();
+  const { t, locale, direction, formatNumber } = useI18n();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>("schedules");
 
@@ -112,7 +112,7 @@ export default function HROrgWorkSchedules() {
   };
 
   const deleteSched = async (row: ScheduleRow) => {
-    if (!confirm(`${t("حذف")} ${t("اسم الجدول")} "${row.name}"؟`)) return;
+    if (!confirm(`${t("حذف")} ${t("اسم الجدول")} "${row.name}"${locale === "en" ? "?" : "؟"}`)) return;
     const { data, error } = await supabase.from("hr_work_schedules").delete().eq("id", row.id).select("id");
     if (mutationFailed(t("تعذر حذف جدول العمل"), error, data)) return;
     setSchedules((prev) => prev.filter((r) => r.id !== row.id));
@@ -120,7 +120,7 @@ export default function HROrgWorkSchedules() {
   };
 
   const deleteComp = async (row: CompanyRow) => {
-    if (!confirm(`${t("حذف")} ${t("الشركة")} "${row.name}"؟`)) return;
+    if (!confirm(`${t("حذف")} ${t("الشركة")} "${row.name}"${locale === "en" ? "?" : "؟"}`)) return;
     const { data, error } = await supabase.from("hr_companies").delete().eq("id", row.id).select("id");
     if (mutationFailed(t("تعذر حذف الشركة"), error, data)) return;
     setCompanies((prev) => prev.filter((r) => r.id !== row.id));

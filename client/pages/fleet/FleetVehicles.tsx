@@ -135,7 +135,7 @@ export default function FleetVehicles() {
       : await supabase.from("fleet_vehicles").insert(payload);
     setBusy(false);
     if (saveError) { setError(t(fleetErrorText(saveError.message))); return; }
-    toast({ title: t(editingId ? "تم تحديث المركبة" : "تمت إضافة المركبة") });
+    toast({ title: editingId ? t("تم تحديث المركبة") : t("تمت إضافة المركبة") });
     reset();
     await load();
   };
@@ -188,11 +188,11 @@ export default function FleetVehicles() {
         {editingId !== undefined && (
           <section className="rounded-xl border bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-bold">{t(editingId ? "تعديل المركبة" : "مركبة جديدة")}</h2>
+              <h2 className="font-bold">{editingId ? t("تعديل المركبة") : t("مركبة جديدة")}</h2>
               <button onClick={reset}><X className="h-5 w-5" /></button>
             </div>
             <div className="grid gap-3 md:grid-cols-4">
-              <label className="text-xs text-slate-600">{t("رقم اللوحة")} *<input value={form.plate} onChange={(event) => update("plate")(event.target.value)} className={input} placeholder="أ ب ج 1234" /></label>
+              <label className="text-xs text-slate-600">{t("رقم اللوحة")} *<input value={form.plate} onChange={(event) => update("plate")(event.target.value)} className={input} placeholder={t("أ ب ج 1234")} /></label>
               <label className="text-xs text-slate-600">{t("الشركة المصنعة")} *<input value={form.make} onChange={(event) => update("make")(event.target.value)} className={input} /></label>
               <label className="text-xs text-slate-600">{t("الطراز")}<input value={form.model} onChange={(event) => update("model")(event.target.value)} className={input} /></label>
               <label className="text-xs text-slate-600">{t("سنة الصنع")}<input type="number" value={form.year} onChange={(event) => update("year")(event.target.value)} className={input} /></label>

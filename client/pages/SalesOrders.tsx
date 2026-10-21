@@ -552,9 +552,9 @@ function OrdersList({
         <FilterInput label={t("البحث")} placeholder={t("رقم الأمر، المرجع، اسم العميل...")} colSpan={2} value={search} onChange={setSearch} />
         <FilterSelect label={t("العميل")} options={["الكل", ...customerNames]} value={customerFilter} onChange={setCustomerFilter} />
         <FilterSelect label={t("الحالة")} value={statusFilter} onChange={setStatusFilter}>
-          <option value="">الكل</option>
-          <option value="confirmed">مؤكد</option>
-          <option value="delivered">تم التسليم</option>
+          <option value="">{t("الكل")}</option>
+          <option value="confirmed">{t("مؤكد")}</option>
+          <option value="delivered">{t("تم التسليم")}</option>
         </FilterSelect>
         <FilterActions onReset={() => { setSearch(""); setCustomerFilter("الكل"); setStatusFilter(""); }} />
       </FilterBar>

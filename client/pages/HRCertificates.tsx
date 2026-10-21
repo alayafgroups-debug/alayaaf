@@ -314,7 +314,7 @@ export default function HRCertificates() {
   }
 
   async function handleDelete(certificate: Certificate) {
-    if (!confirm(`${t("حذف الشهادة")} ${certificate.certificateNo}؟`)) return;
+    if (!confirm(`${t("حذف الشهادة")} ${certificate.certificateNo}${locale === "en" ? "?" : "؟"}`)) return;
 
     const { data, error } = await supabase.from("hr_certificates").delete().eq("id", certificate.id).select("id");
     if (error || !data?.length) {
@@ -370,6 +370,9 @@ export default function HRCertificates() {
     setLocalOnly((rows) => rows.filter((c) => c.id !== certificate.id));
   }
 
+  // القيمتان الافتراضيتان تُترجمان عند العرض والطباعة فقط؛ القيمة المحفوظة لا تتغير
+  const letterValue = (value: string) => (value === "لمن يهمه الأمر" ? t("لمن يهمه الأمر") : value === "شهادة خبرة" ? t("شهادة خبرة") : value);
+
   // نص الشهادة مبني في مكان واحد: المعاينة والطباعة تعرضان النص نفسه
   const certificateLetter = (certificate: Certificate) => {
     const paragraphs: LetterPart[][] = [
@@ -384,11 +387,11 @@ export default function HRCertificates() {
       ],
       [
         { text: `${t("وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى")}:` },
-        { text: certificate.directedTo || "-", bold: true },
+        { text: letterValue(certificate.directedTo) || "-", bold: true },
       ],
       [
         { text: `${t("الغرض من الشهادة")}:` },
-        { text: certificate.purpose || "-", bold: true },
+        { text: letterValue(certificate.purpose) || "-", bold: true },
       ],
     ];
     if (certificate.notes) paragraphs.push([{ text: `${t("ملاحظات")}: ${certificate.notes}` }]);
@@ -414,13 +417,16 @@ export default function HRCertificates() {
       .map((parts) => `<p>${parts.map((part) => (part.bold ? `<strong>${letterText(part.text)}</strong>` : letterText(part.text))).join("")}</p>`)
       .join("");
     const logoHtml = COMPANY_PROFILE.logoUrl ? `<img class="logo" src="${escapeReportHtml(COMPANY_PROFILE.logoUrl)}" alt="">` : "";
+    // الترويسة بالإنجليزية: اسم الشركة والعنوان بالإنجليزية؛ بالعربية كما كانت (الاسم العربي ثم الإنجليزي)
+    const companyName = locale === "en" ? COMPANY_PROFILE.companyNameEn : COMPANY_PROFILE.companyNameAr;
+    const companySubtitle = locale === "en" ? COMPANY_PROFILE.addressEn : COMPANY_PROFILE.companyNameEn;
 
     printWindow.document.write(`<!doctype html>
 <html dir="${direction}" lang="${locale}"><head><meta charset="utf-8"><title>${escapeReportHtml(`${letter.title} ${certificate.certificateNo}`)}</title>
 <style>
 @page{size:A4 portrait;margin:15mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#e8eef4;color:#1f2937;font-family:"Tajawal","Tahoma",Arial,sans-serif}.letter{width:180mm;min-height:267mm;margin:14px auto;background:#fff;padding:14mm;display:flex;flex-direction:column}.letterhead{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:3px solid #b45309}.logo{max-height:70px;max-width:160px;object-fit:contain}.company-ar{font-size:18px;font-weight:800;color:#111827}.company-en{font-size:11px;color:#6b7280;margin-top:3px}.meta{display:flex;justify-content:space-between;gap:12px;margin:16px 0 0;font-size:12px;color:#4b5563}.meta strong{color:#111827}h1{text-align:center;font-size:26px;color:#b45309;margin:34px 0 26px}.body{font-size:15px;line-height:2.1}.body p{margin:0 0 14px}.body strong{margin:0 4px;color:#111827}.closing{margin-top:34px;font-size:15px}.signature{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-end}.signature div{width:65mm;min-height:32mm;border:1px dashed #9ca3af;border-radius:10px;display:flex;align-items:flex-end;justify-content:center;padding:8px;font-size:12px;color:#4b5563}@media print{body{background:#fff}.letter{width:auto;min-height:265mm;margin:0;padding:0}}
 </style></head><body><main class="letter">
-<header class="letterhead">${logoHtml}<div><div class="company-ar">${escapeReportHtml(COMPANY_PROFILE.companyNameAr)}</div><div class="company-en">${escapeReportHtml(COMPANY_PROFILE.companyNameEn)}</div></div></header>
+<header class="letterhead">${logoHtml}<div><div class="company-ar">${escapeReportHtml(companyName)}</div><div class="company-en">${escapeReportHtml(companySubtitle)}</div></div></header>
 <div class="meta"><span>${escapeReportHtml(t("رقم الشهادة"))}: <strong>${escapeReportHtml(certificate.certificateNo)}</strong></span><span>${escapeReportHtml(letter.dateLine)}</span></div>
 <h1>${escapeReportHtml(letter.title)}</h1>
 <section class="body">${paragraphsHtml}<p class="closing">${escapeReportHtml(letter.closing)}</p></section>
@@ -569,15 +575,15 @@ export default function HRCertificates() {
                 </p>
                 <p>
                   {t("وقد منحت هذه الشهادة بناءً على طلبه/طلبها لتقديمها إلى")}:
-                  <span className="font-bold mx-1">{form.directedTo || "........"}</span>
+                  <span className="font-bold mx-1">{letterValue(form.directedTo) || "........"}</span>
                 </p>
                 <p>
                   {t("الغرض من الشهادة")}:
-                  <span className="font-bold mx-1">{form.purpose || "........"}</span>
+                  <span className="font-bold mx-1">{letterValue(form.purpose) || "........"}</span>
                 </p>
                 {form.notes ? <p>{t("ملاحظات")}: {form.notes}</p> : null}
                 <p className="pt-8">{t("وتفضلوا بقبول فائق الاحترام.")}</p>
-                <p className="pt-8 text-left">{t("ختم وتوقيع الموارد البشرية")}</p>
+                <p className="pt-8 text-end">{t("ختم وتوقيع الموارد البشرية")}</p>
               </div>
             </div>
           </div>
@@ -634,12 +640,12 @@ export default function HRCertificates() {
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-4">
               <div className="relative max-w-md">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t("بحث برقم الشهادة أو الموظف")}
-                  className="w-full rounded-lg border border-gray-300 pr-10 pl-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-gray-300 ps-10 pe-3 py-2 text-sm"
                 />
               </div>
 
@@ -647,12 +653,12 @@ export default function HRCertificates() {
                 <table className="w-full min-w-[860px] text-sm">
                   <thead className="bg-gray-50 text-gray-600">
                     <tr>
-                      <th className="text-right px-3 py-2 font-semibold">{t("رقم الشهادة")}</th>
-                      <th className="text-right px-3 py-2 font-semibold">{t("الموظف")}</th>
-                      <th className="text-right px-3 py-2 font-semibold">{t("المسمى الوظيفي")}</th>
-                      <th className="text-right px-3 py-2 font-semibold">{t("تاريخ الإصدار")}</th>
-                      <th className="text-right px-3 py-2 font-semibold">{t("الحالة")}</th>
-                      <th className="text-right px-3 py-2 font-semibold">{t("إجراءات")}</th>
+                      <th className="text-start px-3 py-2 font-semibold">{t("رقم الشهادة")}</th>
+                      <th className="text-start px-3 py-2 font-semibold">{t("الموظف")}</th>
+                      <th className="text-start px-3 py-2 font-semibold">{t("المسمى الوظيفي")}</th>
+                      <th className="text-start px-3 py-2 font-semibold">{t("تاريخ الإصدار")}</th>
+                      <th className="text-start px-3 py-2 font-semibold">{t("الحالة")}</th>
+                      <th className="text-start px-3 py-2 font-semibold">{t("إجراءات")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -756,7 +762,7 @@ export default function HRCertificates() {
                         </p>
                       ))}
                       <p className="pt-8">{letter.closing}</p>
-                      <p className="pt-8 text-left">{letter.signature}</p>
+                      <p className="pt-8 text-end">{letter.signature}</p>
                     </div>
                   );
                 })()}

@@ -142,8 +142,8 @@ export default function HRUserLogs() {
       return;
     }
     const rows = ((data ?? []) as Record<string, unknown>[]).map(toLog);
-    const headers = [t("المستخدم"), t("التاريخ"), t("الوحدة"), t("العملية"), t("التفاصيل"), t("قبل"), t("بعد")];
-    const lines = rows.map((l) => [l.user_name, formatLogDate(l.created_at), l.module_label, l.operation, l.details,
+    const headers = [t("المستخدم"), t("التاريخ"), t("الوحدة"), t("العملية"), t("التفاصيل"), t("قبل التعديل"), t("بعد التعديل")];
+    const lines = rows.map((l) => [l.user_name, formatLogDate(l.created_at), t(l.module_label), t(l.operation), l.details,
       l.old_values ? JSON.stringify(l.old_values) : "", l.new_values ? JSON.stringify(l.new_values) : ""]);
     const csv = [headers, ...lines].map((r) => r.map(csvCell).join(",")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -158,17 +158,31 @@ export default function HRUserLogs() {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-full space-y-4 p-6" dir={direction}>
+      {/* الطباعة: العنوان والجدول بعرض الصفحة، بلا القائمة الجانبية والأزرار والفلاتر */}
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 10mm; }
+          body * { visibility: hidden !important; }
+          #userlogs-print-area, #userlogs-print-area * { visibility: visible !important; }
+          #userlogs-print-area { position: absolute; inset: 0 0 auto 0; width: 100%; max-width: none !important; padding: 0 !important; overflow: visible !important; }
+          #userlogs-print-area .overflow-hidden, #userlogs-print-area .overflow-x-auto { overflow: visible !important; border: 0 !important; box-shadow: none !important; }
+          #userlogs-print-area table { width: 100% !important; min-width: 0 !important; table-layout: auto; font-size: 9px; }
+          #userlogs-print-area th, #userlogs-print-area td { padding: 3px 4px !important; white-space: normal !important; max-width: none !important; overflow: visible !important; text-overflow: clip !important; word-break: break-word; }
+          #userlogs-print-area thead tr { background: #fff !important; color: #000 !important; }
+          .userlogs-no-print { display: none !important; }
+        }
+      `}</style>
+      <div id="userlogs-print-area" className="mx-auto max-w-full space-y-4 p-6" dir={direction}>
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">{t("سجلات المستخدمين")}</h1>
-          <div className="flex items-center gap-2">
+          <div className="userlogs-no-print flex items-center gap-2">
             <button onClick={() => void load()} title={t("تحديث")} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"><RefreshCw className="h-4 w-4" /></button>
             <button onClick={() => void handleExport()} disabled={exporting} title={t("تصدير")} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-50"><Download className="h-4 w-4" /></button>
             <button onClick={() => window.print()} title={t("طباعة")} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"><Printer className="h-4 w-4" /></button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap bg-white border rounded-xl px-4 py-3 shadow-sm">
+        <div className="userlogs-no-print flex items-center gap-3 flex-wrap bg-white border rounded-xl px-4 py-3 shadow-sm">
           <select value={moduleFilter} onChange={(e) => { setModuleFilter(e.target.value); resetPage(); }}
             className="border rounded-lg px-3 py-1.5 text-sm bg-white outline-none">
             <option value="">{t("كل الوحدات")}</option>
@@ -189,19 +203,19 @@ export default function HRUserLogs() {
           <span className="text-sm text-gray-500">{formatNumber(total)} {t("سجل")}</span>
         </div>
 
-        {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {error && <div className="userlogs-no-print rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{t(error)}</div>}
 
         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[#004e89] text-white">
-                  <th className="px-4 py-3 text-right font-medium">{t("المستخدم")}</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("التاريخ")}</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("الوحدة")}</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("العملية")}</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("التفاصيل")}</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("قبل وبعد")}</th>
+                  <th className="px-4 py-3 text-start font-medium">{t("المستخدم")}</th>
+                  <th className="px-4 py-3 text-start font-medium">{t("التاريخ")}</th>
+                  <th className="px-4 py-3 text-start font-medium">{t("الوحدة")}</th>
+                  <th className="px-4 py-3 text-start font-medium">{t("العملية")}</th>
+                  <th className="px-4 py-3 text-start font-medium">{t("التفاصيل")}</th>
+                  <th className="px-4 py-3 text-start font-medium">{t("قبل وبعد")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,9 +232,9 @@ export default function HRUserLogs() {
                         <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{log.user_name}</td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap font-mono text-xs">{formatLogDate(log.created_at)}</td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium", MODULE_COLORS[log.module] ?? "bg-gray-100 text-gray-600")}>{log.module_label}</span>
+                          <span className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium", MODULE_COLORS[log.module] ?? "bg-gray-100 text-gray-600")}>{t(log.module_label)}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{log.operation}</td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{t(log.operation)}</td>
                         <td className="px-4 py-3 text-gray-500 text-xs max-w-md truncate" title={log.details}>{log.details}</td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {rows.length ? (
@@ -234,7 +248,7 @@ export default function HRUserLogs() {
                         <tr className="border-b bg-slate-50">
                           <td colSpan={6} className="px-4 py-3">
                             <table className="w-full text-xs">
-                              <thead><tr className="text-gray-500"><th className="py-1 text-right font-medium">{t("الحقل")}</th><th className="py-1 text-right font-medium">{t("قبل")}</th><th className="py-1 text-right font-medium">{t("بعد")}</th></tr></thead>
+                              <thead><tr className="text-gray-500"><th className="py-1 text-start font-medium">{t("الحقل")}</th><th className="py-1 text-start font-medium">{t("قبل التعديل")}</th><th className="py-1 text-start font-medium">{t("بعد التعديل")}</th></tr></thead>
                               <tbody>
                                 {rows.map((row) => (
                                   <tr key={row.key} className="border-t border-slate-200 align-top">
@@ -256,7 +270,7 @@ export default function HRUserLogs() {
           </div>
           <div className="flex items-center justify-between border-t px-4 py-2 text-sm text-gray-600">
             <span>{t("صفحة")} {formatNumber(page + 1)} {t("من")} {formatNumber(pages)}</span>
-            <div className="flex gap-2">
+            <div className="userlogs-no-print flex gap-2">
               <button type="button" disabled={page === 0 || loading} onClick={() => { setPage((p) => Math.max(0, p - 1)); setExpanded(null); }} className="rounded-lg border px-3 py-1 disabled:opacity-40">{t("السابق")}</button>
               <button type="button" disabled={page + 1 >= pages || loading} onClick={() => { setPage((p) => p + 1); setExpanded(null); }} className="rounded-lg border px-3 py-1 disabled:opacity-40">{t("التالي")}</button>
             </div>

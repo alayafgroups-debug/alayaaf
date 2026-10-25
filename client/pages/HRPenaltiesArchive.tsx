@@ -10,6 +10,7 @@ import { isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
 import { canManagePerm } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { addDays, riyadhToday } from "@/lib/hrDates";
+import PrintBrandHeader from "@/components/PrintBrandHeader";
 
 type PenaltyRow = {
   id: string;
@@ -215,6 +216,7 @@ export default function HRPenaltiesArchive() {
       `}</style>
       <div className="p-6 max-w-[1600px] mx-auto space-y-6" dir={direction}>
         <div id="penalties-print-area" className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <PrintBrandHeader />
           <div className="penalties-print-head bg-[#004e89] text-white p-3 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4 w-full md:w-auto">
               <h2 className="text-lg font-bold whitespace-nowrap hidden sm:block">{t("ارشيف الجزاءات")}</h2>

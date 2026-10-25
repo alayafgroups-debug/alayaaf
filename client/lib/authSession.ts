@@ -33,6 +33,29 @@ export function readUserSession(): UserSession | null {
   }
 }
 
+/** أدوار مدير النظام، كما في is_main_system_admin() بقاعدة البيانات */
+export const MAIN_ADMIN_ROLES = ["مدير النظام", "مدير عام", "المدير العام"];
+
+/**
+ * مدير النظام (حساب موظف دوره من أدوار المدير): قاعدة البيانات تستثنيه من حماية «لا تعدّل سجلك»
+ * (جدول الدوام وطريقة صرف الراتب)، فلا يُستثنى سجله من التغيير الجماعي.
+ */
+export function isMainAdminSession(session: UserSession | null = readUserSession()): boolean {
+  return Boolean(session && session.accountType !== "special" && MAIN_ADMIN_ROLES.includes(String(session.role ?? "").trim()));
+}
+
+/** الحكم الحي من قاعدة البيانات (is_main_system_admin)، فلا يعتمد على الدور المحفوظ عند الدخول؛ وإن تعذر فالدور المحفوظ */
+export async function fetchIsMainAdmin(): Promise<boolean> {
+  try {
+    const { supabase } = await import("@/lib/supabaseClient");
+    const { data, error } = await supabase.rpc("is_main_system_admin");
+    if (!error && typeof data === "boolean") return data;
+  } catch {
+    // يُكتفى بالدور المحفوظ
+  }
+  return isMainAdminSession();
+}
+
 /** Check a permission key against a live permissions map fetched from DB. */
 export function checkPerm(liveMap: PermissionMap, ...keys: string[]): boolean {
   if (liveMap["*"] === true || liveMap["*"] === "read" || liveMap["*"] === "manage") return true;

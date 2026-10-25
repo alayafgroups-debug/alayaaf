@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Banknote, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
 import { employeeErrorText } from "@/components/hr/employeeErrors";
 import { SALARY_PAYMENT_METHODS, UNSPECIFIED_PAYMENT_METHOD } from "@/lib/salaryPaymentMethods";
-import { readUserSession } from "@/lib/authSession";
+import { fetchIsMainAdmin, isMainAdminSession, readUserSession } from "@/lib/authSession";
 
 export type PaymentMethodTarget = { id: string; empId: string; name: string; salaryPaymentMethod: string };
 
@@ -32,16 +32,26 @@ export default function BulkPaymentMethodDialog({ open, employees, onClose, onDo
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
+  // مدير النظام يدخل سجله مع المحددين (حكم قاعدة البيانات الحي، ومبدئيًا الدور المحفوظ)
+  const [ownAllowed, setOwnAllowed] = useState(() => isMainAdminSession());
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void fetchIsMainAdmin().then((value) => { if (!cancelled) setOwnAllowed(value); });
+    return () => { cancelled = true; };
+  }, [open]);
 
   const reset = () => { setMethod(""); setResult(null); setProgress(""); };
   // القيمة المحفوظة: الطريقة المختارة، أو فارغ (null) لخيار «بلا طريقة»
   const target = method === CLEAR_METHOD ? "" : method;
-  // سجل المستخدم نفسه لا يدخل: لا يغيّر أحد طريقة صرف راتبه (تمنعه قاعدة البيانات، ويُبطئ الدفعة كلها)
+  // سجل المستخدم نفسه لا يدخل: لا يغيّر أحد طريقة صرف راتبه (تمنعه قاعدة البيانات، ويُبطئ الدفعة كلها)،
+  // إلا مدير النظام فتستثنيه القاعدة، فيدخل سجله مع المحددين
   const ownIds = useMemo(() => {
     const session = readUserSession();
-    if (!session || session.accountType === "special") return new Set<string>();
+    if (!session || session.accountType === "special" || ownAllowed) return new Set<string>();
     return new Set(employees.filter((employee) => employee.id === session.id || (session.empId !== "" && employee.empId === session.empId)).map((employee) => employee.id));
-  }, [employees]);
+  }, [employees, ownAllowed]);
   const others = useMemo(() => employees.filter((employee) => !ownIds.has(employee.id)), [employees, ownIds]);
   const toChange = useMemo(() => others.filter((employee) => employee.salaryPaymentMethod !== target), [others, target]);
   const unchanged = others.length - toChange.length;

@@ -19,6 +19,8 @@ import {
   Wallet,
   CheckSquare,
   MinusSquare,
+  Network,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -32,6 +34,8 @@ import { loadOrgEnglishNames } from "@/lib/orgNames";
 import EmployeeDeleteDialog, { type DeletableEmployee } from "@/components/hr/EmployeeDeleteDialog";
 import BulkScheduleDialog from "@/components/hr/BulkScheduleDialog";
 import BulkPaymentMethodDialog from "@/components/hr/BulkPaymentMethodDialog";
+import BulkSectionDialog from "@/components/hr/BulkSectionDialog";
+import BulkEmploymentTypeDialog from "@/components/hr/BulkEmploymentTypeDialog";
 import { isSaudiNationality } from "@/lib/hrStatus";
 import { canManagePerm } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
@@ -139,6 +143,8 @@ export default function HREmployees() {
   const [administrationOptions, setAdministrationOptions] = useState<{ id: string; name: string; nameEn: string }[]>([]);
   const [bulkScheduleOpen, setBulkScheduleOpen] = useState(false);
   const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false);
+  const [bulkSectionOpen, setBulkSectionOpen] = useState(false);
+  const [bulkTypeOpen, setBulkTypeOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   // من سيُحذف (موظف واحد من زر الحذف، أو المحددون من زر الحذف الجماعي)
   const [deleteTargets, setDeleteTargets] = useState<DeletableEmployee[] | null>(null);
@@ -919,7 +925,7 @@ export default function HREmployees() {
   }
 
   if (mode === "view" && selected) {
-    return <EmployeeView employee={selected} onBack={() => setMode("list")} onEdit={() => setMode("edit")} />;
+    return <EmployeeView employee={selected} orgName={orgName} onBack={() => setMode("list")} onEdit={() => setMode("edit")} />;
   }
 
   return (
@@ -1085,7 +1091,7 @@ export default function HREmployees() {
               </>
             )}
             {selectedIds.size > 0 && (
-              <span className="flex items-center gap-2 text-xs text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
+              <span className="flex flex-wrap items-center gap-2 text-xs text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
                 {formatNumber(selectedIds.size)} {t("محدد")} — {t("الطباعة والتصدير للمحددين فقط")}
                 <button type="button" onClick={() => setSelectedIds(new Set())} className="text-rose-600 hover:underline">{t("إلغاء التحديد")}</button>
                 <button
@@ -1111,6 +1117,24 @@ export default function HREmployees() {
                     className="flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-0.5 text-blue-700 hover:bg-blue-50"
                   >
                     <Banknote className="h-3.5 w-3.5" />{t("تغيير طريقة صرف الراتب")}
+                  </button>
+                )}
+                {canManageEmployees && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkSectionOpen(true)}
+                    className="flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-0.5 text-blue-700 hover:bg-blue-50"
+                  >
+                    <Network className="h-3.5 w-3.5" />{t("تغيير القسم")}
+                  </button>
+                )}
+                {canManageEmployees && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkTypeOpen(true)}
+                    className="flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-0.5 text-blue-700 hover:bg-blue-50"
+                  >
+                    <UserCog className="h-3.5 w-3.5" />{t("تغيير نوع التوظيف")}
                   </button>
                 )}
               </span>
@@ -1213,7 +1237,7 @@ export default function HREmployees() {
                     {visibleColumns.phone && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.phone || "—"}</td>}
                     {visibleColumns.email && <td className="px-3 py-2 text-gray-500 whitespace-nowrap max-w-[160px] truncate">{emp.email || "—"}</td>}
                     {visibleColumns.workSchedule && <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.workSchedule ? t(emp.workSchedule) : "—"}</td>}
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.employmentType || "—"}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{emp.employmentType ? t(emp.employmentType) : "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className={cn("inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border", STATUS_COLORS[emp.status] ?? "bg-gray-100 text-gray-600 border-gray-200")}>
                         {emp.status ? t(emp.status) : "—"}
@@ -1311,6 +1335,32 @@ export default function HREmployees() {
         onClose={() => setBulkPaymentOpen(false)}
         onDone={() => setRefreshKey((k) => k + 1)}
       />
+      <BulkSectionDialog
+        open={bulkSectionOpen}
+        employees={employees.filter((employee) => selectedIds.has(employee.id)).map((employee) => ({
+          id: employee.id,
+          empId: employee.empId,
+          name: employee.name || employee.firstName,
+          sectionId: employee.sectionId,
+          sectionName: employee.department,
+          departmentId: employee.departmentId,
+          directorate: employee.directorate,
+          branchId: employee.branchId,
+        }))}
+        onClose={() => setBulkSectionOpen(false)}
+        onDone={() => setRefreshKey((k) => k + 1)}
+      />
+      <BulkEmploymentTypeDialog
+        open={bulkTypeOpen}
+        employees={employees.filter((employee) => selectedIds.has(employee.id)).map((employee) => ({
+          id: employee.id,
+          empId: employee.empId,
+          name: employee.name || employee.firstName,
+          employmentType: employee.employmentType,
+        }))}
+        onClose={() => setBulkTypeOpen(false)}
+        onDone={() => setRefreshKey((k) => k + 1)}
+      />
       <EmployeeDeleteDialog
         open={deleteTargets !== null}
         employees={deleteTargets ?? []}
@@ -1330,7 +1380,7 @@ export default function HREmployees() {
 }
 
 // ─── Employee View ────────────────────────────────────────────────────────────
-function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData; onBack: () => void; onEdit: () => void }) {
+function EmployeeView({ employee: emp, orgName, onBack, onEdit }: { employee: EmpFormData; orgName: (value: string) => string; onBack: () => void; onEdit: () => void }) {
   const { t, direction, locale, formatNumber } = useI18n();
   const money = (value: number) => `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}`;
   const total = computeTotalSalary(emp.baseSalary, emp.allowances);
@@ -1377,26 +1427,26 @@ function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData
               <InfoRow label={t("الجنسية")} value={emp.nationality ? t(emp.nationality) : ""} />
               <InfoRow label={t("رقم الهوية / الإقامة")} value={emp.nationalId} />
               <InfoRow label={t("تاريخ انتهاء الهوية")} value={emp.idExpiryDate} />
-              <InfoRow label={t("الجنس")} value={emp.gender} />
+              <InfoRow label={t("الجنس")} value={emp.gender ? t(emp.gender) : ""} />
               <InfoRow label={t("تاريخ الميلاد")} value={emp.birthDate} />
-              <InfoRow label={t("الحالة الاجتماعية")} value={emp.maritalStatus} />
+              <InfoRow label={t("الحالة الاجتماعية")} value={emp.maritalStatus ? t(emp.maritalStatus) : ""} />
               <InfoRow label={t("الجوال")} value={emp.phone} />
               <InfoRow label={t("البريد الإلكتروني")} value={emp.email} />
               <InfoRow label={t("رقم جواز السفر")} value={emp.passportNumber} />
               <InfoRow label={t("انتهاء جواز السفر")} value={emp.passportExpiryDate} />
             </InfoGroup>
             <InfoGroup title={t("المعلومات الوظيفية")}>
-              <InfoRow label={t("الفرع")} value={emp.branch} />
-              <InfoRow label={t("الإدارة")} value={emp.directorate} />
-              <InfoRow label={t("القسم")} value={emp.department} />
-              <InfoRow label={t("المسمى الوظيفي")} value={emp.jobTitle} />
-              <InfoRow label={t("نوع التوظيف")} value={emp.employmentType} />
+              <InfoRow label={t("الفرع")} value={emp.branch ? orgName(emp.branch) : ""} />
+              <InfoRow label={t("الإدارة")} value={emp.directorate ? orgName(emp.directorate) : ""} />
+              <InfoRow label={t("القسم")} value={emp.department ? orgName(emp.department) : ""} />
+              <InfoRow label={t("المسمى الوظيفي")} value={emp.jobTitle ? orgName(emp.jobTitle) : ""} />
+              <InfoRow label={t("نوع التوظيف")} value={emp.employmentType ? t(emp.employmentType) : ""} />
               <InfoRow label={t("تاريخ التعيين")} value={emp.hireDate} />
               <InfoRow label={t("عقد محدد المدة")} value={emp.isContractEnd ? `${t("نعم")} — ${emp.contractEndDate || "—"}` : t("لا")} />
               <InfoRow label={t("المدير المباشر")} value={emp.directManager} />
-              <InfoRow label={t("مكان العمل")} value={emp.workLocation} />
-              <InfoRow label={t("جدول العمل")} value={emp.workSchedule} />
-              <InfoRow label={t("الدور في النظام")} value={emp.employeeRole} />
+              <InfoRow label={t("مكان العمل")} value={emp.workLocation ? orgName(emp.workLocation) : ""} />
+              <InfoRow label={t("جدول العمل")} value={emp.workSchedule ? t(emp.workSchedule) : ""} />
+              <InfoRow label={t("الدور في النظام")} value={emp.employeeRole ? t(emp.employeeRole) : ""} />
             </InfoGroup>
           </div>
 
@@ -1410,7 +1460,7 @@ function EmployeeView({ employee: emp, onBack, onEdit }: { employee: EmpFormData
                 /></Fragment>
               ))}
               <InfoRow label={t("إجمالي الراتب الشهري")} value={money(total)} />
-              <InfoRow label={t("التأمينات الاجتماعية")} value={emp.socialInsurance === "نعم" ? `${t("نعم")} — ${emp.socialInsuranceType || "—"}` : emp.socialInsurance === "" ? t("غير محدد") : t("لا")} />
+              <InfoRow label={t("التأمينات الاجتماعية")} value={emp.socialInsurance === "نعم" ? `${t("نعم")} — ${emp.socialInsuranceType ? t(emp.socialInsuranceType) : "—"}` : emp.socialInsurance === "" ? t("غير محدد") : t("لا")} />
               <InfoRow label={t("البنك")} value={emp.bankName} />
               <InfoRow label={t("الآيبان")} value={emp.iban} />
             </InfoGroup>

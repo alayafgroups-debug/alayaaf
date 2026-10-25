@@ -5856,6 +5856,46 @@ Object.assign(translations, {
   "لم يُحفظ شيء: السجل غير موجود أو ليست لديك صلاحية تعديله": "Nothing was saved: the record does not exist or you do not have permission to edit it",
 });
 
+// HR-18: تغيير القسم ونوع التوظيف للمحددين من قائمة الموظفين
+Object.assign(translations, {
+  "بلا إدارة": "No department",
+  "بلا قسم": "No section",
+  "دون تغيير": "Unchanged",
+  "تغيير القسم": "Change section",
+  "تغيير نوع التوظيف": "Change employment type",
+  "تغيير القسم للمحددين": "Change section for selected employees",
+  "القسم الجديد": "New section",
+  "أقسام المحددين الحالية": "Current sections of the selected employees",
+  "عدد من سينتقلون": "Employees to move",
+  "في هذا القسم أصلًا": "already in this section",
+  "عدد من انتقلوا": "Employees moved",
+  "نقل إلى القسم": "Move to section",
+  "ينتقل المحددون إلى القسم المختار مع إدارته وفرعه كما في الهيكل التنظيمي. الراتب الأساسي وجدول الدوام لا يتغيران، لكن العطل الرسمية الخاصة بفرع أو إدارة أو قسم تتبع المكان الجديد في الأشهر غير المعتمدة رواتبها (أعد حسابها)، والكشوف والتقارير تتبع القسم الجديد، وتغيّر الفرع يغيّر ما يراه الموظف من بيانات الفروع.": "The selected employees move to the chosen section together with its department and branch, as in the organization structure. Basic salary and work schedule do not change, but official holidays limited to a branch, department or section follow the new placement in months whose payroll is not approved (recalculate them); statements and reports follow the new section, and a branch change changes which branch data the employee sees.",
+  "هذا القسم غير تابع لإدارة في الهيكل التنظيمي: ستُفرَّغ إدارة المنقولين، فلا يظهرون في تصفية الإدارات وكشوفها. اربط القسم بإدارة من الهيكل التنظيمي أولًا إن لم يكن هذا المقصود.": "This section is not linked to a department in the organization structure: the moved employees' department will be cleared, so they will not appear in department filters and statements. Link the section to a department in the organization structure first if this is not intended.",
+  "تغيير نوع التوظيف للمحددين": "Change employment type for selected employees",
+  "نوع التوظيف الجديد": "New employment type",
+  "اختر نوع التوظيف": "Choose an employment type",
+  "أنواع توظيف المحددين الحالية": "Current employment types of the selected employees",
+  "عدد من سيتغير نوعهم": "Employees to change",
+  "على هذا النوع أصلًا": "already of this type",
+  "عدد من تغيّر نوعهم": "Employees changed",
+  "تغيير النوع": "Change type",
+  "نوع التوظيف لا يغيّر الراتب ولا الحضور. من يصير «متعاون» يظهر أيضًا في صفحة «الموظفون المتعاونون»، ومن يُنقل منه يختفي منها.": "The employment type does not change salary or attendance. Employees set to \"Collaborator\" also appear on the Collaborative employees page; those moved away from it disappear from there.",
+  "تعذر تحميل الأقسام": "Could not load sections",
+});
+
+// HR-19: ترويسة الطباعة (شعار الشركة ورؤية 2030) وطباعة كشف الرواتب كنموذج سمارت
+Object.assign(translations, {
+  "شعار الشركة": "Company logo",
+  "رؤية المملكة 2030": "Saudi Vision 2030",
+  "كشف رواتب": "Payroll Statement",
+  "التوقيع": "Signature",
+  "أعمدة كشف سمارت (للطباعة)": "Smart statement columns (for printing)",
+  "الأعمدة الافتراضية": "Default columns",
+  "اختر عمودًا واحدًا على الأقل من «إظهار/إخفاء الأعمدة»": "Choose at least one column from Show/hide columns",
+  "قيمة الساعات الإضافية": "Overtime amount",
+});
+
 export function useI18n() {
   const value = useContext(I18nContext);
   if (!value) throw new Error("useI18n must be used inside I18nProvider");

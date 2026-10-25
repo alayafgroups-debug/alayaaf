@@ -16,6 +16,8 @@ import PayrollFreshnessNotice from "@/components/hr/PayrollFreshnessNotice";
 import { freshnessErrorText, savedPayrollFreshness, type PayrollFreshness } from "@/lib/payrollFreshness";
 import { isMissingColumnError } from "@/lib/advances";
 import { UNSPECIFIED_PAYMENT_METHOD, paymentMethodOf, paymentMethodRank } from "@/lib/salaryPaymentMethods";
+import { PRINT_BRAND_CSS, printBrandHeaderHtml } from "@/lib/printBranding";
+import PrintBrandHeader from "@/components/PrintBrandHeader";
 
 type ReportConfig = {
   period: string;
@@ -47,7 +49,7 @@ const columns: PayrollColumn[] = [
   { key: "overtimeHours", label: "الساعات الإضافية", group: "بيانات العمل", width: 16 },
   { key: "basicSalary", label: "الراتب الأساسي", group: "الاستحقاقات", width: 16, money: true },
   { key: "privileges", label: "امتيازات", group: "الاستحقاقات", width: 13, money: true },
-  { key: "overtime", label: "الساعات الإضافية", group: "الاستحقاقات", width: 16, money: true },
+  { key: "overtime", label: "قيمة الساعات الإضافية", group: "الاستحقاقات", width: 16, money: true },
   { key: "allowances", label: "البدلات", group: "الاستحقاقات", width: 14, money: true },
   { key: "incentives", label: "الحوافز", group: "الاستحقاقات", width: 13, money: true },
   { key: "otherEarnings", label: "أخرى", group: "الاستحقاقات", width: 12, money: true },
@@ -68,6 +70,33 @@ const columns: PayrollColumn[] = [
 ];
 
 const money = (value: number) => Math.round(value * 100) / 100;
+
+// أعمدة كشف سمارت المختصر للطباعة (HR-19): الاسم والغياب والإضافي والاستحقاقات والاقتطاعات والسلف ومستحق الصرف
+const SMART_PRINT_COLUMNS = ["name", "absenceDays", "overtimeHours", "basicSalary", "allowances", "overtime", "totalEarnings", "absenceDeduction", "totalDeductions", "loans", "payable"];
+const defaultVisibility = () => Object.fromEntries(columns.map((column) => [column.key, column.defaultVisible !== false]));
+// اختيار الأعمدة يُحفظ على هذا الجهاز ليبقى في الزيارة التالية
+const COLUMNS_STORAGE_KEY = "alayaaf.payrollFullReport.columns.v1";
+const loadVisibility = (): Record<string, boolean> => {
+  const defaults = defaultVisibility();
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLUMNS_STORAGE_KEY) ?? "null") as Record<string, unknown> | null;
+    if (!saved || typeof saved !== "object") return defaults;
+    const merged = Object.fromEntries(columns.map((column) => [column.key, typeof saved[column.key] === "boolean" ? Boolean(saved[column.key]) : defaults[column.key]]));
+    return Object.values(merged).some(Boolean) ? merged : defaults;
+  } catch {
+    return defaults;
+  }
+};
+// ألوان أقسام طرق الصرف في الطباعة كنموذج سمارت؛ مدد والتحويل البنكي لا توقيع فيهما فيُكتب اسم الطريقة في عمود التوقيع
+const METHOD_PRINT_COLORS: Record<string, { label: string; value: string }> = {
+  "نقدي": { label: "#a9d08e", value: "#c6e0b4" },
+  "مدد": { label: "#ddebf7", value: "#ddebf7" },
+  "تحويل بنكي": { label: "#fff2cc", value: "#fff2cc" },
+  "شيك": { label: "#e4dfec", value: "#e4dfec" },
+};
+const UNSPECIFIED_PRINT_COLORS = { label: "#ededed", value: "#ededed" };
+const NO_SIGNATURE_METHODS = ["مدد", "تحويل بنكي"];
+const escapePrintHtml = (value: unknown) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const REPORT_EMPLOYEE_COLUMNS = "id, emp_id, name, job_title, work_time, work_schedule, bank_name, bank_branch, bank_account, iban, branch_id, department_id, section_id, attendance_location_id";
 // طريقة صرف الراتب (HR-17) إن أُضيف عمودها؛ وإلا يُحمَّل الكشف بدونها ولا يُقسَّم
@@ -92,7 +121,14 @@ export default function HRPayrollFullReport() {
   const [showColumns, setShowColumns] = useState(false);
   // تقسيم الكشف حسب طريقة صرف الراتب كسمارت (نقدي، مدد، تحويل بنكي، شيك) بمجموع لكل قسم
   const [groupByMethod, setGroupByMethod] = useState(true);
-  const [visible, setVisible] = useState<Record<string, boolean>>(() => Object.fromEntries(columns.map((column) => [column.key, column.defaultVisible !== false])));
+  const [visible, setVisible] = useState<Record<string, boolean>>(loadVisibility);
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(visible));
+    } catch {
+      // التخزين غير متاح: يبقى الاختيار لهذه الزيارة فقط
+    }
+  }, [visible]);
   const [filterNames, setFilterNames] = useState({ branch: "الكل", department: "الكل", section: "الكل", location: "الكل" });
   // مطابقة الرواتب المحفوظة (طلب الاعتماد) مع الحساب الآن: غياب أو جزاء أُدخل بعد الإرسال
   const [freshness, setFreshness] = useState<PayrollFreshness | null>(null);
@@ -207,6 +243,117 @@ export default function HRPayrollFullReport() {
   const yearLabel = config?.period?.slice(0, 4) ?? "-";
   const formatCell = (column: PayrollColumn, value: string | number) => column.money ? formatNumber(Number(value), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(value ?? "");
 
+  // الطباعة كنموذج سمارت (HR-19): ورقة أفقية بترويسة الشركة ورؤية 2030، وخط كبير يتناسب مع عدد الأعمدة الظاهرة،
+  // وبعد كل طريقة صرف سطر مجموع صافيها بلونها، ثم الإجمالي. عمود التوقيع: يوقّع من يُصرف له نقدًا أو بشيك،
+  // وفي مدد والتحويل البنكي يُكتب اسم الطريقة.
+  const printStatement = () => {
+    if (!rows.length) return;
+    const cols = visibleColumns;
+    if (!cols.length) {
+      toast({ title: t("اختر عمودًا واحدًا على الأقل من «إظهار/إخفاء الأعمدة»"), variant: "destructive" });
+      return;
+    }
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast({ title: t("تعذر فتح نافذة الطباعة؛ اسمح بالنوافذ المنبثقة"), variant: "destructive" });
+      return;
+    }
+    const esc = escapePrintHtml;
+    const english = locale === "en";
+    const count = cols.length;
+    // المقاس والخط حسب مجموع عروض الأعمدة الظاهرة (لا عددها): الجدول بعرض ثابت لا يتجاوز الصفحة في الاتجاهين
+    const SIGNATURE_WIDTH = 16;
+    // الاسم أعرض قليلًا في الورقة فلا يلتف كثيرًا
+    const printWidth = (column: PayrollColumn) => (column.key === "name" ? Math.max(column.width, 30) : column.width);
+    const totalWidth = cols.reduce((sum, column) => sum + printWidth(column), 0) + SIGNATURE_WIDTH;
+    const fontPx = totalWidth <= 220 ? 12.5 : totalWidth <= 300 ? 11 : totalWidth <= 380 ? 9.5 : totalWidth <= 480 ? 8 : 6.5;
+    const rowHeight = totalWidth <= 220 ? 34 : totalWidth <= 300 ? 28 : totalWidth <= 380 ? 24 : 18;
+    const cellPadding = totalWidth <= 300 ? "5px 5px" : totalWidth <= 380 ? "4px 3px" : "2px 2px";
+    const pageSize = totalWidth > 380 ? "A3" : "A4";
+    const colgroup = `<colgroup>${cols.map((column) => `<col style="width:${((printWidth(column) / totalWidth) * 100).toFixed(2)}%">`).join("")}<col style="width:${((SIGNATURE_WIDTH / totalWidth) * 100).toFixed(2)}%"></colgroup>`;
+    const amount = (value: unknown) => formatNumber(Number(value ?? 0), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // عمود الصافي الذي يُجمع عليه كل قسم (كسمارت: مستحق الصرف)، وإلا الصافي، وإلا آخر عمود مالي ظاهر
+    const netKey = ["payable", "netSalary"].find((key) => cols.some((column) => column.key === key)) ?? [...cols].reverse().find((column) => column.money)?.key ?? "";
+    const netIndex = cols.findIndex((column) => column.key === netKey);
+    const filters = config?.filters;
+    const scope = filters && filters.section !== "الكل" ? filterNames.section
+      : filters && filters.department !== "الكل" ? filterNames.department
+      : filters && filters.branch !== "الكل" ? filterNames.branch
+      : t("شركة إدارة العياف للمقاولات");
+    const title = english
+      ? `${scope} ${t("كشف رواتب")} – ${monthLabel} ${yearLabel}`
+      : `${t("كشف رواتب")} ${scope} – ${monthLabel} ${yearLabel}`;
+    const metaParts = [
+      filters && filters.branch !== "الكل" ? `${t("الفرع")}: ${filterNames.branch}` : "",
+      filters && filters.department !== "الكل" ? `${t("الإدارة")}: ${filterNames.department}` : "",
+      filters && filters.section !== "الكل" ? `${t("القسم")}: ${filterNames.section}` : "",
+      filters && filters.location !== "الكل" ? `${t("موقع الحضور")}: ${filterNames.location}` : "",
+      `${t("عدد الموظفين")}: ${formatNumber(rows.length)}`,
+    ].filter(Boolean);
+
+    const dataCell = (column: PayrollColumn, row: PayrollRow) => `<td>${esc(formatCell(column, row[column.key]))}</td>`;
+    // سطر مجموع قسم: اسم الطريقة في العمودين قبل الصافي، ومجموع الصافي تحته
+    const subtotalRow = (label: string, sums: Record<string, number>, colors: { label: string; value: string }) => {
+      if (netIndex < 0) return `<tr class="sum"><td colspan="${count}" style="background:${colors.label}">${esc(label)}</td><td></td></tr>`;
+      const labelSpan = Math.min(2, netIndex);
+      const blank = netIndex - labelSpan;
+      const after = count - netIndex - 1;
+      return `<tr class="sum">${blank > 0 ? `<td colspan="${blank}" class="blank"></td>` : ""}${labelSpan > 0 ? `<td colspan="${labelSpan}" style="background:${colors.label}">${esc(label)}</td>` : ""}<td style="background:${colors.value}">${labelSpan > 0 ? "" : `${esc(label)}: `}${esc(amount(sums[netKey]))}</td>${after > 0 ? `<td colspan="${after}" class="blank"></td>` : ""}<td></td></tr>`;
+    };
+    // الإجمالي: مجموع كل عمود مالي ظاهر، بالأصفر
+    const firstMoney = cols.findIndex((column) => column.money);
+    const grandSpan = firstMoney === 0 ? 0 : Math.max(1, firstMoney);
+    const grandRow = `<tr class="sum grand">${grandSpan > 0 ? `<td colspan="${grandSpan}">${esc(t("الإجمالي"))}</td>` : ""}${cols.slice(grandSpan).map((column) => `<td>${column.money ? esc(amount(totals[column.key])) : ""}</td>`).join("")}<td></td></tr>`;
+
+    // اسم الطريقة في عمود التوقيع على كتل من 8 صفوف، فيظهر في كل صفحة ولا تُدفع مجموعة كبيرة كاملة إلى صفحة جديدة
+    const SIGNATURE_BLOCK = 8;
+    let body = "";
+    sections.forEach((section) => {
+      const method = grouped && section.key !== "unspecified" ? section.key : "";
+      const colors = METHOD_PRINT_COLORS[method] ?? UNSPECIFIED_PRINT_COLORS;
+      const mergedSignature = grouped && NO_SIGNATURE_METHODS.includes(method);
+      section.rows.forEach((row, index) => {
+        const blockStart = index % SIGNATURE_BLOCK === 0;
+        const blockSize = Math.min(SIGNATURE_BLOCK, section.rows.length - index);
+        const signature = mergedSignature
+          ? (blockStart ? `<td class="merged" rowspan="${blockSize}" style="background:${colors.label}">${esc(t(method))}</td>` : "")
+          : "<td></td>";
+        body += `<tr${mergedSignature ? ' class="in-block"' : ""}>${cols.map((column) => dataCell(column, row)).join("")}${signature}</tr>`;
+      });
+      if (grouped) body += subtotalRow(section.subtotalLabel, section.totals as Record<string, number>, colors);
+    });
+    body += grandRow;
+
+    // الترويسة في رأس الجدول فتتكرر في كل صفحة مطبوعة
+    const header = printBrandHeaderHtml(
+      `<div class="title">${esc(title)}</div>${metaParts.length ? `<div class="meta">${metaParts.map(esc).join(" &nbsp;|&nbsp; ")}</div>` : ""}`,
+      { company: t("شعار الشركة"), vision: t("رؤية المملكة 2030") },
+    );
+    printWindow.document.write(`<!doctype html>
+<html dir="${direction}" lang="${locale}"><head><meta charset="utf-8"><title>${esc(title)}</title>
+<style>
+@page{size:${pageSize} landscape;margin:8mm}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;background:#fff;color:#000;font-family:${english ? "\"Calibri\",\"Segoe UI\",Arial,sans-serif" : "\"Tajawal\",\"Tahoma\",Arial,sans-serif"}}
+${PRINT_BRAND_CSS}
+.title{font-size:${Math.max(15, fontPx + 6)}px;font-weight:800}
+.meta{margin-top:5px;font-size:${Math.max(9, fontPx - 1.5)}px;font-weight:600;color:#333}
+table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:${fontPx}px}
+thead{display:table-header-group}
+th,td{border:1px solid #000;padding:${cellPadding};text-align:center;vertical-align:middle;font-weight:700;overflow-wrap:anywhere;word-break:break-word}
+thead tr.cols th{background:#ffff00;line-height:1.25}
+thead tr.brand-row th{border:0;padding:0 0 6px;background:#fff;font-weight:400}
+td{height:${rowHeight}px}
+td.blank{background:#fff}
+tr:not(.in-block){break-inside:avoid;page-break-inside:avoid}
+.sum td{font-size:${fontPx + 1.5}px;font-weight:800}
+.grand td{background:#ffff00}
+</style></head><body>
+<table>${colgroup}<thead><tr class="brand-row"><th colspan="${count + 1}">${header}</th></tr><tr class="cols">${cols.map((column) => `<th>${esc(t(column.label))}</th>`).join("")}<th>${esc(t("التوقيع"))}</th></tr></thead><tbody>${body}</tbody></table>
+<script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`);
+    printWindow.document.close();
+  };
+
   const openApproval = () => {
     if (!config?.period || rows.length === 0 || !computation) {
       toast({ title: t("لا يوجد موظفون"), description: t("لا توجد بيانات رواتب جاهزة للإرسال"), variant: "destructive" });
@@ -318,7 +465,7 @@ export default function HRPayrollFullReport() {
     <style>{`@media print { body * { visibility: hidden !important; } #payroll-full-report, #payroll-full-report * { visibility: visible !important; } #payroll-full-report { position:absolute; inset:0; width:100%; overflow:visible !important; border:0; box-shadow:none; } #payroll-full-report .payroll-table-wrap { overflow:visible !important; } #payroll-full-report table { width:100% !important; min-width:0 !important; table-layout:fixed; font-size:6.5px; } #payroll-full-report th, #payroll-full-report td { padding:2px 1px !important; max-width:none !important; white-space:normal !important; word-break:break-word; } .payroll-no-print { display:none !important; } @page { size:A3 landscape; margin:6mm; } }`}</style>
     <div className="payroll-no-print flex flex-wrap items-center justify-between gap-3">
       <Button variant="outline" onClick={() => navigate("/hr/payroll/statement")}><ArrowRight className="h-4 w-4" />{t("رجوع")}</Button>
-      <div className="flex flex-wrap gap-2"><Button onClick={openApproval} disabled={loading || approvalSubmitting || rows.length === 0} className="bg-emerald-700 text-white hover:bg-emerald-800"><Send className="h-4 w-4" />{approvalSubmitting ? t("جارٍ الإرسال...") : t("إرسال كشف اعتماد الرواتب للإدارة")}</Button><label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"><input type="checkbox" checked={groupByMethod} onChange={(event) => setGroupByMethod(event.target.checked)} />{t("تقسيم حسب طريقة الصرف")}</label><Button variant="outline" onClick={() => setShowColumns(true)}><Columns3 className="h-4 w-4" />{t("إظهار/إخفاء الأعمدة")}</Button><Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{t("طباعة / PDF")}</Button><Button onClick={() => void exportExcel()} className="bg-[#075f94] hover:bg-[#064f7b]"><Download className="h-4 w-4" />Excel</Button></div>
+      <div className="flex flex-wrap gap-2"><Button onClick={openApproval} disabled={loading || approvalSubmitting || rows.length === 0} className="bg-emerald-700 text-white hover:bg-emerald-800"><Send className="h-4 w-4" />{approvalSubmitting ? t("جارٍ الإرسال...") : t("إرسال كشف اعتماد الرواتب للإدارة")}</Button><label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"><input type="checkbox" checked={groupByMethod} onChange={(event) => setGroupByMethod(event.target.checked)} />{t("تقسيم حسب طريقة الصرف")}</label><Button variant="outline" onClick={() => setShowColumns(true)}><Columns3 className="h-4 w-4" />{t("إظهار/إخفاء الأعمدة")}</Button><Button variant="outline" onClick={printStatement} disabled={loading || rows.length === 0}><Printer className="h-4 w-4" />{t("طباعة / PDF")}</Button><Button onClick={() => void exportExcel()} className="bg-[#075f94] hover:bg-[#064f7b]"><Download className="h-4 w-4" />Excel</Button></div>
     </div>
     {(warnings.length > 0 || computation) && <div className="payroll-no-print space-y-1 text-xs">
       {computation && <p className="text-slate-500">{computation.policy.absenceBasis === "basic" ? t("قيمة يوم الغياب = الراتب الأساسي") : t("قيمة يوم الغياب = الراتب الأساسي + البدلات")} ÷ {computation.policy.dayDivisor === "actual" ? t("أيام الشهر الفعلية") : "30"} — {computation.policy.countUnrecordedAsAbsent ? t("أيام العمل بلا تسجيل حضور تُحتسب غيابًا (الراتب المكتسب حسب الحضور)") : t("يُخصم الغياب المسجّل في الحضور فقط")}</p>}
@@ -327,12 +474,13 @@ export default function HRPayrollFullReport() {
     <PayrollFreshnessNotice mode="sender" checking={freshnessChecking} error={freshnessError} freshness={freshness} onResend={openApproval} resendDisabled={loading || approvalSubmitting || rows.length === 0} />
     <section id="payroll-full-report" className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
       <header className="border-b-2 border-[#075f94] p-5">
+        <PrintBrandHeader />
         <h1 className="text-center text-xl font-bold text-slate-900">{t("شركة إدارة العياف للمقاولات")}</h1><h2 className="mt-1 text-center text-lg font-bold text-[#075f94]">{t("كشف الرواتب")}</h2>
         <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-5"><span>{t("شهر")}: <b>{monthLabel}</b></span><span>{t("السنة")}: <b>{yearLabel}</b></span><span>{t("الإدارة")}: <b>{filterNames.department}</b></span><span>{t("القسم")}: <b>{filterNames.section}</b></span><span>{t("الفرع")}: <b>{filterNames.branch}</b></span><span className="lg:col-span-2">{t("مكان العمل")}: <b>{filterNames.location}</b></span><span>{t("عدد الموظفين")}: <b>{formatNumber(rows.length)}</b></span></div>
       </header>
       <div className="payroll-table-wrap overflow-x-auto"><table className="min-w-max border-collapse text-[10px]"><thead><tr className="bg-[#075f94] text-white">{groups.map((group) => <th key={group.name} colSpan={group.count} className="border border-white/30 px-2 py-2 text-center font-bold">{t(group.name)}</th>)}</tr><tr className="bg-[#0b6fa4] text-white">{visibleColumns.map((column) => <th key={column.key} className="max-w-32 whitespace-normal border border-white/30 px-2 py-2 text-center font-semibold">{t(column.label)}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={visibleColumns.length} className="py-16 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : sections.map((section) => <Fragment key={section.key}>{section.rows.map((row) => <tr key={row.id} className="odd:bg-white even:bg-slate-50">{visibleColumns.map((column) => <td key={column.key} className={`border border-slate-200 px-2 py-2 text-center ${column.money && Number(row[column.key]) > 0 ? "font-medium" : ""}`}>{formatCell(column, row[column.key])}</td>)}</tr>)}{grouped && <tr className="bg-amber-50 font-bold">{labelSpan > 0 && <td colSpan={labelSpan} className="border border-slate-300 px-2 py-2 text-center">{section.subtotalLabel}</td>}{visibleColumns.slice(labelSpan).map((column) => <td key={column.key} className="border border-slate-300 px-2 py-2 text-center">{column.money ? formatNumber(Number(section.totals[column.key] ?? 0), { minimumFractionDigits: 2 }) : ""}</td>)}</tr>}</Fragment>)}</tbody>{!loading && rows.length > 0 && <tfoot><tr className="bg-sky-50 font-bold">{labelSpan > 0 && <td colSpan={labelSpan} className="border border-slate-300 px-2 py-3 text-center">{t("الإجماليات")}</td>}{visibleColumns.slice(labelSpan).map((column) => <td key={column.key} className="border border-slate-300 px-2 py-3 text-center">{column.money ? formatNumber(Number(totals[column.key] ?? 0), { minimumFractionDigits: 2 }) : ""}</td>)}</tr></tfoot>}</table></div>
     </section>
-    {showColumns && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowColumns(false)}><div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between border-b p-5"><h2 className="text-xl font-bold">{t("إظهار/إخفاء الأعمدة")}</h2><button onClick={() => setShowColumns(false)}><X className="h-5 w-5" /></button></div><div className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">{columns.map((column) => <label key={column.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 text-sm"><span>{t(column.label)}</span><input type="checkbox" checked={visible[column.key]} onChange={(event) => setVisible((current) => ({ ...current, [column.key]: event.target.checked }))} className="h-5 w-5 accent-[#075f94]" /></label>)}</div><div className="flex justify-end border-t p-4"><Button onClick={() => setShowColumns(false)} className="bg-[#075f94]">{t("تطبيق")}</Button></div></div></div>}
+    {showColumns && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowColumns(false)}><div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between border-b p-5"><h2 className="text-xl font-bold">{t("إظهار/إخفاء الأعمدة")}</h2><button onClick={() => setShowColumns(false)}><X className="h-5 w-5" /></button></div><div className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">{columns.map((column) => <label key={column.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 text-sm"><span>{t(column.label)}</span><input type="checkbox" checked={visible[column.key]} onChange={(event) => setVisible((current) => ({ ...current, [column.key]: event.target.checked }))} className="h-5 w-5 accent-[#075f94]" /></label>)}</div><div className="flex flex-wrap items-center justify-between gap-2 border-t p-4"><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setVisible(Object.fromEntries(columns.map((column) => [column.key, SMART_PRINT_COLUMNS.includes(column.key)])))}>{t("أعمدة كشف سمارت (للطباعة)")}</Button><Button variant="outline" onClick={() => setVisible(defaultVisibility())}>{t("الأعمدة الافتراضية")}</Button></div><Button onClick={() => setShowColumns(false)} className="bg-[#075f94]">{t("تطبيق")}</Button></div></div></div>}
     <PayrollApprovalDialog
       open={approvalOpen}
       period={config.period}

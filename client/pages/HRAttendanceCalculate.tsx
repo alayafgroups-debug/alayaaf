@@ -17,6 +17,7 @@ import { loadPayrollPolicy } from "@/lib/payrollCalc";
 import { useI18n } from "@/i18n";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import { EmployeePhoto } from "@/components/hr/employeeFiles";
+import { COMPANY_PRINT_LOGO, VISION_2030_LOGO } from "@/lib/printBranding";
 
 const ALL = "all";
 type ReportMode = "employees" | "departments";
@@ -865,8 +866,14 @@ export default function HRAttendanceCalculate() {
             </div>
           </div>
           <div className="attendance-print-only border-b-2 border-[#075f94] px-6 py-4 text-center">
-            <h1 className="text-2xl font-bold text-[#075f94]">{locale === "en" ? COMPANY_PROFILE.companyNameEn : t("شركة إدارة العياف للمقاولات")}</h1>
-            <p className="mt-1 text-sm font-semibold text-slate-600">{t("تقرير حساب الدوام التفصيلي")}</p>
+            <div className="flex items-center justify-between gap-4">
+              <img src={COMPANY_PRINT_LOGO} alt={t("شعار الشركة")} className="h-16 w-auto max-w-[130px] object-contain" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl font-bold text-[#075f94]">{locale === "en" ? COMPANY_PROFILE.companyNameEn : t("شركة إدارة العياف للمقاولات")}</h1>
+                <p className="mt-1 text-sm font-semibold text-slate-600">{t("تقرير حساب الدوام التفصيلي")}</p>
+              </div>
+              <img src={VISION_2030_LOGO} alt={t("رؤية المملكة 2030")} className="h-14 w-auto max-w-[100px] object-contain" />
+            </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-4 border-b bg-slate-50 px-5 py-4">
             <div className="flex items-center gap-3">
@@ -892,7 +899,7 @@ export default function HRAttendanceCalculate() {
       </div>
       <div className="border-b border-slate-400 px-5 py-5">
         <div className="flex items-start justify-between gap-6">
-          <img src={COMPANY_PROFILE.logoUrl} alt={t("شعار الشركة")} className="h-20 w-28 object-contain" />
+          <img src={COMPANY_PRINT_LOGO} alt={t("شعار الشركة")} className="h-20 w-28 object-contain" />
           <div className="grid flex-1 gap-x-8 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
             <span>{t("من تاريخ")}: <b>{dateFrom}</b></span><span>{t("إلى تاريخ")}: <b>{dateTo}</b></span>
             <span>{t("الإدارة")}: <b>{departmentId === ALL ? t("الكل") : departments.find((item) => item.id === departmentId)?.name || t("الكل")}</b></span>
@@ -901,6 +908,7 @@ export default function HRAttendanceCalculate() {
             <span>{t("مكان العمل")}: <b>{workLocation === ALL ? t("الكل") : workLocation}</b></span>
             <span>{t("عدد الموظفين")}: <b>{formatNumber(comprehensiveRows.length)}</b></span>
           </div>
+          <img src={VISION_2030_LOGO} alt={t("رؤية المملكة 2030")} className="h-16 w-auto max-w-[100px] object-contain" />
         </div>
       </div>
       <div className="overflow-x-auto"><table className="attendance-summary-table min-w-[1700px] border-collapse text-[11px]"><thead className="bg-[#075f94] text-white"><tr>{comprehensiveColumns.map((column) => <th key={column.key} className="border border-white/30 px-3 py-3 text-center font-bold whitespace-normal">{column.label}</th>)}</tr></thead><tbody>{comprehensiveRows.map((row) => <tr key={String(row.empId)} className="border-b odd:bg-white even:bg-slate-50">{comprehensiveColumns.map((column) => <td key={column.key} className="border border-slate-200 px-3 py-3 text-center">{String(row[column.key as keyof typeof row] ?? "")}</td>)}</tr>)}</tbody></table></div>

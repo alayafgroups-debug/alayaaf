@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
 import { splitOwnEmployees } from "@/lib/attendanceManual";
+import { fetchIsMainAdmin, isMainAdminSession } from "@/lib/authSession";
 import { employeeErrorText } from "@/components/hr/employeeErrors";
 
 export type ScheduleTarget = { id: string; empId: string; name: string; workSchedule: string };
@@ -25,7 +26,8 @@ const scheduleSummary = (schedule: ScheduleOption, t: (text: string) => string) 
 
 /**
  * تغيير جدول الدوام لعدة موظفين مرة واحدة (من قائمة الموظفين).
- * يُستثنى سجل المستخدم نفسه: قاعدة البيانات ترفض أن يغيّر أحد جدول دوامه (EMPLOYEE_OWN_ATTENDANCE_SETTINGS).
+ * يُستثنى سجل المستخدم نفسه: قاعدة البيانات ترفض أن يغيّر أحد جدول دوامه (EMPLOYEE_OWN_ATTENDANCE_SETTINGS)،
+ * إلا مدير النظام فتستثنيه القاعدة، فيدخل سجله مع المحددين.
  * كل تغيير يُسجَّل في سجل العمليات بمشغّل الموظفين كما في التعديل الفردي.
  */
 export default function BulkScheduleDialog({ open, employees, onClose, onDone }: {
@@ -42,6 +44,15 @@ export default function BulkScheduleDialog({ open, employees, onClose, onDone }:
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
+  // مدير النظام يدخل سجله مع المحددين (حكم قاعدة البيانات الحي، ومبدئيًا الدور المحفوظ)
+  const [ownAllowed, setOwnAllowed] = useState(() => isMainAdminSession());
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void fetchIsMainAdmin().then((value) => { if (!cancelled) setOwnAllowed(value); });
+    return () => { cancelled = true; };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +86,10 @@ export default function BulkScheduleDialog({ open, employees, onClose, onDone }:
     return () => { cancelled = true; };
   }, [open]);
 
-  const { own, others } = useMemo(() => splitOwnEmployees(employees), [employees]);
+  const { own, others } = useMemo(
+    () => (ownAllowed ? { own: [] as ScheduleTarget[], others: employees } : splitOwnEmployees(employees)),
+    [employees, ownAllowed],
+  );
   const chosen = schedules.find((schedule) => schedule.name === scheduleName) ?? null;
   const toChange = useMemo(() => others.filter((employee) => employee.workSchedule.trim() !== scheduleName), [others, scheduleName]);
   const unchanged = others.length - toChange.length;

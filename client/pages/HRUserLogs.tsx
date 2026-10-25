@@ -5,6 +5,7 @@ import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { hrRequestErrorText } from "@/lib/hrErrors";
+import PrintBrandHeader from "@/components/PrintBrandHeader";
 
 type LogEntry = {
   id: string;
@@ -173,6 +174,7 @@ export default function HRUserLogs() {
         }
       `}</style>
       <div id="userlogs-print-area" className="mx-auto max-w-full space-y-4 p-6" dir={direction}>
+        <PrintBrandHeader />
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">{t("سجلات المستخدمين")}</h1>
           <div className="userlogs-no-print flex items-center gap-2">

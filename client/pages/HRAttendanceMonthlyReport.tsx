@@ -90,7 +90,7 @@ export function AttendanceMonthlyReportContent({ embedded = false }: { embedded?
   const isWeekendDay = (day: number) => isWeekend(dayKey(day));
   const daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
   const days = useMemo(() => Array.from({ length: daysInMonth }, (_, index) => index + 1), [daysInMonth]);
-  const localeCode = locale === "ar" ? "ar-SA" : "en-US";
+  const localeCode = locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US";
   const monthName = (targetMonth: number) => new Date(safeYear, targetMonth - 1).toLocaleString(localeCode, { month: "long" });
 
   useEffect(() => {

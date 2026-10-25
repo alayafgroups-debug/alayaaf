@@ -299,7 +299,7 @@ export default function HRPenaltiesArchive() {
                       <td className="py-2.5 px-2 text-gray-600">{r.employee_id || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.reason || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.penalty_type ? t(r.penalty_type) : "-"}</td>
-                      <td className="py-2.5 px-2 text-red-600 font-medium">{Number(r.amount ?? 0).toLocaleString(locale === "ar" ? "ar-SA" : "en-US")}</td>
+                      <td className="py-2.5 px-2 text-red-600 font-medium">{Number(r.amount ?? 0).toLocaleString(locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US")}</td>
                       <td className="py-2.5 px-2">
                         <span
                           className={
@@ -315,7 +315,7 @@ export default function HRPenaltiesArchive() {
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-gray-500">
-                        {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-GB") : "-")}
+                        {r.date || (r.created_at ? new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar-EG-u-ca-gregory-nu-latn" : "en-GB") : "-")}
                       </td>
                       <td className="py-2.5 px-2 text-gray-600">{r.created_by_name || "-"}</td>
                       <td className="py-2.5 px-2 text-gray-600">{r.decided_by_name ? `${r.decided_by_name}${r.decision_note ? ` — ${r.decision_note}` : ""}` : "-"}</td>

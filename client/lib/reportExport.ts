@@ -4,9 +4,9 @@ import { currentLocale, translateText } from "@/i18n";
 
 /*
  * التصدير والطباعة بلغة الواجهة المستعملة (HR-15): في الإنجليزية العناوين والأعمدة والنصوص الثابتة بالإنجليزية،
- * واتجاه من اليسار إلى اليمين، وأرقام إنجليزية، وتاريخ ميلادي. النصوص العربية الثابتة تُترجم من قاموس الواجهة
- * (translateText) حتى لو نسيت الصفحة المستدعية ترجمتها؛ وما لا ترجمة له (أسماء الموظفين والأقسام) يبقى كما أُدخل.
- * في العربية يبقى الناتج كما كان تمامًا.
+ * واتجاه من اليسار إلى اليمين. النصوص العربية الثابتة تُترجم من قاموس الواجهة (translateText) حتى لو نسيت
+ * الصفحة المستدعية ترجمتها؛ وما لا ترجمة له (أسماء الموظفين والأقسام) يبقى كما أُدخل.
+ * الأرقام إنجليزية والتاريخ ميلادي في اللغتين (HR-16): لا رقم عربي في أي طباعة أو تحميل.
  */
 
 export type ReportCell = string | number | null | undefined;
@@ -47,21 +47,22 @@ type ReportExportOptions = {
   brand?: ReportBrand;
 };
 
-/** أرقام إنجليزية في النص: ٠-٩ و۰-۹، والفاصلة العشرية العربية ٫ وفاصل الآلاف ٬ */
+/** أرقام إنجليزية في النص: ٠-٩ و۰-۹، والفاصلة العشرية العربية ٫ وفاصل الآلاف ٬ والنسبة ٪ */
 export const latinDigits = (value: string) => value
   .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
   .replace(/[\u06F0-\u06F9]/g, (digit) => String(digit.charCodeAt(0) - 0x06F0))
   .replace(/\u066B/g, ".")
-  .replace(/\u066C/g, ",");
+  .replace(/\u066C/g, ",")
+  .replace(/\u066A/g, "%");
 
-/** النص الثابت بلغة الواجهة: في الإنجليزية مترجمًا بأرقام إنجليزية، وفي العربية كما هو */
-const localize = (value: string) => (currentLocale() === "en" ? latinDigits(translateText(value)) : value);
+/** النص الثابت بلغة الواجهة (في الإنجليزية مترجمًا)، بأرقام إنجليزية في اللغتين */
+const localize = (value: string) => latinDigits(currentLocale() === "en" ? translateText(value) : value);
 
 /** قيمة الخلية: النص يُترجم إن كان له ترجمة (حالات ثابتة مثل «معتمد»)، والأرقام والقيم الأخرى كما هي */
 const localizeCell = (value: ReportCell): ReportCell => (typeof value === "string" ? localize(value) : value);
 
-/** تاريخ الإصدار: في الإنجليزية ميلادي بأرقام إنجليزية، وفي العربية كما كان */
-const issueDate = () => (currentLocale() === "en" ? new Intl.DateTimeFormat("en-GB", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()) : new Date().toLocaleDateString("ar-SA"));
+/** تاريخ الإصدار: ميلادي بأرقام إنجليزية في اللغتين */
+const issueDate = () => new Intl.DateTimeFormat(currentLocale() === "en" ? "en-GB" : "ar-SA-u-ca-gregory-nu-latn", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
 const brandText = (brand: ReportBrand | undefined, fallback: string) => {
   if (!brand?.label) return localize(fallback);

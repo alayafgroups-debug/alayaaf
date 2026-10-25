@@ -8,6 +8,7 @@ import { INACTIVE_EMPLOYEE_STATUSES, setEmployeeLoginState } from "@/components/
 import { employeeErrorText } from "@/components/hr/employeeErrors";
 import { GOSI_TYPE_NON_SAUDI, gosiTypesFor } from "@/lib/gosi";
 import { isSaudiNationality } from "@/lib/hrStatus";
+import { SALARY_PAYMENT_METHODS, UNSPECIFIED_PAYMENT_METHOD, paymentMethodOf } from "@/lib/salaryPaymentMethods";
 
 export { employeeErrorText };
 import {
@@ -113,6 +114,8 @@ export type EmpFormData = {
   bankBranch: string;
   bankAccount: string;
   iban: string;
+  /** طريقة صرف الراتب (HR-17): نقدي أو مدد أو تحويل بنكي أو شيك، والفارغ غير محدد */
+  salaryPaymentMethod: string;
   // Step 4: Permissions
   permissions: string[];
   // Step 5: Insurance
@@ -189,6 +192,7 @@ export const emptyForm = (): EmpFormData => ({
   bankBranch: "",
   bankAccount: "",
   iban: "",
+  salaryPaymentMethod: "",
   permissions: [],
   insuranceItems: [],
   documents: {},
@@ -270,6 +274,7 @@ export const mapRowToForm = (r: Record<string, unknown>): EmpFormData => ({
   bankBranch: String(r.bank_branch ?? ""),
   bankAccount: String(r.bank_account ?? ""),
   iban: String(r.iban ?? ""),
+  salaryPaymentMethod: paymentMethodOf(r.salary_payment_method),
   permissions: Array.isArray(r.permissions) ? (r.permissions as string[]) : [],
   insuranceItems: Array.isArray(r.insurance_items)
     ? (r.insurance_items as InsuranceItem[])
@@ -507,6 +512,7 @@ const buildEmployeePayload = (form: EmpFormData): Record<string, unknown> => ({
   bank_branch: form.bankBranch,
   bank_account: form.bankAccount,
   iban: form.iban.toUpperCase().replace(/\s/g, ""),
+  salary_payment_method: form.salaryPaymentMethod || null,
   permissions: form.permissions,
   insurance_items: form.insuranceItems,
   documents: form.documents,
@@ -731,6 +737,8 @@ export default function EmployeeForm({
 
       if (mode === "create") {
         payload.total_salary = computeTotalSalary(form.baseSalary, form.allowances);
+        // طريقة الصرف غير المحددة لا تُرسل (يعمل الإنشاء ولو لم يُضف العمود بعد في قاعدة البيانات)
+        if (!payload.salary_payment_method) delete payload.salary_payment_method;
         const { data, error } = await supabase
           .from("employees")
           .insert([{ ...payload, id: form.id }])
@@ -1429,7 +1437,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
                       (() => {
                         try {
                           const d = new Date(form.socialInsuranceStartDate);
-                          return d.toLocaleDateString(`${locale === "en" ? "en-US" : "ar-SA"}-u-ca-islamic-umalqura`, { year: "numeric", month: "long", day: "numeric" });
+                          return d.toLocaleDateString(`${locale === "en" ? "en-US" : "ar-SA"}-u-ca-islamic-umalqura-nu-latn`, { year: "numeric", month: "long", day: "numeric" });
                         } catch { return ""; }
                       })()
                     }
@@ -1449,6 +1457,7 @@ function Step3Financial({ form, set }: { form: EmpFormData; set: <K extends keyo
           <FInput label={t("اسم الفرع")} value={form.bankBranch} onChange={(v) => set("bankBranch", v)} />
           <FInput label={t("رقم الحساب")} value={form.bankAccount} onChange={(v) => set("bankAccount", v)} />
           <FInput label={t("رقم الآيبان")} value={form.iban} onChange={(v) => set("iban", v.toUpperCase().replace(/\s/g, ""))} placeholder="SA0000000000000000000000" />
+          <FSelect label={t("طريقة صرف الراتب")} value={form.salaryPaymentMethod} onChange={(v) => set("salaryPaymentMethod", v)} options={[...SALARY_PAYMENT_METHODS]} placeholder={UNSPECIFIED_PAYMENT_METHOD} />
         </div>
       </div>
     </div>

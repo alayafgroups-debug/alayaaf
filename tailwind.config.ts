@@ -7,8 +7,10 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        arabic: ["'Segoe UI'", "'Droid Arabic Kufi'", "sans-serif"],
+        // HR-16: خط الأرقام اللاتينية أولًا (يرسم الأرقام العربية-الهندية بأشكال 0-9 فقط، وباقي الحروف من الخطوط التالية)
+        sans: ["'Alayaaf Latin Digits'", "Inter", "system-ui", "sans-serif"],
+        arabic: ["'Alayaaf Latin Digits'", "'Segoe UI'", "'Droid Arabic Kufi'", "sans-serif"],
+        mono: ["'Alayaaf Latin Digits'", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "'Liberation Mono'", "'Courier New'", "monospace"],
       },
       container: {
         center: true,

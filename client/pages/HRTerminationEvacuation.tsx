@@ -73,7 +73,7 @@ export default function HRTerminationEvacuation() {
                     <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs ${row.declaration === "تم الإقرار" ? "bg-emerald-100 text-emerald-800" : "bg-yellow-100 text-yellow-800"}`}>{t(row.declaration)}</span></td>
                     <td className="py-3 px-4">{row.declarationDate}</td>
                     <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs ${row.status === "موافق عليه" ? "bg-emerald-100 text-emerald-800" : "bg-yellow-100 text-yellow-800"}`}>{t(row.status)}</span></td>
-                    <td className="py-3 px-4">{row.addedDate ? new Date(row.addedDate).toLocaleString(locale === "ar" ? "ar-SA" : "en-US") : "-"}</td>
+                    <td className="py-3 px-4">{row.addedDate ? new Date(row.addedDate).toLocaleString(locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US") : "-"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -169,7 +169,7 @@ const deductionLines = (figures: Figures) => [
 export default function HREmployeeFullReport() {
   const { t, direction, locale } = useI18n();
   // نفس منطق useI18n: ar-SA بالعربية و en-US بالإنجليزية (بدل ar-SA الثابت)
-  const displayLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const displayLocale = locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US";
   const money = (value: number) =>
     value.toLocaleString(displayLocale, {
       minimumFractionDigits: 2,

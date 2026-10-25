@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
@@ -14,6 +14,8 @@ import { computePayroll, savePayrollRows, type PayrollComputation } from "@/lib/
 import PayrollApprovalDialog from "@/components/hr/PayrollApprovalDialog";
 import PayrollFreshnessNotice from "@/components/hr/PayrollFreshnessNotice";
 import { freshnessErrorText, savedPayrollFreshness, type PayrollFreshness } from "@/lib/payrollFreshness";
+import { isMissingColumnError } from "@/lib/advances";
+import { UNSPECIFIED_PAYMENT_METHOD, paymentMethodOf, paymentMethodRank } from "@/lib/salaryPaymentMethods";
 
 type ReportConfig = {
   period: string;
@@ -30,6 +32,7 @@ const columns: PayrollColumn[] = [
   { key: "index", label: "معرف", group: "بيانات الموظف", width: 8 },
   { key: "name", label: "الاسم", group: "بيانات الموظف", width: 22 },
   { key: "empId", label: "الرقم الوظيفي", group: "بيانات الموظف", width: 14 },
+  { key: "paymentMethod", label: "طريقة صرف الراتب", group: "معلومات عن البنك", width: 16 },
   { key: "bankName", label: "اسم البنك", group: "معلومات عن البنك", width: 18 },
   { key: "bankBranch", label: "اسم الفرع", group: "معلومات عن البنك", width: 16 },
   { key: "accountName", label: "اسم الحساب", group: "معلومات عن البنك", width: 20 },
@@ -65,6 +68,14 @@ const columns: PayrollColumn[] = [
 ];
 
 const money = (value: number) => Math.round(value * 100) / 100;
+
+const REPORT_EMPLOYEE_COLUMNS = "id, emp_id, name, job_title, work_time, work_schedule, bank_name, bank_branch, bank_account, iban, branch_id, department_id, section_id, attendance_location_id";
+// طريقة صرف الراتب (HR-17) إن أُضيف عمودها؛ وإلا يُحمَّل الكشف بدونها ولا يُقسَّم
+const loadReportEmployees = async (ids: string[]) => {
+  const withMethod = await supabase.from("employees").select(`${REPORT_EMPLOYEE_COLUMNS}, salary_payment_method`).in("id", ids);
+  if (withMethod.error && isMissingColumnError(withMethod.error)) return supabase.from("employees").select(REPORT_EMPLOYEE_COLUMNS).in("id", ids);
+  return withMethod;
+};
 export default function HRPayrollFullReport() {
   const { t, direction, locale, formatNumber } = useI18n();
   const navigate = useNavigate();
@@ -79,6 +90,8 @@ export default function HRPayrollFullReport() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [showColumns, setShowColumns] = useState(false);
+  // تقسيم الكشف حسب طريقة صرف الراتب كسمارت (نقدي، مدد، تحويل بنكي، شيك) بمجموع لكل قسم
+  const [groupByMethod, setGroupByMethod] = useState(true);
   const [visible, setVisible] = useState<Record<string, boolean>>(() => Object.fromEntries(columns.map((column) => [column.key, column.defaultVisible !== false])));
   const [filterNames, setFilterNames] = useState({ branch: "الكل", department: "الكل", section: "الكل", location: "الكل" });
   // مطابقة الرواتب المحفوظة (طلب الاعتماد) مع الحساب الآن: غياب أو جزاء أُدخل بعد الإرسال
@@ -107,7 +120,7 @@ export default function HRPayrollFullReport() {
       }
       // «*» للهيكل والمسميات: الاسم الإنجليزي (name_en) يُقرأ إن وُجد العمود، فيُعرض ويُصدَّر في الواجهة الإنجليزية
       const [employeeResult, branchResult, departmentResult, sectionResult, locationResult, jobResult] = await Promise.all([
-        supabase.from("employees").select("id, emp_id, name, job_title, work_time, work_schedule, bank_name, bank_branch, bank_account, iban, branch_id, department_id, section_id, attendance_location_id").in("id", config.employeeIds),
+        loadReportEmployees(config.employeeIds),
         supabase.from("branches").select("*"),
         supabase.from("departments").select("*"),
         supabase.from("org_sections").select("*"),
@@ -140,6 +153,7 @@ export default function HRPayrollFullReport() {
         const netSalary = line.net;
         return {
           id: String(employee.id), index: index + 1, name: String(employee.name ?? "-"), empId: String(employee.emp_id ?? "-"),
+          paymentMethodKey: paymentMethodOf((employee as Record<string, unknown>).salary_payment_method), paymentMethod: t(paymentMethodOf((employee as Record<string, unknown>).salary_payment_method) || UNSPECIFIED_PAYMENT_METHOD),
           bankName: String(employee.bank_name ?? t("لا يوجد")), bankBranch: String(employee.bank_branch ?? t("لا يوجد")), accountName: String(employee.name ?? t("لا يوجد")), accountNumber: String(employee.iban ?? employee.bank_account ?? t("لا يوجد")),
           jobTitle: employee.job_title ? localized(jobNames, String(employee.job_title)) : "-", workTime: employee.work_schedule || employee.work_time ? t(String(employee.work_schedule || employee.work_time)) : t("كامل"),
           workDays: line.workDays, presentDays: line.presentDays, absenceDays: line.absentDays, unrecordedDays: line.unrecordedDays, notEmployedDays: line.notEmployedDays,
@@ -169,9 +183,27 @@ export default function HRPayrollFullReport() {
 
   const visibleColumns = columns.filter((column) => visible[column.key]);
   const groups = visibleColumns.reduce<Array<{ name: string; count: number }>>((result, column) => { const last = result[result.length - 1]; if (last?.name === column.group) last.count += 1; else result.push({ name: column.group, count: 1 }); return result; }, []);
-  const totals = Object.fromEntries(columns.filter((column) => column.money).map((column) => [column.key, rows.reduce((sum, row) => sum + Number(row[column.key] ?? 0), 0)]));
+  const sumOf = (list: PayrollRow[]) => Object.fromEntries(columns.filter((column) => column.money).map((column) => [column.key, list.reduce((sum, row) => sum + Number(row[column.key] ?? 0), 0)]));
+  const totals = sumOf(rows);
+  // الأقسام بترتيب سمارت؛ بلا طريقة صرف محددة لأحد لا يُقسَّم الكشف
+  const grouped = groupByMethod && rows.some((row) => String(row.paymentMethodKey ?? "") !== "");
+  // داخل كل قسم بالرقم الوظيفي، والترقيم (المعرف) متسلسل بترتيب العرض بعد التقسيم
+  const byEmpId = (a: PayrollRow, b: PayrollRow) => String(a.empId).localeCompare(String(b.empId), "en", { numeric: true });
+  let serial = 0;
+  const sections = (grouped
+    ? [...new Set(rows.map((row) => String(row.paymentMethodKey ?? "")))]
+      .sort((a, b) => paymentMethodRank(a) - paymentMethodRank(b))
+      .map((key) => {
+        const sectionRows = rows.filter((row) => String(row.paymentMethodKey ?? "") === key);
+        return { key: key || "unspecified", subtotalLabel: key ? `${t("إجمالي")} ${t(key)}` : t("إجمالي غير المحددة طريقتهم"), rows: sectionRows, totals: sumOf(sectionRows) };
+      })
+    : [{ key: "all", subtotalLabel: "", rows, totals }])
+    .map((section) => ({ ...section, rows: [...section.rows].sort(byEmpId).map((row) => ({ ...row, index: ++serial })) }));
+  // أعمدة اسم المجموع: ما قبل أول عمود مالي (إن كان أول عمود ظاهر ماليًا فلا خلية اسم، فلا يُغطّى مبلغه)
+  const firstMoneyIndex = visibleColumns.findIndex((column) => column.money);
+  const labelSpan = firstMoneyIndex === 0 ? 0 : Math.max(1, firstMoneyIndex);
   // الشهر الميلادي باسمه بلغة الواجهة (ar-SA وحده يعطي الشهر الهجري)
-  const monthLabel = config?.period ? new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-ca-gregory" : "en-US", { month: "long", timeZone: "UTC" }).format(new Date(`${config.period}-01T00:00:00Z`)) : "-";
+  const monthLabel = config?.period ? new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US", { month: "long", timeZone: "UTC" }).format(new Date(`${config.period}-01T00:00:00Z`)) : "-";
   const yearLabel = config?.period?.slice(0, 4) ?? "-";
   const formatCell = (column: PayrollColumn, value: string | number) => column.money ? formatNumber(Number(value), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(value ?? "");
 
@@ -259,10 +291,21 @@ export default function HRPayrollFullReport() {
     [4, 5].forEach((rowNumber) => sheet.getRow(rowNumber).eachCell((cell) => { cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowNumber === 4 ? "FF075F94" : "FF0B6FA4" } }; cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 }; cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true, readingOrder }; cell.border = { top: { style: "thin", color: { argb: "FFFFFFFF" } }, left: { style: "thin", color: { argb: "FFFFFFFF" } }, bottom: { style: "thin", color: { argb: "FFFFFFFF" } }, right: { style: "thin", color: { argb: "FFFFFFFF" } } }; }));
     // عمودا «بعملة الراتب الأساسي» نصّان منسّقان في الصفحة؛ في Excel أرقام بصيغة SAR
     const currencyKeys: Record<string, string> = { netSalaryCurrency: "netSalary", payableCurrency: "payable" };
-    rows.forEach((row) => { const excelRow = sheet.addRow(visibleColumns.map((column) => (currencyKeys[column.key] ? Number(row[currencyKeys[column.key]] ?? 0) : row[column.key]))); excelRow.eachCell((cell, index) => { const column = visibleColumns[index - 1]; cell.alignment = { horizontal: column.money || currencyKeys[column.key] ? "right" : "center", vertical: "middle", wrapText: true, readingOrder }; cell.border = { top: { style: "hair", color: { argb: "FFD8E1E8" } }, left: { style: "hair", color: { argb: "FFD8E1E8" } }, bottom: { style: "hair", color: { argb: "FFD8E1E8" } }, right: { style: "hair", color: { argb: "FFD8E1E8" } } }; if (column.money) cell.numFmt = "#,##0.00"; if (currencyKeys[column.key]) cell.numFmt = '#,##0.00 "SAR"'; }); });
-    const totalRow = sheet.addRow(visibleColumns.map((column) => column.key === "name" ? t("الإجماليات") : column.money ? totals[column.key] : ""));
+    const addDataRow = (row: PayrollRow) => { const excelRow = sheet.addRow(visibleColumns.map((column) => (currencyKeys[column.key] ? Number(row[currencyKeys[column.key]] ?? 0) : row[column.key]))); excelRow.eachCell((cell, index) => { const column = visibleColumns[index - 1]; cell.alignment = { horizontal: column.money || currencyKeys[column.key] ? "right" : "center", vertical: "middle", wrapText: true, readingOrder }; cell.border = { top: { style: "hair", color: { argb: "FFD8E1E8" } }, left: { style: "hair", color: { argb: "FFD8E1E8" } }, bottom: { style: "hair", color: { argb: "FFD8E1E8" } }, right: { style: "hair", color: { argb: "FFD8E1E8" } } }; if (column.money) cell.numFmt = "#,##0.00"; if (currencyKeys[column.key]) cell.numFmt = '#,##0.00 "SAR"'; }); };
+    // كل قسم (طريقة صرف) صفوفه ثم مجموعه، كسمارت؛ اسم المجموع في عمود الاسم (أو أول عمود غير مالي إن أُخفي)
+    const labelKey = visibleColumns.some((column) => column.key === "name") ? "name" : visibleColumns.find((column) => !column.money && !currencyKeys[column.key])?.key;
+    sections.forEach((section) => {
+      section.rows.forEach(addDataRow);
+      if (!grouped) return;
+      const subtotalRow = sheet.addRow(visibleColumns.map((column) => column.key === labelKey ? section.subtotalLabel : column.money ? section.totals[column.key] : ""));
+      subtotalRow.font = { bold: true };
+      subtotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF4D6" } };
+      subtotalRow.eachCell((cell, index) => { cell.alignment = { horizontal: "center", vertical: "middle", readingOrder }; if (visibleColumns[index - 1].money) cell.numFmt = "#,##0.00"; });
+    });
+    const totalRow = sheet.addRow(visibleColumns.map((column) => column.key === labelKey ? t("الإجماليات") : column.money ? totals[column.key] : ""));
     totalRow.font = { bold: true }; totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F2F8" } }; totalRow.eachCell((cell, index) => { if (visibleColumns[index - 1].money) cell.numFmt = "#,##0.00"; cell.border = { top: { style: "medium", color: { argb: "FF075F94" } } }; });
-    sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + rows.length, column: visibleColumns.length } };
+    // الفرز في Excel يخلط سطور مجاميع الأقسام بالموظفين، فلا فلتر مع التقسيم
+    if (!grouped) sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + rows.length, column: visibleColumns.length } };
     const output = await workbook.xlsx.writeBuffer();
     const url = URL.createObjectURL(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = `Payroll_Report_${config?.period ?? ""}.xlsx`; anchor.click(); URL.revokeObjectURL(url);
@@ -275,7 +318,7 @@ export default function HRPayrollFullReport() {
     <style>{`@media print { body * { visibility: hidden !important; } #payroll-full-report, #payroll-full-report * { visibility: visible !important; } #payroll-full-report { position:absolute; inset:0; width:100%; overflow:visible !important; border:0; box-shadow:none; } #payroll-full-report .payroll-table-wrap { overflow:visible !important; } #payroll-full-report table { width:100% !important; min-width:0 !important; table-layout:fixed; font-size:6.5px; } #payroll-full-report th, #payroll-full-report td { padding:2px 1px !important; max-width:none !important; white-space:normal !important; word-break:break-word; } .payroll-no-print { display:none !important; } @page { size:A3 landscape; margin:6mm; } }`}</style>
     <div className="payroll-no-print flex flex-wrap items-center justify-between gap-3">
       <Button variant="outline" onClick={() => navigate("/hr/payroll/statement")}><ArrowRight className="h-4 w-4" />{t("رجوع")}</Button>
-      <div className="flex flex-wrap gap-2"><Button onClick={openApproval} disabled={loading || approvalSubmitting || rows.length === 0} className="bg-emerald-700 text-white hover:bg-emerald-800"><Send className="h-4 w-4" />{approvalSubmitting ? t("جارٍ الإرسال...") : t("إرسال كشف اعتماد الرواتب للإدارة")}</Button><Button variant="outline" onClick={() => setShowColumns(true)}><Columns3 className="h-4 w-4" />{t("إظهار/إخفاء الأعمدة")}</Button><Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{t("طباعة / PDF")}</Button><Button onClick={() => void exportExcel()} className="bg-[#075f94] hover:bg-[#064f7b]"><Download className="h-4 w-4" />Excel</Button></div>
+      <div className="flex flex-wrap gap-2"><Button onClick={openApproval} disabled={loading || approvalSubmitting || rows.length === 0} className="bg-emerald-700 text-white hover:bg-emerald-800"><Send className="h-4 w-4" />{approvalSubmitting ? t("جارٍ الإرسال...") : t("إرسال كشف اعتماد الرواتب للإدارة")}</Button><label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"><input type="checkbox" checked={groupByMethod} onChange={(event) => setGroupByMethod(event.target.checked)} />{t("تقسيم حسب طريقة الصرف")}</label><Button variant="outline" onClick={() => setShowColumns(true)}><Columns3 className="h-4 w-4" />{t("إظهار/إخفاء الأعمدة")}</Button><Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{t("طباعة / PDF")}</Button><Button onClick={() => void exportExcel()} className="bg-[#075f94] hover:bg-[#064f7b]"><Download className="h-4 w-4" />Excel</Button></div>
     </div>
     {(warnings.length > 0 || computation) && <div className="payroll-no-print space-y-1 text-xs">
       {computation && <p className="text-slate-500">{computation.policy.absenceBasis === "basic" ? t("قيمة يوم الغياب = الراتب الأساسي") : t("قيمة يوم الغياب = الراتب الأساسي + البدلات")} ÷ {computation.policy.dayDivisor === "actual" ? t("أيام الشهر الفعلية") : "30"} — {computation.policy.countUnrecordedAsAbsent ? t("أيام العمل بلا تسجيل حضور تُحتسب غيابًا (الراتب المكتسب حسب الحضور)") : t("يُخصم الغياب المسجّل في الحضور فقط")}</p>}
@@ -287,7 +330,7 @@ export default function HRPayrollFullReport() {
         <h1 className="text-center text-xl font-bold text-slate-900">{t("شركة إدارة العياف للمقاولات")}</h1><h2 className="mt-1 text-center text-lg font-bold text-[#075f94]">{t("كشف الرواتب")}</h2>
         <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-5"><span>{t("شهر")}: <b>{monthLabel}</b></span><span>{t("السنة")}: <b>{yearLabel}</b></span><span>{t("الإدارة")}: <b>{filterNames.department}</b></span><span>{t("القسم")}: <b>{filterNames.section}</b></span><span>{t("الفرع")}: <b>{filterNames.branch}</b></span><span className="lg:col-span-2">{t("مكان العمل")}: <b>{filterNames.location}</b></span><span>{t("عدد الموظفين")}: <b>{formatNumber(rows.length)}</b></span></div>
       </header>
-      <div className="payroll-table-wrap overflow-x-auto"><table className="min-w-max border-collapse text-[10px]"><thead><tr className="bg-[#075f94] text-white">{groups.map((group) => <th key={group.name} colSpan={group.count} className="border border-white/30 px-2 py-2 text-center font-bold">{t(group.name)}</th>)}</tr><tr className="bg-[#0b6fa4] text-white">{visibleColumns.map((column) => <th key={column.key} className="max-w-32 whitespace-normal border border-white/30 px-2 py-2 text-center font-semibold">{t(column.label)}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={visibleColumns.length} className="py-16 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : rows.map((row) => <tr key={row.id} className="odd:bg-white even:bg-slate-50">{visibleColumns.map((column) => <td key={column.key} className={`border border-slate-200 px-2 py-2 text-center ${column.money && Number(row[column.key]) > 0 ? "font-medium" : ""}`}>{formatCell(column, row[column.key])}</td>)}</tr>)}</tbody>{!loading && rows.length > 0 && <tfoot><tr className="bg-sky-50 font-bold"><td colSpan={Math.max(1, visibleColumns.findIndex((column) => column.money))} className="border border-slate-300 px-2 py-3 text-center">{t("الإجماليات")}</td>{visibleColumns.slice(Math.max(1, visibleColumns.findIndex((column) => column.money))).map((column) => <td key={column.key} className="border border-slate-300 px-2 py-3 text-center">{column.money ? formatNumber(Number(totals[column.key] ?? 0), { minimumFractionDigits: 2 }) : ""}</td>)}</tr></tfoot>}</table></div>
+      <div className="payroll-table-wrap overflow-x-auto"><table className="min-w-max border-collapse text-[10px]"><thead><tr className="bg-[#075f94] text-white">{groups.map((group) => <th key={group.name} colSpan={group.count} className="border border-white/30 px-2 py-2 text-center font-bold">{t(group.name)}</th>)}</tr><tr className="bg-[#0b6fa4] text-white">{visibleColumns.map((column) => <th key={column.key} className="max-w-32 whitespace-normal border border-white/30 px-2 py-2 text-center font-semibold">{t(column.label)}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={visibleColumns.length} className="py-16 text-center text-slate-400">{t("جاري التحميل...")}</td></tr> : sections.map((section) => <Fragment key={section.key}>{section.rows.map((row) => <tr key={row.id} className="odd:bg-white even:bg-slate-50">{visibleColumns.map((column) => <td key={column.key} className={`border border-slate-200 px-2 py-2 text-center ${column.money && Number(row[column.key]) > 0 ? "font-medium" : ""}`}>{formatCell(column, row[column.key])}</td>)}</tr>)}{grouped && <tr className="bg-amber-50 font-bold">{labelSpan > 0 && <td colSpan={labelSpan} className="border border-slate-300 px-2 py-2 text-center">{section.subtotalLabel}</td>}{visibleColumns.slice(labelSpan).map((column) => <td key={column.key} className="border border-slate-300 px-2 py-2 text-center">{column.money ? formatNumber(Number(section.totals[column.key] ?? 0), { minimumFractionDigits: 2 }) : ""}</td>)}</tr>}</Fragment>)}</tbody>{!loading && rows.length > 0 && <tfoot><tr className="bg-sky-50 font-bold">{labelSpan > 0 && <td colSpan={labelSpan} className="border border-slate-300 px-2 py-3 text-center">{t("الإجماليات")}</td>}{visibleColumns.slice(labelSpan).map((column) => <td key={column.key} className="border border-slate-300 px-2 py-3 text-center">{column.money ? formatNumber(Number(totals[column.key] ?? 0), { minimumFractionDigits: 2 }) : ""}</td>)}</tr></tfoot>}</table></div>
     </section>
     {showColumns && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowColumns(false)}><div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between border-b p-5"><h2 className="text-xl font-bold">{t("إظهار/إخفاء الأعمدة")}</h2><button onClick={() => setShowColumns(false)}><X className="h-5 w-5" /></button></div><div className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">{columns.map((column) => <label key={column.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 text-sm"><span>{t(column.label)}</span><input type="checkbox" checked={visible[column.key]} onChange={(event) => setVisible((current) => ({ ...current, [column.key]: event.target.checked }))} className="h-5 w-5 accent-[#075f94]" /></label>)}</div><div className="flex justify-end border-t p-4"><Button onClick={() => setShowColumns(false)} className="bg-[#075f94]">{t("تطبيق")}</Button></div></div></div>}
     <PayrollApprovalDialog

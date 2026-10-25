@@ -2,6 +2,7 @@ import "./global.css";
 
 import { Toaster } from "@/components/ui/toaster";
 import { createRoot } from "react-dom/client";
+import { installLatinDigitsInput } from "@/lib/latinDigitsInput";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -339,6 +340,9 @@ const App = () => (
     </I18nProvider>
   </QueryClientProvider>
 );
+
+// HR-16: الأرقام العربية المكتوبة في حقول النص تُحوَّل إلى أرقام إنجليزية
+installLatinDigitsInput();
 
 const container = document.getElementById("root");
 if (container) {

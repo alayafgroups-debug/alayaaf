@@ -199,7 +199,7 @@ export default function InventoryCounts() {
 
         {editing && (
           <section className="rounded-xl border bg-white p-5 shadow-sm">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold">{t("إدخال الكميات الفعلية")} — {editing.number}</h2><p className="text-xs text-slate-500">{t("وقت تثبيت الرصيد")}: {new Date(editing.snapshotAt).toLocaleString()}</p></div><button onClick={() => setEditing(null)}><X className="h-5 w-5" /></button></div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold">{t("إدخال الكميات الفعلية")} — {editing.number}</h2><p className="text-xs text-slate-500">{t("وقت تثبيت الرصيد")}: {new Date(editing.snapshotAt).toLocaleString("en-GB")}</p></div><button onClick={() => setEditing(null)}><X className="h-5 w-5" /></button></div>
             <label className="block text-xs text-slate-600">{t("ملاحظات عامة")}<input value={notes} onChange={(event) => setNotes(event.target.value)} className="mt-1 h-10 w-full rounded border px-3" /></label>
             <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm">
               <thead className="bg-slate-100"><tr><th className="p-2">{t("الصنف")}</th><th className="p-2">{t("الكمية الدفترية")}</th><th className="p-2">{t("الكمية الفعلية")}</th><th className="p-2">{t("الفرق")}</th><th className="p-2">{t("قيمة الفرق")}</th><th className="p-2">{t("ملاحظات")}</th></tr></thead>

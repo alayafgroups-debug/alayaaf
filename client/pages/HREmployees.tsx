@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowRight,
+  Banknote,
   CalendarClock,
   Wallet,
   CheckSquare,
@@ -30,6 +31,7 @@ import { printReport } from "@/lib/reportExport";
 import { loadOrgEnglishNames } from "@/lib/orgNames";
 import EmployeeDeleteDialog, { type DeletableEmployee } from "@/components/hr/EmployeeDeleteDialog";
 import BulkScheduleDialog from "@/components/hr/BulkScheduleDialog";
+import BulkPaymentMethodDialog from "@/components/hr/BulkPaymentMethodDialog";
 import { isSaudiNationality } from "@/lib/hrStatus";
 import { canManagePerm } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
@@ -136,6 +138,7 @@ export default function HREmployees() {
   // الإدارات (departments): لفلتر «الإدارة» واستثناء إدارة كاملة من التحديد
   const [administrationOptions, setAdministrationOptions] = useState<{ id: string; name: string; nameEn: string }[]>([]);
   const [bulkScheduleOpen, setBulkScheduleOpen] = useState(false);
+  const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   // من سيُحذف (موظف واحد من زر الحذف، أو المحددون من زر الحذف الجماعي)
   const [deleteTargets, setDeleteTargets] = useState<DeletableEmployee[] | null>(null);
@@ -1101,6 +1104,15 @@ export default function HREmployees() {
                     <CalendarClock className="h-3.5 w-3.5" />{t("تغيير جدول الدوام")}
                   </button>
                 )}
+                {canManageEmployees && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkPaymentOpen(true)}
+                    className="flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-0.5 text-blue-700 hover:bg-blue-50"
+                  >
+                    <Banknote className="h-3.5 w-3.5" />{t("تغيير طريقة صرف الراتب")}
+                  </button>
+                )}
               </span>
             )}
           </div>
@@ -1286,6 +1298,17 @@ export default function HREmployees() {
           workSchedule: employee.workSchedule,
         }))}
         onClose={() => setBulkScheduleOpen(false)}
+        onDone={() => setRefreshKey((k) => k + 1)}
+      />
+      <BulkPaymentMethodDialog
+        open={bulkPaymentOpen}
+        employees={employees.filter((employee) => selectedIds.has(employee.id)).map((employee) => ({
+          id: employee.id,
+          empId: employee.empId,
+          name: employee.name || employee.firstName,
+          salaryPaymentMethod: employee.salaryPaymentMethod,
+        }))}
+        onClose={() => setBulkPaymentOpen(false)}
         onDone={() => setRefreshKey((k) => k + 1)}
       />
       <EmployeeDeleteDialog

@@ -3912,12 +3912,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       setLocale,
       formatDate: (date, options) =>
         new Intl.DateTimeFormat(
-          locale === "ar" ? "ar-SA" : "en-US",
+          locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US",
           options,
         ).format(new Date(date)),
       formatNumber: (number, options) =>
         new Intl.NumberFormat(
-          locale === "ar" ? "ar-SA" : "en-US",
+          locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US",
           options,
         ).format(number),
     }),
@@ -5814,6 +5814,46 @@ Object.assign(translations, {
   "وقت الانصراف لا يطابق وقت الحضور المسجل (المدة صفر أو أكثر من 16 ساعة)": "The check-out time does not match the recorded check-in time (duration is zero or more than 16 hours)",
   "وقت الحضور أو الانصراف غير صحيح (الصيغة HH:MM)": "Invalid check-in or check-out time (format HH:MM)",
   "يمكن تغيير القرار والملاحظة فقط؛ بيانات الطلب لا تُعدَّل": "Only the decision and note can be changed; the request details cannot be edited",
+});
+
+// HR-17: طريقة صرف الراتب وتقسيم كشف الرواتب حسبها (كسمارت)
+Object.assign(translations, {
+  "مدد": "Mudad",
+  "تقسيم حسب طريقة الصرف": "Group by disbursement method",
+  "تغيير طريقة صرف الراتب": "Change disbursement method",
+  "تغيير طريقة صرف الراتب للمحددين": "Change disbursement method for selected employees",
+  "طريقة الصرف الجديدة": "New disbursement method",
+  "اختر طريقة الصرف": "Choose a disbursement method",
+  "بلا طريقة (غير محدد)": "No method (not set)",
+  "طرق الصرف الحالية للمحددين": "Current disbursement methods of the selected employees",
+  "عدد من ستتغير طريقتهم": "Employees to change",
+  "على هذه الطريقة أصلًا": "already on this method",
+  "طريقة الصرف تقسّم كشف الرواتب (نقدي، مدد، تحويل بنكي، شيك) بمجموع لكل قسم، ولا تغيّر مبلغ الراتب.": "The disbursement method splits the payroll statement (Cash, Mudad, Bank transfer, Cheque) with a total for each group; it does not change the salary amount.",
+  "عدد من تغيّرت طريقتهم": "Employees changed",
+  "تغيير الطريقة": "Change method",
+  "إجمالي غير المحددة طريقتهم": "Total — method not set",
+  "بلا طريقة أصلًا": "already without a method",
+  "سجلك ليس ضمن التغيير: لا تغيّر طريقة صرف راتبك بنفسك": "Your own record is not included: you cannot change your own disbursement method",
+  // رسائل أخطاء حفظ الموظفين (employeeErrors) بالإنجليزية
+  "لا يمكن استخدام بريد حسابك أنت لموظف جديد": "You cannot use your own account email for a new employee",
+  "تغيير البريد لموظف له بريد مسجّل يتم من مدير النظام فقط": "Only the system administrator can change the email of an employee who already has one",
+  "منح دور المدير أو سحبه يتم من مدير النظام فقط": "Only the system administrator can grant or remove the administrator role",
+  "سجل مدير النظام محمي ولا يعدّله إلا مدير النظام": "The system administrator record is protected; only the system administrator can edit it",
+  "لا يمكنك تغيير دورك أو صلاحياتك بنفسك": "You cannot change your own role or permissions",
+  "إضافة الموظفين تتطلب صلاحية إدارة الموظفين": "Adding employees requires the manage employees permission",
+  "تعديل هذه الحقول يتطلب صلاحية الموارد البشرية": "Editing these fields requires HR permission",
+  "الرقم الوظيفي مستخدم لموظف آخر": "This employee number is used by another employee",
+  "الرقم الوظيفي لا يُعدَّل بعد إنشائه": "The employee number cannot be changed after it is created",
+  "الرقم الوظيفي البديل مستخدم لموظف آخر": "This alternate employee number is used by another employee",
+  "رقم الهوية / الإقامة مسجّل لموظف آخر": "This ID / Iqama number is registered to another employee",
+  "دور هذا الموظف أو صلاحياته أعلى من صلاحياتك؛ يسندها أو يعدّلها مدير النظام": "This employee's role or permissions are above yours; the system administrator assigns or edits them",
+  "تعديل الراتب والبدلات والحساب البنكي يتطلب صلاحية إدارة الرواتب": "Editing salary, allowances and bank account requires the manage payroll permission",
+  "هذا البريد مرتبط بحساب دخول موظف آخر": "This email is linked to another employee's login account",
+  "حذف الموظفين يتطلب صلاحية إدارة الموظفين": "Deleting employees requires the manage employees permission",
+  "لا يمكنك تغيير طريقة صرف راتبك بنفسك؛ يغيّرها لك مسؤول آخر": "You cannot change your own disbursement method; another manager changes it for you",
+  "لا يمكنك تعديل راتبك أو بدلاتك أو حسابك البنكي بنفسك؛ يعدّلها مسؤول رواتب آخر": "You cannot edit your own salary, allowances or bank account; another payroll officer edits them",
+  "قيمة مكررة: البيانات مسجّلة لموظف آخر": "Duplicate value: this data is registered to another employee",
+  "لم يُحفظ شيء: السجل غير موجود أو ليست لديك صلاحية تعديله": "Nothing was saved: the record does not exist or you do not have permission to edit it",
 });
 
 export function useI18n() {

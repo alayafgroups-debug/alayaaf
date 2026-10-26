@@ -145,6 +145,7 @@ const hrNavItems: HRNavItem[] = [
     hasChildren: true,
     children: [
       { icon: Users2, label: "الموظفون", href: "/hr/employees" },
+      { icon: UserCheck, label: "الموظفون الأساسيون", href: "/hr/employees/basic" },
       {
         icon: Handshake,
         label: "الموظفون المتعاونون",

@@ -3,6 +3,7 @@ import "./global.css";
 import { Toaster } from "@/components/ui/toaster";
 import { createRoot } from "react-dom/client";
 import { installLatinDigitsInput } from "@/lib/latinDigitsInput";
+import { installLatinDatePicker } from "@/lib/latinDatePicker";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -194,6 +195,7 @@ const App = () => (
           <Route path="/hr/employees" element={<HREmployees />} />
           <Route path="/hr/employees/new" element={<HREmployees />} />
           <Route path="/hr/employees/cooperative" element={<HREmployeesCooperative />} />
+          <Route path="/hr/employees/basic" element={<HREmployees key="basic" scope="basic" />} />
           <Route path="/hr/employees/inactive" element={<HREmployeesInactive />} />
           <Route path="/hr/employees/:id/financial" element={<HREmployeeFinance />} />
           <Route path="/hr/user-logs" element={<HRUserLogs />} />
@@ -343,6 +345,8 @@ const App = () => (
 
 // HR-16: الأرقام العربية المكتوبة في حقول النص تُحوَّل إلى أرقام إنجليزية
 installLatinDigitsInput();
+// HR-21: لوحة اختيار التاريخ والشهر بأرقام إنجليزية بدل لوحة المتصفح (تتبع لغة الجهاز)
+installLatinDatePicker();
 
 const container = document.getElementById("root");
 if (container) {

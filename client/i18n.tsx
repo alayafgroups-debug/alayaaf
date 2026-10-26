@@ -5896,6 +5896,24 @@ Object.assign(translations, {
   "قيمة الساعات الإضافية": "Overtime amount",
 });
 
+// HR-20: التحضير الفردي والجماعي بأوقات جدول الدوام (أُخفي حقلا الوقت)
+Object.assign(translations, {
+  "يُسجَّل بوقتي بداية ونهاية جدول دوام كل موظف (بلا تأخير)": "Recorded with each employee's work schedule start and end times (no lateness)",
+});
+
+// HR-21: صفحة الموظفين الأساسيين، ولوحة اختيار التاريخ بأرقام إنجليزية
+Object.assign(translations, {
+  "الموظفون الأساسيون": "Basic employees",
+  "الموظفون على كفالة الشركة (نوع التوظيف: أساسي)": "Employees sponsored by the company (employment type: Primary)",
+  "اختر التاريخ": "Choose a date",
+  "الشهر السابق": "Previous month",
+  "الشهر التالي": "Next month",
+  "السنة السابقة": "Previous year",
+  "السنة التالية": "Next year",
+  "اليوم": "Today",
+  "هذا الشهر": "This month",
+});
+
 export function useI18n() {
   const value = useContext(I18nContext);
   if (!value) throw new Error("useI18n must be used inside I18nProvider");

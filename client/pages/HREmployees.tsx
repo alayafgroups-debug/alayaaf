@@ -132,8 +132,19 @@ const toDeletable = (employee: EmpFormData): DeletableEmployee => ({
 });
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function HREmployees() {
+/** نوع التوظيف «أساسي» (على كفالة الشركة): الفارغ يُعد أساسيًا كما في ملف الموظف، والهمزة لا تفرق (اساسي) */
+const isBasicEmployee = (employee: EmpFormData) => {
+  const type = employee.employmentType.trim().replace(/[أإآ]/g, "ا");
+  return type === "" || type === "اساسي";
+};
+
+/**
+ * قائمة الموظفين. scope="basic" (HR-21): «الموظفون الأساسيون» على كفالة الشركة، بكل أدوات القائمة نفسها.
+ */
+export default function HREmployees({ scope }: { scope?: "basic" } = {}) {
   const { t, direction, locale, formatNumber } = useI18n();
+  const basicOnly = scope === "basic";
+  const listTitle = basicOnly ? t("الموظفون الأساسيون") : t("قائمة الموظفين");
   const { permissions } = useRolePermissions();
   // تغيير جدول الدوام تعديل لملفات الموظفين: لمن يدير الموظفين (قاعدة البيانات تفرض ذلك أيضًا)
   const canManageEmployees = canManagePerm(permissions, "hr.employees", "module.hr");
@@ -180,6 +191,15 @@ export default function HREmployees() {
   const [pageSize, setPageSize] = useState(10);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // صفحة الأساسيين: من لم يعد أساسيًا (تغيّر نوعه) يخرج من التحديد، فلا يُطبع ولا يُعدَّل تحت عنوانها
+  useEffect(() => {
+    if (!basicOnly) return;
+    setSelectedIds((current) => {
+      const allowed = new Set(employees.filter(isBasicEmployee).map((employee) => employee.id));
+      const next = new Set([...current].filter((id) => allowed.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [basicOnly, employees]);
   const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumn, boolean>>({
     englishName: false,
     directorate: true,
@@ -237,6 +257,7 @@ export default function HREmployees() {
   }, [refreshKey]);
 
   const filtered = useMemo(() => employees.filter((employee) => {
+    if (basicOnly && !isBasicEmployee(employee)) return false;
     const keyword = fSearch.trim().toLowerCase();
     if (keyword && ![employee.name, employee.firstName, employee.empId, employee.accountTitle, employee.phone, employee.email, employee.nationalId]
       .some((value) => value.toLowerCase().includes(keyword))) return false;
@@ -265,7 +286,7 @@ export default function HREmployees() {
     if (fNationality === "unknown" && employee.nationality.trim()) return false;
     if (fSchedule === NO_SCHEDULE ? employee.workSchedule.trim() !== "" : fSchedule && employee.workSchedule.trim() !== fSchedule) return false;
     return true;
-  }), [administrationOptions, departmentOptions, employees, fSearch, fDepartment, fNationalId, fStatus, fAdministration, fNationality, fSchedule]);
+  }), [administrationOptions, basicOnly, departmentOptions, employees, fSearch, fDepartment, fNationalId, fStatus, fAdministration, fNationality, fSchedule]);
 
   // جداول الدوام الموجودة في ملفات الموظفين (لفلتر الجدول)
   const scheduleOptions = useMemo(
@@ -435,7 +456,7 @@ export default function HREmployees() {
       { key: "status", label: t("الحالة") },
     ];
     const opened = printReport({
-      title: t("قائمة الموظفين"),
+      title: listTitle,
       subtitle: selectedIds.size ? `${t("الموظفون المحددون")}: ${outputRows.length}` : `${t("حسب الفلتر الحالي")}: ${outputRows.length}`,
       columns,
       rows: outputRows.map((employee) => ({
@@ -933,10 +954,13 @@ export default function HREmployees() {
       <div dir={direction} className="space-y-4">
         {/* ─── Header bar ─────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <Users className="h-5 w-5 text-blue-600" />
-            {t("قائمة الموظفين")}
-          </h1>
+          <div>
+            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              {listTitle}
+            </h1>
+            {basicOnly && <p className="mt-1 text-xs text-gray-500">{t("الموظفون على كفالة الشركة (نوع التوظيف: أساسي)")}</p>}
+          </div>
           <button
             onClick={() => setMode("create")}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition shadow"
@@ -950,7 +974,7 @@ export default function HREmployees() {
           {/* Blue title bar */}
           <div className="bg-blue-700 px-4 py-2.5 flex items-center justify-between text-white">
             <span className="font-semibold text-sm">
-              {t("قائمة الموظفين")} — {formatNumber(filtered.length)} {t("موظف")}
+              {listTitle} — {formatNumber(filtered.length)} {t("موظف")}
             </span>
             <div className="flex items-center gap-1">
               <button onClick={() => void exportSafeEmployeesExcel()} title={selectedIds.size ? t("تحميل المحددين Excel") : t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>

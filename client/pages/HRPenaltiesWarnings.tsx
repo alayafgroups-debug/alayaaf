@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
+import PenaltyReplyBlock, { PenaltyReplyBadge } from "@/components/hr/PenaltyReplyBlock";
+import { readPenaltyReply } from "@/lib/penaltyReply";
 
 type Employee = {
   id: string;
@@ -25,6 +27,9 @@ type Warning = {
   senderName: string;
   status: string;
   sentAt: string;
+  // HR-22: رد الموظف من بوابته
+  reply: string;
+  replyAt: string;
 };
 
 const getLocalDate = () => {
@@ -49,6 +54,8 @@ export default function HRPenaltiesWarnings() {
   const [showForm, setShowForm] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [historyPreview, setHistoryPreview] = useState(false);
+  // رد الموظف على الإنذار المعروض من السجل
+  const [historyReply, setHistoryReply] = useState({ reply: "", replyAt: "" });
   const [search, setSearch] = useState("");
 
   const loadData = async () => {
@@ -82,6 +89,7 @@ export default function HRPenaltiesWarnings() {
           senderName: String(row.sender_name ?? "الإدارة"),
           status: String(row.status ?? "مرسل"),
           sentAt: String(row.sent_at ?? ""),
+          ...readPenaltyReply(row),
         }))
       );
     } catch (error) {
@@ -153,7 +161,7 @@ export default function HRPenaltiesWarnings() {
     const keyword = search.trim();
     if (!keyword) return warnings;
     return warnings.filter((warning) =>
-      [warning.empName, warning.department, warning.subject, warning.message, warning.senderName, warning.status]
+      [warning.empName, warning.department, warning.subject, warning.message, warning.senderName, warning.status, warning.reply]
         .some((value) => value.includes(keyword))
     );
   }, [warnings, search]);
@@ -166,6 +174,7 @@ export default function HRPenaltiesWarnings() {
       date: warning.date,
       message: warning.message,
     });
+    setHistoryReply({ reply: warning.reply, replyAt: warning.replyAt });
     setHistoryPreview(true);
     setPreviewOpen(true);
   };
@@ -248,7 +257,7 @@ export default function HRPenaltiesWarnings() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] text-sm text-right">
+            <table className="w-full min-w-[1100px] text-sm text-right">
               <thead className="bg-[#004e89] text-white">
                 <tr>
                   <th className="py-3 px-4">{t("التاريخ")}</th>
@@ -257,14 +266,15 @@ export default function HRPenaltiesWarnings() {
                   <th className="py-3 px-4">{t("المرسل")}</th>
                   <th className="py-3 px-4">{t("الموضوع")}</th>
                   <th className="py-3 px-4">{t("الحالة")}</th>
+                  <th className="py-3 px-4">{t("رد الموظف")}</th>
                   <th className="py-3 px-4 text-center">{t("عرض")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={7} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
+                  <tr><td colSpan={8} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />{t("لا توجد إنذارات مرسلة")}</td></tr>
+                  <tr><td colSpan={8} className="py-10 text-center text-gray-500"><FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />{t("لا توجد إنذارات مرسلة")}</td></tr>
                 ) : filtered.map((warning) => (
                   <tr key={warning.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4">{warning.date}</td>
@@ -273,6 +283,7 @@ export default function HRPenaltiesWarnings() {
                     <td className="py-3 px-4">{warning.senderName}</td>
                     <td className="py-3 px-4">{warning.subject}</td>
                     <td className="py-3 px-4"><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-700">{t(warning.status)}</span></td>
+                    <td className="py-3 px-4"><PenaltyReplyBadge reply={warning.reply} /></td>
                     <td className="py-3 px-4 text-center">
                       <button type="button" onClick={() => showSavedWarning(warning)} className="text-[#004e89] hover:text-[#003d6d]" aria-label={`${t("عرض إنذار")} ${warning.empName}`}>
                         <Eye className="h-4 w-4" />
@@ -292,7 +303,7 @@ export default function HRPenaltiesWarnings() {
                 <h3 className="text-xl font-bold text-gray-900">{t("معاينة الإنذار")}</h3>
                 <button type="button" onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-900"><X className="h-5 w-5" /></button>
               </div>
-              <div className="p-6 space-y-5">
+              <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
                 <div className="border-b border-gray-100 pb-4 text-center">
                   <h4 className="text-2xl font-bold text-[#004e89]">{t("إنذار إداري")}</h4>
                   <p className="mt-1 text-sm text-gray-500">{t("التاريخ")}: {form.date}</p>
@@ -306,6 +317,7 @@ export default function HRPenaltiesWarnings() {
                   <span className="font-medium text-gray-900">{form.subject}</span>
                 </div>
                 <div className="whitespace-pre-wrap rounded-lg bg-gray-50 p-4 leading-7 text-gray-800">{form.message}</div>
+                {historyPreview && <PenaltyReplyBlock reply={historyReply.reply} replyAt={historyReply.replyAt} />}
               </div>
               <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
                 <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t("رجوع")}</Button>

@@ -8,6 +8,8 @@ import { toast } from "@/hooks/use-toast";
 import { useI18n } from "@/i18n";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { riyadhToday } from "@/lib/hrDates";
+import PenaltyReplyBlock, { PenaltyReplyBadge } from "@/components/hr/PenaltyReplyBlock";
+import { readPenaltyReply } from "@/lib/penaltyReply";
 
 type Employee = {
   id: string;
@@ -34,6 +36,9 @@ type Investigation = {
   subject: string;
   message: string;
   status: string;
+  // HR-22: رد الموظف من بوابته
+  reply: string;
+  replyAt: string;
 };
 
 // يُحسب تاريخ اليوم عند إنشاء النموذج أو تفريغه، لا مرة واحدة عند تحميل الملف
@@ -103,6 +108,7 @@ export default function HRPenaltiesInvestigations() {
           subject: String(row.subject ?? ""),
           message: String(row.message ?? ""),
           status: String(row.status ?? "مرسلة"),
+          ...readPenaltyReply(row),
         }))
       );
     } catch (error) {
@@ -179,7 +185,7 @@ export default function HRPenaltiesInvestigations() {
     const keyword = search.trim();
     if (!keyword) return investigations;
     return investigations.filter((item) =>
-      [item.empName, item.department, item.groupName, item.typeName, item.subject, item.status].some((value) => value.includes(keyword))
+      [item.empName, item.department, item.groupName, item.typeName, item.subject, item.status, item.reply].some((value) => value.includes(keyword))
     );
   }, [investigations, search]);
 
@@ -289,7 +295,7 @@ export default function HRPenaltiesInvestigations() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-sm text-right">
+            <table className="w-full min-w-[1150px] text-sm text-right">
               <thead className="bg-[#004e89] text-white">
                 <tr>
                   <th className="py-3 px-4">{t("رقم المساءلة")}</th>
@@ -299,15 +305,16 @@ export default function HRPenaltiesInvestigations() {
                   <th className="py-3 px-4">{t("المخالفة")}</th>
                   <th className="py-3 px-4">{t("الموضوع")}</th>
                   <th className="py-3 px-4">{t("الحالة")}</th>
+                  <th className="py-3 px-4">{t("رد الموظف")}</th>
                   <th className="py-3 px-4 text-center">{t("عرض")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={8} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
+                  <tr><td colSpan={9} className="py-10 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-10 text-center text-gray-500">
+                    <td colSpan={9} className="py-10 text-center text-gray-500">
                       <FileText className="h-10 w-10 mx-auto mb-2 text-gray-300" />
                       {t("لا توجد مساءلات مرسلة")}
                     </td>
@@ -321,6 +328,7 @@ export default function HRPenaltiesInvestigations() {
                     <td className="py-3 px-4">{item.typeName || "—"}</td>
                     <td className="py-3 px-4">{item.subject}</td>
                     <td className="py-3 px-4"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700">{t(item.status)}</span></td>
+                    <td className="py-3 px-4"><PenaltyReplyBadge reply={item.reply} /></td>
                     <td className="py-3 px-4 text-center">
                       <button
                         type="button"
@@ -345,7 +353,7 @@ export default function HRPenaltiesInvestigations() {
                 <h3 className="text-xl font-bold text-gray-900">{t("عرض مساءلة")}</h3>
                 <button type="button" onClick={() => setViewItem(null)} className="text-gray-500 hover:text-gray-900"><X className="h-5 w-5" /></button>
               </div>
-              <div className="p-6 space-y-5">
+              <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
                 <div className="text-center border-b border-gray-100 pb-4">
                   <h4 className="text-2xl font-bold text-[#004e89]">{t("مساءلة إدارية")}</h4>
                   <p className="mt-1 text-sm text-gray-500">{t("التاريخ")}: {viewItem.date || "—"}</p>
@@ -359,6 +367,7 @@ export default function HRPenaltiesInvestigations() {
                   <PreviewItem label={t("المرسل")} value={viewItem.senderName || "—"} />
                 </div>
                 <div className="rounded-lg bg-gray-50 p-4 whitespace-pre-wrap leading-7 text-gray-800">{viewItem.message}</div>
+                <PenaltyReplyBlock reply={viewItem.reply} replyAt={viewItem.replyAt} />
               </div>
               <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
                 <Button variant="outline" onClick={() => setViewItem(null)}>{t("إغلاق")}</Button>

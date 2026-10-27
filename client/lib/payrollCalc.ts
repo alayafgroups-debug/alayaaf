@@ -6,7 +6,7 @@ import { fetchAllRows } from "@/lib/fetchAll";
 import { eachDate, monthRange, riyadhToday } from "@/lib/hrDates";
 import { isApprovedStatus } from "@/lib/hrStatus";
 import { advanceInstallmentDue, advanceSkipsById, allocateAdvanceRepayments, isCancelledPayrollStatus, isMissingColumnError, parseApprovedAdvance, terminationAdvanceCredits, withTerminationCredit, type AdvanceRecord } from "@/lib/advances";
-import { GOSI_EMPLOYEE_RATE_SAUDI, gosiContributionWage, gosiDeductsFromEmployee, gosiSaudiRates, isHousingAllowance } from "@/lib/gosi";
+import { GOSI_EMPLOYEE_RATE_SAUDI, gosiContributionWage, gosiDeductsFromEmployee, gosiEffectiveFile, gosiSaudiRates, isHousingAllowance } from "@/lib/gosi";
 import { classifyAttendanceDay, type DayCategory, type DayRecord } from "@/lib/attendanceRules";
 import { effectiveLateMinutes, isScheduledWorkDay, loadWorkSchedules, scheduleForEmployee, type WorkSchedule } from "@/lib/workSchedule";
 import { approvedLeaveDatesByEmployee, loadApprovedLeaves, loadOfficialHolidays, officialHolidayDates, type HolidayScope } from "@/lib/attendanceManual";
@@ -33,6 +33,11 @@ export type PayrollPolicy = {
   gosiFollowEmployeeFlag: boolean;
   /** أجر الاشتراك = الأساسي + بدل السكن (نظام التأمينات)؛ الافتراضي الأساسي فقط كما كان، حتى يطابق الأجر المسجّل في التأمينات */
   gosiIncludeHousing: boolean;
+  /**
+   * التسجيل الشامل في التأمينات (HR-23): كل سعودي مشمول قابل للخصم، وكل مقيم أساسي مشمول (أجانب)، والمتعاون غير مشمول،
+   * دون اعتماد حقل التأمينات في ملف الموظف (lib/gosi gosiEffectiveFile). الافتراضي مطفأ (السلوك السابق).
+   */
+  gosiAutoCoverage: boolean;
 };
 
 export const DEFAULT_PAYROLL_POLICY: PayrollPolicy = {
@@ -42,6 +47,7 @@ export const DEFAULT_PAYROLL_POLICY: PayrollPolicy = {
   countUnrecordedAsAbsent: false,
   gosiFollowEmployeeFlag: false,
   gosiIncludeHousing: false,
+  gosiAutoCoverage: false,
 };
 
 /** من قيم صفحة "إعدادات حساب الراتب" إلى سياسة الحساب */
@@ -58,6 +64,7 @@ export const payrollPolicyFromSettings = (settings: Record<string, unknown> | nu
     countUnrecordedAsAbsent: settings.earnedSalaryApplied === true,
     gosiFollowEmployeeFlag: settings.gosiFollowEmployeeFlag === true,
     gosiIncludeHousing: settings.gosiIncludeHousing === true,
+    gosiAutoCoverage: settings.gosiAutoCoverage === true,
   };
 };
 
@@ -555,7 +562,7 @@ const ID_CHUNK = 100;
 const chunk = <T,>(items: T[]) => Array.from({ length: Math.ceil(items.length / ID_CHUNK) }, (_, index) => items.slice(index * ID_CHUNK, (index + 1) * ID_CHUNK));
 const errorCode = (error: unknown) => String((error as { code?: unknown } | null)?.code ?? "");
 
-const EMPLOYEE_COLUMNS = "id, emp_id, name, nationality, base_salary, allowances, hire_date, daily_hours, work_schedule, branch, branch_id, directorate, department, department_id, section_id, social_insurance, social_insurance_type";
+const EMPLOYEE_COLUMNS = "id, emp_id, name, nationality, base_salary, allowances, hire_date, daily_hours, work_schedule, branch, branch_id, directorate, department, department_id, section_id, social_insurance, social_insurance_type, employment_type";
 
 async function loadEmployees(ids: string[]): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
@@ -856,6 +863,8 @@ export async function computePayroll(employeeIds: string[], period: string, opti
       department: [departmentNames.get(String(row.department_id ?? "")) ?? "", String(row.directorate ?? ""), String(row.department ?? "")],
       section: [sectionNames.get(String(row.section_id ?? "")) ?? "", String(row.department ?? "")],
     };
+    // التسجيل الشامل (إعداد الرواتب): الشمول ونوع التأمين من الجنسية ونوع التوظيف لا من حقل الملف
+    const insurance = gosiEffectiveFile({ nationality: row.nationality, employmentType: row.employment_type, socialInsurance: row.social_insurance, insuranceType: row.social_insurance_type }, policy.gosiAutoCoverage);
     const line = computePayrollLine({
       employee: {
         id,
@@ -867,8 +876,8 @@ export async function computePayroll(employeeIds: string[], period: string, opti
         dailyHours: Number(row.daily_hours ?? 8),
         attendanceExempt: row.attendance_exempt === true,
         schedule,
-        socialInsurance: String(row.social_insurance ?? ""),
-        socialInsuranceType: String(row.social_insurance_type ?? ""),
+        socialInsurance: insurance.socialInsurance,
+        socialInsuranceType: insurance.insuranceType,
       },
       period,
       today,

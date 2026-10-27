@@ -71,6 +71,36 @@ export const gosiDeductsFromEmployee = (nationality: unknown, socialInsurance: u
   && !(followFlag && gosiExcluded(socialInsurance))
   && clean(insuranceType) !== GOSI_TYPE_NOT_DEDUCTIBLE;
 
+/** نوع التوظيف «أساسي» (على كفالة الشركة): الفارغ يُعد أساسيًا كما في ملف الموظف، والهمزة لا تفرق (اساسي) */
+export const isBasicEmploymentType = (employmentType: unknown) => {
+  const type = clean(employmentType).replace(/[أإآ]/g, "ا");
+  return type === "" || type === "اساسي";
+};
+
+/** نطاق التأمينات الاجتماعية في المنشأة (HR-23): السعوديون، والمقيمون الأساسيون على كفالة الشركة */
+export const gosiInScope = (nationality: unknown, employmentType: unknown) =>
+  isSaudiNationality(nationality) || isBasicEmploymentType(employmentType);
+
+/**
+ * التسجيل الشامل في التأمينات (إعداد الرواتب gosiAutoCoverage، HR-23) بطلب الموارد البشرية:
+ * لا يُعتمد على حقل التأمينات ونوعه في ملف الموظف، بل:
+ * - كل سعودي مشمول وقابل للخصم (نوع «النظام الجديد» يبقى لنسبه؛ و«غير قابل للخصم» لا يُتبع).
+ * - كل مقيم أساسي (على كفالة الشركة) مشمول بتأمين الأجانب: 2% على المنشأة، لا شيء على الموظف.
+ * - المقيم غير الأساسي (متعاون وغيره، ليس على كفالة الشركة) غير مشمول.
+ * الإعداد مطفأ: الحقلان كما في الملف (السلوك السابق).
+ */
+export const gosiEffectiveFile = (
+  input: { nationality: unknown; employmentType: unknown; socialInsurance: unknown; insuranceType: unknown },
+  autoCoverage: boolean,
+) => {
+  if (!autoCoverage) return { socialInsurance: clean(input.socialInsurance), insuranceType: clean(input.insuranceType) };
+  if (isSaudiNationality(input.nationality)) {
+    return { socialInsurance: "نعم", insuranceType: clean(input.insuranceType) === GOSI_TYPE_NEW_SYSTEM ? GOSI_TYPE_NEW_SYSTEM : GOSI_TYPE_DEDUCTIBLE };
+  }
+  if (isBasicEmploymentType(input.employmentType)) return { socialInsurance: "نعم", insuranceType: GOSI_TYPE_NON_SAUDI };
+  return { socialInsurance: "لا", insuranceType: "" };
+};
+
 export type GosiShares = { wage: number; employee: number; employer: number; total: number; employeeRate: number; employerRate: number; excluded: boolean };
 
 export const gosiShares = (input: { nationality: unknown; socialInsurance: unknown; insuranceType: unknown; basic: number; housing: number; month: string; followFlag?: boolean }): GosiShares => {

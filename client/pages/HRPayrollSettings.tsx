@@ -24,6 +24,8 @@ type PayrollSettings = {
   gosiFollowEmployeeFlag: boolean;
   /** أجر الاشتراك في التأمينات يشمل بدل السكن (مطبّق) */
   gosiIncludeHousing: boolean;
+  /** التسجيل الشامل في التأمينات (HR-23، مطبّق): السعودي مشمول قابل للخصم، والمقيم الأساسي مشمول، والمتعاون غير مشمول */
+  gosiAutoCoverage: boolean;
   monthDaysMethod: string;
   month31Policy: string;
 };
@@ -47,6 +49,8 @@ const DEFAULTS: PayrollSettings = {
   gosiFollowEmployeeFlag: false,
   // الافتراضي: الأساسي فقط كما كان قبل HR-7
   gosiIncludeHousing: false,
+  // الافتراضي مطفأ: يتبع ملف الموظف كما كان، حتى يفعّله مسؤول الرواتب
+  gosiAutoCoverage: false,
   monthDaysMethod: "30 يوم ثابت (افتراضي حسب نظام العمل السعودي)",
   month31Policy: "لصالح الموظف (متساهل)",
 };
@@ -243,10 +247,17 @@ export default function HRPayrollSettings() {
                 {s.earnedSalaryApplied && <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("تنبيه: فعّله فقط إذا كان كل الموظفين يسجلون حضورهم يوميًا؛ وإلا خُصمت أيام موظفين لا يستخدمون البصمة.")}</p>}
               </div>
               <div className="space-y-3 mt-6">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("التسجيل الشامل في التأمينات الاجتماعية")} <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
+                <YesNo name="gosi_auto_coverage" value={s.gosiAutoCoverage} onChange={(v) => set("gosiAutoCoverage", v)} />
+                <p className="text-xs text-gray-500 mt-2">{t("نعم: كل موظف سعودي مشمول بالتأمينات وتُخصم حصته من راتبه، وكل مقيم أساسي (على كفالة الشركة) مشمول بتأمين الأجانب (2% على المنشأة)، والمقيم غير الأساسي (متعاون) غير مشمول؛ دون الرجوع إلى حقل التأمينات في ملف كل موظف. لا (الافتراضي): حسب ملف كل موظف.")}</p>
+                {s.gosiAutoCoverage && <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("يسري على الرواتب التي لم تُعتمد بعد عند حسابها أو إعادة إرسالها؛ الرواتب المعتمدة والمرحّلة لا تتغير. السعودي من نوع «غير قابل للخصم» يُخصم منه أيضًا.")} {t("بعد التفعيل قد يُظهر كشف الرواتب فرقًا عن المحفوظ في الأشهر المعتمدة، ويُظهر طلب الاعتماد المعلق فرقًا للمعتمد حتى يُعاد إرساله.")}</p>}
+              </div>
+              <div className="space-y-3 mt-6">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("اتباع حقل التأمينات الاجتماعية في ملف الموظف")} <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>
                 <YesNo name="gosi_follow_flag" value={s.gosiFollowEmployeeFlag} onChange={(v) => set("gosiFollowEmployeeFlag", v)} />
                 <p className="text-xs text-gray-500 mt-2">{t("لا (الافتراضي): تُخصم حصة الموظف في التأمينات من كل موظف سعودي، إلا نوع «سعودي غير قابل للخصم». نعم: الموظف السعودي المسجّل في ملفه «غير مشمول» لا يُخصم منه.")}</p>
                 {s.gosiFollowEmployeeFlag && <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{t("تنبيه: نموذج الموظف القديم كان يحفظ «لا» تلقائيًا. راجع صفحة التأمينات الاجتماعية وصحّح ملفات السعوديين قبل التفعيل.")}</p>}
+                {s.gosiAutoCoverage && <p className="mt-1 text-xs text-slate-500">{t("لا يُستعمل هذا الإعداد والتسجيل الشامل مفعّل.")}</p>}
               </div>
               <div className="space-y-3 mt-6">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1">{t("أجر الاشتراك في التأمينات يشمل بدل السكن")} <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("مطبّق")}</span></label>

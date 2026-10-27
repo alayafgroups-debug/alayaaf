@@ -5914,6 +5914,52 @@ Object.assign(translations, {
   "هذا الشهر": "This month",
 });
 
+// HR-22: رد الموظف على المساءلة والإنذار من بوابته
+Object.assign(translations, {
+  "ردك": "Your reply",
+  "الرد وتوضيح العذر": "Reply and explain your excuse",
+  "أُرسل الرد إلى الموارد البشرية": "Your reply was sent to HR",
+  "اكتب ردك وعذرك هنا": "Write your reply and excuse here",
+  "يُرسل الرد مرة واحدة ولا يمكن تعديله بعد الإرسال": "You can reply once; the reply cannot be edited after sending",
+  "تأكيد إرسال الرد؟ لا يمكن تعديله بعد الإرسال": "Send the reply? It cannot be edited after sending",
+  "تأكيد الإرسال": "Confirm sending",
+  "تم الرد": "Replied",
+  "لم ترد بعد": "Not replied yet",
+  "اكتب ردك قبل الإرسال": "Write your reply before sending",
+  "لم يرد الموظف بعد": "The employee has not replied yet",
+  "لم يرد": "No reply",
+  "مرسلة": "Sent",
+  "الرد طويل؛ اكتبه في 2000 حرف أو أقل": "The reply is too long; keep it to 2000 characters or fewer",
+  "أرسلت ردك على هذا مسبقًا؛ لا يُعدَّل الرد بعد إرساله": "You already replied to this; a reply cannot be edited after sending",
+  "لم يُعثر على هذه المساءلة أو الإنذار في سجلك؛ راجع الموارد البشرية": "This investigation or warning was not found in your record; contact HR",
+  "نوع السجل غير صحيح": "Invalid record type",
+  "رد الموظف يكتبه الموظف من بوابته فقط، ولا يُعدَّل بعد إرساله": "Only the employee writes the reply from the employee portal, and it cannot be edited after sending",
+  "في هذا السجل رد من الموظف؛ تتغير حالته فقط": "This record has the employee's reply; only its status can change",
+  "في هذا السجل رد من الموظف؛ لا يحذفه إلا مدير النظام": "This record has the employee's reply; only the system administrator can delete it",
+  "الرد على المساءلات والإنذارات يحتاج تحديث قاعدة البيانات (HR-22)؛ أبلغ الموارد البشرية": "Replying to investigations and warnings needs the database update (HR-22); inform HR",
+});
+
+// HR-23: أرشيف الرواتب بتصميم كشف الرواتب وتصفيته بالقسم، والتسجيل الشامل في التأمينات الاجتماعية
+Object.assign(translations, {
+  "السجل": "Record",
+  "بحث بالاسم / القسم / رقم السجل": "Search by name / section / record number",
+  "تصدير Excel بتصميم كشف الرواتب": "Export Excel in the payroll statement design",
+  "طباعة كشف بتصميم كشف الرواتب": "Print in the payroll statement design",
+  "تعذرت الطباعة": "Printing failed",
+  "من أرشيف الرواتب": "From the payroll archive",
+  "التسجيل الشامل في التأمينات الاجتماعية": "Comprehensive social insurance registration",
+  "نعم: كل موظف سعودي مشمول بالتأمينات وتُخصم حصته من راتبه، وكل مقيم أساسي (على كفالة الشركة) مشمول بتأمين الأجانب (2% على المنشأة)، والمقيم غير الأساسي (متعاون) غير مشمول؛ دون الرجوع إلى حقل التأمينات في ملف كل موظف. لا (الافتراضي): حسب ملف كل موظف.": "Yes: every Saudi employee is covered by social insurance and their share is deducted from their salary, every primary resident (sponsored by the company) is covered by foreigners' insurance (2% on the employer), and a non-primary resident (collaborator) is not covered — without relying on each employee file's insurance field. No (default): per each employee's file.",
+  "يسري على الرواتب التي لم تُعتمد بعد عند حسابها أو إعادة إرسالها؛ الرواتب المعتمدة والمرحّلة لا تتغير. السعودي من نوع «غير قابل للخصم» يُخصم منه أيضًا.": "Applies to payroll not yet approved when it is calculated or resent; approved and posted payroll does not change. A Saudi of type \"non-deductible\" is also deducted.",
+  "لا يُستعمل هذا الإعداد والتسجيل الشامل مفعّل.": "This setting is not used while comprehensive registration is on.",
+  "بعد التفعيل قد يُظهر كشف الرواتب فرقًا عن المحفوظ في الأشهر المعتمدة، ويُظهر طلب الاعتماد المعلق فرقًا للمعتمد حتى يُعاد إرساله.": "After turning it on, the payroll statement may show differences from the saved figures for approved months, and a pending approval request shows differences to the approver until it is resent.",
+  "طريقة الصرف وبيانات البنك من ملف الموظف الحالي": "Payment method and bank details are from the current employee file",
+  "تظهر هنا التأمينات للسعوديين والمقيمين الأساسيين (على كفالة الشركة) فقط.": "Only Saudis and primary residents (sponsored by the company) are shown here.",
+  "لا يظهر": "Not shown:",
+  "مقيم غير أساسي (متعاون وغيره).": "non-primary residents (collaborators and others).",
+  "التسجيل الشامل مفعّل: كل سعودي مشمول وتُخصم حصته، وكل مقيم أساسي مشمول بتأمين الأجانب، دون الرجوع إلى حقل التأمينات في ملف الموظف.": "Comprehensive registration is on: every Saudi is covered and their share is deducted, and every primary resident is covered by foreigners' insurance, without relying on the insurance field in the employee file.",
+  "لتسجيل الجميع دفعة واحدة (كل سعودي مشمول وتُخصم حصته، وكل مقيم أساسي مشمول بتأمين الأجانب) فعّل «التسجيل الشامل في التأمينات الاجتماعية» من": "To register everyone at once (every Saudi covered with their share deducted, every primary resident covered by foreigners' insurance), turn on \"Comprehensive social insurance registration\" in",
+});
+
 export function useI18n() {
   const value = useContext(I18nContext);
   if (!value) throw new Error("useI18n must be used inside I18nProvider");

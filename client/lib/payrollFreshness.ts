@@ -113,7 +113,8 @@ function compare(rows: SavedRow[], computation: PayrollComputation, idsByCode: M
 /**
  * طلبات اعتماد رواتب الشهر:
  * - ownerOf: الرقم الوظيفي في طلب معلق؟ true طلبي، false طلب مستخدم آخر (أو طلب قديم بلا قائمة لغيري)، null لا طلب معلق
- * - stopDecided: نفس قاعدة القاعدة payroll_stop_decided — آخر طلب مقرَّر يذكر الموظف موافَق عليه وفيه ضمن الموقوفين
+ * - stopDecided: نفس قاعدة القاعدة payroll_stop_decided — آخر طلب مقرَّر يذكر الموظف موافَق عليه وفيه ضمن الموقوفين،
+ *   ولم يُرفض عند الاعتماد بتحديد الموظفين ولم يُلغَ اعتماده (HR-24)
  */
 async function payrollRequestContext(period: string) {
   const { data, error } = await supabase
@@ -158,7 +159,11 @@ async function payrollRequestContext(period: string) {
       const latest = decided.find((request) =>
         ["employee_ids", "active_employee_ids", "stopped_employee_ids"].some((key) => codesIn(request.details, key)?.includes(code)),
       );
-      return Boolean(latest && isApprovedRequest(latest.status) && codesIn(latest.details, "stopped_employee_ids")?.includes(code));
+      return Boolean(
+        latest && isApprovedRequest(latest.status) && codesIn(latest.details, "stopped_employee_ids")?.includes(code)
+          && !codesIn(latest.details, "rejected_employee_ids")?.includes(code)
+          && !codesIn(latest.details, "cancelled_employee_ids")?.includes(code),
+      );
     },
   };
 }

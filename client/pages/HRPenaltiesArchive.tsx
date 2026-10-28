@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { Printer, FileText, Download, Trash2, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Printer, FileText, Download, Trash2, Loader2, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
@@ -11,6 +11,7 @@ import { canManagePerm } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { addDays, riyadhToday } from "@/lib/hrDates";
 import PrintBrandHeader from "@/components/PrintBrandHeader";
+import CancelApprovalDialog from "@/components/hr/CancelApprovalDialog";
 
 type PenaltyRow = {
   id: string;
@@ -26,6 +27,8 @@ type PenaltyRow = {
   // HR-12: من سجّل الجزاء ومن قرّر فيه (فارغة قبل تحديث قاعدة البيانات)
   created_by_name?: string | null;
   decided_by_name?: string | null;
+  // HR-24: من اعتمد الجزاء (يلغي اعتماده هو أو مدير النظام)
+  decided_by?: string | null;
   decision_note?: string | null;
 };
 
@@ -72,6 +75,8 @@ export default function HRPenaltiesArchive() {
   // نفس مفتاح قاعدة البيانات (hr.penalties) حتى لا تظهر أزرار ترفضها
   const canDecide = canManagePerm(permissions, "hr.penalties", "module.hr");
   const [deciding, setDeciding] = useState("");
+  // HR-24: إلغاء اعتماد جزاء معتمد بسبب إلزامي (ما لم يدخل في رواتب مقفلة)
+  const [cancelTarget, setCancelTarget] = useState<PenaltyRow | null>(null);
   // من سجّل الجزاء لا يعتمده، والمعتمد لا يحذفه إلا مدير النظام: تُخفى الأزرار التي سترفضها قاعدة البيانات
   const [myUid, setMyUid] = useState("");
   const [isMainAdmin, setIsMainAdmin] = useState(false);
@@ -177,6 +182,19 @@ export default function HRPenaltiesArchive() {
     const updated = data[0] as PenaltyRow;
     setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, ...updated } : item)));
     toast({ title: decision === "معتمد" ? t("اعتُمد الجزاء") : t("رُفض الجزاء") });
+  };
+
+  const handleCancelApproval = async (row: PenaltyRow, reason: string) => {
+    setDeciding(row.id);
+    const { error } = await supabase.rpc("cancel_penalty_approval", { p_id: row.id, p_note: reason });
+    setDeciding("");
+    setCancelTarget(null);
+    if (error) {
+      toast({ title: t("تعذر إلغاء الاعتماد"), description: t(hrRequestErrorText(error)), variant: "destructive" });
+      return;
+    }
+    toast({ title: t("أُلغي اعتماد الجزاء"), description: t("صار «مرفوض» ولا يُخصم من الراتب") });
+    await load();
   };
 
   const handlePrint = () => window.print();
@@ -333,6 +351,11 @@ export default function HRPenaltiesArchive() {
                               </button>
                             </>
                           )}
+                          {canDecide && isApprovedStatus(r.status) && (isMainAdmin || (Boolean(myUid) && r.decided_by === myUid)) && (
+                            <button onClick={() => setCancelTarget(r)} disabled={deciding === r.id} className="text-amber-600 hover:text-amber-800 disabled:opacity-40" title={t("إلغاء الاعتماد")} aria-label={t("إلغاء الاعتماد")}>
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                          )}
                           {(!isApprovedStatus(r.status) || isMainAdmin) && (
                             <button onClick={() => handleDelete(r)} className="text-red-500 hover:text-red-700" title={t("حذف")} aria-label={t("حذف")}>
                               <Trash2 className="h-4 w-4" />
@@ -356,6 +379,14 @@ export default function HRPenaltiesArchive() {
           </div>
         </div>
       </div>
+      <CancelApprovalDialog
+        open={Boolean(cancelTarget)}
+        title="إلغاء اعتماد الجزاء"
+        description="يصير الجزاء «مرفوض» ولا يُخصم من الراتب، ويبقى في الأرشيف بسبب الإلغاء. لا يُلغى جزاء دخل في رواتب معتمدة أو مرحّلة أو داخل طلب اعتماد معلق، ويلغيه من اعتمده أو مدير النظام."
+        busy={Boolean(cancelTarget) && deciding === cancelTarget?.id}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={(reason) => { if (cancelTarget) void handleCancelApproval(cancelTarget, reason); }}
+      />
     </Layout>
   );
 }

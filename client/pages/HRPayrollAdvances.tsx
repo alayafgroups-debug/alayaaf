@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
-import { CalendarClock, CheckCircle2, Pencil, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
@@ -10,7 +10,9 @@ import { advanceMinStartMonth, advanceSkipsById, advanceStartMonth, allocateAdva
 import { AdvanceEditDialog, AdvanceSkipsDialog, deleteAdvance, type AdvanceActionTarget } from "@/components/hr/AdvanceDialogs";
 import { isEmployeeActive } from "@/lib/employeeStatus";
 import { riyadhMonth, riyadhToday } from "@/lib/hrDates";
-import { canManagePerm, readUserSession } from "@/lib/authSession";
+import { canManagePerm, fetchIsMainAdmin, readUserSession } from "@/lib/authSession";
+import { toLatinDigits } from "@/lib/latinDigitsInput";
+import CancelApprovalDialog from "@/components/hr/CancelApprovalDialog";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useI18n } from "@/i18n";
 
@@ -20,8 +22,10 @@ import { useI18n } from "@/i18n";
  * المعلقة القديمة (قبل HR-13) يعتمدها مسؤول رواتب آخر كما كان. المسدَّد يُحسب من أقساط كشوف الرواتب (عدا الملغاة) شهرًا بشهر،
  * بالدالة نفسها التي يستخدمها مسير الرواتب (lib/advances). المادة 92: قسط السلفة بلا موافقة كتابية لا يزيد على 10% من الأجر،
  * والمادة 93: المحسوم كله لا يزيد على نصف الأجر (يطبقه مسير الرواتب ويؤجل الباقي).
+ * HR-24: البحث عن الموظف بالاسم أو الرقم الوظيفي أو رقم الهوية/الإقامة. مدير النظام يسجّل سلفته من طلب سلفة وافقت عليه الإدارة،
+ * فتبقى معلقة حتى يعتمدها مسؤول رواتب آخر (ويحذفها ما دامت معلقة). وإلغاء اعتماد السلفة بسبب إلزامي ما لم يُخصم منها قسط.
  */
-type Employee = { id: string; empId: string; name: string; wage: number; active: boolean; hireDate: string };
+type Employee = { id: string; empId: string; name: string; wage: number; active: boolean; hireDate: string; nationalId: string };
 type Advance = {
   id: string;
   employeeId: string;
@@ -91,6 +95,9 @@ export default function HRPayrollAdvances() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  // HR-24: مدير النظام (حكم قاعدة البيانات) يسجّل سلفته من طلب معتمد؛ وإلغاء اعتماد سلفة بسبب
+  const [isMainAdmin, setIsMainAdmin] = useState(false);
+  const [cancelling, setCancelling] = useState<Advance | null>(null);
   const loadSeq = useRef(0);
 
   const money = (value: number) => `${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("ر.س")}`;
@@ -106,7 +113,7 @@ export default function HRPayrollAdvances() {
     setLoading(true); setError("");
     try {
       const [employeeRows, advanceRows, payrollRows, requestRows, skipRows, terminationRows] = await Promise.all([
-        fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("employees").select("id, emp_id, name, status, base_salary, total_salary, hire_date").order("name").order("id").range(from, to)),
+        fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("employees").select("id, emp_id, name, status, base_salary, total_salary, hire_date, national_id").order("name").order("id").range(from, to)),
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("hr_advances").select("*").order("id").range(from, to)),
         // أقساط السلف المخصومة في كشوف الرواتب (غير المرفوضة) — المسدَّد من كل سلفة
         fetchAllRows<Record<string, unknown>>((from, to) => supabase.from("payroll").select("id, emp_id, month, status, advance_deduction").gt("advance_deduction", 0).order("month").order("id").range(from, to)),
@@ -134,6 +141,7 @@ export default function HRPayrollAdvances() {
         wage: Number(row.total_salary) > 0 ? Number(row.total_salary) : Number(row.base_salary) || 0,
         active: isEmployeeActive(row.status),
         hireDate: String(row.hire_date ?? "").slice(0, 10),
+        nationalId: toLatinDigits(String(row.national_id ?? "")).trim(),
       }));
       const employeeById = new Map(employeeList.map((item) => [item.id, item]));
       // أقساط السلف المخصومة لكل موظف شهرًا بشهر (كل الصفوف عدا الملغاة، كما في مسير الرواتب)
@@ -225,6 +233,11 @@ export default function HRPayrollAdvances() {
   };
 
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let cancelled = false;
+    void fetchIsMainAdmin().then((value) => { if (!cancelled) setIsMainAdmin(value); });
+    return () => { cancelled = true; };
+  }, []);
 
   const counts = useMemo(() => {
     const result: Record<Tab, number> = { pending: 0, active: 0, closed: 0, rejected: 0, all: advances.length };
@@ -239,10 +252,15 @@ export default function HRPayrollAdvances() {
   const outstandingTotal = useMemo(() => advances.filter((advance) => isApprovedStatus(advance.status)).reduce((sum, advance) => sum + advance.remaining, 0), [advances]);
   // سلفة سُدد منها شيء من مستحقات نهاية الخدمة: بلا تعديل ولا تأجيل ولا حذف (يُعدَّل الاستقطاع من إنهاء الخدمة)
   const settledOnTermination = (advance: Advance) => isApprovedStatus(advance.status) && advance.terminationPart > 0.004;
+  // البحث بالاسم أو الرقم الوظيفي أو رقم الهوية/الإقامة؛ موظف واحد مطابق يُختار مباشرة
   const employeeOptions = useMemo(() => {
-    const query = employeeSearch.trim().toLowerCase();
-    return employees.filter((employee) => employee.active && (!query || employee.name.toLowerCase().includes(query) || employee.empId.toLowerCase().includes(query))).slice(0, 200);
+    const query = toLatinDigits(employeeSearch).trim().toLowerCase();
+    return employees.filter((employee) => employee.active && (!query || employee.name.toLowerCase().includes(query) || employee.empId.toLowerCase().includes(query) || (employee.nationalId !== "" && employee.nationalId.toLowerCase().includes(query)))).slice(0, 200);
   }, [employees, employeeSearch]);
+  useEffect(() => {
+    // ليس من طلب سلفة (هناك يُطابق صاحب الطلب نفسه)
+    if (draft && !draft.employeeId && !draft.requestId && employeeSearch.trim() && employeeOptions.length === 1) setDraft({ ...draft, employeeId: employeeOptions[0].id });
+  }, [employeeOptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFromRequest = (request: AdvanceRequest) => {
     const matches = employees.filter((employee) => employee.empId === request.empId);
@@ -278,7 +296,9 @@ export default function HRPayrollAdvances() {
     const amount = round2(Number(draft.amount));
     const installment = round2(Number(draft.installment));
     if (!draftEmployee) { setError(t("اختر الموظف")); return; }
-    if (isOwn(draftEmployee.empId, draftEmployee.name)) { setError(t("لا تسجّل سلفة لنفسك؛ يسجّلها مسؤول رواتب آخر")); return; }
+    // سلفتك: لمدير النظام فقط ومن طلب سلفة وافقت عليه الإدارة، وتبقى معلقة حتى يعتمدها مسؤول آخر
+    const ownAdvance = isOwn(draftEmployee.empId, draftEmployee.name);
+    if (ownAdvance && !(isMainAdmin && draft.requestId)) { setError(t(isMainAdmin ? "سلفتك تُسجَّل من طلب سلفة وافقت عليه الإدارة («تسجيل كسلفة»)، ويعتمدها مسؤول رواتب آخر" : "لا تسجّل سلفة لنفسك؛ يسجّلها مسؤول رواتب آخر")); return; }
     if (!(amount > 0)) { setError(t("أدخل مبلغ السلفة")); return; }
     if (!(installment > 0) || installment > amount) { setError(t("القسط الشهري يجب أن يكون أكبر من صفر ولا يتجاوز مبلغ السلفة")); return; }
     if (!/^\d{4}-\d{2}$/.test(draft.startMonth) || draft.startMonth < draftMinStart) { setError(`${t("شهر بداية الخصم لا يسبق شهر تعيين الموظف ولا أقدم من 24 شهرًا")}: ${draftMinStart}`); return; }
@@ -297,7 +317,7 @@ export default function HRPayrollAdvances() {
         monthly_installment: installment,
         start_month: draft.startMonth,
         request_date: riyadhToday(),
-        status: "معتمد",
+        status: ownAdvance ? "معلق" : "معتمد",
         notes: draft.notes.trim() || null,
       };
       if (draft.requestId) payload.request_id = draft.requestId;
@@ -305,9 +325,9 @@ export default function HRPayrollAdvances() {
       if (opening > 0) payload.opening_repaid = opening;
       const { error: insertError } = await supabase.from("hr_advances").insert(payload);
       if (insertError) throw insertError;
-      setMessage(t("سُجّلت السلفة معتمدة؛ يُخصم قسطها من شهر البداية"));
+      setMessage(t(ownAdvance ? "سُجّلت سلفتك معلقة؛ يعتمدها مسؤول رواتب آخر ثم يُخصم قسطها" : "سُجّلت السلفة معتمدة؛ يُخصم قسطها من شهر البداية"));
       setDraft(null); setDraftSource(null); setEmployeeSearch("");
-      setTab("active");
+      setTab(ownAdvance ? "pending" : "active");
       await load();
     } catch (saveError) {
       setError(hrRequestErrorText(saveError, t("تعذر حفظ السلفة")));
@@ -332,6 +352,24 @@ export default function HRPayrollAdvances() {
       await load();
     } catch (decideError) {
       setError(hrRequestErrorText(decideError, t("تعذر حفظ القرار")));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // HR-24: إلغاء اعتماد سلفة (لغير سلفتك) بسبب إلزامي، ما لم يُخصم منها قسط في رواتب معتمدة أو مرحّلة أو داخل طلب اعتماد
+  const cancelApproval = async (advance: Advance, reason: string) => {
+    if (busy) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const { error: rpcError } = await supabase.rpc("cancel_advance_approval", { p_id: advance.id, p_note: reason });
+      if (rpcError) throw rpcError;
+      setMessage(t("أُلغي اعتماد السلفة وصارت «مرفوضة»؛ لا يُخصم منها شيء"));
+      setCancelling(null);
+      await load();
+    } catch (cancelError) {
+      setError(hrRequestErrorText(cancelError, t("تعذر إلغاء الاعتماد")));
+      setCancelling(null);
     } finally {
       setBusy(false);
     }
@@ -400,11 +438,11 @@ export default function HRPayrollAdvances() {
               <div className="md:col-span-3">
                 <label className="mb-1 block text-sm text-gray-700">{t("الموظف")} *</label>
                 <div className="flex flex-wrap gap-2">
-                  <Input placeholder={t("بحث بالاسم أو الرقم الوظيفي")} value={employeeSearch} onChange={(event) => setEmployeeSearch(event.target.value)} className="w-64" />
+                  <Input placeholder={t("بحث بالاسم أو الرقم الوظيفي أو رقم الهوية")} value={employeeSearch} onChange={(event) => setEmployeeSearch(event.target.value)} className="w-72" />
                   <select value={draft.employeeId} onChange={(event) => setDraft({ ...draft, employeeId: event.target.value })} className="min-w-72 rounded border px-3 py-2 text-sm">
                     <option value="">{t("اختر الموظف")}</option>
-                    {draftEmployee && !employeeOptions.includes(draftEmployee) && <option value={draftEmployee.id}>{draftEmployee.name} — {draftEmployee.empId}</option>}
-                    {employeeOptions.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} — {employee.empId}</option>)}
+                    {draftEmployee && !employeeOptions.includes(draftEmployee) && <option value={draftEmployee.id}>{draftEmployee.name} — {draftEmployee.empId}{draftEmployee.nationalId ? ` — ${draftEmployee.nationalId}` : ""}</option>}
+                    {employeeOptions.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} — {employee.empId}{employee.nationalId ? ` — ${employee.nationalId}` : ""}</option>)}
                   </select>
                 </div>
               </div>
@@ -567,10 +605,18 @@ export default function HRPayrollAdvances() {
                             <span className="flex gap-1">
                               <button type="button" disabled={busy} onClick={() => setEditing(actionTarget(advance))} className="flex items-center gap-1 rounded border border-[#004e89] px-2 py-1 text-xs text-[#004e89] disabled:opacity-50" title={t("تعديل معلومات السلفة")}><Pencil className="h-3 w-3" />{t("تعديل")}</button>
                               <button type="button" disabled={busy} onClick={() => setSkipping(actionTarget(advance))} className="flex items-center gap-1 rounded border border-amber-400 px-2 py-1 text-xs text-amber-800 disabled:opacity-50" title={t("تأجيل قسط شهري")}><CalendarClock className="h-3 w-3" />{t("تأجيل قسط")}</button>
+                              <button type="button" disabled={busy} onClick={() => setCancelling(advance)} className="flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50" title={t("إلغاء الاعتماد")}><RotateCcw className="h-3 w-3" />{t("إلغاء الاعتماد")}</button>
                               <button type="button" disabled={busy} onClick={() => void removeAdvance(advance)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50" title={t("حذف")}><Trash2 className="h-3 w-3" /></button>
                             </span>
                           )}
-                          {own && <span className="text-xs text-amber-700">{t("سلفتك؛ يتولاها مسؤول آخر")}</span>}
+                          {own && (
+                            <span className="flex items-center gap-1">
+                              <span className="text-xs text-amber-700">{t(pending ? "سلفتك معلقة؛ يعتمدها مسؤول رواتب آخر" : "سلفتك؛ يتولاها مسؤول آخر")}</span>
+                              {pending && isMainAdmin && (
+                                <button type="button" disabled={busy} onClick={() => void removeAdvance(advance)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50" title={t("حذف")}><Trash2 className="h-3 w-3" /></button>
+                              )}
+                            </span>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -583,6 +629,14 @@ export default function HRPayrollAdvances() {
       </div>
       <AdvanceEditDialog advance={editing} onClose={() => setEditing(null)} onSaved={(text) => { setEditing(null); setMessage(text); void load(); }} />
       <AdvanceSkipsDialog advance={skipping} onClose={() => setSkipping(null)} onChanged={() => void load()} />
+      <CancelApprovalDialog
+        open={Boolean(cancelling)}
+        title="إلغاء اعتماد السلفة"
+        description="تصير السلفة «مرفوضة» ولا يُخصم منها شيء، ويعود طلبها (إن وُجد) إلى «طلبات سلف موافق عليها لم تُسجَّل بعد». لا يُلغى اعتماد سلفة خُصم منها قسط في رواتب معتمدة أو مرحّلة؛ استخدم التعديل أو التأجيل."
+        busy={busy}
+        onClose={() => setCancelling(null)}
+        onConfirm={(reason) => { if (cancelling) void cancelApproval(cancelling, reason); }}
+      />
     </Layout>
   );
 }

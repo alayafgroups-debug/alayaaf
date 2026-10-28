@@ -2,6 +2,8 @@ import { X } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
 import { daysInclusive } from "@/lib/hrDates";
+import { isApprovalCancelDetailKey } from "@/lib/approvalCancel";
+import ApprovalCancelInfo from "@/components/hr/ApprovalCancelInfo";
 
 /** طلب للعرض فقط (الطلبات المرسلة وطلبات الإجازات): نفس محتوى نافذة الطلبات الواردة بلا أزرار قرار */
 export type RequestDetailsView = {
@@ -34,7 +36,7 @@ const INTERNAL_DETAIL_KEYS = new Set([
   "employee_count", "active_employee_count", "stopped_employee_count", "stop_reason", "computed_on",
 ]);
 const isInternalDetailKey = (key: string) =>
-  key.startsWith("reviewed_") || key.startsWith("sender_") || INTERNAL_DETAIL_KEYS.has(key);
+  key.startsWith("reviewed_") || key.startsWith("sender_") || INTERNAL_DETAIL_KEYS.has(key) || isApprovalCancelDetailKey(key);
 
 const detailValueText = (value: unknown): string => {
   if (value === null || value === undefined || String(value).trim() === "") return "—";
@@ -153,6 +155,7 @@ export default function RequestDetailsDialog({ request, onClose }: { request: Re
             <h3 className="mb-2 font-semibold text-gray-800">{t("ملاحظة الإدارة")}</h3>
             <p className="whitespace-pre-line text-gray-700">{request.adminNote || t("لا توجد ملاحظة")}</p>
           </div>
+          <ApprovalCancelInfo details={request.details} />
           {!isPayroll && (
             <div>
               <h3 className="mb-2 font-semibold text-gray-800">{t("توقيع الموظف")}</h3>

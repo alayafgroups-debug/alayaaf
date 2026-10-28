@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Search, ChevronLeft, CheckCircle, XCircle, Eye, Loader2, Filter } from "lucide-react";
+import { Search, ChevronLeft, CheckCircle, XCircle, Eye, Loader2, Filter, RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
 import { hrRequestErrorText } from "@/lib/hrErrors";
 import { readUserSession } from "@/lib/authSession";
+import { isApprovalCancelDetailKey, requestCancelInfo } from "@/lib/approvalCancel";
 
 type Props = { onBack: () => void };
 
@@ -21,6 +22,7 @@ type Request = {
   signatureData: string;
   incoming: boolean;
   rawDetails: Record<string, unknown>;
+  adminNote: string;
 };
 
 // طلبات المدير في البوابة: الوارد إليه (إجازات وطلبات) للقرار، والمرسل منه للمتابعة.
@@ -33,6 +35,9 @@ export default function ManagerRequestsPage({ onBack }: Props) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Request | null>(null);
   const [processing, setProcessing] = useState(false);
+  // HR-24: إلغاء اعتماد إجازة أو طلب وافق عليه المدير، بسبب إلزامي
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelNote, setCancelNote] = useState("");
 
   useEffect(() => {
     load();
@@ -51,12 +56,12 @@ export default function ManagerRequestsPage({ onBack }: Props) {
       const [leavesResult, requestsResult] = await Promise.all([
         supabase
           .from("leave_requests")
-          .select("id, emp_name, leave_type, start_date, end_date, days, status, notes, signature_data, created_at")
+          .select("id, emp_name, leave_type, start_date, end_date, days, status, notes, admin_note, signature_data, created_at")
           .eq(column, me)
           .order("created_at", { ascending: false }),
         supabase
           .from("hr_requests")
-          .select("id, emp_name, request_type, start_date, end_date, status, details, signature_data, created_at")
+          .select("id, emp_name, request_type, start_date, end_date, status, details, admin_note, signature_data, created_at")
           .eq(column, me)
           .order("created_at", { ascending: false }),
       ]);
@@ -68,13 +73,14 @@ export default function ManagerRequestsPage({ onBack }: Props) {
         rawTable: "leave_requests",
         reqNumber: String(r.id).slice(0, 8).toUpperCase(),
         empName: r.emp_name ?? "—",
-        type: `إجازة — ${r.leave_type ?? ""}`,
+        type: `${t("إجازة")} — ${r.leave_type ? t(String(r.leave_type)) : ""}`,
         status: normalizeStatus(r.status),
         date: r.created_at ?? "",
-        details: `${r.days ? `${r.days} يوم ` : ""}من ${r.start_date ?? ""} إلى ${r.end_date ?? ""}${r.notes ? ` — ${r.notes}` : ""}`,
+        details: `${r.days ? `${r.days} ${t("يوم")} ` : ""}${t("من")} ${r.start_date ?? ""} ${t("إلى")} ${r.end_date ?? ""}${r.notes ? ` — ${r.notes}` : ""}`,
         signatureData: r.signature_data ?? "",
         incoming: tab !== "sent",
         rawDetails: {},
+        adminNote: String(r.admin_note ?? ""),
       }));
 
       const requestRows: Request[] = (requestsResult.data ?? [])
@@ -82,7 +88,7 @@ export default function ManagerRequestsPage({ onBack }: Props) {
         .map((r: any) => {
           const details = r.details && typeof r.details === "object" ? r.details as Record<string, unknown> : {};
           const shown = Object.entries(details)
-            .filter(([key, value]) => !key.startsWith("reviewed_") && !key.startsWith("sender_") && value !== "" && value !== null && typeof value !== "object")
+            .filter(([key, value]) => !key.startsWith("reviewed_") && !key.startsWith("sender_") && !isApprovalCancelDetailKey(key) && value !== "" && value !== null && typeof value !== "object")
             .map(([key, value]) => `${key}: ${String(value)}`)
             .join(" — ");
           return {
@@ -91,13 +97,14 @@ export default function ManagerRequestsPage({ onBack }: Props) {
             rawTable: "hr_requests" as const,
             reqNumber: String(r.id).slice(0, 8).toUpperCase(),
             empName: r.emp_name ?? "—",
-            type: r.request_type ?? "طلب",
+            type: r.request_type ? t(String(r.request_type)) : t("طلب"),
             status: normalizeStatus(r.status),
             date: r.created_at ?? "",
-            details: [r.start_date ? `من ${r.start_date}` : "", r.end_date ? `إلى ${r.end_date}` : "", shown].filter(Boolean).join(" — ") || "—",
+            details: [r.start_date ? `${t("من")} ${r.start_date}` : "", r.end_date ? `${t("إلى")} ${r.end_date}` : "", shown].filter(Boolean).join(" — ") || "—",
             signatureData: r.signature_data ?? "",
             incoming: tab !== "sent",
             rawDetails: details,
+            adminNote: String(r.admin_note ?? ""),
           };
         });
 
@@ -152,6 +159,41 @@ export default function ManagerRequestsPage({ onBack }: Props) {
     }
   }
 
+  // إلغاء الاعتماد (للمستلم الذي اعتمد): يصير «مرفوض» بسبب إلزامي، ما لم يدخل في رواتب مجمّدة أو سُجّلت منه سلفة
+  async function cancelApproval(req: Request) {
+    if (!req.incoming || processing) return;
+    const note = cancelNote.trim();
+    if (!note) {
+      toast.error(hrRequestErrorText(new Error("REQUEST_CANCEL_NOTE_REQUIRED")));
+      return;
+    }
+    if (!window.confirm(`${t("إلغاء اعتماد الطلب؛ يصير «مرفوض» وتظهر لصاحبه ملاحظة الإلغاء")}\n${t("السبب")}: ${note}\n${t("متابعة؟")}`)) return;
+    setProcessing(true);
+    try {
+      const { error } = await supabase.rpc("cancel_request_approval", {
+        p_source: req.rawTable === "leave_requests" ? "leave" : "request",
+        p_id: req.rawId,
+        p_note: note,
+      });
+      if (error) throw error;
+      toast.success(t("أُلغي الاعتماد"));
+      setCancelOpen(false);
+      setCancelNote("");
+      setSelected(null);
+      await load();
+    } catch (error) {
+      toast.error(hrRequestErrorText(error, t("تعذر إلغاء الاعتماد")));
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  const openDetails = (req: Request) => {
+    setCancelOpen(false);
+    setCancelNote("");
+    setSelected(req);
+  };
+
   const handleApprove = (req: Request) => decide(req, "موافق");
   const handleReject = (req: Request) => decide(req, "مرفوض");
 
@@ -164,6 +206,8 @@ export default function ManagerRequestsPage({ onBack }: Props) {
 
   if (selected) {
     const isPending = selected.status === "معلق" && selected.incoming;
+    const canCancel = selected.status === "موافق" && selected.incoming;
+    const cancelInfo = requestCancelInfo(selected.rawDetails);
     return (
       <div className="flex flex-col h-full" dir={direction}>
         <div className="flex items-center gap-3 p-4 bg-white border-b sticky top-0 z-10">
@@ -181,6 +225,8 @@ export default function ManagerRequestsPage({ onBack }: Props) {
               { label: "نوع الطلب", value: selected.type },
               { label: "التاريخ", value: selected.date ? formatDate(selected.date, { dateStyle: "medium" }) : "" },
               { label: "التفاصيل", value: selected.details },
+              ...(selected.adminNote ? [{ label: "ملاحظة الإدارة", value: selected.adminNote }] : []),
+              ...(cancelInfo?.byName ? [{ label: "ألغى الاعتماد", value: `${cancelInfo.byName}${cancelInfo.at ? ` — ${formatDate(cancelInfo.at, { dateStyle: "medium" })}` : ""}` }] : []),
             ].map(({ label, value }) => (
               <div key={label} className="flex items-start justify-between py-3 border-b border-gray-100 last:border-0 gap-3">
                 <span className="text-gray-500 text-sm flex-shrink-0">{t(label)}</span>
@@ -207,6 +253,33 @@ export default function ManagerRequestsPage({ onBack }: Props) {
               <button onClick={() => handleApprove(selected)} disabled={processing} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#004e89] text-white font-bold text-sm">
                 {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />} {t("موافقة")}
               </button>
+            </div>
+          )}
+
+          {canCancel && (
+            <div className="rounded-xl bg-white p-4 shadow-sm">
+              {!cancelOpen ? (
+                <button onClick={() => setCancelOpen(true)} disabled={processing} className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-500 py-3 text-sm font-bold text-amber-700">
+                  <RotateCcw className="h-5 w-5" /> {t("إلغاء الاعتماد")}
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-amber-800">{t("يصير الطلب «مرفوض» بسبب الإلغاء، ما لم يدخل في رواتب معتمدة أو مرحّلة.")}</p>
+                  <textarea
+                    value={cancelNote}
+                    onChange={(e) => setCancelNote(e.target.value)}
+                    placeholder={t("سبب إلغاء الاعتماد (إلزامي)")}
+                    rows={3}
+                    className={`w-full resize-none rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e89] ${cancelNote.trim() ? "border-gray-200" : "border-red-300"}`}
+                  />
+                  <div className="flex gap-3">
+                    <button onClick={() => { setCancelOpen(false); setCancelNote(""); }} disabled={processing} className="flex-1 rounded-xl border border-gray-300 py-3 text-sm font-bold text-gray-700">{t("تراجع")}</button>
+                    <button onClick={() => void cancelApproval(selected)} disabled={processing || !cancelNote.trim()} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold text-white disabled:opacity-50">
+                      {processing && <Loader2 className="h-4 w-4 animate-spin" />} {t("تأكيد إلغاء الاعتماد")}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -252,12 +325,17 @@ export default function ManagerRequestsPage({ onBack }: Props) {
                 <div className="flex justify-center"><span className={`px-3 py-0.5 rounded-full text-xs font-medium ${statusColor(req.status)}`}>{t(req.status)}</span></div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setSelected(req)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
+                <button onClick={() => openDetails(req)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
                   <Eye className="h-4 w-4" /> {t("عرض")}
                 </button>
                 {req.status === "معلق" && req.incoming && (
-                  <button onClick={() => setSelected(req)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg border border-[#004e89] text-[#004e89] text-sm font-medium hover:bg-blue-50">
+                  <button onClick={() => openDetails(req)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg border border-[#004e89] text-[#004e89] text-sm font-medium hover:bg-blue-50">
                     {t("معالجة")}
+                  </button>
+                )}
+                {req.status === "موافق" && req.incoming && (
+                  <button onClick={() => { setSelected(req); setCancelNote(""); setCancelOpen(true); }} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg border border-amber-400 text-amber-700 text-sm font-medium hover:bg-amber-50">
+                    <RotateCcw className="h-4 w-4" /> {t("إلغاء الاعتماد")}
                   </button>
                 )}
               </div>

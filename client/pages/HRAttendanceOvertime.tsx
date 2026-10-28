@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
-import { CheckCircle2, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, RefreshCw, RotateCcw, Search, Trash2, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
@@ -10,11 +10,13 @@ import { monthRange, riyadhMonth } from "@/lib/hrDates";
 import { canManagePerm, readUserSession } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useI18n } from "@/i18n";
+import CancelApprovalDialog from "@/components/hr/CancelApprovalDialog";
 
 /**
  * الساعات الإضافية (HR-13، كما في سمارت): تُسجَّل من "حساب الدوام" معتمدة وتدخل كشف الراتب مباشرة.
  * السجل الخاطئ يُحذف هنا ويُسجَّل من جديد ما دام شهر رواتبه غير مقفل (قاعدة البيانات تفرض ذلك).
  * السجلات المعلقة القديمة (قبل HR-13) تُعتمد أو تُرفض هنا من مسؤول آخر، لا من سجّلها ولا من صاحبها.
+ * HR-24: إلغاء اعتماد المعتمد بسبب إلزامي (يصير «مرفوض» ويخرج من كشف الراتب ويبقى في السجل) ما دام شهر رواتبه غير مقفل.
  */
 type OvertimeRow = {
   id: string;
@@ -35,6 +37,7 @@ type OvertimeRow = {
 };
 type Tab = "pending" | "approved" | "rejected" | "all";
 type DecideResult = { updated?: number; self_skipped?: number; creator_skipped?: number; not_pending?: number; locked?: number };
+type CancelResult = { updated?: number; self_skipped?: number; locked?: number; not_approved?: number };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "pending", label: "بانتظار الاعتماد" },
@@ -66,6 +69,7 @@ export default function HRAttendanceOvertime() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
   const loadSeq = useRef(0);
 
   const isOwn = (row: OvertimeRow) => Boolean(ownEmpId) && row.empId.trim() === ownEmpId && (!ownName || row.name.trim() === ownName);
@@ -140,6 +144,7 @@ export default function HRAttendanceOvertime() {
   const selectable = visible.filter((row) => !isOwn(row));
   const allSelected = selectable.length > 0 && selectable.every((row) => selected.has(row.id));
   const selectedPending = selectable.filter((row) => selected.has(row.id) && tabOf(row.status) === "pending");
+  const selectedApproved = selectable.filter((row) => selected.has(row.id) && tabOf(row.status) === "approved");
   const hasPending = counts.pending > 0;
 
   const toggle = (id: string) => setSelected((current) => {
@@ -177,6 +182,34 @@ export default function HRAttendanceOvertime() {
       await load();
     } catch (decideError) {
       setError(hrRequestErrorText(decideError, t("تعذر حفظ القرار")));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // HR-24: إلغاء اعتماد المحدد المعتمد بسبب إلزامي (دفعات من 500؛ الدالة تتخطى سجلاتك وما في شهر رواتب مقفل)
+  const cancelSelected = async (reason: string) => {
+    const ids = selectedApproved.map((row) => row.id);
+    if (!ids.length || busy) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const result: Required<CancelResult> = { updated: 0, self_skipped: 0, locked: 0, not_approved: 0 };
+      for (let index = 0; index < ids.length; index += 500) {
+        const { data, error: rpcError } = await supabase.rpc("cancel_overtime_approval", { p_ids: ids.slice(index, index + 500), p_note: reason });
+        if (rpcError) throw rpcError;
+        const part = (data ?? {}) as CancelResult;
+        (Object.keys(result) as (keyof CancelResult)[]).forEach((key) => { result[key] += Number(part[key]) || 0; });
+      }
+      const parts = [`${t("أُلغي اعتماد")} ${formatNumber(result.updated)} ${t("سجل")}`];
+      if (result.self_skipped) parts.push(`${t("تُخطي")} ${formatNumber(result.self_skipped)} ${t("سجل يخصك")}`);
+      if (result.locked) parts.push(`${t("تُخطي")} ${formatNumber(result.locked)} ${t("سجل في شهر رواتبه معتمدة أو مرحّلة")}`);
+      if (result.not_approved) parts.push(`${t("تُخطي")} ${formatNumber(result.not_approved)} ${t("سجل غير معتمد")}`);
+      setMessage(parts.join("، "));
+      setCancelOpen(false);
+      await load();
+    } catch (cancelError) {
+      setError(hrRequestErrorText(cancelError, t("تعذر إلغاء الاعتماد")));
+      setCancelOpen(false);
     } finally {
       setBusy(false);
     }
@@ -270,6 +303,12 @@ export default function HRAttendanceOvertime() {
                     </button>
                   </>
                 )}
+                {counts.approved > 0 && (tab === "approved" || tab === "all") && (
+                  <button type="button" disabled={!selectedApproved.length || busy} onClick={() => setCancelOpen(true)}
+                    className="flex items-center gap-1 rounded border border-amber-400 px-3 py-2 text-sm text-amber-800 disabled:opacity-50">
+                    <RotateCcw className="h-4 w-4" />{t("إلغاء اعتماد المحدد")} ({formatNumber(selectedApproved.length)})
+                  </button>
+                )}
                 {canDelete && (
                   <button type="button" disabled={!selected.size || busy} onClick={() => void removeSelected()}
                     className="flex items-center gap-1 rounded border border-red-300 px-3 py-2 text-sm text-red-700 disabled:opacity-50">
@@ -328,6 +367,14 @@ export default function HRAttendanceOvertime() {
           </div>
         </div>
       </div>
+      <CancelApprovalDialog
+        open={cancelOpen}
+        title="إلغاء اعتماد الساعات الإضافية"
+        description="تصير السجلات المحددة «مرفوضة» وتخرج من كشف الراتب، وتبقى في السجل بسبب الإلغاء. لا يُلغى سجل في شهر رواتبه معتمدة أو مرحّلة أو داخل طلب اعتماد، ولا سجل يخصك."
+        busy={busy}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={(reason) => void cancelSelected(reason)}
+      />
     </Layout>
   );
 }

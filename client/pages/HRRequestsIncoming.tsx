@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
-import { Search, CheckCircle, XCircle, Eye, X } from "lucide-react";
+import { Search, CheckCircle, XCircle, Eye, X, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
@@ -13,6 +13,8 @@ import PayrollFreshnessNotice from "@/components/hr/PayrollFreshnessNotice";
 import { isPendingStatus, normalizeRequestStatus } from "@/lib/hrStatus";
 import { daysInclusive } from "@/lib/hrDates";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
+import ApprovalCancelInfo from "@/components/hr/ApprovalCancelInfo";
+import { cancellablePayrollCodes, detailCodes, isApprovalCancelDetailKey } from "@/lib/approvalCancel";
 
 type RequestRow = {
   id: string; requestDate: string; empId: string; empName: string;
@@ -45,7 +47,7 @@ const INTERNAL_DETAIL_KEYS = new Set([
   "employee_count", "active_employee_count", "stopped_employee_count", "stop_reason", "computed_on",
 ]);
 const isInternalDetailKey = (key: string) =>
-  key.startsWith("reviewed_") || key.startsWith("sender_") || INTERNAL_DETAIL_KEYS.has(key);
+  key.startsWith("reviewed_") || key.startsWith("sender_") || INTERNAL_DETAIL_KEYS.has(key) || isApprovalCancelDetailKey(key);
 
 const detailValueText = (value: unknown): string => {
   if (value === null || value === undefined || String(value).trim() === "") return "—";
@@ -79,10 +81,20 @@ export default function HRRequestsIncoming() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   // طلب اعتماد الرواتب المفتوح: هل ما زال صافيه مطابقًا للحساب الآن (غياب أو جزاء أُدخل بعد الإرسال)
   const [requestFreshness, setRequestFreshness] = useState<{ id: string; checking: boolean; error: string; result: PayrollFreshness | null } | null>(null);
+  // HR-24: موظفو طلب الرواتب المحددون للاعتماد (غير المحددين يُرفضون ويرجعون لمسؤول الرواتب بسبب إلزامي)
+  const [approveSelection, setApproveSelection] = useState<Set<string>>(new Set());
+  // HR-24: إلغاء الاعتماد بعد الاعتماد النهائي بسبب إلزامي (للرواتب: لكل الطلب أو لموظفين محددين)
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelNote, setCancelNote] = useState("");
+  const [cancelSelection, setCancelSelection] = useState<Set<string>>(new Set());
+  // موظفون رفض الخادم إلغاء اعتمادهم من هذا الطلب (رواتبهم مرحّلة، أو هم في طلب اعتماد أحدث): لا يُحدَّدون بعدها
+  const [refusedCodes, setRefusedCodes] = useState<Set<string>>(new Set());
   // التحديث الدوري: لا تداخل بين طلبين، والاستجابة الأقدم من آخر طلب تُهمل، ولا تحديث بعد مغادرة الصفحة
   const mountedRef = useRef(true);
   const inFlightRef = useRef(false);
   const loadSeqRef = useRef(0);
+  // تفاصيل الطلب المفتوح: استجابة طلب فُتح قبله تُهمل (لا تحل صفوفه وتحديده محل الطلب الحالي)
+  const detailSeqRef = useRef(0);
 
   // silent: تحديث دوري في الخلفية بلا مؤشر تحميل ودون مسح القائمة عند الخطأ
   // force: يتجاوز حارس الطلب الجاري (بعد القرار) ويجعل أي استجابة أقدم متقادمة
@@ -161,7 +173,8 @@ export default function HRRequestsIncoming() {
   }, []);
 
   // القرار أولًا على الطلب (يتحقق الخادم أنك المستلم وأن الطلب معلق)، ثم أثره على الرواتب إن كان طلب اعتماد رواتب
-  const updateRequestStatus = async (item: RequestRow, status: "موافق" | "مرفوض") => {
+  // selectedCodes (HR-24): اعتماد بعض موظفي طلب الرواتب فقط؛ غير المحددين يُرفضون بسبب إلزامي (ملاحظة القرار)
+  const updateRequestStatus = async (item: RequestRow, status: "موافق" | "مرفوض", selectedCodes?: string[]) => {
     if (updatingId) return;
     setUpdatingId(item.id);
     try {
@@ -173,12 +186,20 @@ export default function HRRequestsIncoming() {
       const stoppedCount = Array.isArray(item.details.stopped_employee_ids) ? item.details.stopped_employee_ids.length : 0;
       // طلب فيه موقوفون فقط: القرار يعتمد الإيقاف نفسه ولا تتغير حالة صفوف
       if (isPayroll && (!period || (employeeIds.length === 0 && stoppedCount === 0))) throw new Error(t("بيانات طلب اعتماد الرواتب غير مكتملة"));
+      const partial = isPayroll && status === "موافق" && selectedCodes !== undefined;
+      const selection = selectedCodes ?? [];
+      if (partial && selection.length === 0) throw new Error("PAYROLL_SELECTION_EMPTY");
+      if (partial && !reviewNotes[item.id]?.trim()) throw new Error("PAYROLL_REJECT_NOTE_REQUIRED");
+      // في الاعتماد الجزئي يُراجَع المحددون فقط (غير المحددين يُرفضون)
+      const approvingActive = partial ? employeeIds.filter((code) => selection.includes(code)) : employeeIds;
 
       // طلب اعتماد الرواتب: القرار وأثره على صفوف الرواتب في عملية واحدة على الخادم (decide_payroll_request)،
       // فلا يبقى الطلب "موافق" وصفوفه معلقة إن لم يكن للمعتمِد صلاحية الرواتب. قبل تطبيق دفعة HR-7 يعود للطريقة السابقة.
       // قبل الموافقة: لا يُعتمد صافٍ حُسب قبل آخر إدخال للحضور أو الغياب أو الجزاءات (وإلا صُرف الراتب القديم كاملًا)
       if (isPayroll && status === "موافق") {
-        const allIds = Array.isArray(item.details.employee_ids) ? item.details.employee_ids.map(String) : employeeIds;
+        const allIds = partial
+          ? selection
+          : Array.isArray(item.details.employee_ids) ? item.details.employee_ids.map(String) : employeeIds;
         let check: PayrollFreshness | null = null;
         let checkError = "";
         try {
@@ -216,22 +237,37 @@ export default function HRRequestsIncoming() {
             .join("، ");
           if (!window.confirm(`${t("سُجّل حضور أو غياب لأيام بعد يوم إرسال الطلب يغيّر الصافي")}: ${list}${later.length > 5 ? " …" : ""}\n${t("الأفضل رفض الطلب ليعيد مسؤول الرواتب إرساله. هل تعتمد الأرقام كما أُرسلت؟")}`)) return;
         }
+        if (partial) {
+          const allCodes = Array.isArray(item.details.employee_ids) ? item.details.employee_ids.map(String) : [...employeeIds, ...((item.details.stopped_employee_ids as unknown[] | undefined) ?? []).map(String)];
+          const rejectedCount = allCodes.filter((code) => !selection.includes(code)).length;
+          if (!window.confirm(`${t("اعتماد المحددين")}: ${formatNumber(selection.length)}\n${t("رفض غير المحددين وإرجاعهم لمسؤول الرواتب للتصحيح")}: ${formatNumber(rejectedCount)}\n${t("السبب")}: ${reviewNotes[item.id]?.trim() ?? ""}\n${t("متابعة؟")}`)) return;
+        }
       }
 
       if (isPayroll) {
-        const { data: decided, error: decideError } = await supabase.rpc("decide_payroll_request", {
-          p_request_id: item.id,
-          p_decision: status,
-          p_note: reviewNotes[item.id]?.trim() || null,
-          // الطلب الذي فتحه المعتمد نفسه (لا طلبًا أُعيد إرساله بالمعرّف نفسه)
-          p_created_at: item.requestDate || null,
-        });
-        const missingRpc = Boolean(decideError && (decideError.code === "PGRST202" || decideError.code === "42883"));
+        // الاعتماد الجزئي بدالة HR-24 فقط (لا بديل له قبل تطبيقها: رسالة الخطأ تطلب التحديث)
+        const { data: decided, error: decideError } = partial
+          ? await supabase.rpc("decide_payroll_request_selected", {
+              p_request_id: item.id,
+              p_decision: status,
+              p_note: reviewNotes[item.id]?.trim() || null,
+              p_created_at: item.requestDate || null,
+              p_selected_ids: selection,
+            })
+          : await supabase.rpc("decide_payroll_request", {
+              p_request_id: item.id,
+              p_decision: status,
+              p_note: reviewNotes[item.id]?.trim() || null,
+              // الطلب الذي فتحه المعتمد نفسه (لا طلبًا أُعيد إرساله بالمعرّف نفسه)
+              p_created_at: item.requestDate || null,
+            });
+        const missingRpc = !partial && Boolean(decideError && (decideError.code === "PGRST202" || decideError.code === "42883"));
         if (decideError && !missingRpc) throw decideError;
         if (!decideError) {
           const changedRows = Number((decided as { updated_rows?: unknown } | null)?.updated_rows ?? 0);
           const mismatchedRows = Number((decided as { mismatched_rows?: unknown } | null)?.mismatched_rows ?? 0);
           const selfSkipped = Number((decided as { self_skipped?: unknown } | null)?.self_skipped ?? 0);
+          const rejectedEmployees = Number((decided as { rejected_employees?: unknown } | null)?.rejected_employees ?? 0);
           if (selfSkipped > 0) {
             toast({ title: t("راتبك ضمن الطلب لم يُعتمد"), description: t("لا يعتمد المعتمد راتبه؛ يعتمده مسؤول آخر"), variant: "destructive" });
           }
@@ -241,12 +277,15 @@ export default function HRRequestsIncoming() {
               description: `${formatNumber(mismatchedRows)} ${t("صف تغيّر صافيه عن المعروض عليك فبقي معلقًا؛ اطلب من مسؤول الرواتب إعادة الإرسال")}`,
               variant: "destructive",
             });
-          } else if (employeeIds.length > 0 && changedRows === 0) {
+          } else if (approvingActive.length > 0 && changedRows === 0) {
             toast({
               title: t("سُجّل القرار لكن لم تتغير صفوف الرواتب"),
               description: t("صفوف الشهر لم تعد معلقة (أُعيد حسابها أو قُرّر فيها)؛ راجع مسؤول الرواتب"),
               variant: "destructive",
             });
+          }
+          if (rejectedEmployees > 0) {
+            toast({ title: t("رُفض غير المحددين ورجعوا لمسؤول الرواتب للتصحيح"), description: `${t("عدد الموظفين")}: ${formatNumber(rejectedEmployees)}` });
           }
           toast({ title: t(status === "موافق" ? "تمت الموافقة على الطلب" : "تم رفض الطلب") });
           if (!mountedRef.current) return;
@@ -315,10 +354,84 @@ export default function HRRequestsIncoming() {
     }
   };
 
-  const openRequestDetails = async (item: RequestRow) => {
+  // HR-24: إلغاء الاعتماد بعد الاعتماد النهائي (للمستلم الذي اعتمد)، بسبب إلزامي.
+  // الرواتب: الصفوف المحددة ترجع «مرفوض» لمسؤول الرواتب ليصححها ويعيد إرسالها (المرحّل والمدفوع لا يُلغى).
+  // الإجازة أو الطلب: يصير «مرفوض» ما لم يدخل في رواتب مجمّدة أو سُجّلت منه سلفة.
+  const cancelApproval = async (item: RequestRow) => {
+    if (updatingId) return;
+    const note = cancelNote.trim();
+    if (!note) {
+      toast({ title: t("تعذر إلغاء الاعتماد"), description: t(hrRequestErrorText(new Error("REQUEST_CANCEL_NOTE_REQUIRED"))), variant: "destructive" });
+      return;
+    }
+    const isPayroll = item.source === "request" && item.details.workflow === "payroll_approval";
+    let codes: string[] | null = null;
+    if (isPayroll) {
+      const done = new Set([...detailCodes(item.details, "cancelled_employee_ids"), ...detailCodes(item.details, "rejected_employee_ids")]);
+      const cancellable = cancellablePayrollCodes(payrollDetails, new Set([...done, ...refusedCodes]));
+      const selected = payrollDetails
+        .filter((row) => cancelSelection.has(row.empId) && cancellable.has(row.empId))
+        .map((row) => row.empId);
+      if (selected.length === 0) {
+        toast({ title: t("تعذر إلغاء الاعتماد"), description: t("حدد موظفًا واحدًا على الأقل لإلغاء اعتماد راتبه"), variant: "destructive" });
+        return;
+      }
+      // كل من بقي معتمدًا في الطلب محدد: الإلغاء للطلب كله (يصير «مرفوض»)
+      const remaining = detailCodes(item.details, "employee_ids").filter((code) => !done.has(code));
+      codes = remaining.length > 0 && remaining.every((code) => selected.includes(code)) ? null : selected;
+      if (!window.confirm(`${t("إلغاء اعتماد رواتب")} ${formatNumber(selected.length)} ${t("موظف؛ ترجع «مرفوض» لمسؤول الرواتب ليصححها ويعيد إرسالها")}\n${t("السبب")}: ${note}\n${t("متابعة؟")}`)) return;
+    } else if (!window.confirm(`${t("إلغاء اعتماد الطلب؛ يصير «مرفوض» وتظهر لصاحبه ملاحظة الإلغاء")}\n${t("السبب")}: ${note}\n${t("متابعة؟")}`)) {
+      return;
+    }
+    setUpdatingId(item.id);
+    try {
+      const { data, error } = isPayroll
+        ? await supabase.rpc("cancel_payroll_approval", { p_request_id: item.id, p_emp_ids: codes, p_note: note })
+        : await supabase.rpc("cancel_request_approval", { p_source: item.source, p_id: item.id, p_note: note });
+      if (error) throw error;
+      if (isPayroll) {
+        const count = Number((data as { cancelled_employees?: unknown } | null)?.cancelled_employees ?? 0);
+        const whole = String((data as { request_status?: unknown } | null)?.request_status ?? "") === "مرفوض";
+        const superseded = Number((data as { superseded?: unknown } | null)?.superseded ?? 0);
+        toast({
+          title: t("أُلغي الاعتماد"),
+          description: `${t("رواتب رجعت «مرفوض» لمسؤول الرواتب للتصحيح")}: ${formatNumber(count)}${whole ? ` — ${t("أُلغي اعتماد الطلب كله")}` : ""}${superseded > 0 ? ` — ${t("تُخطي")} ${formatNumber(superseded)} ${t("موظف في طلب اعتماد أحدث (يُلغى من الطلب الأحدث)")}` : ""}`,
+        });
+      } else {
+        toast({ title: t("أُلغي الاعتماد"), description: t("صار الطلب «مرفوض» بسبب الإلغاء") });
+      }
+      if (!mountedRef.current) return;
+      setCancelOpen(false);
+      setCancelNote("");
+      setDetailRequest(null);
+      await loadData(true, true);
+    } catch (error) {
+      toast({ title: t("تعذر إلغاء الاعتماد"), description: t(hrRequestErrorText(error, "حدث خطأ غير متوقع")), variant: "destructive" });
+      // المرحّل أو من في طلب أحدث (الخادم يذكر أرقامهم): يُزال تحديدهم ليُكمل الإلغاء لغيرهم
+      const err = error as { message?: string; details?: string } | null;
+      if (isPayroll && /PAYROLL_CANCEL_POSTED|REQUEST_CANCEL_SUPERSEDED/.test(String(err?.message ?? ""))) {
+        const refused = String(err?.details ?? "").split(/[،,]\s*/).map((code) => code.trim()).filter(Boolean);
+        if (refused.length && mountedRef.current) {
+          setRefusedCodes((current) => new Set([...current, ...refused]));
+          setCancelSelection((current) => new Set([...current].filter((code) => !refused.includes(code))));
+        }
+      }
+    } finally {
+      if (mountedRef.current) setUpdatingId(null);
+    }
+  };
+
+  const openRequestDetails = async (item: RequestRow, openCancel = false) => {
+    const seq = ++detailSeqRef.current;
     setDetailRequest(item);
     setPayrollDetails([]);
+    setDetailsLoading(false);
     setRequestFreshness(null);
+    setApproveSelection(new Set());
+    setCancelSelection(new Set());
+    setRefusedCodes(new Set());
+    setCancelNote("");
+    setCancelOpen(openCancel && item.status === "موافق");
     if (item.details.workflow !== "payroll_approval") return;
     if (item.status === "معلق") {
       const checkPeriod = String(item.details.payroll_period ?? "");
@@ -338,6 +451,7 @@ export default function HRRequestsIncoming() {
     const employeeIds = Array.isArray(item.details.employee_ids) ? item.details.employee_ids.map(String) : [];
     // صفوف الطلب من دالة الخادم (يراها المستلم ولو لم تكن له صلاحية قراءة الرواتب)؛ وقبل HR-7 من الجدول مباشرة
     const viaRpc = await supabase.rpc("get_payroll_request_rows", { p_request_id: item.id });
+    if (seq !== detailSeqRef.current) return;
     const missingRpc = Boolean(viaRpc.error && (viaRpc.error.code === "PGRST202" || viaRpc.error.code === "42883"));
     const { data, error } = missingRpc
       ? await supabase
@@ -347,13 +461,13 @@ export default function HRRequestsIncoming() {
           .in("emp_id", employeeIds.length ? employeeIds : ["__none__"])
           .order("emp_name")
       : { data: viaRpc.data as Record<string, unknown>[] | null, error: viaRpc.error };
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || seq !== detailSeqRef.current) return;
     setDetailsLoading(false);
     if (error) {
       toast({ title: t("تعذر تحميل تفاصيل الطلب"), description: error.message, variant: "destructive" });
       return;
     }
-    setPayrollDetails(((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    const loaded = ((data ?? []) as Record<string, unknown>[]).map((row) => ({
       id: String(row.id),
       empId: String(row.emp_id ?? ""),
       empName: String(row.emp_name ?? ""),
@@ -364,7 +478,12 @@ export default function HRRequestsIncoming() {
       netSalary: Number(row.net_salary ?? 0),
       status: String(row.status ?? ""),
       notes: String(row.notes ?? ""),
-    })));
+    }));
+    setPayrollDetails(loaded);
+    // الاعتماد: الكل محدد افتراضيًا. الإلغاء: كل من بقي معتمدًا (غير مرحّل، ولم يُلغَ أو يُرفض من قبل)
+    const done = new Set([...detailCodes(item.details, "cancelled_employee_ids"), ...detailCodes(item.details, "rejected_employee_ids")]);
+    setApproveSelection(new Set(loaded.map((row) => row.empId)));
+    setCancelSelection(cancellablePayrollCodes(loaded, done));
   };
 
   const filtered = items.filter((i) => !search || i.empName.includes(search) || i.empId.includes(search));
@@ -417,6 +536,15 @@ export default function HRRequestsIncoming() {
                     <td className="py-3 px-4">{row.requestType ? t(row.requestType) : "—"}</td>
                     <td className="py-3 px-4 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.status === "موافق" ? "bg-emerald-100 text-emerald-800" : row.status === "مرفوض" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>{t(row.status)}</span>
+                      {detailCodes(row.details, "rejected_employee_ids").length > 0 && (
+                        <div className="mt-1 text-[11px] text-amber-700">{t("مرفوض منهم")}: {formatNumber(detailCodes(row.details, "rejected_employee_ids").length)}</div>
+                      )}
+                      {detailCodes(row.details, "cancelled_employee_ids").length > 0 && (
+                        <div className="mt-1 text-[11px] text-red-700">{t("أُلغي اعتماد")}: {formatNumber(detailCodes(row.details, "cancelled_employee_ids").length)}</div>
+                      )}
+                      {row.source === "request" && String(row.details.cancel_note ?? "").trim() !== "" && (
+                        <div className="mt-1 text-[11px] text-red-700">{t("أُلغي الاعتماد")}</div>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center">
                       {row.signatureData ? (
@@ -449,6 +577,9 @@ export default function HRRequestsIncoming() {
                         <div className="flex items-center justify-center gap-2">
                           <span className="text-xs text-gray-600">{row.adminNote || t("لا توجد ملاحظة")}</span>
                           <button onClick={() => void openRequestDetails(row)} className="text-sky-600 hover:text-sky-800" title={t("عرض التفاصيل")}><Eye className="h-5 w-5" /></button>
+                          {row.status === "موافق" && (
+                            <button disabled={updatingId === row.id} onClick={() => void openRequestDetails(row, true)} className="text-amber-600 hover:text-amber-800 disabled:opacity-40" title={t("إلغاء الاعتماد")}><RotateCcw className="h-5 w-5" /></button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -520,6 +651,7 @@ export default function HRRequestsIncoming() {
                   <h3 className="mb-2 font-semibold text-gray-800">{t("ملاحظة الإدارة")}</h3>
                   <p className="whitespace-pre-line text-gray-700">{detailRequest.adminNote || t("لا توجد ملاحظة")}</p>
                 </div>
+                <ApprovalCancelInfo details={detailRequest.details} names={Object.fromEntries(payrollDetails.map((row) => [row.empId, row.empName]))} />
                 {detailRequest.details.workflow !== "payroll_approval" && <div>
                   <h3 className="mb-2 font-semibold text-gray-800">{t("توقيع الموظف")}</h3>
                   {detailRequest.signatureData ? (
@@ -537,20 +669,135 @@ export default function HRRequestsIncoming() {
                   {requestFreshness?.id === detailRequest.id && (
                     <PayrollFreshnessNotice mode="approver" checking={requestFreshness.checking} error={requestFreshness.error} freshness={requestFreshness.result} />
                   )}
-                  {detailsLoading ? <p className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</p> : (
-                    <div className="overflow-x-auto rounded-lg border">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-[#075f94] text-white"><tr><th className="px-3 py-3">{t("رقم الموظف")}</th><th className="px-3 py-3">{t("اسم الموظف")}</th><th className="px-3 py-3">{t("القسم")}</th><th className="px-3 py-3">{t("الراتب الأساسي")}</th><th className="px-3 py-3">{t("البدلات")}</th><th className="px-3 py-3">{t("الاستقطاعات")}</th><th className="px-3 py-3">{t("صافي الراتب")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("تفاصيل الحساب")}</th></tr></thead>
-                        <tbody>{payrollDetails.map((row) => <tr key={row.id} className="border-b"><td className="px-3 py-3">{row.empId}</td><td className="px-3 py-3 font-medium">{row.empName}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{formatNumber(row.basicSalary, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.allowances, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.deductions, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3 font-semibold">{formatNumber(row.netSalary, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{t(row.status)}</td><td className="min-w-64 px-3 py-3 text-xs text-gray-600">{row.notes || "—"}</td></tr>)}</tbody>
-                      </table>
-                    </div>
-                  )}
+                  {detailsLoading ? <p className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</p> : (() => {
+                    // HR-24: عمود التحديد للاعتماد (طلب معلق) أو لإلغاء الاعتماد (طلب معتمد بعد فتح الإلغاء)
+                    const rejectedCodes = new Set(detailCodes(detailRequest.details, "rejected_employee_ids"));
+                    const cancelledCodes = new Set(detailCodes(detailRequest.details, "cancelled_employee_ids"));
+                    const approveMode = detailRequest.status === "معلق";
+                    const cancelMode = detailRequest.status === "موافق" && cancelOpen;
+                    const cancellable = cancellablePayrollCodes(payrollDetails, new Set([...rejectedCodes, ...cancelledCodes, ...refusedCodes]));
+                    const canCancelRow = (row: PayrollDetailRow) => cancellable.has(row.empId);
+                    const selectable = approveMode ? payrollDetails : cancelMode ? payrollDetails.filter(canCancelRow) : [];
+                    const selection = approveMode ? approveSelection : cancelSelection;
+                    const setSelection = approveMode ? setApproveSelection : setCancelSelection;
+                    const allSelected = selectable.length > 0 && selectable.every((row) => selection.has(row.empId));
+                    const toggle = (code: string) => setSelection((current) => {
+                      const next = new Set(current);
+                      if (next.has(code)) next.delete(code);
+                      else next.add(code);
+                      return next;
+                    });
+                    return (
+                      <div className="overflow-x-auto rounded-lg border">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-[#075f94] text-white"><tr>
+                            {(approveMode || cancelMode) && (
+                              <th className="px-3 py-3">
+                                <input type="checkbox" checked={allSelected} disabled={selectable.length === 0} onChange={() => setSelection(allSelected ? new Set() : new Set(selectable.map((row) => row.empId)))} title={t("تحديد الكل")} aria-label={t("تحديد الكل")} />
+                              </th>
+                            )}
+                            <th className="px-3 py-3">{t("رقم الموظف")}</th><th className="px-3 py-3">{t("اسم الموظف")}</th><th className="px-3 py-3">{t("القسم")}</th><th className="px-3 py-3">{t("الراتب الأساسي")}</th><th className="px-3 py-3">{t("البدلات")}</th><th className="px-3 py-3">{t("الاستقطاعات")}</th><th className="px-3 py-3">{t("صافي الراتب")}</th><th className="px-3 py-3">{t("الحالة")}</th><th className="px-3 py-3">{t("تفاصيل الحساب")}</th>
+                          </tr></thead>
+                          <tbody>{payrollDetails.map((row) => {
+                            const rowSelectable = approveMode || (cancelMode && canCancelRow(row));
+                            const unselected = approveMode && !approveSelection.has(row.empId);
+                            return (
+                              <tr key={row.id} className={`border-b ${unselected ? "bg-red-50/60" : cancelMode && cancelSelection.has(row.empId) && rowSelectable ? "bg-amber-50/60" : ""}`}>
+                                {(approveMode || cancelMode) && (
+                                  <td className="px-3 py-3 text-center">
+                                    {rowSelectable ? <input type="checkbox" checked={selection.has(row.empId)} onChange={() => toggle(row.empId)} aria-label={`${t("تحديد")} ${row.empName}`} /> : <span className="text-gray-300">—</span>}
+                                  </td>
+                                )}
+                                <td className="px-3 py-3">{row.empId}</td><td className="px-3 py-3 font-medium">{row.empName}</td><td className="px-3 py-3">{row.department || "—"}</td><td className="px-3 py-3">{formatNumber(row.basicSalary, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.allowances, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3">{formatNumber(row.deductions, { minimumFractionDigits: 2 })}</td><td className="px-3 py-3 font-semibold">{formatNumber(row.netSalary, { minimumFractionDigits: 2 })}</td>
+                                <td className="px-3 py-3">
+                                  {t(row.status)}
+                                  {rejectedCodes.has(row.empId) && <div className="text-[11px] text-amber-700">{t("رُفض عند الاعتماد")}</div>}
+                                  {cancelledCodes.has(row.empId) && <div className="text-[11px] text-red-700">{t("أُلغي اعتماده")}</div>}
+                                  {cancelMode && refusedCodes.has(row.empId) && <div className="text-[11px] text-slate-600">{t("لا يُلغى من هذا الطلب")}</div>}
+                                  {unselected && <div className="text-[11px] text-red-700">{t("سيُرفض ويرجع لمسؤول الرواتب")}</div>}
+                                </td>
+                                <td className="min-w-64 px-3 py-3 text-xs text-gray-600">{row.notes || "—"}</td>
+                              </tr>
+                            );
+                          })}</tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
-              {detailRequest.status === "معلق" && (
-                <div className="flex justify-end gap-3 border-t px-5 py-4">
-                  <Button variant="outline" disabled={updatingId === detailRequest.id} onClick={() => void updateRequestStatus(detailRequest, "مرفوض")} className="border-red-200 text-red-700">{t("رفض")}</Button>
-                  <Button disabled={updatingId === detailRequest.id} onClick={() => void updateRequestStatus(detailRequest, "موافق")} className="bg-emerald-600 hover:bg-emerald-700">{t("موافقة")}</Button>
+              {detailRequest.status === "معلق" && (() => {
+                const isPayrollRequest = detailRequest.details.workflow === "payroll_approval";
+                // اعتماد جزئي: صفوف معروضة غير محددة (يُرفضون ويرجعون لمسؤول الرواتب بسبب إلزامي)
+                const unselectedCount = isPayrollRequest && !detailsLoading ? payrollDetails.filter((row) => !approveSelection.has(row.empId)).length : 0;
+                const partialApprove = unselectedCount > 0;
+                const selectedCodes = payrollDetails.filter((row) => approveSelection.has(row.empId)).map((row) => row.empId);
+                return (
+                  <div className="space-y-3 border-t px-5 py-4">
+                    {isPayrollRequest && (
+                      <>
+                        {payrollDetails.length > 0 && (
+                          <p className={`text-sm ${partialApprove ? "text-red-700" : "text-gray-600"}`}>
+                            {t("المحدد للاعتماد")}: {formatNumber(selectedCodes.length)} / {formatNumber(payrollDetails.length)}
+                            {partialApprove && <> — {t("غير المحددين")} ({formatNumber(unselectedCount)}) {t("يُرفضون ويرجعون لمسؤول الرواتب للتصحيح")}</>}
+                          </p>
+                        )}
+                        <textarea
+                          value={reviewNotes[detailRequest.id] ?? detailRequest.adminNote}
+                          onChange={(e) => setReviewNotes((prev) => ({ ...prev, [detailRequest.id]: e.target.value }))}
+                          placeholder={t(partialApprove ? "سبب رفض غير المحددين (إلزامي؛ يظهر لمسؤول الرواتب)" : "اكتب ملاحظة للموظف (اختياري)")}
+                          rows={2}
+                          className={`w-full resize-none rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none ${partialApprove && !(reviewNotes[detailRequest.id] ?? "").trim() ? "border-red-300" : "border-gray-200"}`}
+                        />
+                      </>
+                    )}
+                    <div className="flex justify-end gap-3">
+                      <Button variant="outline" disabled={updatingId === detailRequest.id} onClick={() => void updateRequestStatus(detailRequest, "مرفوض")} className="border-red-200 text-red-700">{t(isPayrollRequest ? "رفض الطلب كله" : "رفض")}</Button>
+                      <Button
+                        disabled={updatingId === detailRequest.id || (isPayrollRequest && detailsLoading)}
+                        onClick={() => void updateRequestStatus(detailRequest, "موافق", partialApprove ? selectedCodes : undefined)}
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        {partialApprove ? `${t("اعتماد المحددين")} (${formatNumber(selectedCodes.length)})` : t("موافقة")}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+              {detailRequest.status === "موافق" && (
+                <div className="space-y-3 border-t px-5 py-4">
+                  {!cancelOpen ? (
+                    <div className="flex justify-end">
+                      <Button variant="outline" disabled={updatingId === detailRequest.id} onClick={() => setCancelOpen(true)} className="border-amber-300 text-amber-800">
+                        <RotateCcw className="me-2 h-4 w-4" />{t("إلغاء الاعتماد")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-amber-800">
+                        {detailRequest.details.workflow === "payroll_approval"
+                          ? `${t("حدد الموظفين الذين يُلغى اعتماد رواتبهم؛ ترجع «مرفوض» لمسؤول الرواتب ليصححها ويعيد إرسالها. المرحّل محاسبيًا والمدفوع لا يُلغى.")} ${t("المحدد")}: ${formatNumber(cancelSelection.size)}`
+                          : t("يصير الطلب «مرفوض» بسبب الإلغاء، ما لم يدخل في رواتب معتمدة أو مرحّلة.")}
+                      </p>
+                      {detailRequest.details.workflow === "payroll_approval" && !detailsLoading
+                        && cancellablePayrollCodes(payrollDetails, new Set([...detailCodes(detailRequest.details, "rejected_employee_ids"), ...detailCodes(detailRequest.details, "cancelled_employee_ids"), ...refusedCodes])).size === 0 && (
+                        <p className="rounded border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700">{t("لا يوجد في الطلب ما يُلغى اعتماده: رواتبه مرحّلة أو مدفوعة أو أُلغي اعتمادها أو رُفضت من قبل")}</p>
+                      )}
+                      <textarea
+                        value={cancelNote}
+                        onChange={(e) => setCancelNote(e.target.value)}
+                        placeholder={t("سبب إلغاء الاعتماد (إلزامي)")}
+                        rows={2}
+                        className={`w-full resize-none rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none ${cancelNote.trim() ? "border-gray-200" : "border-red-300"}`}
+                      />
+                      <div className="flex justify-end gap-3">
+                        <Button variant="outline" disabled={updatingId === detailRequest.id} onClick={() => { setCancelOpen(false); setCancelNote(""); }}>{t("تراجع")}</Button>
+                        <Button disabled={updatingId === detailRequest.id || !cancelNote.trim() || (detailRequest.details.workflow === "payroll_approval" && (detailsLoading || cancelSelection.size === 0))} onClick={() => void cancelApproval(detailRequest)} className="bg-red-600 hover:bg-red-700">
+                          {t("تأكيد إلغاء الاعتماد")}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "@/components/Layout";
-import { Search } from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
@@ -12,6 +12,9 @@ import { monthRange, riyadhMonth } from "@/lib/hrDates";
 import { allowancesForPeriod, loadPayrollPolicy } from "@/lib/payrollCalc";
 import { GOSI_TYPE_NEW_SYSTEM, GOSI_WAGE_CAP, gosiEffectiveFile, gosiExcluded, gosiInScope, gosiShares, type GosiShares } from "@/lib/gosi";
 import { useI18n } from "@/i18n";
+import { canManagePerm, fetchIsMainAdmin, readUserSession } from "@/lib/authSession";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
+import InsuranceBulkDialog, { type InsuranceBulkTarget } from "@/components/hr/InsuranceBulkDialog";
 
 /**
  * التأمينات الاجتماعية: الاشتراك الشهري المتوقع لكل موظف فعال من بيانات ملفه (لا من مسير الرواتب).
@@ -19,6 +22,7 @@ import { useI18n } from "@/i18n";
  * السعودي 9.75% موظف و11.75% منشأة، وغير السعودي 2% منشأة فقط.
  * HR-23: الصفحة للسعوديين والمقيمين الأساسيين (على كفالة الشركة) فقط؛ والتسجيل الشامل (إعداد الرواتب) يجعل الشمول والنوع
  * من الجنسية ونوع التوظيف لا من حقل الملف، كما يحسبه مسير الرواتب.
+ * HR-24: تحديد موظفين وتسجيلهم في التأمينات (أو إلغاء شمولهم) من الصفحة بدل تعديل كل ملف.
  */
 type Row = {
   id: string;
@@ -32,6 +36,9 @@ type Row = {
   capped: boolean;
   /** سعودي ملفه "غير مشمول" ويُخصم منه لأن إعداد اتباع الحقل مطفأ */
   flagIgnored: boolean;
+  /** قيم ملف الموظف كما هي (للتسجيل الجماعي) */
+  fileInsurance: string;
+  fileType: string;
 };
 
 const COVERAGE_LABELS: Record<Row["coverage"], string> = { included: "مشمول", excluded: "غير مشمول", unset: "غير محدد" };
@@ -46,6 +53,25 @@ export default function HRInsuranceSocial() {
   const [autoCoverage, setAutoCoverage] = useState(false);
   // مقيمون غير أساسيين (متعاون وغيره) لا تشملهم الصفحة
   const [outOfScope, setOutOfScope] = useState(0);
+  // HR-24: التسجيل الجماعي — تعديل التأمينات في الملف لمن يدير الموظفين والرواتب (ولا يعدّل أحد سجله إلا مدير النظام)
+  const { permissions } = useRolePermissions();
+  const canRegister = canManagePerm(permissions, "hr.employees", "module.hr") && canManagePerm(permissions, "hr.payroll", "module.hr");
+  const [isMainAdmin, setIsMainAdmin] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  // المحددون لحظة فتح النافذة (إعادة التحميل بعد الحفظ تمسح التحديد)
+  const [bulkSnapshot, setBulkSnapshot] = useState<InsuranceBulkTarget[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const session = readUserSession() as { empId?: unknown; name?: unknown } | null;
+  const ownEmpId = String(session?.empId ?? "").trim();
+  const ownName = String(session?.name ?? "").trim();
+  const isOwn = (row: Row) => Boolean(ownEmpId) && row.empId.trim() === ownEmpId && (!ownName || row.name.trim() === ownName);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchIsMainAdmin().then((value) => { if (!cancelled) setIsMainAdmin(value); });
+    return () => { cancelled = true; };
+  }, []);
 
   const money = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const percent = (rate: number) => `${formatNumber(rate * 100, { maximumFractionDigits: 2 })}%`;
@@ -89,8 +115,11 @@ export default function HRInsuranceSocial() {
             shares: gosiShares({ nationality: row.nationality, socialInsurance: flag, insuranceType: effective.insuranceType, basic, housing: includeHousing ? housing : 0, month, followFlag: follow }),
             capped: basic + (includeHousing ? housing : 0) > GOSI_WAGE_CAP,
             flagIgnored: !auto && !follow && coverage === "excluded" && isSaudiNationality(row.nationality),
+            fileInsurance: String(row.social_insurance ?? "").trim(),
+            fileType: String(row.social_insurance_type ?? "").trim(),
           };
         }));
+        setSelected(new Set());
       } catch (loadError) {
         setError(hrRequestErrorText(loadError, t("تعذر تحميل بيانات التأمينات")));
         setItems([]);
@@ -99,7 +128,7 @@ export default function HRInsuranceSocial() {
       }
     };
     void load();
-  }, [t]);
+  }, [t, reloadKey]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -112,6 +141,18 @@ export default function HRInsuranceSocial() {
     total: sum.total + item.shares.total,
   }), { wage: 0, employee: 0, employer: 0, total: 0 }), [filtered]);
   const unsetSaudis = autoCoverage ? 0 : items.filter((item) => item.coverage === "unset" && isSaudiNationality(item.nationality)).length;
+  // التحديد للظاهر فقط؛ سجلك لا يُحدَّد إلا لمدير النظام
+  const selectable = filtered.filter((row) => isMainAdmin || !isOwn(row));
+  const allSelected = selectable.length > 0 && selectable.every((row) => selected.has(row.id));
+  const toggle = (id: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const bulkTargets: InsuranceBulkTarget[] = selectable.filter((row) => selected.has(row.id)).map((row) => ({
+    id: row.id, empId: row.empId, name: row.name, nationality: row.nationality,
+    fileInsurance: row.fileInsurance, fileType: row.fileType, fileStart: row.startDate,
+  }));
   const ignoredFlags = items.filter((item) => item.flagIgnored).length;
 
   return (
@@ -150,14 +191,27 @@ export default function HRInsuranceSocial() {
           <div className="flex items-center justify-between border-b p-4">
             <div className="relative w-72">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input placeholder={t("بحث بالاسم أو الرقم الوظيفي...")} value={search} onChange={(event) => setSearch(event.target.value)} className="pr-9" />
+              <Input placeholder={t("بحث بالاسم أو الرقم الوظيفي...")} value={search} onChange={(event) => { setSearch(event.target.value); setSelected(new Set()); }} className="pr-9" />
             </div>
-            <span className="text-sm text-gray-500">{formatNumber(filtered.length)} {t("موظف")}</span>
+            <div className="flex items-center gap-3">
+              {canRegister && (
+                <button type="button" disabled={bulkTargets.length === 0} onClick={() => { setBulkSnapshot(bulkTargets); setBulkOpen(true); }}
+                  className="flex items-center gap-1 rounded bg-[#004e89] px-3 py-2 text-sm text-white disabled:opacity-50" title={t("تسجيل المحددين في التأمينات")}>
+                  <ShieldCheck className="h-4 w-4" />{t("تسجيل المحددين في التأمينات")} ({formatNumber(bulkTargets.length)})
+                </button>
+              )}
+              <span className="text-sm text-gray-500">{formatNumber(filtered.length)} {t("موظف")}</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1200px] text-right text-sm">
               <thead className="bg-[#004e89] text-white">
                 <tr>
+                  {canRegister && (
+                    <th className="w-10 px-3 py-3">
+                      <input type="checkbox" checked={allSelected} disabled={selectable.length === 0} onChange={() => setSelected(allSelected ? new Set() : new Set(selectable.map((row) => row.id)))} aria-label={t("تحديد الكل")} title={t("تحديد الكل")} />
+                    </th>
+                  )}
                   <th className="px-3 py-3 font-medium">{t("الرقم الوظيفي")}</th>
                   <th className="px-3 py-3 font-medium">{t("الاسم")}</th>
                   <th className="px-3 py-3 font-medium">{t("الجنسية")}</th>
@@ -172,11 +226,16 @@ export default function HRInsuranceSocial() {
               </thead>
               <tbody className="divide-y bg-white">
                 {loading ? (
-                  <tr><td colSpan={10} className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
+                  <tr><td colSpan={canRegister ? 11 : 10} className="py-8 text-center text-gray-400">{t("جاري التحميل...")}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={10} className="py-8 text-center text-gray-400">{t("لا توجد بيانات")}</td></tr>
+                  <tr><td colSpan={canRegister ? 11 : 10} className="py-8 text-center text-gray-400">{t("لا توجد بيانات")}</td></tr>
                 ) : filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50/50">
+                    {canRegister && (
+                      <td className="px-3 py-2 text-center">
+                        <input type="checkbox" disabled={!isMainAdmin && isOwn(row)} checked={selected.has(row.id)} onChange={() => toggle(row.id)} aria-label={`${t("تحديد")} ${row.name}`} title={!isMainAdmin && isOwn(row) ? t("لا تعدّل تأميناتك في سجلك؛ يعدّلها مسؤول آخر") : ""} />
+                      </td>
+                    )}
                     <td className="px-3 py-2">{row.empId || "—"}</td>
                     <td className="px-3 py-2 font-medium">{row.name}</td>
                     <td className="px-3 py-2">{row.nationality || "—"}</td>
@@ -196,7 +255,7 @@ export default function HRInsuranceSocial() {
               {!loading && filtered.length > 0 && (
                 <tfoot className="bg-slate-50 font-semibold">
                   <tr>
-                    <td className="px-3 py-3" colSpan={5}>{t("الإجمالي")} ({t("ر.س")})</td>
+                    <td className="px-3 py-3" colSpan={canRegister ? 6 : 5}>{t("الإجمالي")} ({t("ر.س")})</td>
                     <td className="px-3 py-3">{money(totals.wage)}</td>
                     <td className="px-3 py-3">{money(totals.employee)}</td>
                     <td className="px-3 py-3">{money(totals.employer)}</td>
@@ -209,6 +268,13 @@ export default function HRInsuranceSocial() {
           </div>
         </div>
       </div>
+      <InsuranceBulkDialog
+        open={bulkOpen}
+        targets={bulkSnapshot}
+        autoCoverage={autoCoverage}
+        onClose={() => setBulkOpen(false)}
+        onDone={() => setReloadKey((key) => key + 1)}
+      />
     </Layout>
   );
 }

@@ -81,7 +81,7 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   OVERTIME_NO_SALARY: "لا راتب أساسي مسجل للموظف؛ لا يُحسب مبلغ الساعات الإضافية",
   OVERTIME_TOO_MANY: "حدد ألف سجل أو أقل في المرة الواحدة",
   ADVANCE_ENTRY_NOT_ALLOWED: "تسجيل السلف يتطلب صلاحية إدارة الرواتب",
-  ADVANCE_SELF_ENTRY: "لا تسجّل سلفة لنفسك؛ يسجّلها مسؤول رواتب آخر",
+  ADVANCE_SELF_ENTRY: "لا تسجّل سلفة لنفسك؛ يسجّلها مسؤول رواتب آخر (مدير النظام يسجّل سلفته من طلب سلفة معتمد، ويعتمدها غيره)",
   ADVANCE_INVALID_AMOUNTS: "مبلغ السلفة وقسطها يجب أن يكونا أكبر من صفر، والقسط لا يتجاوز المبلغ",
   ADVANCE_INVALID_START: "شهر بداية الخصم غير صحيح، أو قبل شهر تعيين الموظف، أو أقدم من 24 شهرًا",
   ADVANCE_INVALID_OPENING: "المسدد قبل النظام لا يكون سالبًا، ويكون أقل من مبلغ السلفة (السلفة المسددة كلها في سمارت لا تُسجَّل)",
@@ -98,7 +98,7 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   ADVANCE_EDIT_NOT_ALLOWED: "يُعدَّل في السلفة المبلغ والقسط وشهر البداية والملاحظات فقط؛ الموظف لا يتغير (احذفها وسجّلها من جديد)",
   // HR-13: تعديل السلف وتأجيل أقساطها والاقتطاعات الشهرية
   ADVANCE_HAS_DEDUCTIONS: "خُصم من الموظف قسط سلفة في رواتب معتمدة أو مرحّلة أو داخل طلب اعتماد منذ شهر بداية هذه السلفة؛ لا تُحذف ولا يتغير شهر بدايتها. عدّل مبلغها، أو أجّل قسط شهر",
-  ADVANCE_NOT_APPROVED: "يُؤجَّل قسط السلفة المعتمدة فقط",
+  ADVANCE_NOT_APPROVED: "السلفة ليست معتمدة؛ تأجيل القسط وإلغاء الاعتماد للسلفة المعتمدة فقط",
   ADVANCE_SKIP_INVALID_MONTH: "اختر الشهر المؤجَّل",
   ADVANCE_SKIP_BEFORE_START: "لا يُؤجَّل قسط قبل شهر بداية السلفة",
   ADVANCE_SKIP_MONTH_LOCKED: "رواتب هذا الشهر للموظف معتمدة أو مرحّلة أو موقوفة الصرف أو داخل طلب اعتماد معلق؛ لا يُؤجَّل قسطه ولا يُلغى تأجيله",
@@ -157,12 +157,38 @@ const HR_ERROR_MESSAGES: Record<string, string> = {
   PENALTY_REPLY_EMPLOYEE_ONLY: "رد الموظف يكتبه الموظف من بوابته فقط، ولا يُعدَّل بعد إرساله",
   PENALTY_REPLY_RECORD_LOCKED: "في هذا السجل رد من الموظف؛ تتغير حالته فقط",
   PENALTY_REPLY_DELETE_LOCKED: "في هذا السجل رد من الموظف؛ لا يحذفه إلا مدير النظام",
+  // HR-24: اعتماد الرواتب بتحديد الموظفين، وإلغاء الاعتماد بعد الاعتماد النهائي
+  PAYROLL_SELECTION_EMPTY: "حدد موظفًا واحدًا على الأقل للاعتماد، أو ارفض الطلب كله",
+  PAYROLL_REJECT_NOTE_REQUIRED: "اكتب سبب رفض الموظفين غير المحددين؛ يرجعون لمسؤول الرواتب للتصحيح",
+  REQUEST_CANCEL_NOTE_REQUIRED: "اكتب سبب إلغاء الاعتماد",
+  REQUEST_CANCEL_NOTHING: "لا يوجد في الطلب من بقي معتمدًا لإلغاء اعتماده (أُلغي أو رُفض من قبل)",
+  PAYROLL_CANCEL_POSTED: "رواتب مرحّلة محاسبيًا أو مدفوعة أو موقوف صرفها بعد الترحيل لا يُلغى اعتمادها؛ أزل تحديد هؤلاء الموظفين",
+  REQUEST_NOT_APPROVED: "الطلب ليس معتمدًا؛ يُلغى اعتماد الطلب المعتمد فقط",
+  REQUEST_CANCEL_USE_PAYROLL: "طلب اعتماد الرواتب يُلغى اعتماده من تفاصيله في «الطلبات الواردة»",
+  REQUEST_CANCEL_ADVANCE_EXISTS: "سُجّلت سلفة من هذا الطلب؛ ألغِ اعتماد السلفة أو احذفها من صفحة السلف أولًا",
+  REQUEST_CANCEL_PAYROLL_LOCKED: "رواتب الموظف معتمدة أو مرحّلة أو داخل طلب اعتماد معلق في شهر من أشهر الطلب؛ لا يُلغى اعتماده",
+  REQUEST_INVALID_SOURCE: "نوع الطلب غير صحيح",
+  PENALTY_NOT_APPROVED: "الجزاء ليس معتمدًا؛ يُلغى اعتماد الجزاء المعتمد فقط",
+  PENALTY_NOT_FOUND: "الجزاء غير موجود",
+  PENALTY_CANCEL_APPROVER_ONLY: "يلغي اعتماد الجزاء من اعتمده أو مدير النظام",
+  PENALTY_CANCEL_PAYROLL_LOCKED: "رواتب الموظف لشهر الجزاء أو ما بعده معتمدة أو مرحّلة أو داخل طلب اعتماد معلق؛ لا يُلغى اعتماد الجزاء",
+  REQUEST_CANCEL_SUPERSEDED: "الموظفون المحددون في طلب اعتماد أحدث لهذا الشهر؛ يُلغى اعتمادهم من الطلب الأحدث",
   // الدالة غير موجودة (لم يُطبَّق تحديث قاعدة البيانات بعد)
   "function public.penalty_submit_reply": "الرد على المساءلات والإنذارات يحتاج تحديث قاعدة البيانات (HR-22)؛ أبلغ الموارد البشرية",
+  "function public.decide_payroll_request_selected": "اعتماد بعض الموظفين فقط يحتاج تحديث قاعدة البيانات (HR-24)؛ حدد الكل أو ارفض الطلب كله، أو أبلغ مسؤول النظام",
+  "function public.cancel_": "إلغاء الاعتماد يحتاج تحديث قاعدة البيانات (HR-24)؛ أبلغ مسؤول النظام",
 };
 
+// رموز يُلحق بها تفصيل الخادم (أرقام الموظفين أو الشهر)
+const DETAIL_CODES = ["PAYROLL_CANCEL_POSTED", "REQUEST_CANCEL_PAYROLL_LOCKED", "REQUEST_CANCEL_SUPERSEDED", "PENALTY_CANCEL_PAYROLL_LOCKED"];
+
 // الرسالة بلغة الواجهة (HR-15): العربية كما هي، والإنجليزية من القاموس
-export const hrRequestErrorText = (error: unknown, fallback = "حدث خطأ غير متوقع") => translateText(hrRequestErrorSource(error, fallback));
+export const hrRequestErrorText = (error: unknown, fallback = "حدث خطأ غير متوقع") => {
+  const text = translateText(hrRequestErrorSource(error, fallback));
+  const err = error as { message?: string; details?: string } | null;
+  const detail = String(err?.details ?? "").trim();
+  return detail && DETAIL_CODES.some((code) => String(err?.message ?? "").includes(code)) ? `${text}: ${detail}` : text;
+};
 
 function hrRequestErrorSource(error: unknown, fallback: string) {
   const err = error as { message?: string; code?: string; details?: string } | null;

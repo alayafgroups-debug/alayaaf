@@ -1,13 +1,17 @@
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useI18n } from "@/i18n";
+import { supabase } from "@/lib/supabaseClient";
 import { requestFormSchemas } from "@/components/hr/formSchemas";
 import { daysInclusive } from "@/lib/hrDates";
-import { isApprovalCancelDetailKey } from "@/lib/approvalCancel";
+import { detailCodes, isApprovalCancelDetailKey } from "@/lib/approvalCancel";
 import ApprovalCancelInfo from "@/components/hr/ApprovalCancelInfo";
 
 /** طلب للعرض فقط (الطلبات المرسلة وطلبات الإجازات): نفس محتوى نافذة الطلبات الواردة بلا أزرار قرار */
 export type RequestDetailsView = {
   source: "leave" | "request";
+  /** معرّف الطلب: يلزم لطلب اعتماد الرواتب لعرض موظفيه (HR-25) */
+  requestId?: string;
   requestType: string;
   status: string;
   requestDate: string;
@@ -59,8 +63,44 @@ const requestDetailEntries = (requestType: string, details: Record<string, unkno
 
 const PENDING = new Set(["", "معلق", "معلقة", "pending"]);
 
+type PayrollRequestRow = { id: string; empId: string; empName: string; department: string; netSalary: number; status: string };
+type PayrollRowsState = { requestId: string; loading: boolean; error: boolean; rows: PayrollRequestRow[] };
+
 export default function RequestDetailsDialog({ request, onClose }: { request: RequestDetailsView | null; onClose: () => void }) {
   const { t, direction, formatDate, formatNumber } = useI18n();
+  // HR-25: موظفو طلب اعتماد الرواتب للمرسل، من دالة الخادم get_payroll_request_rows (تسمح للمرسل والمستلم ومسؤولي الرواتب والتقارير)
+  const payrollRequestId = request && request.source === "request" && request.details.workflow === "payroll_approval" ? String(request.requestId ?? "").trim() : "";
+  const [payrollRows, setPayrollRows] = useState<PayrollRowsState | null>(null);
+  useEffect(() => {
+    if (!payrollRequestId) {
+      setPayrollRows(null);
+      return;
+    }
+    let cancelled = false;
+    setPayrollRows({ requestId: payrollRequestId, loading: true, error: false, rows: [] });
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc("get_payroll_request_rows", { p_request_id: payrollRequestId });
+        if (cancelled) return;
+        if (error) {
+          setPayrollRows({ requestId: payrollRequestId, loading: false, error: true, rows: [] });
+          return;
+        }
+        const rows = ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+          id: String(row.id ?? row.emp_id ?? ""),
+          empId: String(row.emp_id ?? ""),
+          empName: String(row.emp_name ?? ""),
+          department: String(row.department ?? ""),
+          netSalary: Number(row.net_salary ?? 0),
+          status: String(row.status ?? ""),
+        }));
+        setPayrollRows({ requestId: payrollRequestId, loading: false, error: false, rows });
+      } catch {
+        if (!cancelled) setPayrollRows({ requestId: payrollRequestId, loading: false, error: true, rows: [] });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [payrollRequestId]);
   if (!request) return null;
 
   const formatDateTime = (value: string) => {
@@ -72,6 +112,9 @@ export default function RequestDetailsDialog({ request, onClose }: { request: Re
   const reviewedBy = String(request.details.reviewed_by_name ?? "").trim();
   const reviewedAt = String(request.details.reviewed_at ?? "").trim();
   const isPayroll = request.details.workflow === "payroll_approval";
+  const currentPayrollRows = payrollRows && payrollRows.requestId === payrollRequestId ? payrollRows : null;
+  const rejectedCodes = new Set(detailCodes(request.details, "rejected_employee_ids"));
+  const cancelledCodes = new Set(detailCodes(request.details, "cancelled_employee_ids"));
   const days = request.days !== null && request.days > 0
     ? request.days
     : request.startDate && request.endDate ? daysInclusive(request.startDate, request.endDate) : null;
@@ -151,11 +194,50 @@ export default function RequestDetailsDialog({ request, onClose }: { request: Re
               </div>
             );
           })()}
+          {isPayroll && payrollRequestId && (
+            <div>
+              <h3 className="mb-2 font-semibold text-gray-800">
+                {t("موظفو الطلب")}{currentPayrollRows && !currentPayrollRows.loading && !currentPayrollRows.error ? ` (${formatNumber(currentPayrollRows.rows.length)})` : ""}
+              </h3>
+              {!currentPayrollRows || currentPayrollRows.loading ? (
+                <p className="py-4 text-center text-gray-400">{t("جاري التحميل...")}</p>
+              ) : currentPayrollRows.error ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-700">{t("تعذر تحميل موظفي الطلب")}</p>
+              ) : currentPayrollRows.rows.length === 0 ? (
+                <p className="text-gray-400">{t("لا يوجد موظفون")}</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-[#075f94] text-white"><tr>
+                      <th className="px-3 py-2 text-start">{t("رقم الموظف")}</th>
+                      <th className="px-3 py-2 text-start">{t("اسم الموظف")}</th>
+                      <th className="px-3 py-2 text-start">{t("القسم")}</th>
+                      <th className="px-3 py-2 text-start">{t("صافي الراتب")}</th>
+                      <th className="px-3 py-2 text-start">{t("الحالة")}</th>
+                    </tr></thead>
+                    <tbody>{currentPayrollRows.rows.map((row) => (
+                      <tr key={row.id || row.empId} className="border-b last:border-b-0">
+                        <td className="px-3 py-2 font-mono text-xs">{row.empId || "—"}</td>
+                        <td className="px-3 py-2 font-medium text-gray-900">{row.empName || "—"}</td>
+                        <td className="px-3 py-2 text-gray-600">{row.department || "—"}</td>
+                        <td className="px-3 py-2 font-semibold">{formatNumber(row.netSalary, { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2">
+                          {t(row.status || "معلق")}
+                          {rejectedCodes.has(row.empId) && <div className="text-[11px] text-amber-700">{t("رُفض عند الاعتماد")}</div>}
+                          {cancelledCodes.has(row.empId) && <div className="text-[11px] text-red-700">{t("أُلغي اعتماده")}</div>}
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
           <div>
             <h3 className="mb-2 font-semibold text-gray-800">{t("ملاحظة الإدارة")}</h3>
             <p className="whitespace-pre-line text-gray-700">{request.adminNote || t("لا توجد ملاحظة")}</p>
           </div>
-          <ApprovalCancelInfo details={request.details} />
+          <ApprovalCancelInfo details={request.details} names={currentPayrollRows ? Object.fromEntries(currentPayrollRows.rows.map((row) => [row.empId, row.empName])) : undefined} />
           {!isPayroll && (
             <div>
               <h3 className="mb-2 font-semibold text-gray-800">{t("توقيع الموظف")}</h3>

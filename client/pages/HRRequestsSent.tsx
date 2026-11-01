@@ -82,7 +82,7 @@ export default function HRRequestsSent() {
           senderName: String(details.sender_name ?? r.emp_name ?? ""),
           source: "request" as const,
           view: {
-            source: "request" as const, requestType: String(r.request_type ?? "طلب"), status: String(r.status ?? ""), requestDate: String(r.created_at ?? ""),
+            source: "request" as const, requestId: String(r.id), requestType: String(r.request_type ?? "طلب"), status: String(r.status ?? ""), requestDate: String(r.created_at ?? ""),
             empId: String(r.emp_id ?? ""), empName: String(r.emp_name ?? ""), senderDepartment: String(details.sender_department ?? ""),
             senderName: String(details.sender_name ?? r.emp_name ?? ""), startDate: String(r.start_date ?? ""), endDate: String(r.end_date ?? ""), days: null,
             notes: "", adminNote: String(r.admin_note ?? ""), signatureData: String(r.signature_data ?? ""), signedAt: String(r.signed_at ?? ""),
@@ -137,7 +137,11 @@ export default function HRRequestsSent() {
 
   // الحذف للطلب المعلق فقط (سياسة الخادم)؛ نتحقق من أن الصف حُذف فعلًا
   const handleDelete = async (item: Request) => {
-    if (!confirm(t("حذف هذا الطلب؟"))) return;
+    // الحذف نهائي: يختفي الطلب من عند المستلم، وفي طلب الرواتب ترجع صفوفه قابلة للتعديل وإعادة الإرسال
+    const isPayrollRequest = item.source === "request" && item.view.details.workflow === "payroll_approval";
+    if (!confirm(t(isPayrollRequest
+      ? "حذف طلب اعتماد الرواتب؟ يُحذف نهائيًا ويختفي من عند المستلم، وترجع رواتب موظفيه قابلة للتعديل وإعادة الإرسال."
+      : "حذف هذا الطلب؟ يُحذف نهائيًا ويختفي من عند المستلم كأنه لم يُرسل."))) return;
     const { error } = await supabase.from(item.source === "leave" ? "leave_requests" : "hr_requests").delete().eq("id", item.id).select("id").single();
     if (error) {
       toast({

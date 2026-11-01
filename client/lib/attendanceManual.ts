@@ -91,8 +91,11 @@ export const manualAttendanceTimeError = (checkIn: string, checkOut: string, req
 /**
  * يفصل سجل المستخدم الحالي عن غيره: لا يسجّل المسؤول حضوره ولا يعدّله بنفسه (قاعدة البيانات ترفضه أيضًا).
  * الرقم الوظيفي قد يتكرر (EMP-030) فيُطابق الاسم معه إن توفر.
+ * ownAllowed (HR-25): مدير النظام يسجّل حضوره بنفسه فلا يُفصل سجله. موانع الخادم (get_attendance_write_blocks) تبقى الحكم:
+ * قبل تطبيق HR-25 على قاعدة البيانات يُتخطّى سجله عند الحفظ ويظهر «لا تسجّل حضورك…».
  */
-export const splitOwnEmployees = <T extends { empId: string; name: string }>(list: T[]): { own: T[]; others: T[] } => {
+export const splitOwnEmployees = <T extends { empId: string; name: string }>(list: T[], ownAllowed = false): { own: T[]; others: T[] } => {
+  if (ownAllowed) return { own: [], others: list };
   const session = readUserSession() as { empId?: unknown; name?: unknown } | null;
   const ownEmpId = String(session?.empId ?? "").trim();
   const ownName = String(session?.name ?? "").trim();

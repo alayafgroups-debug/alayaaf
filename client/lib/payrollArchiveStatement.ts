@@ -1,5 +1,5 @@
-import ExcelJS from "exceljs";
 import { PRINT_BRAND_CSS, printBrandHeaderHtml } from "@/lib/printBranding";
+import { METHOD_STATEMENT_COLORS, NO_SIGNATURE_METHODS, UNSPECIFIED_STATEMENT_COLORS, downloadWorkbook, writeStatementSheet } from "@/lib/statementTheme";
 import { UNSPECIFIED_PAYMENT_METHOD, paymentMethodOf, paymentMethodRank } from "@/lib/salaryPaymentMethods";
 
 /**
@@ -80,14 +80,9 @@ const COLUMNS: StatementColumn[] = [
 // أعمدة الطباعة كنموذج سمارت (كطباعة كشف الرواتب)، والتأمينات إن خُصم منها شيء في الشهر
 const PRINT_KEYS = ["name", "absenceDays", "basicSalary", "allowances", "overtime", "totalEarnings", "absenceDeduction", "socialInsurance", "totalDeductions", "loans", "payable"];
 
-const METHOD_PRINT_COLORS: Record<string, { label: string; value: string }> = {
-  "نقدي": { label: "#a9d08e", value: "#c6e0b4" },
-  "مدد": { label: "#ddebf7", value: "#ddebf7" },
-  "تحويل بنكي": { label: "#fff2cc", value: "#fff2cc" },
-  "شيك": { label: "#e4dfec", value: "#e4dfec" },
-};
-const UNSPECIFIED_PRINT_COLORS = { label: "#ededed", value: "#ededed" };
-const NO_SIGNATURE_METHODS = ["مدد", "تحويل بنكي"];
+// ألوان أقسام طرق الصرف وطرق بلا توقيع: مشتركة مع كشف الرواتب وExcel (statementTheme)
+const METHOD_PRINT_COLORS = METHOD_STATEMENT_COLORS;
+const UNSPECIFIED_PRINT_COLORS = UNSPECIFIED_STATEMENT_COLORS;
 
 const round2 = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -220,97 +215,40 @@ export const buildArchiveStatements = (records: ArchivePayrollRecord[], employee
   });
 };
 
-const columnGroups = (columns: StatementColumn[]) => columns.reduce<Array<{ name: string; count: number }>>((result, column) => {
-  const last = result[result.length - 1];
-  if (last?.name === column.group) last.count += 1;
-  else result.push({ name: column.group, count: 1 });
-  return result;
-}, []);
-
 /** اسم ملف آمن: حروف (عربية أو إنجليزية) وأرقام فقط، والباقي «_» */
 const safeFileName = (value: string) => value.normalize("NFC").replace(/[^\p{L}\p{M}\p{N}_.-]+/gu, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 120) || "Payroll_Archive";
 
-/** Excel بتصميم كشف الرواتب: ورقة لكل شهر */
+/**
+ * Excel بشكل الطباعة الصفراء (HR-26، كشف سمارت): ورقة لكل شهر بالشعارين والعنوان، رأس أصفر وحدود سوداء،
+ * ومجموع كل طريقة صرف بلونها تحت مستحق الصرف، والإجمالي بالأصفر، وعمود التوقيع. كل الأعمدة (لا مختصر الطباعة) حتى لا تضيع بيانات.
+ */
 export async function exportArchiveStatementExcel(statements: MonthStatement[], context: ArchiveStatementContext, fileStem: string) {
   const { t, direction } = context;
+  const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Idarat Al Ayaf Management System";
-  const rtl = direction === "rtl";
-  const readingOrder = rtl ? "rtl" : "ltr";
-  const columns = COLUMNS;
-  const groups = columnGroups(columns);
-  const count = columns.length;
   const usedNames = new Set<string>();
   statements.forEach((statement) => {
     let sheetName = (statement.period || t("كشف الرواتب")).replace(/[\\/:*?[\]]/g, "-").slice(0, 31);
     for (let suffix = 2; usedNames.has(sheetName); suffix += 1) sheetName = `${sheetName.slice(0, 27)} (${suffix})`;
     usedNames.add(sheetName);
-    const sheet = workbook.addWorksheet(sheetName, { views: [{ rightToLeft: rtl, state: "frozen", ySplit: 5 }] });
-    sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
-    sheet.mergeCells(1, 1, 1, count); sheet.getCell(1, 1).value = t("شركة إدارة العياف للمقاولات");
-    sheet.mergeCells(2, 1, 2, count); sheet.getCell(2, 1).value = statement.title;
-    sheet.mergeCells(3, 1, 3, count); sheet.getCell(3, 1).value = [...statement.meta, t("طريقة الصرف وبيانات البنك من ملف الموظف الحالي")].join(" | ");
-    [1, 2, 3].forEach((row) => {
-      sheet.getRow(row).alignment = { horizontal: "center", vertical: "middle", readingOrder };
-      sheet.getRow(row).font = { bold: true, size: row === 1 ? 18 : 12, color: { argb: row === 1 ? "FFFFFFFF" : "FF17324D" } };
+    const sheet = workbook.addWorksheet(sheetName);
+    writeStatementSheet(workbook, sheet, {
+      title: statement.title,
+      meta: [...statement.meta, t("طريقة الصرف وبيانات البنك من ملف الموظف الحالي")],
+      columns: COLUMNS.map((column) => ({ key: column.key, label: t(column.label), width: column.key === "name" ? Math.max(column.width, 30) : column.width, money: column.money })),
+      sections: statement.sections.map((section) => ({
+        method: statement.grouped && section.key !== "unspecified" ? section.key : "",
+        rows: section.rows,
+        subtotal: statement.grouped ? { label: section.subtotalLabel, totals: section.totals } : undefined,
+      })),
+      grand: { label: t("الإجمالي"), totals: statement.totals },
+      signature: { label: t("التوقيع"), mergeMethods: statement.grouped ? NO_SIGNATURE_METHODS : [], methodText: (method) => t(method) },
+      netKey: "payable",
+      rtl: direction === "rtl",
     });
-    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF075F94" } };
-    sheet.getRow(1).height = 30;
-    let start = 1;
-    groups.forEach((group) => {
-      sheet.mergeCells(4, start, 4, start + group.count - 1);
-      sheet.getCell(4, start).value = t(group.name);
-      start += group.count;
-    });
-    columns.forEach((column, index) => {
-      sheet.getCell(5, index + 1).value = t(column.label);
-      sheet.getColumn(index + 1).width = column.width;
-    });
-    const thin = { style: "thin" as const, color: { argb: "FFFFFFFF" } };
-    [4, 5].forEach((rowNumber) => sheet.getRow(rowNumber).eachCell((cell) => {
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowNumber === 4 ? "FF075F94" : "FF0B6FA4" } };
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
-      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true, readingOrder };
-      cell.border = { top: thin, left: thin, bottom: thin, right: thin };
-    }));
-    const hair = { style: "hair" as const, color: { argb: "FFD8E1E8" } };
-    const addDataRow = (row: StatementRow) => {
-      const excelRow = sheet.addRow(columns.map((column) => row[column.key]));
-      excelRow.eachCell((cell, index) => {
-        const column = columns[index - 1];
-        cell.alignment = { horizontal: column.money ? "right" : "center", vertical: "middle", wrapText: true, readingOrder };
-        cell.border = { top: hair, left: hair, bottom: hair, right: hair };
-        if (column.money) cell.numFmt = "#,##0.00";
-      });
-    };
-    statement.sections.forEach((section) => {
-      section.rows.forEach(addDataRow);
-      if (!statement.grouped) return;
-      const subtotalRow = sheet.addRow(columns.map((column) => column.key === "name" ? section.subtotalLabel : column.money ? section.totals[column.key] : ""));
-      subtotalRow.font = { bold: true };
-      subtotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF4D6" } };
-      subtotalRow.eachCell((cell, index) => {
-        cell.alignment = { horizontal: "center", vertical: "middle", readingOrder };
-        if (columns[index - 1].money) cell.numFmt = "#,##0.00";
-      });
-    });
-    const totalRow = sheet.addRow(columns.map((column) => column.key === "name" ? t("الإجماليات") : column.money ? statement.totals[column.key] : ""));
-    totalRow.font = { bold: true };
-    totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F2F8" } };
-    totalRow.eachCell((cell, index) => {
-      if (columns[index - 1].money) cell.numFmt = "#,##0.00";
-      cell.border = { top: { style: "medium", color: { argb: "FF075F94" } } };
-    });
-    // الفرز في Excel يخلط سطور مجاميع الأقسام بالموظفين، فلا فلتر مع التقسيم
-    if (!statement.grouped) sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + statement.rows, column: count } };
   });
-  const output = await workbook.xlsx.writeBuffer();
-  const url = URL.createObjectURL(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${safeFileName(fileStem)}.xlsx`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  await downloadWorkbook(workbook, `${safeFileName(fileStem)}.xlsx`);
 }
 
 /**

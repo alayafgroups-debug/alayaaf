@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { useI18n } from "@/i18n";
 import { ArrowRight, Columns3, Download, Printer, Send, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import ExcelJS from "exceljs";
 import { toast } from "@/hooks/use-toast";
 import { readUserSession } from "@/lib/authSession";
 import { preparePayrollResend, resendPreparationOf, submitPayrollApprovalRequest, type PayrollResendPreparation } from "@/lib/payrollApproval";
@@ -17,6 +16,7 @@ import { freshnessErrorText, savedPayrollFreshness, type PayrollFreshness } from
 import { isMissingColumnError } from "@/lib/advances";
 import { UNSPECIFIED_PAYMENT_METHOD, paymentMethodOf, paymentMethodRank } from "@/lib/salaryPaymentMethods";
 import { PRINT_BRAND_CSS, printBrandHeaderHtml } from "@/lib/printBranding";
+import { METHOD_STATEMENT_COLORS as METHOD_PRINT_COLORS, NO_SIGNATURE_METHODS, UNSPECIFIED_STATEMENT_COLORS as UNSPECIFIED_PRINT_COLORS, downloadWorkbook, writeStatementSheet } from "@/lib/statementTheme";
 import PrintBrandHeader from "@/components/PrintBrandHeader";
 
 type ReportConfig = {
@@ -87,15 +87,7 @@ const loadVisibility = (): Record<string, boolean> => {
     return defaults;
   }
 };
-// ألوان أقسام طرق الصرف في الطباعة كنموذج سمارت؛ مدد والتحويل البنكي لا توقيع فيهما فيُكتب اسم الطريقة في عمود التوقيع
-const METHOD_PRINT_COLORS: Record<string, { label: string; value: string }> = {
-  "نقدي": { label: "#a9d08e", value: "#c6e0b4" },
-  "مدد": { label: "#ddebf7", value: "#ddebf7" },
-  "تحويل بنكي": { label: "#fff2cc", value: "#fff2cc" },
-  "شيك": { label: "#e4dfec", value: "#e4dfec" },
-};
-const UNSPECIFIED_PRINT_COLORS = { label: "#ededed", value: "#ededed" };
-const NO_SIGNATURE_METHODS = ["مدد", "تحويل بنكي"];
+// ألوان أقسام طرق الصرف في الطباعة كنموذج سمارت (مشتركة مع Excel في statementTheme)؛ مدد والتحويل البنكي لا توقيع فيهما فيُكتب اسم الطريقة في عمود التوقيع
 const escapePrintHtml = (value: unknown) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const REPORT_EMPLOYEE_COLUMNS = "id, emp_id, name, job_title, work_time, work_schedule, bank_name, bank_branch, bank_account, iban, branch_id, department_id, section_id, attendance_location_id";
@@ -246,6 +238,28 @@ export default function HRPayrollFullReport() {
   // الطباعة كنموذج سمارت (HR-19): ورقة أفقية بترويسة الشركة ورؤية 2030، وخط كبير يتناسب مع عدد الأعمدة الظاهرة،
   // وبعد كل طريقة صرف سطر مجموع صافيها بلونها، ثم الإجمالي. عمود التوقيع: يوقّع من يُصرف له نقدًا أو بشيك،
   // وفي مدد والتحويل البنكي يُكتب اسم الطريقة.
+  // عنوان الكشف وبياناته (الطباعة وExcel): اسم القسم أو الإدارة أو الفرع المختار، وإلا اسم الشركة
+  const statementTitle = () => {
+    const filters = config?.filters;
+    const scope = filters && filters.section !== "الكل" ? filterNames.section
+      : filters && filters.department !== "الكل" ? filterNames.department
+      : filters && filters.branch !== "الكل" ? filterNames.branch
+      : t("شركة إدارة العياف للمقاولات");
+    return locale === "en"
+      ? `${scope} ${t("كشف رواتب")} – ${monthLabel} ${yearLabel}`
+      : `${t("كشف رواتب")} ${scope} – ${monthLabel} ${yearLabel}`;
+  };
+  const statementMeta = () => {
+    const filters = config?.filters;
+    return [
+      filters && filters.branch !== "الكل" ? `${t("الفرع")}: ${filterNames.branch}` : "",
+      filters && filters.department !== "الكل" ? `${t("الإدارة")}: ${filterNames.department}` : "",
+      filters && filters.section !== "الكل" ? `${t("القسم")}: ${filterNames.section}` : "",
+      filters && filters.location !== "الكل" ? `${t("موقع الحضور")}: ${filterNames.location}` : "",
+      `${t("عدد الموظفين")}: ${formatNumber(rows.length)}`,
+    ].filter(Boolean);
+  };
+
   const printStatement = () => {
     if (!rows.length) return;
     const cols = visibleColumns;
@@ -275,21 +289,8 @@ export default function HRPayrollFullReport() {
     // عمود الصافي الذي يُجمع عليه كل قسم (كسمارت: مستحق الصرف)، وإلا الصافي، وإلا آخر عمود مالي ظاهر
     const netKey = ["payable", "netSalary"].find((key) => cols.some((column) => column.key === key)) ?? [...cols].reverse().find((column) => column.money)?.key ?? "";
     const netIndex = cols.findIndex((column) => column.key === netKey);
-    const filters = config?.filters;
-    const scope = filters && filters.section !== "الكل" ? filterNames.section
-      : filters && filters.department !== "الكل" ? filterNames.department
-      : filters && filters.branch !== "الكل" ? filterNames.branch
-      : t("شركة إدارة العياف للمقاولات");
-    const title = english
-      ? `${scope} ${t("كشف رواتب")} – ${monthLabel} ${yearLabel}`
-      : `${t("كشف رواتب")} ${scope} – ${monthLabel} ${yearLabel}`;
-    const metaParts = [
-      filters && filters.branch !== "الكل" ? `${t("الفرع")}: ${filterNames.branch}` : "",
-      filters && filters.department !== "الكل" ? `${t("الإدارة")}: ${filterNames.department}` : "",
-      filters && filters.section !== "الكل" ? `${t("القسم")}: ${filterNames.section}` : "",
-      filters && filters.location !== "الكل" ? `${t("موقع الحضور")}: ${filterNames.location}` : "",
-      `${t("عدد الموظفين")}: ${formatNumber(rows.length)}`,
-    ].filter(Boolean);
+    const title = statementTitle();
+    const metaParts = statementMeta();
 
     const dataCell = (column: PayrollColumn, row: PayrollRow) => `<td>${esc(formatCell(column, row[column.key]))}</td>`;
     // سطر مجموع قسم: اسم الطريقة في العمودين قبل الصافي، ومجموع الصافي تحته
@@ -419,43 +420,48 @@ tr:not(.in-block){break-inside:avoid;page-break-inside:avoid}
     }
   };
 
+  // Excel بشكل الطباعة الصفراء (HR-26، كشف سمارت): نفس الأعمدة الظاهرة والعنوان والبيانات والشعارين،
+  // ومجموع كل طريقة صرف بلونها تحت عمود الصافي، والإجمالي بالأصفر، وعمود التوقيع
   const exportExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Idarat Al Ayaf Management System";
-    // بلغة الواجهة واتجاهها: الإنجليزية من اليسار إلى اليمين، والأرقام أرقامًا (أرقام إنجليزية في Excel)
-    const rtl = direction === "rtl";
-    const readingOrder = rtl ? "rtl" : "ltr";
-    const sheet = workbook.addWorksheet(t("كشف الرواتب").slice(0, 31), { views: [{ rightToLeft: rtl, state: "frozen", ySplit: 5 }] });
-    sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
-    const count = Math.max(1, visibleColumns.length);
-    sheet.mergeCells(1, 1, 1, count); sheet.getCell(1, 1).value = t("شركة إدارة العياف للمقاولات");
-    sheet.mergeCells(2, 1, 2, count); sheet.getCell(2, 1).value = `${t("كشف الرواتب")} — ${monthLabel} ${yearLabel}`;
-    sheet.mergeCells(3, 1, 3, count); sheet.getCell(3, 1).value = `${t("الإدارة")}: ${filterNames.department} | ${t("القسم")}: ${filterNames.section} | ${t("الفرع")}: ${filterNames.branch} | ${t("مكان العمل")}: ${filterNames.location}`;
-    [1, 2, 3].forEach((row) => { sheet.getRow(row).alignment = { horizontal: "center", vertical: "middle", readingOrder }; sheet.getRow(row).font = { bold: true, size: row === 1 ? 18 : 12, color: { argb: row === 1 ? "FFFFFFFF" : "FF17324D" } }; });
-    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF075F94" } }; sheet.getRow(1).height = 30;
-    let start = 1; groups.forEach((group) => { sheet.mergeCells(4, start, 4, start + group.count - 1); const cell = sheet.getCell(4, start); cell.value = t(group.name); start += group.count; });
-    visibleColumns.forEach((column, index) => { const cell = sheet.getCell(5, index + 1); cell.value = t(column.label); sheet.getColumn(index + 1).width = column.width; });
-    [4, 5].forEach((rowNumber) => sheet.getRow(rowNumber).eachCell((cell) => { cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowNumber === 4 ? "FF075F94" : "FF0B6FA4" } }; cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 }; cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true, readingOrder }; cell.border = { top: { style: "thin", color: { argb: "FFFFFFFF" } }, left: { style: "thin", color: { argb: "FFFFFFFF" } }, bottom: { style: "thin", color: { argb: "FFFFFFFF" } }, right: { style: "thin", color: { argb: "FFFFFFFF" } } }; }));
-    // عمودا «بعملة الراتب الأساسي» نصّان منسّقان في الصفحة؛ في Excel أرقام بصيغة SAR
-    const currencyKeys: Record<string, string> = { netSalaryCurrency: "netSalary", payableCurrency: "payable" };
-    const addDataRow = (row: PayrollRow) => { const excelRow = sheet.addRow(visibleColumns.map((column) => (currencyKeys[column.key] ? Number(row[currencyKeys[column.key]] ?? 0) : row[column.key]))); excelRow.eachCell((cell, index) => { const column = visibleColumns[index - 1]; cell.alignment = { horizontal: column.money || currencyKeys[column.key] ? "right" : "center", vertical: "middle", wrapText: true, readingOrder }; cell.border = { top: { style: "hair", color: { argb: "FFD8E1E8" } }, left: { style: "hair", color: { argb: "FFD8E1E8" } }, bottom: { style: "hair", color: { argb: "FFD8E1E8" } }, right: { style: "hair", color: { argb: "FFD8E1E8" } } }; if (column.money) cell.numFmt = "#,##0.00"; if (currencyKeys[column.key]) cell.numFmt = '#,##0.00 "SAR"'; }); };
-    // كل قسم (طريقة صرف) صفوفه ثم مجموعه، كسمارت؛ اسم المجموع في عمود الاسم (أو أول عمود غير مالي إن أُخفي)
-    const labelKey = visibleColumns.some((column) => column.key === "name") ? "name" : visibleColumns.find((column) => !column.money && !currencyKeys[column.key])?.key;
-    sections.forEach((section) => {
-      section.rows.forEach(addDataRow);
-      if (!grouped) return;
-      const subtotalRow = sheet.addRow(visibleColumns.map((column) => column.key === labelKey ? section.subtotalLabel : column.money ? section.totals[column.key] : ""));
-      subtotalRow.font = { bold: true };
-      subtotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF4D6" } };
-      subtotalRow.eachCell((cell, index) => { cell.alignment = { horizontal: "center", vertical: "middle", readingOrder }; if (visibleColumns[index - 1].money) cell.numFmt = "#,##0.00"; });
-    });
-    const totalRow = sheet.addRow(visibleColumns.map((column) => column.key === labelKey ? t("الإجماليات") : column.money ? totals[column.key] : ""));
-    totalRow.font = { bold: true }; totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F2F8" } }; totalRow.eachCell((cell, index) => { if (visibleColumns[index - 1].money) cell.numFmt = "#,##0.00"; cell.border = { top: { style: "medium", color: { argb: "FF075F94" } } }; });
-    // الفرز في Excel يخلط سطور مجاميع الأقسام بالموظفين، فلا فلتر مع التقسيم
-    if (!grouped) sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + rows.length, column: visibleColumns.length } };
-    const output = await workbook.xlsx.writeBuffer();
-    const url = URL.createObjectURL(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `Payroll_Report_${config?.period ?? ""}.xlsx`; anchor.click(); URL.revokeObjectURL(url);
+    if (!rows.length) return;
+    if (!visibleColumns.length) {
+      toast({ title: t("اختر عمودًا واحدًا على الأقل من «إظهار/إخفاء الأعمدة»"), variant: "destructive" });
+      return;
+    }
+    try {
+      const { default: ExcelJS } = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Idarat Al Ayaf Management System";
+      const sheet = workbook.addWorksheet(t("كشف الرواتب").slice(0, 31));
+      // عمودا «بعملة الراتب الأساسي» نصّان منسّقان في الصفحة؛ في Excel أرقام بصيغة SAR
+      const currencyKeys: Record<string, string> = { netSalaryCurrency: "netSalary", payableCurrency: "payable" };
+      const excelRow = (row: PayrollRow) => Object.fromEntries(visibleColumns.map((column) => [column.key, currencyKeys[column.key] ? Number(row[currencyKeys[column.key]] ?? 0) : row[column.key]]));
+      writeStatementSheet(workbook, sheet, {
+        title: statementTitle(),
+        meta: statementMeta(),
+        columns: visibleColumns.map((column) => ({
+          key: column.key,
+          label: t(column.label),
+          width: column.key === "name" ? Math.max(column.width, 30) : column.width,
+          money: column.money,
+          numFmt: currencyKeys[column.key] ? '#,##0.00 "SAR"' : undefined,
+        })),
+        sections: sections.map((section) => ({
+          method: grouped && section.key !== "unspecified" ? section.key : "",
+          rows: section.rows.map(excelRow),
+          subtotal: grouped ? { label: section.subtotalLabel, totals: section.totals as Record<string, number> } : undefined,
+        })),
+        grand: { label: t("الإجمالي"), totals: totals as Record<string, number> },
+        signature: { label: t("التوقيع"), mergeMethods: grouped ? NO_SIGNATURE_METHODS : [], methodText: (method) => t(method) },
+        netKey: ["payable", "netSalary"].find((key) => visibleColumns.some((column) => column.key === key)),
+        rtl: direction === "rtl",
+      });
+      // اسم الملف بلغة الواجهة
+      await downloadWorkbook(workbook, `${t("كشف الرواتب").replace(/[\\/:*?"<>|\s]+/g, "_")}_${config?.period ?? ""}.xlsx`);
+    } catch (error) {
+      console.error(error);
+      toast({ title: t("تعذر إنشاء ملف Excel"), variant: "destructive" });
+    }
   };
 
   if (!config) return <Layout><div className="rounded-xl border bg-white p-10 text-center"><p>{t("لا توجد بيانات تقرير محفوظة")}</p><Button className="mt-4" onClick={() => navigate("/hr/payroll/statement")}>{t("العودة لكشف الرواتب")}</Button></div></Layout>;

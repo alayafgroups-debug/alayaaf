@@ -6056,6 +6056,55 @@ Object.assign(translations, {
   "تعذر تحميل بعض بيانات الحساب (إعدادات الراتب أو جداول الدوام أو العطل أو الإجازات)": "Could not load some calculation data (salary settings, work schedules, holidays or leaves)",
 });
 
+// HR-25: موظفو طلب اعتماد الرواتب في الطلبات المرسلة، وتأكيد الحذف، وأزرار المهمة ورسائلها، وغير الفعالين
+Object.assign(translations, {
+  "موظفو الطلب": "Employees in the request",
+  "تعذر تحميل موظفي الطلب": "Could not load the request's employees",
+  "حذف طلب اعتماد الرواتب؟ يُحذف نهائيًا ويختفي من عند المستلم، وترجع رواتب موظفيه قابلة للتعديل وإعادة الإرسال.": "Delete the payroll approval request? It will be deleted permanently and removed from the recipient, and its employees' payroll will be editable again and can be resent.",
+  "حذف هذا الطلب؟ يُحذف نهائيًا ويختفي من عند المستلم كأنه لم يُرسل.": "Delete this request? It will be deleted permanently and removed from the recipient as if it was never sent.",
+  "إنهاء المهمة": "Finish task",
+  "بدأ تنفيذ المهمة": "Task started",
+  "تم إنهاء المهمة": "Task finished",
+  "تم تحديث حالة المهمة": "Task status updated",
+  "اعتُمدت المهمة": "Task approved",
+  "رُفضت المهمة": "Task rejected",
+  "المهمة مكتملة": "Task completed",
+  "بانتظار موافقة المدير": "Awaiting manager approval",
+  "حُذفت المهمة": "Task deleted",
+  "لم تُحذف المهمة: يحذفها منشئها أو مدير مشروعها أو مدير النظام": "Task not deleted: only its creator, its project manager or the system administrator can delete it",
+  "لم يُحفظ التعديل: المهمة لم تعد متاحة لك (حُذفت أو تغيّرت صلاحيتك)؛ حدّث الصفحة": "Change not saved: the task is no longer available to you (it was deleted or your access changed); refresh the page",
+  "جارٍ حفظ تعديل سابق على هذه المهمة؛ انتظر قليلًا": "A previous change to this task is still being saved; please wait",
+  "لا تملك صلاحية هذا الإجراء على المهمة": "You do not have permission for this action on the task",
+  "تعذر حفظ التعديل؛ حاول مرة أخرى": "Could not save the change; please try again",
+  "تعذر حذف المهمة؛ حاول مرة أخرى": "Could not delete the task; please try again",
+  "لا يعتمد المهمة أو يقيّمها إلا منشئها أو مدير مشروعها أو المدير": "Only the task's creator, its project manager or the administrator can approve or rate it",
+  // قائمة الموظفين للفعالين فقط، وغير الفعالين في صفحتهم بكل حالاتهم
+  "غير الفعالين": "Inactive",
+  "مستقيل": "Resigned",
+  "مفصول": "Dismissed",
+  "منتهي الخدمة": "End of service",
+});
+
+// HR-26: مصمم التقارير، والثيم الأصفر الموحّد (شكل كشف سمارت) لطباعة الموارد البشرية وExcel
+Object.assign(translations, {
+  "مصمم التقارير": "Report designer",
+  "البيانات الأساسية": "Basic information",
+  "الوظيفة": "Job",
+  "البنك والتأمينات": "Bank and insurance",
+  "رقم الجواز": "Passport number",
+  "مجموع البدلات": "Total allowances",
+  "تاريخ الاشتراك في التأمينات": "Social insurance start date",
+  "تقرير الموظفين": "Employees report",
+  "الموظفون الفعالون": "Active employees",
+  "كل الموظفين": "All employees",
+  "عنوان التقرير": "Report title",
+  "اختر أعمدة التقرير": "Choose the report columns",
+  "ترتيب الأعمدة": "Column order",
+  "اختر عمودًا واحدًا على الأقل": "Choose at least one column",
+  "الراتب والبدلات من ملف الموظف كما هي اليوم (البدل الساري اليوم فقط)؛ لأرقام شهر محدد استعمل كشف الرواتب.": "Salary and allowances are taken from the employee file as of today (only allowances in effect today); for a specific month's figures use the payroll statement.",
+  "تعذر إنشاء ملف Excel": "Could not create the Excel file",
+});
+
 export function useI18n() {
   const value = useContext(I18nContext);
   if (!value) throw new Error("useI18n must be used inside I18nProvider");

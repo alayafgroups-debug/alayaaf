@@ -40,13 +40,15 @@ import { isSaudiNationality } from "@/lib/hrStatus";
 import { canManagePerm } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { fetchAllRows } from "@/lib/fetchAll";
+import { isEmployeeActive } from "@/lib/employeeStatus";
 import { useI18n } from "@/i18n";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import XlsxPopulate from "xlsx-populate/browser/xlsx-populate";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const STATUSES = ["فعال", "غير فعال", "إجازة", "منتهي"];
+// قائمة الموظفين للفعالين فقط؛ غير الفعال (غير فعال، منتهي، مستقيل…) في صفحة «الموظفون غير الفعالين»
+const STATUSES = ["فعال", "إجازة"];
 
 type OptionalColumn = "englishName" | "directorate" | "nationality" | "nationalId" | "hireDate" | "phone" | "email" | "workSchedule";
 // فلتر جدول الدوام: موظفون بلا جدول
@@ -191,11 +193,10 @@ export default function HREmployees({ scope }: { scope?: "basic" } = {}) {
   const [pageSize, setPageSize] = useState(10);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  // صفحة الأساسيين: من لم يعد أساسيًا (تغيّر نوعه) يخرج من التحديد، فلا يُطبع ولا يُعدَّل تحت عنوانها
+  // من صار غير فعال، أو لم يعد أساسيًا في صفحة الأساسيين، يخرج من التحديد فلا يُطبع ولا يُعدَّل تحت عنوان القائمة
   useEffect(() => {
-    if (!basicOnly) return;
     setSelectedIds((current) => {
-      const allowed = new Set(employees.filter(isBasicEmployee).map((employee) => employee.id));
+      const allowed = new Set(employees.filter((employee) => isEmployeeActive(employee.status) && (!basicOnly || isBasicEmployee(employee))).map((employee) => employee.id));
       const next = new Set([...current].filter((id) => allowed.has(id)));
       return next.size === current.size ? current : next;
     });
@@ -256,7 +257,14 @@ export default function HREmployees({ scope }: { scope?: "basic" } = {}) {
     load();
   }, [refreshKey]);
 
+  // غير الفعالين في نطاق الصفحة (للرابط إلى صفحتهم)
+  const inactiveCount = useMemo(
+    () => employees.filter((employee) => !isEmployeeActive(employee.status) && (!basicOnly || isBasicEmployee(employee))).length,
+    [basicOnly, employees],
+  );
+
   const filtered = useMemo(() => employees.filter((employee) => {
+    if (!isEmployeeActive(employee.status)) return false;
     if (basicOnly && !isBasicEmployee(employee)) return false;
     const keyword = fSearch.trim().toLowerCase();
     if (keyword && ![employee.name, employee.firstName, employee.empId, employee.accountTitle, employee.phone, employee.email, employee.nationalId]
@@ -975,6 +983,16 @@ export default function HREmployees({ scope }: { scope?: "basic" } = {}) {
           <div className="bg-blue-700 px-4 py-2.5 flex items-center justify-between text-white">
             <span className="font-semibold text-sm">
               {listTitle} — {formatNumber(filtered.length)} {t("موظف")}
+              {inactiveCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/hr/employees/inactive")}
+                  className="ms-2 rounded bg-white/15 px-2 py-0.5 text-xs font-normal hover:bg-white/25"
+                  title={t("الموظفون غير الفعالين")}
+                >
+                  {t("غير الفعالين")}: {formatNumber(inactiveCount)}
+                </button>
+              )}
             </span>
             <div className="flex items-center gap-1">
               <button onClick={() => void exportSafeEmployeesExcel()} title={selectedIds.size ? t("تحميل المحددين Excel") : t("تحميل تقرير الموظفين Excel")} className="p-1.5 rounded hover:bg-white/20 transition"><Download className="h-4 w-4" /></button>

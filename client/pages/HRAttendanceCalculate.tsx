@@ -9,7 +9,7 @@ import { daysInclusive, eachDate, monthRange, riyadhMonth, riyadhToday } from "@
 import { ACTIVE_EMPLOYEE_STATUSES, isApprovedStatus, isRejectedStatus } from "@/lib/hrStatus";
 import { fetchAllRows } from "@/lib/fetchAll";
 import { hrRequestErrorText } from "@/lib/hrErrors";
-import { readUserSession } from "@/lib/authSession";
+import { fetchIsMainAdmin, isMainAdminSession, readUserSession } from "@/lib/authSession";
 import { MANUAL_ATTENDANCE_SOURCE, OWN_ATTENDANCE_NOTE, PROTECTED_ATTENDANCE_FILTER, VERIFIED_ATTENDANCE_SOURCE, approvedLeaveDatesByEmployee, employeeHolidayScope, loadApprovedLeaves, loadAttendanceWriteBlocks, loadOfficialHolidays, lockedKey, manualAttendanceDatesFor, manualAttendanceFutureError, manualAttendanceResultText, manualAttendanceTimeError, officialHolidayDates, permissionHoursFromDetails, saveManualAttendance, scheduleWorkDates, splitOwnEmployees, type ManualAttendanceRow } from "@/lib/attendanceManual";
 import { classifyAttendanceDay, type DayCategory, type DayClassification } from "@/lib/attendanceRules";
 import { WEEKDAY_LABELS, earlyLeaveMinutesFor, effectiveLateMinutes, isScheduledWorkDay, loadWorkSchedules, requiredDailyMinutes, scheduleForEmployee, workedSecondsFor, type WorkSchedule } from "@/lib/workSchedule";
@@ -148,6 +148,13 @@ export default function HRAttendanceCalculate() {
   // فاصل القوائم في الرسائل والنصوص المعروضة: «، » بالعربية و«, » بالإنجليزية
   const listSeparator = locale === "en" ? ", " : "، ";
   const initialRange = monthRange(riyadhMonth());
+  // HR-25: مدير النظام يسجّل حضوره ويعدّله بنفسه (حكم قاعدة البيانات حيًّا، والدور المحفوظ حتى يصل)
+  const [ownAllowed, setOwnAllowed] = useState(() => isMainAdminSession());
+  useEffect(() => {
+    let cancelled = false;
+    void fetchIsMainAdmin().then((value) => { if (!cancelled) setOwnAllowed(value); });
+    return () => { cancelled = true; };
+  }, []);
   const [dateFrom, setDateFrom] = useState(initialRange.from);
   const [dateTo, setDateTo] = useState(initialRange.to);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -479,7 +486,7 @@ export default function HRAttendanceCalculate() {
       }
       if (!rangeActions.includes(attendanceAction) && !actionDate) throw new Error(t("حدد التاريخ"));
       // سجلات الحضور: لا يسجّل المسؤول حضوره ولا يعدّله ولا يحذفه بنفسه (قاعدة البيانات ترفضه أيضًا)
-      const { own: ownTargets, others: attendanceTargets } = splitOwnEmployees(actionEmployees);
+      const { own: ownTargets, others: attendanceTargets } = splitOwnEmployees(actionEmployees, ownAllowed);
       const attendanceAffecting = attendanceAction === "punch" || attendanceAction === "bulk" || attendanceAction === "clear-punches" || attendanceAction === "delete-bulk";
       if (attendanceAffecting && !attendanceTargets.length) throw new Error(t(OWN_ATTENDANCE_NOTE));
       const ownNote = attendanceAffecting && ownTargets.length ? `${listSeparator}${t(OWN_ATTENDANCE_NOTE)}` : "";
@@ -598,6 +605,9 @@ export default function HRAttendanceCalculate() {
         if (actionDateFrom > clearTo) throw new Error(t("لا يُمسح الحضور لأيام بعد اليوم"));
         const { blocks, error: blocksError } = await loadAttendanceWriteBlocks(attendanceTargets.map((employee) => employee.empId), actionDateFrom, clearTo);
         if (blocksError) throw blocksError;
+        // سجلات يرفضها الخادم لأنها للمستخدم نفسه (قبل تطبيق HR-25 على قاعدة البيانات أو بعد التراجع عنه، لمدير النظام)
+        const serverOwnCount = attendanceTargets.filter((employee) => blocks.own.has(employee.empId.trim())).length;
+        if (serverOwnCount === attendanceTargets.length) throw new Error(t(OWN_ATTENDANCE_NOTE));
         let lockedSkipped = 0;
         const workDatesByEmployee = attendanceTargets.filter((employee) => !blocks.own.has(employee.empId.trim())).map((employee) => {
           const all = scheduleWorkDates(actionDateFrom, clearTo, employee.schedule);
@@ -633,7 +643,7 @@ export default function HRAttendanceCalculate() {
         message = updated ? `${t("تم مسح الدخول والخروج من")} ${formatNumber(updated)} ${t("سجل")}` : t("لم يُعدَّل أي سجل: لا توجد سجلات حضور إدارية في أيام العمل ضمن الفترة أو لا تملك صلاحية التعديل");
         if (verifiedCount) message += `${listSeparator}${t("وتُرك")} ${formatNumber(verifiedCount)} ${t("سجل بصمة موثّقة من بوابة الموظف دون تعديل")}`;
         if (lockedSkipped) message += `${listSeparator}${t("ولم تُمس")} ${formatNumber(lockedSkipped)} ${t("يوم في أشهر رواتبها معتمدة أو مرحّلة")}`;
-        message += ownNote;
+        message += ownNote || (serverOwnCount ? `${listSeparator}${t(OWN_ATTENDANCE_NOTE)}` : "");
       } else {
         // سجل أنشأه المدير ثم سجّل الموظف عليه انصرافًا موثّقًا من البوابة لا يُحذف
         let keptCount = 0;
@@ -641,6 +651,10 @@ export default function HRAttendanceCalculate() {
         // الحذف شهرًا بشهر: لا يُمس شهر رواتبه معتمدة أو مرحّلة للموظف (قاعدة البيانات ترفضه فيُرفض الطلب كله)
         const { blocks, error: blocksError } = await loadAttendanceWriteBlocks(empIds, actionDateFrom, actionDateTo);
         if (blocksError) throw blocksError;
+        // سجلات يرفضها الخادم لأنها للمستخدم نفسه (قبل تطبيق HR-25 على قاعدة البيانات أو بعد التراجع عنه، لمدير النظام)
+        const uniqueEmpIds = [...new Set(empIds)];
+        const serverOwnCount = uniqueEmpIds.filter((empId) => blocks.own.has(empId.trim())).length;
+        if (serverOwnCount === uniqueEmpIds.length) throw new Error(t(OWN_ATTENDANCE_NOTE));
         const months: { from: string; to: string; month: string }[] = [];
         for (let month = actionDateFrom.slice(0, 7); month <= actionDateTo.slice(0, 7); ) {
           const range = monthRange(month);
@@ -665,7 +679,7 @@ export default function HRAttendanceCalculate() {
         message = deleted ? `${t("تم حذف")} ${formatNumber(deleted)} ${t("سجل تحضير إداري")}` : t("لم يُحذف أي سجل: لا توجد سجلات تحضير إداري في الفترة أو لا تملك صلاحية الحذف");
         if (keptCount) message += `${listSeparator}${t("وتُرك")} ${formatNumber(keptCount)} ${t("سجل يحمل بصمة موثّقة من بوابة الموظف دون حذف")}`;
         if (lockedMonths) message += `${listSeparator}${t("ولم يُمس")} ${formatNumber(lockedMonths)} ${t("شهر رواتبه معتمدة أو مرحّلة لموظف")}`;
-        message += ownNote;
+        message += ownNote || (serverOwnCount ? `${listSeparator}${t(OWN_ATTENDANCE_NOTE)}` : "");
       }
       setAttendanceAction(null);
     } catch (actionError) {

@@ -18,9 +18,10 @@ import { toast } from "@/hooks/use-toast";
 import EmployeeForm, { mapRowToForm } from "./EmployeeForm";
 import { loadOrgEnglishNames } from "@/lib/orgNames";
 import type { EmpFormData } from "./EmployeeForm";
+import { isEmployeeActive } from "@/lib/employeeStatus";
+import { fetchAllRows } from "@/lib/fetchAll";
 
-// Status values that count as "inactive"
-const INACTIVE_STATUSES = ["غير فعال", "غير نشط", "منتهي", "inactive"];
+// غير الفعال: نفس قائمة قاعدة البيانات (غير فعال، غير نشط، منتهي، مستقيل، مفصول، موقوف…)، فلا يضيع موظف بين القائمتين
 
 const STATUS_COLORS: Record<string, string> = {
   "غير فعال": "bg-slate-100 text-slate-600 border-slate-200",
@@ -69,22 +70,13 @@ export default function HREmployeesInactive() {
     const load = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("employees")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (error) {
-          toast({ title: t("خطأ في تحميل البيانات"), description: error.message });
-          return;
-        }
+        // كل الموظفين على دفعات (لا يُقطع العدد عند حد 1000 صف)؛ الخطأ يظهر برسالة «فشل تحميل بيانات الموظفين»
+        const data = await fetchAllRows<Record<string, any>>((from, to) =>
+          supabase.from("employees").select("*").order("created_at", { ascending: false }).order("id").range(from, to));
 
         if (data) {
           const all = data.map(mapRowToForm);
-          // Keep only employees whose status is one of the inactive values
-          const inactive = all.filter((e) =>
-            INACTIVE_STATUSES.some((s) => e.status === s)
-          );
+          const inactive = all.filter((e) => !isEmployeeActive(e.status));
           setEmployees(inactive);
         }
       } catch {
@@ -107,7 +99,7 @@ export default function HREmployeesInactive() {
           )
         )
           return false;
-        if (fStatus && e.status !== fStatus) return false;
+        if (fStatus && String(e.status ?? "").trim() !== fStatus) return false;
         return true;
       }),
     [employees, fSearch, fStatus]
@@ -116,6 +108,12 @@ export default function HREmployeesInactive() {
   useEffect(() => {
     setPage(1);
   }, [fSearch, fStatus, pageSize]);
+
+  // حالات غير الفعالين الموجودة فعلًا (لفلتر الحالة)
+  const statusOptions = useMemo(
+    () => [...new Set(employees.map((e) => String(e.status ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar")),
+    [employees]
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -285,7 +283,7 @@ export default function HREmployeesInactive() {
               className={cn("rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:outline-none", direction === "rtl" ? "text-right" : "text-left")}
             >
               <option value="">{t("جميع الحالات")}</option>
-              {["غير فعال", "منتهي"].map((s) => (
+              {statusOptions.map((s) => (
                 <option key={s} value={s}>{t(s)}</option>
               ))}
             </select>

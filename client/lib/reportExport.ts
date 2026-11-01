@@ -2,12 +2,16 @@ import * as XLSX from "xlsx";
 import { COMPANY_PROFILE } from "@/lib/companyProfile";
 import { currentLocale, translateText } from "@/i18n";
 import { PRINT_BRAND_CSS, printBrandHeaderHtml } from "@/lib/printBranding";
+import { downloadWorkbook, statementPrintCss, writeStatementSheet } from "@/lib/statementTheme";
+import { toast } from "@/hooks/use-toast";
 
 /*
  * التصدير والطباعة بلغة الواجهة المستعملة (HR-15): في الإنجليزية العناوين والأعمدة والنصوص الثابتة بالإنجليزية،
  * واتجاه من اليسار إلى اليمين. النصوص العربية الثابتة تُترجم من قاموس الواجهة (translateText) حتى لو نسيت
  * الصفحة المستدعية ترجمتها؛ وما لا ترجمة له (أسماء الموظفين والأقسام) يبقى كما أُدخل.
  * الأرقام إنجليزية والتاريخ ميلادي في اللغتين (HR-16): لا رقم عربي في أي طباعة أو تحميل.
+ * تقارير الموارد البشرية (بلا brand) بالثيم الموحّد الأصفر كشكل كشف سمارت (HR-26) في الطباعة وExcel؛
+ * التقارير المالية والضريبية والمخزون والأسطول وCRM والمشتريات (تمرّر brand) تبقى بتصميمها كما هو.
  */
 
 export type ReportCell = string | number | null | undefined;
@@ -16,6 +20,8 @@ export type ReportColumn = {
   key: string;
   label: string;
   width?: number;
+  /** عمود مبلغ: يُنسَّق بمنزلتين (#,##0.00) ويُجمع في سطر الإجمالي إن أُعطي totals */
+  money?: boolean;
 };
 
 export type ReportBrand = {
@@ -46,6 +52,26 @@ type ReportExportOptions = {
   summary?: Array<{ label: string; value: ReportCell }>;
   landscape?: boolean;
   brand?: ReportBrand;
+  /** statement: الثيم الأصفر (الافتراضي بلا brand)؛ classic: التصميم السابق (الافتراضي مع brand) */
+  theme?: "statement" | "classic";
+  /** مجاميع الأعمدة المالية: سطر «الإجمالي» بالأصفر أسفل الجدول (الثيم الأصفر) */
+  totals?: Record<string, number>;
+};
+
+const isStatementTheme = (options: ReportExportOptions) => (options.theme ?? (options.brand ? "classic" : "statement")) === "statement";
+
+/** قيمة عمود مالي رقمًا (يقبل نصًا بفواصل آلاف وأرقام عربية)، أو null إن لم تكن رقمًا */
+const moneyNumber = (value: ReportCell): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const number = typeof value === "number" ? value : Number(latinDigits(String(value)).replace(/,/g, "").trim());
+  return Number.isFinite(number) ? number : null;
+};
+
+/** مبلغ بمنزلتين وأرقام إنجليزية */
+const moneyText = (value: ReportCell) => {
+  if (value === null || value === undefined || value === "") return "-";
+  const number = moneyNumber(value);
+  return number !== null ? number.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : localize(String(value));
 };
 
 /** أرقام إنجليزية في النص: ٠-٩ و۰-۹، والفاصلة العشرية العربية ٫ وفاصل الآلاف ٬ والنسبة ٪ */
@@ -79,7 +105,9 @@ export const escapeReportHtml = (value: ReportCell) => text(value)
   .replace(/"/g, "&quot;")
   .replace(/'/g, "&#039;");
 
-export function printReport({ title: rawTitle, subtitle, columns, rows, summary = [], landscape = false, brand }: ReportExportOptions) {
+export function printReport(options: ReportExportOptions) {
+  if (isStatementTheme(options)) return printStatementReport(options);
+  const { title: rawTitle, subtitle, columns, rows, summary = [], landscape = false, brand } = options;
   const english = currentLocale() === "en";
   const title = localize(rawTitle);
   const brandLabel = brandText(brand, DEFAULT_BRAND.label);
@@ -102,7 +130,15 @@ export function printReport({ title: rawTitle, subtitle, columns, rows, summary 
   return true;
 }
 
-export function exportReportExcel({ title, subtitle, columns, rows, fileName, summary = [], brand }: ReportExportOptions) {
+export function exportReportExcel(options: ReportExportOptions) {
+  if (isStatementTheme(options)) {
+    void exportStatementReportExcel(options).catch((error) => {
+      console.error(error);
+      toast({ title: localize("تعذر إنشاء ملف Excel"), variant: "destructive" });
+    });
+    return;
+  }
+  const { title, subtitle, columns, rows, fileName, summary = [], brand } = options;
   const english = currentLocale() === "en";
   const labels = columns.map((column) => localize(column.label));
   const subtitleText = subtitle ? localize(subtitle) : `${localize("تاريخ الإصدار")}: ${issueDate()}`;
@@ -133,4 +169,96 @@ export function exportReportExcel({ title, subtitle, columns, rows, fileName, su
   XLSX.utils.book_append_sheet(workbook, worksheet, localize("التقرير").slice(0, 31));
   // اسم الملف بلغة الواجهة (إن كان نصًا ثابتًا له ترجمة)، بلا رموز لا يقبلها نظام الملفات
   XLSX.writeFile(workbook, `${english ? localize(fileName).replace(/[\\/:*?"<>|]+/g, "-") : fileName}.xlsx`, { compression: true });
+}
+
+// ───────────── الثيم الأصفر (HR-26): كشكل كشف سمارت ─────────────
+
+const INDEX_KEY = "__index";
+const columnWidth = (column: ReportColumn, label: string) => column.width ?? Math.max(12, label.length + 4);
+const metaParts = (subtitle: string | undefined, count: number) => [
+  subtitle ? localize(subtitle) : "",
+  `${localize("عدد السجلات")}: ${count}`,
+  `${localize("تاريخ الإصدار")}: ${issueDate()}`,
+].filter(Boolean);
+
+/** طباعة تقرير بالثيم الأصفر: الترويسة (الشعاران والعنوان) في رأس الجدول فتتكرر في كل صفحة، والإجمالي بالأصفر */
+function printStatementReport({ title: rawTitle, subtitle, columns, rows, summary = [], landscape = false, totals }: ReportExportOptions) {
+  const english = currentLocale() === "en";
+  const title = localize(rawTitle);
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return false;
+  const labels = columns.map((column) => localize(column.label));
+  const indexWidth = 6;
+  const widths = columns.map((column, index) => columnWidth(column, labels[index]));
+  const totalWidth = widths.reduce((sum, width) => sum + width, indexWidth);
+  // العرض المكافئ في الورقة الأفقية (الطولية أضيق بنحو الثلث)
+  const css = statementPrintCss({ totalWidth: landscape ? totalWidth : Math.round(totalWidth * 1.45), english, landscape });
+  const count = columns.length + 1;
+  const colgroup = `<colgroup><col style="width:${((indexWidth / totalWidth) * 100).toFixed(2)}%">${widths.map((width) => `<col style="width:${((width / totalWidth) * 100).toFixed(2)}%">`).join("")}</colgroup>`;
+  const cell = (column: ReportColumn, value: ReportCell) => escapeReportHtml(column.money ? moneyText(value) : localizeCell(value));
+  let body = rows.length
+    ? rows.map((row, index) => `<tr><td>${index + 1}</td>${columns.map((column) => `<td>${cell(column, row[column.key])}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${count}" class="empty">${escapeReportHtml(localize("لا توجد بيانات في التقرير"))}</td></tr>`;
+  if (totals && rows.length) {
+    // «الإجمالي» على الأعمدة قبل أول عمود مالي (ومعها عمود الترقيم)، ثم مجموع كل عمود مالي
+    const firstMoney = columns.findIndex((column) => column.money);
+    const span = firstMoney < 0 ? count : firstMoney + 1;
+    body += `<tr class="sum grand"><td colspan="${span}">${escapeReportHtml(localize("الإجمالي"))}</td>${columns.slice(span - 1).map((column) => `<td>${column.money ? escapeReportHtml(moneyText(totals[column.key] ?? 0)) : ""}</td>`).join("")}</tr>`;
+  }
+  const summaryHtml = summary.length
+    ? `<table class="summary"><tbody>${summary.map((item) => `<tr><th>${escapeReportHtml(localize(item.label))}</th><td>${escapeReportHtml(localizeCell(item.value))}</td></tr>`).join("")}</tbody></table>`
+    : "";
+  const header = printBrandHeaderHtml(
+    `<div class="title">${escapeReportHtml(title)}</div><div class="meta">${metaParts(subtitle, rows.length).map(escapeReportHtml).join(" &nbsp;|&nbsp; ")}</div>`,
+    { company: localize("شعار الشركة"), vision: localize("رؤية المملكة 2030") },
+  );
+  printWindow.document.write(`<!doctype html>
+<html dir="${english ? "ltr" : "rtl"}" lang="${english ? "en" : "ar"}"><head><meta charset="utf-8"><title>${escapeReportHtml(title)}</title>
+<style>
+${css}
+</style></head><body>
+<table>${colgroup}<thead><tr class="brand-row"><th colspan="${count}">${header}</th></tr><tr class="cols"><th>${english ? "#" : "م"}</th>${labels.map((label) => `<th>${escapeReportHtml(label)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>
+${summaryHtml}
+<script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`);
+  printWindow.document.close();
+  return true;
+}
+
+/** Excel تقرير بالثيم الأصفر: نفس الترويسة والرأس الأصفر والحدود السوداء، والإجمالي بالأصفر، والملخص أسفله */
+async function exportStatementReportExcel({ title, subtitle, columns, rows, fileName, summary = [], totals, landscape = false }: ReportExportOptions) {
+  const english = currentLocale() === "en";
+  const { default: ExcelJS } = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Idarat Al Ayaf Management System";
+  const sheet = workbook.addWorksheet(localize("التقرير").slice(0, 31));
+  const labels = columns.map((column) => localize(column.label));
+  writeStatementSheet(workbook, sheet, {
+    title: localize(title),
+    meta: metaParts(subtitle, rows.length),
+    columns: [
+      { key: INDEX_KEY, label: english ? "#" : "م", width: 6 },
+      ...columns.map((column, index) => ({ key: column.key, label: labels[index], width: columnWidth(column, labels[index]), money: column.money })),
+    ],
+    sections: [{
+      rows: rows.map((row, index) => ({
+        [INDEX_KEY]: index + 1,
+        ...Object.fromEntries(columns.map((column) => {
+          const value = row[column.key];
+          if (column.money) {
+            const number = moneyNumber(value);
+            return [column.key, number !== null ? number : value === null || value === undefined || value === "" ? "" : localizeCell(value)];
+          }
+          return [column.key, typeof value === "number" ? value : localizeCell(value ?? "-")];
+        })),
+      })),
+    }],
+    grand: totals && rows.length ? { label: localize("الإجمالي"), totals } : undefined,
+    summary: summary.map((item) => ({ label: localize(item.label), value: typeof item.value === "number" ? item.value : String(localizeCell(item.value) ?? "-") })),
+    emptyText: localize("لا توجد بيانات في التقرير"),
+    // اتجاه الورقة كالطباعة؛ العريض جدًا أفقي دائمًا
+    landscape: landscape || columns.reduce((sum, column, index) => sum + columnWidth(column, labels[index]), 6) > 120,
+    rtl: !english,
+  });
+  // اسم الملف بلغة الواجهة (إن كان نصًا ثابتًا له ترجمة)، بلا رموز لا يقبلها نظام الملفات
+  await downloadWorkbook(workbook, `${(english ? localize(fileName) : fileName).replace(/[\\/:*?"<>|]+/g, "-")}.xlsx`);
 }

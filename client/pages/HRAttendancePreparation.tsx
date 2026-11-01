@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
-import { canManagePerm, readUserSession } from "@/lib/authSession";
+import { canManagePerm, fetchIsMainAdmin, isMainAdminSession, readUserSession } from "@/lib/authSession";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { CheckCheck, Clock3, Loader2, MapPin, Navigation, Search, Users, X } from "lucide-react";
 import { toast } from "sonner";
@@ -65,6 +65,13 @@ export default function HRAttendancePreparation() {
   const [mainLatitude, setMainLatitude] = useState("");
   const [mainLongitude, setMainLongitude] = useState("");
   const [assignedLocationId, setAssignedLocationId] = useState("");
+  // HR-25: مدير النظام يسجّل حضوره ويعيّن موقع حضوره بنفسه (حكم قاعدة البيانات حيًّا، والدور المحفوظ حتى يصل)
+  const [ownAllowed, setOwnAllowed] = useState(() => isMainAdminSession());
+  useEffect(() => {
+    let cancelled = false;
+    void fetchIsMainAdmin().then((value) => { if (!cancelled) setOwnAllowed(value); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -136,8 +143,9 @@ export default function HRAttendancePreparation() {
     const chosen = employees.filter((employee) => selected.has(employee.id));
     // سجلات المستخدم نفسه من الخادم (حساب الدخول المرتبط أو البريد)، ومن الجلسة احتياطًا
     const today = riyadhToday();
-    const { blocks } = await loadAttendanceWriteBlocks(chosen.map((employee) => employee.empId), today, today);
-    const sessionOwn = new Set(splitOwnEmployees(chosen).own.map((employee) => employee.id));
+    const { blocks, error: blocksError } = await loadAttendanceWriteBlocks(chosen.map((employee) => employee.empId), today, today);
+    // إن تعذر سؤال الخادم يُفصل سجل المستخدم من الجلسة كما كان، ولا يُعتمد على أنه مدير النظام
+    const sessionOwn = new Set(splitOwnEmployees(chosen, ownAllowed && !blocksError).own.map((employee) => employee.id));
     const ownSelected = chosen.filter((employee) => sessionOwn.has(employee.id) || blocks.own.has(employee.empId.trim()));
     const employeeIds = chosen.filter((employee) => !ownSelected.includes(employee)).map((employee) => employee.id);
     if (employeeIds.length === 0) { toast.error(t("لا تعيّن موقع حضورك بنفسك؛ يعيّنه لك مسؤول آخر")); return; }
@@ -179,7 +187,7 @@ export default function HRAttendancePreparation() {
   const handlePrepare = async () => {
     if (prepareInFlight.current) return;
     if (!canPrepare) return toast.error(t("ليس لديك صلاحية تسجيل حضور الموظفين"));
-    const { own: ownChosen, others: chosen } = splitOwnEmployees(employees.filter((employee) => selected.has(employee.id)));
+    const { own: ownChosen, others: chosen } = splitOwnEmployees(employees.filter((employee) => selected.has(employee.id)), ownAllowed);
     if (chosen.length === 0) return toast.error(t(ownChosen.length ? OWN_ATTENDANCE_NOTE : "اختر موظفًا واحدًا على الأقل"));
     if (!fromDate || !toDate) return toast.error(t("حدد تاريخ البداية وتاريخ النهاية"));
     if (fromDate > toDate) return toast.error(t("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية"));

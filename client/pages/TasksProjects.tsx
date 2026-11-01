@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Bell,
@@ -224,6 +224,9 @@ export default function TasksProjects() {
     null,
   );
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  // مهام يُحفظ تعديلها الآن: يمنع إرسال تعديل ثانٍ للمهمة نفسها قبل انتهاء الأول (الضغط المزدوج)
+  const savingTaskIds = useRef(new Set<string>());
+  const [savingTasks, setSavingTasks] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailPoints, setDetailPoints] = useState<any[]>([]);
   const [detailComments, setDetailComments] = useState<any[]>([]);
@@ -691,39 +694,81 @@ export default function TasksProjects() {
     toast.success(t("تم إنشاء التذكرة"));
   };
 
-  const updateTask = async (task: Task, patch: Partial<Task>) => {
-    const { error } = await supabase
-      .from("work_tasks")
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq("id", task.id);
-    if (error) return toast.error(error.message);
-    await supabase
-      .from("work_activity_log")
-      .insert({
-        entity_type: "task",
-        entity_id: task.id,
-        action: "تم تحديث بيانات المهمة",
-        details: patch,
-        actor_name: session?.name || "مستخدم",
-        created_by: (await supabase.auth.getUser()).data.user?.id,
-      });
-    setTasks((current) =>
-      current.map((item) =>
-        item.id === task.id ? { ...item, ...patch } : item,
-      ),
-    );
-    if (selectedTask?.id === task.id)
-      setSelectedTask({ ...selectedTask, ...patch });
+  // رسالة خطأ الخادم بلغة الواجهة: رسائل الحماية العربية تُترجم، وغيرها نص واضح بدل رسالة قاعدة البيانات الخام
+  const taskErrorText = (error: { code?: string; message?: string }, fallback: string) => {
+    const message = String(error.message ?? "").trim();
+    if (/[\u0600-\u06FF]/.test(message)) return t(message);
+    console.error(error);
+    if (error.code === "42501") return t("لا تملك صلاحية هذا الإجراء على المهمة");
+    return t(fallback);
   };
 
+  // يُرجع true إن حُفظ التعديل. سياسة القاعدة ترفض تعديل مهمة لم تعد متاحة للمستخدم دون خطأ (0 صف)،
+  // فلا تُعرض الحالة الجديدة كأنها حُفظت. successMessage نص عربي يُترجم ويظهر بعد الحفظ.
+  const updateTask = async (task: Task, patch: Partial<Task>, successMessage?: string) => {
+    if (savingTaskIds.current.has(task.id)) {
+      toast.info(t("جارٍ حفظ تعديل سابق على هذه المهمة؛ انتظر قليلًا"));
+      return false;
+    }
+    savingTaskIds.current.add(task.id);
+    setSavingTasks(Array.from(savingTaskIds.current));
+    try {
+      const { data: saved, error } = await supabase
+        .from("work_tasks")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", task.id)
+        .select("id");
+      if (error) {
+        toast.error(taskErrorText(error, "تعذر حفظ التعديل؛ حاول مرة أخرى"));
+        return false;
+      }
+      if (!saved?.length) {
+        toast.error(t("لم يُحفظ التعديل: المهمة لم تعد متاحة لك (حُذفت أو تغيّرت صلاحيتك)؛ حدّث الصفحة"));
+        return false;
+      }
+      await supabase
+        .from("work_activity_log")
+        .insert({
+          entity_type: "task",
+          entity_id: task.id,
+          action: "تم تحديث بيانات المهمة",
+          details: patch,
+          actor_name: session?.name || "مستخدم",
+          created_by: (await supabase.auth.getUser()).data.user?.id,
+        });
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id ? { ...item, ...patch } : item,
+        ),
+      );
+      setSelectedTask((current) => (current?.id === task.id ? { ...current, ...patch } : current));
+      if (successMessage) toast.success(t(successMessage));
+      return true;
+    } finally {
+      savingTaskIds.current.delete(task.id);
+      setSavingTasks(Array.from(savingTaskIds.current));
+    }
+  };
+
+  // يُرجع true إن حُذفت. الحذف لمنشئ المهمة أو مدير مشروعها أو المدير؛ غيرهم ترفضه القاعدة دون خطأ (0 صف)
   const deleteTask = async (task: Task) => {
-    if (!confirm(locale === "en" ? `${t("حذف المهمة")} "${task.title}"?` : `${t("حذف المهمة")} «${task.title}»؟`)) return;
-    const { error } = await supabase
+    if (!confirm(locale === "en" ? `${t("حذف المهمة")} "${task.title}"?` : `${t("حذف المهمة")} «${task.title}»؟`)) return false;
+    const { data: removed, error } = await supabase
       .from("work_tasks")
       .delete()
-      .eq("id", task.id);
-    if (error) return toast.error(error.message);
+      .eq("id", task.id)
+      .select("id");
+    if (error) {
+      toast.error(taskErrorText(error, "تعذر حذف المهمة؛ حاول مرة أخرى"));
+      return false;
+    }
+    if (!removed?.length) {
+      toast.error(t("لم تُحذف المهمة: يحذفها منشئها أو مدير مشروعها أو مدير النظام"));
+      return false;
+    }
     setTasks((current) => current.filter((item) => item.id !== task.id));
+    toast.success(t("حُذفت المهمة"));
+    return true;
   };
 
   const openTask = async (task: Task) => {
@@ -1730,18 +1775,42 @@ export default function TasksProjects() {
                   {Number(selectedTask.estimated_hours || 0).toFixed(2)}
                 </p>
               </div>
-              <button
-                onClick={() =>
-                  updateTask(selectedTask, { status: "قيد التنفيذ" })
+              {/* زر حسب حالة المهمة: بدء، ثم إنهاء؛ ولا زر فعّال للمكتملة أو التي تنتظر الموافقة أو رُفضت */}
+              {(() => {
+                const status = String(selectedTask.status ?? "").trim();
+                if (selectedTask.approval_status === "مرفوض") {
+                  return <button disabled className="w-full rounded-xl bg-slate-200 py-2 text-sm font-bold text-slate-600">{t("رُفضت المهمة")}</button>;
                 }
-                className="w-full rounded-xl bg-cyan-600 py-2 text-sm font-bold text-white"
-              >
-                {t("بدء تنفيذ المهمة")}
-              </button>
+                if (status === "بانتظار الموافقة" || (selectedTask.requires_approval && selectedTask.approval_status === "بانتظار الموافقة")) {
+                  return <button disabled className="w-full rounded-xl bg-violet-100 py-2 text-sm font-bold text-violet-700">{t("بانتظار موافقة المدير")}</button>;
+                }
+                if (status === "مكتملة") {
+                  return <button disabled className="w-full rounded-xl bg-emerald-100 py-2 text-sm font-bold text-emerald-700">{t("المهمة مكتملة")}</button>;
+                }
+                if (status === "قيد التنفيذ" || status === "متأخرة") {
+                  return (
+                    <button
+                      disabled={savingTasks.includes(selectedTask.id)}
+                      onClick={() => void updateTask(selectedTask, { status: "مكتملة", progress: 100 }, "تم إنهاء المهمة")}
+                      className="w-full rounded-xl bg-emerald-600 py-2 text-sm font-bold text-white disabled:opacity-50"
+                    >
+                      {t("إنهاء المهمة")}
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    disabled={savingTasks.includes(selectedTask.id)}
+                    onClick={() => void updateTask(selectedTask, { status: "قيد التنفيذ" }, "بدأ تنفيذ المهمة")}
+                    className="w-full rounded-xl bg-cyan-600 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    {t("بدء تنفيذ المهمة")}
+                  </button>
+                );
+              })()}
               <button
-                onClick={() => {
-                  deleteTask(selectedTask);
-                  setModal(null);
+                onClick={async () => {
+                  if (await deleteTask(selectedTask)) setModal(null);
                 }}
                 className="w-full rounded-xl border border-rose-200 py-2 text-sm text-rose-700"
               >
@@ -1766,11 +1835,12 @@ export default function TasksProjects() {
                     const progress = Number(e.target.value);
                     setSelectedTask({ ...selectedTask, progress });
                   }}
-                  onMouseUp={() =>
-                    updateTask(selectedTask, {
-                      progress: selectedTask.progress,
-                    })
-                  }
+                  onMouseUp={async () => {
+                    // إن لم يُحفظ تعود النسبة إلى آخر قيمة محفوظة
+                    const savedProgress = tasks.find((item) => item.id === selectedTask.id)?.progress ?? 0;
+                    if (!(await updateTask(selectedTask, { progress: selectedTask.progress })))
+                      setSelectedTask((current) => (current?.id === selectedTask.id ? { ...current, progress: savedProgress } : current));
+                  }}
                   className="mt-4 w-full accent-cyan-600"
                 />
               </div>
@@ -2228,11 +2298,11 @@ function TasksView({
                     <select
                       value={task.status}
                       onChange={(e) =>
-                        updateTask(task, {
+                        void updateTask(task, {
                           status: e.target.value,
                           progress:
                             e.target.value === "مكتملة" ? 100 : task.progress,
-                        })
+                        }, "تم تحديث حالة المهمة")
                       }
                       className={`rounded-lg border-0 px-2 py-1 text-xs ${statusTone[task.status] || "bg-slate-100"}`}
                     >
@@ -2265,10 +2335,10 @@ function TasksView({
                         <>
                           <button
                             onClick={() =>
-                              updateTask(task, {
+                              void updateTask(task, {
                                 approval_status: "موافق",
                                 status: "انتظار العمل",
-                              })
+                              }, "اعتُمدت المهمة")
                             }
                             className="rounded-lg bg-emerald-50 p-2 text-emerald-600"
                           >
@@ -2276,10 +2346,10 @@ function TasksView({
                           </button>
                           <button
                             onClick={() =>
-                              updateTask(task, {
+                              void updateTask(task, {
                                 approval_status: "مرفوض",
                                 status: "متوقفة",
-                              })
+                              }, "رُفضت المهمة")
                             }
                             className="rounded-lg bg-rose-50 p-2 text-rose-600"
                           >
@@ -2288,7 +2358,7 @@ function TasksView({
                         </>
                       )}
                       <button
-                        onClick={() => deleteTask(task)}
+                        onClick={() => void deleteTask(task)}
                         className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
                       >
                         <Trash2 className="h-4 w-4" />

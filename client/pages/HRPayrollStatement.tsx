@@ -358,14 +358,15 @@ export default function HRPayrollStatement() {
   };
 
   const moneyText = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money2 = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
   const payrollColumns: ReportColumn[] = [
     { key: "empId", label: t("رقم الموظف"), width: 13 }, { key: "name", label: t("الموظف"), width: 24 },
     { key: "department", label: t("القسم"), width: 18 }, { key: "branch", label: t("الفرع"), width: 16 },
     { key: "workDays", label: t("أيام الحضور/العمل"), width: 14 }, { key: "absentDays", label: t("أيام الغياب"), width: 11 },
-    { key: "basic", label: t("الراتب الأساسي"), width: 15 }, { key: "allowances", label: t("البدلات"), width: 13 },
-    { key: "overtime", label: t("الإضافي"), width: 12 }, { key: "absenceDeduction", label: t("خصم الغياب والإجازات غير المدفوعة"), width: 16 },
-    { key: "socialInsurance", label: t("التأمينات الاجتماعية (حصة الموظف)"), width: 18 }, { key: "otherDeductions", label: t("جزاءات وسلف وأخرى"), width: 16 },
-    { key: "deductions", label: t("إجمالي الاستقطاعات"), width: 17 }, { key: "net", label: t("صافي الراتب"), width: 15 },
+    { key: "basic", label: t("الراتب الأساسي"), width: 15, money: true }, { key: "allowances", label: t("البدلات"), width: 13, money: true },
+    { key: "overtime", label: t("الإضافي"), width: 12, money: true }, { key: "absenceDeduction", label: t("خصم الغياب والإجازات غير المدفوعة"), width: 16, money: true },
+    { key: "socialInsurance", label: t("التأمينات الاجتماعية (حصة الموظف)"), width: 18, money: true }, { key: "otherDeductions", label: t("جزاءات وسلف وأخرى"), width: 16, money: true },
+    { key: "deductions", label: t("إجمالي الاستقطاعات"), width: 17, money: true }, { key: "net", label: t("صافي الراتب"), width: 15, money: true },
   ];
   const reportEmployees = selectedEmployees.filter((employee) => calc[employee.id]);
   const payrollRows = reportEmployees.map((employee) => {
@@ -373,11 +374,13 @@ export default function HRPayrollStatement() {
     return {
       empId: employee.empId, name: employee.name, department: employee.section || t("غير متوفر"), branch: employee.branch || t("غير متوفر"),
       workDays: `${formatNumber(c.presentDays)}/${formatNumber(c.workDays)}`, absentDays: formatNumber(c.absentDays),
-      basic: moneyText(c.basic), allowances: moneyText(c.allowances), overtime: moneyText(c.overtime), absenceDeduction: moneyText(c.absenceDeduction + c.unpaidLeaveDeduction),
-      socialInsurance: moneyText(c.socialInsurance), otherDeductions: moneyText(c.penalties + c.loans + c.fixedDeductions + c.allowanceDeductions),
-      deductions: moneyText(c.totalDeductions), net: moneyText(c.net),
+      // المبالغ أرقامًا: تُنسَّق في الطباعة بمنزلتين وتبقى أرقامًا في Excel، ويُجمع منها سطر «الإجمالي»
+      basic: money2(c.basic), allowances: money2(c.allowances), overtime: money2(c.overtime), absenceDeduction: money2(c.absenceDeduction + c.unpaidLeaveDeduction),
+      socialInsurance: money2(c.socialInsurance), otherDeductions: money2(c.penalties + c.loans + c.fixedDeductions + c.allowanceDeductions),
+      deductions: money2(c.totalDeductions), net: money2(c.net),
     };
   });
+  const payrollTotals = Object.fromEntries(payrollColumns.filter((column) => column.money).map((column) => [column.key, money2(payrollRows.reduce((sum, row) => sum + Number(row[column.key as keyof typeof row] ?? 0), 0))]));
   const payrollTotal = reportEmployees.reduce((total, employee) => total + (calc[employee.id]?.net ?? 0), 0);
   const totalAbsentDays = reportEmployees.reduce((total, employee) => total + (calc[employee.id]?.absentDays ?? 0), 0);
   const totalAbsenceDeduction = reportEmployees.reduce((total, employee) => total + (calc[employee.id]?.absenceDeduction ?? 0) + (calc[employee.id]?.unpaidLeaveDeduction ?? 0), 0);
@@ -388,8 +391,8 @@ export default function HRPayrollStatement() {
     { label: t("مجموع خصم الغياب"), value: `${moneyText(totalAbsenceDeduction)} ${t("ر.س")}` },
     { label: t("إجمالي صافي الرواتب"), value: `${moneyText(payrollTotal)} ${t("ر.س")}` },
   ];
-  const printPayroll = () => printReport({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: reportSummary });
-  const exportPayroll = () => exportReportExcel({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `${t("كشف الرواتب").replace(/ /g, "-")}-${period}`, summary: reportSummary });
+  const printPayroll = () => printReport({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `payroll-${period}`, landscape: true, summary: reportSummary, totals: payrollTotals });
+  const exportPayroll = () => exportReportExcel({ title: t("كشف الرواتب"), subtitle: payrollSubtitle, columns: payrollColumns, rows: payrollRows, fileName: `${t("كشف الرواتب").replace(/ /g, "-")}-${period}`, summary: reportSummary, landscape: true, totals: payrollTotals });
 
   const handleOpenApproval = () => {
     setApprovalScope("all");

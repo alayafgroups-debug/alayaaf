@@ -2,11 +2,16 @@ import { useState } from "react";
 import Layout from "@/components/Layout";
 import { cn } from "@/lib/utils";
 import DynamicReport from "@/components/hr/reports/DynamicReport";
+import ReportDesigner from "@/components/hr/reports/ReportDesigner";
 import { reportSchemas } from "@/components/hr/reports/reportSchemas";
 import { useI18n } from "@/i18n";
 
+// مصمم التقارير (HR-26): أعمدة يختارها المستخدم من ملف الموظف
+const REPORT_DESIGNER = "مصمم التقارير";
+
 // Reports Sidebar Menu Items mapping
 const REPORT_CATEGORIES = [
+  REPORT_DESIGNER,
   "إجازات",
   "المساءلات والإنذارات",
   "مصروفات الرواتب",
@@ -73,13 +78,15 @@ export default function HRReports() {
           {/* Header */}
           <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-800">
-              {selectedReport ? `${t("تقرير")} ${t(selectedReport)}` : t("التقارير الشاملة")}
+              {selectedReport === REPORT_DESIGNER ? t(REPORT_DESIGNER) : selectedReport ? `${t("تقرير")} ${t(selectedReport)}` : t("التقارير الشاملة")}
             </h2>
           </div>
 
           {/* Content Body */}
           <div className="flex-1 p-0 overflow-hidden bg-gray-50/30 relative">
-            {selectedReport && reportSchemas[selectedReport] ? (
+            {selectedReport === REPORT_DESIGNER ? (
+              <ReportDesigner />
+            ) : selectedReport && reportSchemas[selectedReport] ? (
               <DynamicReport key={selectedReport} schema={reportSchemas[selectedReport]} />
             ) : selectedReport ? (
               <div className="bg-white rounded-xl border border-gray-200 p-8 m-6 min-h-[400px] flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-200">

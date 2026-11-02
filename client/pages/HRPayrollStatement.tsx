@@ -15,6 +15,7 @@ import { readUserSession } from "@/lib/authSession";
 import { preparePayrollResend, resendPreparationOf, submitPayrollApprovalRequest, type PayrollResendPreparation } from "@/lib/payrollApproval";
 import { payrollApprovalErrorText } from "@/lib/hrErrors";
 import { computePayroll, savePayrollRows, type PayrollComputation, type PayrollLine } from "@/lib/payrollCalc";
+import { syncOvertimeAmounts } from "@/lib/overtimeRecalc";
 import PayrollApprovalDialog from "@/components/hr/PayrollApprovalDialog";
 import PayrollFreshnessNotice from "@/components/hr/PayrollFreshnessNotice";
 import { freshnessErrorText, savedPayrollFreshness, type PayrollFreshness } from "@/lib/payrollFreshness";
@@ -318,6 +319,7 @@ export default function HRPayrollStatement() {
   }, [computation, period, pageMode, approvalSubmitting, t]);
 
   // "اختيار الموظفين (تفصيلي)": يحسب ويعرض الكشف فقط؛ لا يُكتب شيء في الرواتب قبل إرسال طلب الاعتماد
+  // (سوى تحديث مبالغ الإضافي على جدول وراتب كل موظف الآن، HR-27)
   const handleGenerate = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) {
@@ -326,10 +328,12 @@ export default function HRPayrollStatement() {
     }
     setGenerating(true);
     try {
+      // HR-27: الإضافي على جدول وراتب كل موظف الآن قبل الحساب
+      const overtime = await syncOvertimeAmounts(period);
       const result = await computePayroll(ids, period);
       setComputation(result);
       setPageMode("report");
-      const notices = [...result.loadErrors, ...result.warnings];
+      const notices = [...result.loadErrors, ...(overtime.warning ? [overtime.warning] : []), ...result.warnings];
       if (notices.length) toast({ title: t("تنبيه"), description: notices.map((notice) => t(notice)).join(" | "), variant: result.loadErrors.length ? "destructive" : undefined });
     } catch (error) {
       toast({ title: t("تعذر حساب الرواتب"), description: t(payrollApprovalErrorText(error)), variant: "destructive" });
@@ -464,28 +468,32 @@ export default function HRPayrollStatement() {
     try {
       // يُعاد الحساب لحظة الإرسال حتى يدخل أي غياب أو جزاء سُجّل بعد عرض الكشف
       const ids = target.map((employee) => employee.id);
-      const fresh = await computePayroll(ids, period);
-      setComputation((current) => {
-        if (!current || current.period !== period) return fresh;
-        // أرقام الإرسال تحل محل المعروض لهؤلاء الموظفين، ومن لم يعد له سطر (تعيينه بعد الشهر) يُزال
+      // أرقام الإرسال تحل محل المعروض لهؤلاء الموظفين، ومن لم يعد له سطر (تعيينه بعد الشهر) يُزال
+      const showFresh = (next: PayrollComputation) => setComputation((current) => {
+        if (!current || current.period !== period) return next;
         const lines = new Map(current.lines);
         const employees = new Map(current.employees);
         const notStarted = new Map(current.notStarted);
         ids.forEach((id) => {
-          const line = fresh.lines.get(id);
-          const employee = fresh.employees.get(id);
+          const line = next.lines.get(id);
+          const employee = next.employees.get(id);
           if (line && employee) {
             lines.set(id, line);
             employees.set(id, employee);
             notStarted.delete(id);
           } else {
             lines.delete(id);
-            const code = fresh.notStarted.get(id);
+            const code = next.notStarted.get(id);
             if (code !== undefined) notStarted.set(id, code);
           }
         });
-        return { ...current, policy: fresh.policy, lines, employees, notStarted, warnings: fresh.warnings, loadErrors: fresh.loadErrors, computedOn: fresh.computedOn };
+        return { ...current, policy: next.policy, lines, employees, notStarted, warnings: next.warnings, loadErrors: next.loadErrors, computedOn: next.computedOn };
       });
+      // HR-27: الإضافي على جدول وراتب كل موظف الآن؛ إن تعذر لا يُرسل شيء
+      const overtimeBefore = await syncOvertimeAmounts(period);
+      if (overtimeBefore.warning) throw new Error(overtimeBefore.warning);
+      let fresh = await computePayroll(ids, period);
+      showFresh(fresh);
       if (fresh.loadErrors.length) throw new Error(`PAYROLL_INPUTS_INCOMPLETE: ${fresh.loadErrors.join(" | ")}`);
       const codeOf = (id: string) => fresh.employees.get(id)?.empId.trim() ?? "";
       const stoppedIds = ids.filter((id) => stopped.has(id)).map(codeOf).filter(Boolean);
@@ -494,6 +502,14 @@ export default function HRPayrollStatement() {
       const notStartedCodes = ids.map((id) => fresh.notStarted.get(id) ?? "").filter(Boolean);
       // طلبي المعلق المتداخل يُحذف قبل تغيير الأرقام، ولا يُعاد الحساب على موظف في طلب معلق لمستخدم آخر
       preparation = await preparePayrollResend(period, [...activeIds, ...stoppedIds, ...notStartedCodes]);
+      // HR-27: طلبي المعلق السابق كان يقفل الشهر فلا يُعاد حساب إضافيه؛ بعد حذفه يُعاد، وإن تغيّر مبلغ يُعاد حساب الكشف
+      const overtimeAfter = await syncOvertimeAmounts(period);
+      if (overtimeAfter.warning) throw new Error(overtimeAfter.warning);
+      if (overtimeAfter.updated > 0) {
+        fresh = await computePayroll(ids, period);
+        showFresh(fresh);
+        if (fresh.loadErrors.length) throw new Error(`PAYROLL_INPUTS_INCOMPLETE: ${fresh.loadErrors.join(" | ")}`);
+      }
       const saved = await savePayrollRows(fresh, ids, stopped);
 
       const session = readUserSession();

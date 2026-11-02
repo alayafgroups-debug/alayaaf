@@ -6105,6 +6105,24 @@ Object.assign(translations, {
   "تعذر إنشاء ملف Excel": "Could not create the Excel file",
 });
 
+// HR-27: إعادة حساب قيمة الإضافي (كسمارت)
+Object.assign(translations, {
+  "إعادة حساب قيمة الإضافي": "Recalculate overtime value",
+  "يعيد حساب مبلغ إضافي الشهر الظاهر على جدول وراتب كل موظف الآن": "Recalculates this month's overtime amounts on each employee's current schedule and salary",
+  "قيمة الساعة = الأساسي ÷ 30 ÷ ساعات الدوام اليومية × 1.5، ويُعاد حساب المبلغ تلقائيًا إن تغيّر جدول الموظف أو راتبه ما دام شهره مفتوحًا": "Hourly value = basic ÷ 30 ÷ daily working hours × 1.5; the amount is recalculated automatically when the employee's schedule or salary changes while the month is still open",
+  "إعادة حساب مبالغ إضافي هذا الشهر على جدول وراتب كل موظف الآن؟ لا يُمس شهر رواتبه مقفل، ولا مبلغ قديم لم يحسبه النظام": "Recalculate this month's overtime amounts on each employee's current schedule and salary? Months with locked payroll and old amounts the system did not calculate are not touched",
+  "إعادة حساب قيمة الإضافي تتطلب تحديث قاعدة البيانات (HR-27)": "Recalculating overtime value requires the database update (HR-27)",
+  "إعادة حساب قيمة الإضافي لمن يدير الحضور أو الرواتب": "Only attendance or payroll managers can recalculate overtime value",
+  "اختر شهرًا صحيحًا": "Choose a valid month",
+  "أُعيد حساب": "Recalculated",
+  "مبالغ إضافي هذا الشهر مطابقة لجدول وراتب كل موظف الآن": "This month's overtime amounts already match each employee's current schedule and salary",
+  "سجل في شهر رواتبه مقفل أو داخل طلب اعتماد": "record(s) in a month whose payroll is locked or in an approval request",
+  "سجل بمبلغ قديم لم يحسبه النظام": "record(s) with an old amount the system did not calculate",
+  "تعذر إعادة حساب قيمة الإضافي": "Could not recalculate overtime value",
+  "لم تكتمل إعادة الحساب لكثرة السجلات؛ اضغط الزر مرة أخرى لإكمالها": "Recalculation did not finish because there are many records; press the button again to complete it",
+  "تعذر إعادة حساب قيمة الإضافي على جدول وراتب كل موظف الآن؛ قد يكون بعض الإضافي في الكشف على جدول أو راتب قديم": "Could not recalculate overtime on each employee's current schedule and salary; some overtime in this statement may be based on an old schedule or salary",
+});
+
 export function useI18n() {
   const value = useContext(I18nContext);
   if (!value) throw new Error("useI18n must be used inside I18nProvider");

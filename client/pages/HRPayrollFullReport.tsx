@@ -10,6 +10,7 @@ import { readUserSession } from "@/lib/authSession";
 import { preparePayrollResend, resendPreparationOf, submitPayrollApprovalRequest, type PayrollResendPreparation } from "@/lib/payrollApproval";
 import { payrollApprovalErrorText } from "@/lib/hrErrors";
 import { computePayroll, savePayrollRows, type PayrollComputation } from "@/lib/payrollCalc";
+import { syncOvertimeAmounts } from "@/lib/overtimeRecalc";
 import PayrollApprovalDialog from "@/components/hr/PayrollApprovalDialog";
 import PayrollFreshnessNotice from "@/components/hr/PayrollFreshnessNotice";
 import { freshnessErrorText, savedPayrollFreshness, type PayrollFreshness } from "@/lib/payrollFreshness";
@@ -139,7 +140,10 @@ export default function HRPayrollFullReport() {
       setLoading(true);
       // الأرقام من الحساب الموحد (نفس كشف الرواتب وحساب الدوام)؛ بيانات البنك والوظيفة من ملف الموظف
       let result: PayrollComputation;
+      let overtimeWarning = "";
       try {
+        // HR-27: الإضافي على جدول وراتب كل موظف الآن قبل الحساب
+        overtimeWarning = (await syncOvertimeAmounts(config.period)).warning;
         result = await computePayroll(config.employeeIds, config.period);
       } catch (error) {
         toast({ title: t("تعذر تحميل كشف الرواتب"), description: t(payrollApprovalErrorText(error)), variant: "destructive" });
@@ -157,7 +161,7 @@ export default function HRPayrollFullReport() {
       ]);
       if (employeeResult.error) { toast({ title: t("تعذر تحميل كشف الرواتب"), description: t(payrollApprovalErrorText(employeeResult.error)), variant: "destructive" }); setLoading(false); return; }
       setComputation(result);
-      setWarnings([...result.loadErrors.map((error) => `${error} — ${t("الكشف تقديري ولا يمكن إرساله")}`), ...result.warnings]);
+      setWarnings([...result.loadErrors.map((error) => `${error} — ${t("الكشف تقديري ولا يمكن إرساله")}`), ...(overtimeWarning ? [overtimeWarning] : []), ...result.warnings]);
       // الاسم بلغة الواجهة: name_en في الإنجليزية إن وُجد، وإلا ترجمة القاموس، وإلا الاسم كما هو
       const localName = (item: Record<string, unknown>) => {
         const arabic = String(item.name ?? "").trim();
@@ -372,7 +376,10 @@ tr:not(.in-block){break-inside:avoid;page-break-inside:avoid}
       // يُعاد الحساب لحظة الإرسال حتى يدخل أي غياب أو جزاء سُجّل بعد فتح التقرير
       // من لم يبدأ خدمته في الشهر يُمرَّر أيضًا حتى يُصفَّر صفه القديم إن وُجد
       const ids = [...rows.map((row) => String(row.id)), ...[...(computation?.notStarted.keys() ?? [])].filter((id) => !rows.some((row) => String(row.id) === id))];
-      const fresh = await computePayroll(ids, config.period);
+      // HR-27: الإضافي على جدول وراتب كل موظف الآن؛ إن تعذر لا يُرسل شيء
+      const overtimeBefore = await syncOvertimeAmounts(config.period);
+      if (overtimeBefore.warning) throw new Error(overtimeBefore.warning);
+      let fresh = await computePayroll(ids, config.period);
       if (fresh.loadErrors.length) throw new Error(`PAYROLL_INPUTS_INCOMPLETE: ${fresh.loadErrors.join(" | ")}`);
       const codeOf = (id: string) => fresh.employees.get(id)?.empId.trim() ?? "";
       const stoppedIds = ids.filter((id) => stopped.has(id)).map(codeOf).filter(Boolean);
@@ -381,6 +388,13 @@ tr:not(.in-block){break-inside:avoid;page-break-inside:avoid}
       const notStartedCodes = ids.map((id) => fresh.notStarted.get(id) ?? "").filter(Boolean);
       // طلبي المعلق المتداخل يُحذف قبل تغيير الأرقام، ولا يُعاد الحساب على موظف في طلب معلق لمستخدم آخر
       preparation = await preparePayrollResend(config.period, [...activeIds, ...stoppedIds, ...notStartedCodes]);
+      // HR-27: طلبي المعلق السابق كان يقفل الشهر فلا يُعاد حساب إضافيه؛ بعد حذفه يُعاد، وإن تغيّر مبلغ يُعاد حساب الكشف
+      const overtimeAfter = await syncOvertimeAmounts(config.period);
+      if (overtimeAfter.warning) throw new Error(overtimeAfter.warning);
+      if (overtimeAfter.updated > 0) {
+        fresh = await computePayroll(ids, config.period);
+        if (fresh.loadErrors.length) throw new Error(`PAYROLL_INPUTS_INCOMPLETE: ${fresh.loadErrors.join(" | ")}`);
+      }
       const saved = await savePayrollRows(fresh, ids, stopped);
       const session = readUserSession();
       const senderName = session?.name?.trim() || t("مسؤول الموارد البشرية");

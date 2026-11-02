@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
-import { CheckCircle2, RefreshCw, RotateCcw, Search, Trash2, XCircle } from "lucide-react";
+import { Calculator, CheckCircle2, RefreshCw, RotateCcw, Search, Trash2, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/fetchAll";
@@ -17,6 +17,8 @@ import CancelApprovalDialog from "@/components/hr/CancelApprovalDialog";
  * السجل الخاطئ يُحذف هنا ويُسجَّل من جديد ما دام شهر رواتبه غير مقفل (قاعدة البيانات تفرض ذلك).
  * السجلات المعلقة القديمة (قبل HR-13) تُعتمد أو تُرفض هنا من مسؤول آخر، لا من سجّلها ولا من صاحبها.
  * HR-24: إلغاء اعتماد المعتمد بسبب إلزامي (يصير «مرفوض» ويخرج من كشف الراتب ويبقى في السجل) ما دام شهر رواتبه غير مقفل.
+ * HR-27 (كسمارت): المبلغ الذي حسبه النظام يُعاد حسابه تلقائيًا إن تغيّر جدول الموظف أو راتبه الأساسي ما دام شهره مفتوحًا،
+ * وزر «إعادة حساب قيمة الإضافي» يعيد حساب الشهر الظاهر (الأساسي ÷ 30 ÷ ساعات الدوام × 1.5).
  */
 type OvertimeRow = {
   id: string;
@@ -38,6 +40,7 @@ type OvertimeRow = {
 type Tab = "pending" | "approved" | "rejected" | "all";
 type DecideResult = { updated?: number; self_skipped?: number; creator_skipped?: number; not_pending?: number; locked?: number };
 type CancelResult = { updated?: number; self_skipped?: number; locked?: number; not_approved?: number };
+type RecalcResult = { updated?: number; frozen?: number; manual?: number; incomplete?: boolean };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "pending", label: "بانتظار الاعتماد" },
@@ -215,6 +218,37 @@ export default function HRAttendanceOvertime() {
     }
   };
 
+  // HR-27: إعادة حساب قيمة الإضافي للشهر الظاهر على جدول وراتب كل موظف الآن
+  // (لا يُمس شهر رواتبه مقفل أو داخل طلب اعتماد، ولا مبلغ قديم لم يحسبه النظام)
+  const recalcMonth = async () => {
+    if (busy || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return;
+    if (!window.confirm(t("إعادة حساب مبالغ إضافي هذا الشهر على جدول وراتب كل موظف الآن؟ لا يُمس شهر رواتبه مقفل، ولا مبلغ قديم لم يحسبه النظام"))) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const { data, error: rpcError } = await supabase.rpc("recalc_overtime_amounts", { p_month: month });
+      if (rpcError) {
+        if (missingRpc(rpcError)) throw new Error(t("إعادة حساب قيمة الإضافي تتطلب تحديث قاعدة البيانات (HR-27)"));
+        if (String(rpcError.message ?? "").includes("OVERTIME_RECALC_NOT_ALLOWED")) throw new Error(t("إعادة حساب قيمة الإضافي لمن يدير الحضور أو الرواتب"));
+        if (String(rpcError.message ?? "").includes("OVERTIME_RECALC_BAD_MONTH")) throw new Error(t("اختر شهرًا صحيحًا"));
+        throw rpcError;
+      }
+      const result = (data ?? {}) as RecalcResult;
+      const updated = Number(result.updated) || 0;
+      const parts = [updated
+        ? `${t("أُعيد حساب")} ${formatNumber(updated)} ${t("سجل")}`
+        : t("مبالغ إضافي هذا الشهر مطابقة لجدول وراتب كل موظف الآن")];
+      if (result.frozen) parts.push(`${t("تُخطي")} ${formatNumber(Number(result.frozen))} ${t("سجل في شهر رواتبه مقفل أو داخل طلب اعتماد")}`);
+      if (result.manual) parts.push(`${t("تُخطي")} ${formatNumber(Number(result.manual))} ${t("سجل بمبلغ قديم لم يحسبه النظام")}`);
+      if (result.incomplete) parts.push(t("لم تكتمل إعادة الحساب لكثرة السجلات؛ اضغط الزر مرة أخرى لإكمالها"));
+      setMessage(parts.join(direction === "rtl" ? "، " : ", "));
+      await load();
+    } catch (recalcError) {
+      setError(hrRequestErrorText(recalcError, t("تعذر إعادة حساب قيمة الإضافي")));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeSelected = async () => {
     const targets = selectable.filter((row) => selected.has(row.id));
     if (!targets.length || busy) return;
@@ -258,13 +292,21 @@ export default function HRAttendanceOvertime() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{t("الساعات الإضافية")}</h1>
             <p className="mt-1 text-sm text-gray-500">{t("تُسجَّل الساعات الإضافية من «حساب الدوام» معتمدة وتدخل كشف الراتب مباشرة. السجل الخاطئ يُحذف من هنا ويُسجَّل من جديد ما دام شهر رواتبه غير مقفل. السجلات المعلقة القديمة يعتمدها أو يرفضها مسؤول غير من سجّلها")}</p>
+            <p className="mt-1 text-sm text-gray-500">{t("قيمة الساعة = الأساسي ÷ 30 ÷ ساعات الدوام اليومية × 1.5، ويُعاد حساب المبلغ تلقائيًا إن تغيّر جدول الموظف أو راتبه ما دام شهره مفتوحًا")}</p>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">{t("الشهر")}</label>
             <Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="w-44" />
-            <button type="button" onClick={() => void load()} className="rounded border px-3 py-2 text-sm hover:bg-gray-50" disabled={loading}>
+            <button type="button" onClick={() => void load()} className="rounded border px-3 py-2 text-sm hover:bg-gray-50" disabled={loading} title={t("تحديث")} aria-label={t("تحديث")}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
+            {canDecide && (
+              <button type="button" onClick={() => void recalcMonth()} disabled={busy || loading}
+                className="flex items-center gap-1 rounded border border-[#004e89] px-3 py-2 text-sm text-[#004e89] hover:bg-[#004e89]/5 disabled:opacity-50"
+                title={t("يعيد حساب مبلغ إضافي الشهر الظاهر على جدول وراتب كل موظف الآن")}>
+                <Calculator className="h-4 w-4" />{t("إعادة حساب قيمة الإضافي")}
+              </button>
+            )}
           </div>
         </div>
 
